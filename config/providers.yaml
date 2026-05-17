@@ -1,0 +1,85 @@
+# AI-Finance Provider 配置 (v2.0)
+# 参考 CherryStudio Provider 化架构
+# 支持多 Key 轮询、自定义模型、环境变量注入
+
+version: "2.0"
+
+# ============== Provider 列表 ==============
+# 每个 Provider 对应一个 API 服务端点
+providers:
+  - id: deepseek
+    name: DeepSeek
+    apiHost: https://api.deepseek.com/v1
+    apiKey: ${DEEPSEEK_API_KEY}
+    models:
+      - id: deepseek-chat
+        name: DeepSeek Chat
+        contextWindow: 64000
+      - id: deepseek-reasoner
+        name: DeepSeek Reasoner
+        contextWindow: 64000
+
+  - id: claude
+    name: Claude
+    apiHost: ${CLAUDE_BASE_URL}
+    apiKey: ${CLAUDE_API_KEY}
+    models:
+      - id: claude-sonnet-4-5
+        name: Claude Sonnet 4.5
+        contextWindow: 200000
+      - id: claude-opus-4-7
+        name: Claude Opus 4.7
+        contextWindow: 200000
+
+  - id: gpt
+    name: GPT
+    apiHost: ${GPT_BASE_URL}
+    apiKey: ${GPT_API_KEY}
+    models:
+      - id: gpt-5.2
+        name: GPT-5.2
+        contextWindow: 128000
+      - id: gpt-5.2-mini
+        name: GPT-5.2 Mini
+        contextWindow: 128000
+
+  - id: mimo
+    name: Mimo
+    apiHost: ${MIMO_BASE_URL}
+    apiKey: ${MIMO_API_KEY}
+    models:
+      - id: mimo-v2.5-pro
+        name: Mimo v2.5 Pro
+        contextWindow: 32000
+
+  - id: sensenova
+    name: SenseNova
+    apiHost: ${SENSENOVA_BASE_URL}
+    apiKey: ${SENSENOVA_API_KEY}
+    models:
+      - id: deepseek-v4-flash
+        name: DeepSeek-V4 Flash
+        contextWindow: 128000
+
+  - id: kimi
+    name: Kimi (Moonshot)
+    apiHost: https://api.moonshot.cn/v1
+    apiKey: ${KIMI_API_KEY}
+    models:
+      - id: moonshot-v1-32k
+        name: Moonshot v1-32k
+        contextWindow: 32000
+      - id: moonshot-v1-128k
+        name: Moonshot v1-128k
+        contextWindow: 128000
+
+# ============== 全局兜底配置 ==============
+# 当 Agent 调用失败时使用的默认 Provider
+fallback:
+  provider: deepseek
+  model: deepseek-chat
+
+# ============== AI 咨询默认 Provider ==============
+ai_chat:
+  defaultProvider: deepseek
+  defaultModel: deepseek-chat

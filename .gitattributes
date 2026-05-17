@@ -1,0 +1,26 @@
+# Lock end-of-line conventions so Windows checkouts don't churn
+# git index entries with "LF will be replaced by CRLF" warnings.
+
+* text=auto eol=lf
+
+*.py        text eol=lf
+*.md        text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.json      text eol=lf
+*.toml      text eol=lf
+*.txt       text eol=lf
+*.cfg       text eol=lf
+*.ini       text eol=lf
+
+# Mermaid files are text; keep LF too
+*.mermaid   text eol=lf
+
+# Treat compiled / binary blobs explicitly
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.parquet   binary
+*.zip       binary

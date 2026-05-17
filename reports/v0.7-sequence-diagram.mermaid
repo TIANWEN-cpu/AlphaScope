@@ -1,0 +1,148 @@
+%% v0.7 关键调用流程时序图(共 3 条主流)
+%% 流程一:用户进入"💡基本面"Tab → 触发 fundamentals 拉取 → 渲染
+%% 流程二:用户在 AI 咨询输入框发问 → 上下文注入 → LLM 调用 → 返回流式输出
+%% 流程三:用户点击"召开圆桌" → 5 专家并行 LLM 调用 → 卡片渲染 + 汇总统计
+
+%% ====== 流程一:基本面 Tab ======
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant D as dashboard.py
+    participant FP as fundamentals_panel
+    participant FS as fundamentals.py
+    participant CACHE as cache/fundamentals
+    participant AK as akshare
+
+    U->>D: 切换到 Tab6
+    D->>FP: render(symbol, stock_name, info)
+    FP->>FS: load_fundamentals(symbol, stock_name)
+    FS->>CACHE: 读 {symbol}.json
+    alt 缓存命中且 < 24h
+        CACHE-->>FS: FundamentalsData
+    else 缓存缺失或过期
+        par 5 路并行 fetch
+            FS->>AK: stock_financial_abstract(symbol)
+            AK-->>FS: 财务 df
+        and
+            FS->>AK: stock_main_stock_holder(symbol)
+            AK-->>FS: 十大股东 df
+        and
+            FS->>AK: stock_circulate_stock_holder(symbol)
+            AK-->>FS: 流通股东 df
+        and
+            FS->>AK: stock_individual_info_em(symbol)
+            AK-->>FS: 行业归属
+            FS->>AK: stock_board_industry_cons_em(industry)
+            AK-->>FS: 成分股列表
+            FS->>AK: stock_zh_a_spot_em()
+            AK-->>FS: 行情快照
+        and
+            FS->>AK: stock_institute_hold_detail(symbol)
+            AK-->>FS: 机构持仓变动
+        end
+        FS->>FS: 组装 FundamentalsData
+        FS->>CACHE: 写 {symbol}.json
+    end
+    FS-->>FP: FundamentalsData
+    FP->>FP: 渲染财务折线 + 股东表 + 同业表
+    alt 任一子模块 has_error
+        FP->>U: 显示"该股暂无完整 XX 数据"占位
+    end
+    FP-->>U: 完整渲染
+
+%% ====== 流程二:AI 咨询 ======
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant CP as ai_chat_panel
+    participant SS as session_state
+    participant AC as ai_chat.py
+    participant LLM as llm_agents.call_llm
+
+    U->>CP: 点击悬浮按钮(首次)
+    CP->>SS: show_ai_chat = True
+    Note over CP,SS: 主区分栏 [3, 1.4]<br/>右栏渲染对话面板
+    CP->>SS: 读 chat_session_{symbol}
+    alt 无 session(首次提问)
+        CP->>AC: new_session(symbol, name, ctx)
+        Note right of AC: ctx = {close, ma5/20/60,<br/>fund_dir, latest_agent_excerpt}
+        AC->>AC: build_system_prompt(ctx)
+        AC-->>CP: ChatSession (含 system msg)
+        CP->>SS: 写回 session
+    end
+
+    U->>CP: 输入"现在估值贵不贵?"
+    CP->>AC: send_message(session, user_msg)
+    AC->>AC: append user msg
+    AC->>AC: truncate_history(session, max_rounds=30)
+    Note right of AC: 超过 30 轮则保留<br/>system + 最近 30 轮
+    AC->>LLM: call_llm(provider, model, messages)
+    Note right of LLM: 默认 deepseek-chat<br/>provider 来自 .env
+    LLM-->>AC: 文本回复
+    AC->>AC: append assistant msg
+    AC-->>CP: 更新后的 ChatSession
+    CP->>SS: 写回 session
+    CP-->>U: 渲染最新消息
+
+    U->>CP: 点击"📥 导出 MD"
+    CP->>AC: export_to_markdown(session)
+    AC-->>CP: md 文本
+    CP->>CP: 写 reports/chat_history/chat_{symbol}_{ts}.md
+    CP-->>U: 下载链接
+
+%% ====== 流程三:专家团圆桌 ======
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant EV as expert_panel_view
+    participant EP as expert_panel.py
+    participant CONF as experts.yaml
+    participant POOL as ThreadPoolExecutor
+    participant LLM as llm_agents.call_llm
+    participant ARC as archive.py
+
+    U->>EV: 点击"召开圆桌"
+    EV->>EP: run_roundtable(stock_brief, stock_name)
+    EP->>CONF: load_experts_config()
+    CONF-->>EP: 5 个 ExpertConfig
+    EP->>POOL: submit 5 路任务
+
+    par 5 专家并行
+        POOL->>LLM: call_llm(claude, sonnet, buffett_msg)
+        alt claude 失败
+            POOL->>LLM: call_llm(deepseek, chat, buffett_msg)
+            Note right of LLM: 兜底,标记 fallback_used
+        end
+        LLM-->>POOL: 三段式 JSON 文本
+        POOL->>POOL: 解析 → ExpertOpinion(buffett)
+    and
+        POOL->>LLM: call_llm(gpt, gpt-5.2, lynch_msg)
+        LLM-->>POOL: ExpertOpinion(lynch)
+    and
+        POOL->>LLM: call_llm(deepseek, chat, chanlun_msg)
+        LLM-->>POOL: ExpertOpinion(chanlun)
+    and
+        POOL->>LLM: call_llm(mimo, v2.5-pro, macro_msg)
+        LLM-->>POOL: ExpertOpinion(macro)
+    and
+        POOL->>LLM: call_llm(sensenova, v4-flash, risk_msg)
+        alt 全部厂商连续失败
+            POOL-->>EP: ExpertOpinion(ok=False)
+        end
+        LLM-->>POOL: ExpertOpinion(risk_officer)
+    end
+
+    POOL-->>EP: 5 个 ExpertOpinion
+    EP->>EP: summarize → {buy, hold, reduce, sell, avg_position}
+    EP-->>EV: {opinions, summary}
+    EV->>EV: 渲染 5 卡片(降级模型角标)
+    EV->>EV: 渲染底部统计 "X买/Y观/Z减/W卖"
+    EV-->>U: 完整圆桌界面
+
+    U->>EV: 点击"📥 导出纪要"
+    EV->>EP: export_md(opinions, summary, name, symbol)
+    EP->>ARC: save_roundtable(name, symbol, opinions, summary, md)
+    Note right of ARC: 落盘 reports/roundtables/<br/>index.json 追加 type=roundtable
+    ARC-->>EP: 保存路径
+    EP-->>EV: file path
+    EV-->>U: 下载链接

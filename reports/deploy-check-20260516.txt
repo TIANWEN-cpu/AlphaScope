@@ -1,0 +1,39 @@
+﻿=== Python 环境 ===
+Python 3.12.10
+=== 核心包导入 ===
+OK openbb unknown
+OK akshare 1.18.60
+OK pandas 3.0.3
+OK numpy 2.4.5
+OK plotly 6.7.0
+OK streamlit 1.57.0
+OK fastapi 0.128.8
+OK uvicorn 0.40.0
+OK langchain 1.3.1
+OK langgraph unknown
+OK chromadb 1.5.9
+OK mem0 2.0.2
+TOTAL OK=12 FAIL=0
+=== 目录结构 ===
+Name     
+----     
+apps     
+backend  
+data     
+frontend 
+notebooks
+reports  
+venvs
+=== 源码项目 ===
+Name          LastWriteTime     
+----          -------------     
+ai-hedge-fund 2026/5/16 16:47:36
+TradingAgents 2026/5/16 16:47:47
+=== Git 代理 ===
+socks5://127.0.0.1:10808
+socks5://127.0.0.1:10808
+=== D 盘空间 ===
+已用: 112.92 GB
+可用: 511.64 GB
+=== 虚拟环境大小 ===
+830.13 MB

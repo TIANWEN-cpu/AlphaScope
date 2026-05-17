@@ -1,0 +1,57 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+venvs/
+venv/
+env/
+ENV/
+
+# Data caches
+data/cache/
+data/raw/
+*.parquet.tmp
+cache/
+
+# Reports / logs
+reports/*.log
+reports/streamlit-*.err
+reports/archive/
+reports/roundtables/
+reports/chat_history/
+*.log
+
+# External study repos (separate git projects, not part of this repo)
+apps/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Local screenshots / feedback dropped by the user (kept off VCS)
+反馈/
+feedback/
+
+# Claude Code local settings (per-machine permissions)
+.claude/settings.local.json
+
+# Notebooks checkpoints
+.ipynb_checkpoints/

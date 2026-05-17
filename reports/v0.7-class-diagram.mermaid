@@ -1,0 +1,137 @@
+classDiagram
+    class FinancialPeriod {
+        +str period
+        +float revenue_yi
+        +float net_profit_yi
+        +float gross_margin_pct
+        +float roe_pct
+        +float debt_ratio_pct
+        +float yoy_revenue
+        +float yoy_net_profit
+    }
+
+    class ShareholderRow {
+        +int rank
+        +str name
+        +float shares_yi
+        +float ratio_pct
+        +str change_type
+    }
+
+    class PeerRow {
+        +str symbol
+        +str name
+        +float total_mcap_yi
+        +float pe
+        +float pb
+        +float roe_pct
+        +float yoy_revenue_pct
+        +float yoy_net_profit_pct
+        +bool is_self
+    }
+
+    class FundamentalsData {
+        +str symbol
+        +str stock_name
+        +str data_date
+        +list~FinancialPeriod~ financials
+        +list~ShareholderRow~ top_holders
+        +list~ShareholderRow~ circulate_holders
+        +list~ShareholderRow~ inst_changes
+        +str industry_name
+        +list~PeerRow~ peers
+        +bool has_error
+        +str error_msg
+    }
+
+    class ChatMessage {
+        +str role
+        +str content
+        +str timestamp
+    }
+
+    class ChatSession {
+        +str stock_symbol
+        +str stock_name
+        +str provider
+        +str model
+        +list~ChatMessage~ messages
+        +dict context_snapshot
+        +int max_rounds
+        +append(role, content)
+        +to_markdown() str
+    }
+
+    class ExpertConfig {
+        +str key
+        +str name
+        +str style
+        +str icon
+        +str preferred_vendor
+        +str preferred_model
+        +str system_prompt
+        +list~str~ focus_dims
+        +str stop_loss_style
+    }
+
+    class ExpertOpinion {
+        +str expert_key
+        +str expert_name
+        +str style
+        +str icon
+        +str view
+        +list~str~ evidence
+        +str action
+        +int position
+        +float stop_loss
+        +str vendor
+        +str model
+        +bool fallback_used
+        +bool ok
+        +str error_msg
+    }
+
+    class FundamentalsService {
+        <<module>>
+        +fetch_financial_summary(symbol) list~FinancialPeriod~
+        +fetch_top_holders(symbol) list~ShareholderRow~
+        +fetch_circulate_holders(symbol) list~ShareholderRow~
+        +fetch_inst_changes(symbol) list~ShareholderRow~
+        +fetch_industry_peers(symbol) tuple
+        +load_fundamentals(symbol, name) FundamentalsData
+    }
+
+    class AIChatService {
+        <<module>>
+        +new_session(symbol, name, ctx) ChatSession
+        +build_system_prompt(ctx) str
+        +send_message(session, user_msg) ChatSession
+        +truncate_history(session) ChatSession
+        +export_to_markdown(session) str
+    }
+
+    class ExpertPanelService {
+        <<module>>
+        +load_experts_config() list~ExpertConfig~
+        +run_expert(cfg, brief) ExpertOpinion
+        +run_roundtable(brief) dict
+        +summarize(opinions) dict
+        +export_md(opinions, summary) str
+    }
+
+    class LLMClient {
+        <<from llm_agents>>
+        +call_llm(vendor, model, messages, json_mode) str
+        +get_client(vendor) OpenAI
+    }
+
+    ChatSession "1" --> "*" ChatMessage : contains
+    FundamentalsData "1" --> "*" FinancialPeriod : contains
+    FundamentalsData "1" --> "*" ShareholderRow : contains
+    FundamentalsData "1" --> "*" PeerRow : contains
+    FundamentalsService ..> FundamentalsData : produces
+    AIChatService ..> ChatSession : operates on
+    AIChatService ..> LLMClient : uses
+    ExpertPanelService ..> ExpertOpinion : produces
+    ExpertPanelService ..> ExpertConfig : reads
+    ExpertPanelService ..> LLMClient : uses
