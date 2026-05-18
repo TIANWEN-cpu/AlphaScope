@@ -10,6 +10,7 @@
 import warnings
 warnings.filterwarnings("ignore")
 
+import json
 import akshare as ak
 import pandas as pd
 from typing import List, Dict, Any, Optional
@@ -133,6 +134,61 @@ def _to_float_or_none(value):
         return f
     except (TypeError, ValueError):
         return None
+
+
+def _eastmoney_article_url(code: Any) -> str:
+    """Build an Eastmoney article URL only for plausible numeric article ids."""
+    code_s = _clean_str(code)
+    if not code_s or not code_s.isdigit():
+        return ""
+    return f"http://finance.eastmoney.com/a/{code_s}.html"
+
+
+def _parse_eastmoney_search_payload(text: str) -> Dict[str, Any]:
+    import json as _json
+    import re as _re
+    m = _re.search(r"^[^(]+\((.+)\)\s*;?\s*$", text or "", _re.DOTALL)
+    if not m:
+        return {}
+    try:
+        data = _json.loads(m.group(1))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _fetch_eastmoney_search_text(cf_requests, params: dict, headers: dict) -> str:
+    """Try Eastmoney search without cookie first, then fall back to a minimal history cookie."""
+    base_headers = {k: v for k, v in headers.items() if k.lower() != "cookie"}
+    url = "https://search-api-web.eastmoney.com/search/jsonp"
+    try:
+        r = cf_requests.get(
+            url,
+            params=params,
+            headers=base_headers,
+            impersonate="chrome",
+            timeout=10,
+        )
+        text = r.text
+        payload = _parse_eastmoney_search_payload(text)
+        if (payload.get("result") or {}).get("cmsArticleWebOld"):
+            return text
+        if "passportWeb" not in text and payload:
+            return text
+    except Exception:
+        pass
+
+    try:
+        r = cf_requests.get(
+            url,
+            params=params,
+            headers=headers,
+            impersonate="chrome",
+            timeout=10,
+        )
+        return r.text
+    except Exception:
+        return ""
 
 
 # ============== 公告分类(纯函数) ==============
@@ -345,9 +401,6 @@ def fetch_stock_news_em(symbol: str, limit: int = 20) -> List[Dict[str, Any]]:
     except Exception:
         return []
 
-    import json as _json
-    import re as _re
-
     inner = {
         "uid": "",
         "keyword": str(symbol),
@@ -368,36 +421,23 @@ def fetch_stock_news_em(symbol: str, limit: int = 20) -> List[Dict[str, Any]]:
     }
     params = {
         "cb": "jQuery35101792940631092459_1764599530165",
-        "param": _json.dumps(inner, ensure_ascii=False),
+        "param": json.dumps(inner, ensure_ascii=False),
         "_": "1764599530176",
     }
     headers = {
         "accept": "*/*",
         "accept-language": "en,zh-CN;q=0.9,zh;q=0.8",
         "cache-control": "no-cache",
-        "cookie": ("qgqp_b_id=652bf4c98a74e210088f372a17d4e27b; "
-                   f"emshistory=%5B%22{symbol}%22%5D"),
+        "cookie": f"emshistory=%5B%22{symbol}%22%5D",
         "host": "search-api-web.eastmoney.com",
         "referer": f"https://so.eastmoney.com/news/s?keyword={symbol}",
         "user-agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                        "AppleWebKit/537.36 (KHTML, like Gecko) "
                        "Chrome/142.0.0.0 Safari/537.36"),
     }
-    try:
-        r = _cf_requests.get(
-            "https://search-api-web.eastmoney.com/search/jsonp",
-            params=params, headers=headers, impersonate="chrome", timeout=10,
-        )
-        text = r.text
-    except Exception:
-        return []
-
-    m = _re.search(r"^[^(]+\((.+)\)\s*;?\s*$", text, _re.DOTALL)
-    if not m:
-        return []
-    try:
-        payload = _json.loads(m.group(1))
-    except Exception:
+    text = _fetch_eastmoney_search_text(_cf_requests, params, headers)
+    payload = _parse_eastmoney_search_payload(text)
+    if not payload:
         return []
 
     arts = (payload.get("result") or {}).get("cmsArticleWebOld") or []
@@ -414,7 +454,7 @@ def fetch_stock_news_em(symbol: str, limit: int = 20) -> List[Dict[str, Any]]:
         url = ""
         code = _clean_str(a.get("code"))
         if code:
-            url = f"http://finance.eastmoney.com/a/{code}.html"
+            url = _eastmoney_article_url(code)
         out.append({
             "source": _clean_str(a.get("mediaName")) or "东方财富",
             "title": title,
@@ -440,9 +480,6 @@ def fetch_keyword_news_em(keyword: str, limit: int = 20) -> List[Dict[str, Any]]
     except Exception:
         return []
 
-    import json as _json
-    import re as _re
-
     page_size = max(1, min(int(limit), 50))
     inner = {
         "uid": "",
@@ -464,35 +501,23 @@ def fetch_keyword_news_em(keyword: str, limit: int = 20) -> List[Dict[str, Any]]
     }
     params = {
         "cb": "jQuery35101792940631092459_1764599530165",
-        "param": _json.dumps(inner, ensure_ascii=False),
+        "param": json.dumps(inner, ensure_ascii=False),
         "_": "1764599530176",
     }
     headers = {
         "accept": "*/*",
         "accept-language": "en,zh-CN;q=0.9,zh;q=0.8",
         "cache-control": "no-cache",
-        "cookie": f"qgqp_b_id=652bf4c98a74e210088f372a17d4e27b; emshistory=%5B%22{keyword}%22%5D",
+        "cookie": f"emshistory=%5B%22{keyword}%22%5D",
         "host": "search-api-web.eastmoney.com",
         "referer": f"https://so.eastmoney.com/news/s?keyword={keyword}",
         "user-agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                        "AppleWebKit/537.36 (KHTML, like Gecko) "
                        "Chrome/142.0.0.0 Safari/537.36"),
     }
-    try:
-        r = _cf_requests.get(
-            "https://search-api-web.eastmoney.com/search/jsonp",
-            params=params, headers=headers, impersonate="chrome", timeout=10,
-        )
-        text = r.text
-    except Exception:
-        return []
-
-    m = _re.search(r"^[^(]+\((.+)\)\s*;?\s*$", text, _re.DOTALL)
-    if not m:
-        return []
-    try:
-        payload = _json.loads(m.group(1))
-    except Exception:
+    text = _fetch_eastmoney_search_text(_cf_requests, params, headers)
+    payload = _parse_eastmoney_search_payload(text)
+    if not payload:
         return []
 
     arts = (payload.get("result") or {}).get("cmsArticleWebOld") or []
@@ -512,7 +537,7 @@ def fetch_keyword_news_em(keyword: str, limit: int = 20) -> List[Dict[str, Any]]
             "title": title,
             "summary": content[:240],
             "datetime": _clean_str(a.get("date")),
-            "url": f"http://finance.eastmoney.com/a/{code}.html" if code else "",
+            "url": _eastmoney_article_url(code),
         })
     return out
 

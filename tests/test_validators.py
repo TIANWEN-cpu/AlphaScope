@@ -1,6 +1,8 @@
 """Tests for backend.validators — pure-function schema normalizers."""
 import pytest
 
+from llm_agents import _extract_json, normalize_openai_base_url, validate_custom_base_url
+
 from validators import (
     validate_agent_output,
     validate_expert_output,
@@ -183,3 +185,20 @@ class TestValidateExpertOutput:
 def test_evidence_type_whitelist_includes_finance_categories():
     must_have = {"fund_flow", "technical", "fundamental", "news", "research", "macro", "other"}
     assert must_have.issubset(EVIDENCE_TYPES)
+
+
+def test_extract_json_uses_balanced_object_block():
+    assert _extract_json('prefix {"a": {"b": 1}, "c": "}"} suffix') == {"a": {"b": 1}, "c": "}"}
+    assert _extract_json('bad {"a": 1} middle {"b": 2}') == {"a": 1}
+
+
+def test_normalize_openai_base_url_preserves_version_paths():
+    assert normalize_openai_base_url("api.example.com") == "https://api.example.com/v1"
+    assert normalize_openai_base_url("https://api.example.com/v2") == "https://api.example.com/v2"
+
+
+def test_validate_custom_base_url_rejects_local_addresses():
+    with pytest.raises(ValueError):
+        validate_custom_base_url("http://localhost:8000/v1")
+    with pytest.raises(ValueError):
+        validate_custom_base_url("http://127.0.0.1:8000/v1")

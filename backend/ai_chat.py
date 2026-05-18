@@ -13,6 +13,7 @@ LLM 调用统一走 llm_agents.call_llm；默认厂商通过 .env AI_CHAT_PROVID
 """
 import os
 import sys
+import inspect
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import List, Optional
@@ -29,6 +30,15 @@ from project_paths import ENV_FILE  # noqa: E402
 call_llm = getattr(_llm_agents, "call_llm", _llm_agents._call_with)
 VENDORS = _llm_agents.VENDORS
 FALLBACK_VENDOR_MODEL = _llm_agents.FALLBACK_VENDOR_MODEL
+
+
+def _call_llm_compat(payload: dict, api_key: Optional[str] = None) -> str:
+    """Call llm_agents.call_llm while tolerating old hot-reload signatures explicitly."""
+    params = inspect.signature(call_llm).parameters
+    if "api_key" in params:
+        return call_llm(**payload, api_key=api_key)
+    return call_llm(**payload)
+
 
 from dotenv import load_dotenv
 load_dotenv(ENV_FILE)
@@ -177,14 +187,7 @@ def _build_payload(session: ChatSession) -> List[dict]:
 
 def normalize_base_url(base_url: str) -> str:
     """规范化 OpenAI-compatible Base URL：允许用户填根域名或 /v1。"""
-    cleaned = (base_url or "").strip().rstrip("/")
-    if not cleaned:
-        return ""
-    if not cleaned.startswith(("http://", "https://")):
-        cleaned = "https://" + cleaned
-    if not cleaned.endswith("/v1"):
-        cleaned = cleaned + "/v1"
-    return cleaned
+    return _llm_agents.validate_custom_base_url(base_url)
 
 
 def _create_custom_client(base_url: str, api_key: str) -> OpenAI:
@@ -259,13 +262,11 @@ def send_message(session: ChatSession, user_msg: str) -> ChatSession:
                 temperature=0.4,
             )
             # Streamlit 热重载时 call_llm 可能仍指向旧函数签名，不接受 api_key。
-            # 先尝试细粒度 Key；如遇旧签名 TypeError，回退到默认 Provider Key。
-            try:
-                reply = call_llm(**payload, api_key=getattr(session, "api_key", "") or None)
-            except TypeError as te:
-                if "api_key" not in str(te):
-                    raise
-                reply = call_llm(**payload)
+            # 用签名检查兼容旧函数，避免 TypeError 字符串匹配掩盖真实错误。
+            key_override = getattr(session, "api_key", "") or None
+            if (vd, md) == FALLBACK_VENDOR_MODEL:
+                key_override = None
+            reply = _call_llm_compat(payload, api_key=key_override)
             if reply and reply.strip():
                 if (vd, md) != primary:
                     reply = f"_(主厂商 {primary[0]} 不可用,已切换到 {vd}/{md})_\n\n" + reply
