@@ -1,0 +1,53 @@
+# AI-Finance Docker Compose (v0.11)
+# 支持: 主应用 + Redis缓存 + 可选ChromaDB
+
+version: "3.8"
+
+services:
+  # 主应用 - Streamlit Dashboard
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-finance-app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./cache:/app/cache
+      - ./reports:/app/reports
+      - ./.env:/app/.env:ro
+      - ./config:/app/config:ro
+    environment:
+      - PYTHONPATH=/app
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ai-finance-net
+
+  # Redis 缓存层
+  redis:
+    image: redis:7-alpine
+    container_name: ai-finance-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - ai-finance-net
+
+volumes:
+  redis-data:
+
+networks:
+  ai-finance-net:
+    driver: bridge

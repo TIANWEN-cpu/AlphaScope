@@ -1,0 +1,37 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+venvs/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Cache
+cache/
+*.log
+
+# Docs
+reports/archive/
+*.md
+!README.md
+
+# Env (use docker-compose volumes)
+.env
+.env.*
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
