@@ -9,15 +9,17 @@
 
 | 模块 | 主要能力 |
 |---|---|
-| **🔗 数据管道** | `backend/pipeline.py`：DataPipeline 串联 Provider → 去重 → 可信度排序 → SQLite 存储 → ChromaDB 索引，一条命令完成全流程采集 |
+| **🔗 数据管道** | `backend/pipeline.py`：DataPipeline 串联 Provider → 去重 → 可信度排序 → 事件抽取 → SQLite 存储 → ChromaDB 索引，一条命令完成全流程采集 |
 | **⏱️ 采集任务** | `backend/ingestion/jobs.py`：6 个预定义采集任务（CN 新闻/研报/公告/行情/大盘 + US SEC），`create_default_scheduler()` 一键启动 |
 | **🔧 Provider 修复** | HKEX 实现 HTML 解析；SEC 实现 ticker→CIK 映射（使用 SEC 官方 `company_tickers.json`） |
-| **🧠 证据驱动 Agent** | Agent 分析前自动从 RAG 检索相关证据注入市场简报；Critic 新增第 6 维度：证据覆盖率评估 |
+| **📋 事件抽取** | `backend/events/extractor.py`：规则引擎从新闻/公告抽取 8 类结构化事件（业绩/分红/并购/融资/诉讼/政策/供应链/股东），附带情绪分和重要度 |
+| **📊 量化因子** | `backend/factors/generator.py`：5 维因子（新闻情绪/事件信号/分析师评级/资金流向/价格动量），归一化到 [-1,1]，加权综合评分 |
+| **🧠 证据驱动 Agent** | Agent 分析前自动从 RAG 检索证据 + 量化因子注入市场简报；Critic 新增第 6/7 维度：证据覆盖率 + 因子一致性 |
 | **📊 数据源健康度** | 新增 Tab 10：Provider 状态表、采集日志统计、RAG 索引状态、数据库记录数一览 |
-| **🧪 测试覆盖** | 新增 8 个测试文件覆盖 Pipeline/去重/可信度/数据库/调度器/Schema/SEC/HKEX |
+| **🧪 测试覆盖** | 新增 9 个测试文件覆盖 Pipeline/去重/可信度/数据库/调度器/Schema/SEC/HKEX/因子 |
 | **📰 三级回退** | `news_data.py` 的 `fetch_*_via_provider()` 现在优先走 Pipeline（v0.12）→ Registry（v0.11）→ 原有函数（兜底） |
 
-> v0.12 核心理念：**从"数据源平台"升级为"端到端数据管道 + 证据驱动研究系统"**。所有数据自动采集、去重、排序、持久化、索引；Agent 分析时自动检索证据，结论必须可追溯。
+> v0.12 核心理念：**从"数据源平台"升级为"端到端数据管道 + 事件抽取 + 量化因子 + 证据驱动研究系统"**。所有数据自动采集、去重、排序、事件抽取、持久化、索引；Agent 分析时自动检索证据和量化因子，结论必须可追溯且可量化。
 
 ## v0.11.0 新特性（Provider 插件架构 + 数据中台）
 

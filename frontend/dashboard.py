@@ -1020,6 +1020,15 @@ with tab2:
         vol_ratio = recent_vol / prev_vol if prev_vol > 0 else 1
         volatility = df["close"].pct_change().std() * 100
 
+        # ========== 量化因子分析 (v0.12) ==========
+        try:
+            from frontend.components.factor_panel import render_factor_panel
+            st.markdown("#### 📊 量化因子分析")
+            render_factor_panel(symbol, stock_name)
+            st.divider()
+        except Exception as _factor_e:
+            logger.debug("因子面板跳过: %s", _factor_e)
+
         # ========== LLM 深度分析模式 ==========
         if use_llm and LLM_AVAILABLE:
             st.markdown("#### 🧠 LLM 深度分析（可自定义 Agent 团队）")
