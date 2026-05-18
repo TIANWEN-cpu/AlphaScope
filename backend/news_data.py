@@ -1269,9 +1269,19 @@ def fetch_news_via_provider(
 ) -> List[Dict[str, Any]]:
     """通过 Provider Registry 获取新闻 (v0.11)
 
-    自动按优先级选择数据源, 失败时自动降级到下一源。
-    如果 Provider 系统不可用, 回退到原有函数。
+    v0.12: 优先通过 DataPipeline 采集 (含去重/排序/存储/索引),
+    Pipeline 不可用时回退到 Provider Registry, 最终回退到原有函数。
     """
+    # v0.12: 优先使用 Pipeline
+    try:
+        from pipeline import get_pipeline
+        results = get_pipeline().ingest_news(market=market, symbol=symbol, limit=limit)
+        if results:
+            return results
+    except Exception:
+        pass
+
+    # v0.11 回退: 直接使用 Registry
     registry = _get_registry()
     if registry:
         results = registry.get(
@@ -1283,7 +1293,7 @@ def fetch_news_via_provider(
         if results:
             return results
 
-    # 回退到原有实现
+    # 最终回退到原有实现
     return merge_news_items(
         fetch_telegraph_cls(limit=limit),
         fetch_telegraph_em(limit=limit),
@@ -1295,7 +1305,15 @@ def fetch_reports_via_provider(
     symbol: str,
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
-    """通过 Provider Registry 获取研报 (v0.11)"""
+    """通过 Provider Registry 获取研报 (v0.11, v0.12 增强)"""
+    try:
+        from pipeline import get_pipeline
+        results = get_pipeline().ingest_reports(symbol=symbol, limit=limit)
+        if results:
+            return results
+    except Exception:
+        pass
+
     registry = _get_registry()
     if registry:
         results = registry.get(
@@ -1307,7 +1325,6 @@ def fetch_reports_via_provider(
         if results:
             return results
 
-    # 回退
     return fetch_research_report(symbol, limit=limit)
 
 
@@ -1317,7 +1334,18 @@ def fetch_announcements_via_provider(
     start_date: str = "",
     end_date: str = "",
 ) -> List[Dict[str, Any]]:
-    """通过 Provider Registry 获取公告 (v0.11)"""
+    """通过 Provider Registry 获取公告 (v0.11, v0.12 增强)"""
+    try:
+        from pipeline import get_pipeline
+        results = get_pipeline().ingest_announcements(
+            symbol=symbol, limit=limit,
+            start_date=start_date, end_date=end_date,
+        )
+        if results:
+            return results
+    except Exception:
+        pass
+
     registry = _get_registry()
     if registry:
         results = registry.get(
@@ -1331,7 +1359,6 @@ def fetch_announcements_via_provider(
         if results:
             return results
 
-    # 回退
     return fetch_announcements_cninfo(symbol, days=30, limit=limit)
 
 

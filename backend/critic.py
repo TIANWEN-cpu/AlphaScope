@@ -88,11 +88,13 @@ def build_critic_prompt(
     stock_name: str,
     market_brief: str,
     agent_results: Dict[str, Dict[str, Any]],
+    available_evidence: str = "",
 ) -> str:
     """组装给审稿人的 user message。
 
     传入的是 agent 主键 -> 结果 dict,要求每个 dict 至少有 name/signal/confidence/reason,
     可选有 evidence/invalid_if/risks。
+    available_evidence: v0.12 RAG 检索到的可用证据列表 (用于评估证据覆盖率)
     """
     lines: List[str] = [
         f"标的:{stock_name}",
@@ -100,8 +102,10 @@ def build_critic_prompt(
         "==== 市场简报(原始数据) ====",
         market_brief.strip() or "(无)",
         "",
-        "==== 待审稿的 Agent 输出 ====",
     ]
+    if available_evidence:
+        lines += ["==== 可用证据 (数据源平台检索) ====", available_evidence.strip(), ""]
+    lines += ["==== 待审稿的 Agent 输出 ===="]
     for key, r in agent_results.items():
         lines.append(f"--- key: {key} ---")
         lines.append(f"name: {r.get('name', key)}")

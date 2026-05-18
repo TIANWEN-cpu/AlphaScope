@@ -363,7 +363,31 @@ AGENT_PROMPTS = {
 }
 
 
-def build_market_brief(stock_data: Dict[str, Any]) -> str:
+def fetch_evidence_context(symbol: str, stock_name: str = "", limit: int = 8) -> str:
+    """从 RAG 检索相关证据, 格式化为简报上下文 (v0.12)"""
+    try:
+        from backend.pipeline import search_evidence
+        query = f"{stock_name} {symbol} 投资分析"
+        results = search_evidence(query, symbol=symbol, n_results=limit)
+        if not results:
+            return ""
+        lines = ["【可用证据 (来自数据源平台)】"]
+        for i, r in enumerate(results, 1):
+            meta = r.get("metadata", {})
+            doc_type = meta.get("doc_type", "unknown")
+            source = meta.get("source", "unknown")
+            published = meta.get("published_at", "")
+            text_preview = r.get("text", "")[:120]
+            type_icon = {"news": "📰", "report": "📊", "announcement": "📋"}.get(doc_type, "📄")
+            lines.append(f"  [{i}] {type_icon} [{source}] {published} — {text_preview}...")
+        lines.append(f"\n共检索到 {len(results)} 条相关证据, 覆盖新闻/研报/公告。")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.debug("RAG 证据检索失败: %s", e)
+        return ""
+
+
+def build_market_brief(stock_data: Dict[str, Any], evidence_context: str = "") -> str:
     """把数据打包成一段简洁的市场简报"""
     base = f"""
 【标的】{stock_data['name']} ({stock_data['symbol']})
@@ -409,6 +433,8 @@ def build_market_brief(stock_data: Dict[str, Any]) -> str:
         base += f"\n{stock_data['stock_fund_brief']}\n"
     if stock_data.get("market_fund_brief"):
         base += f"\n{stock_data['market_fund_brief']}\n"
+    if evidence_context:
+        base += f"\n{evidence_context}\n"
     return base
 
 
@@ -844,7 +870,12 @@ def run_all_agents(stock_data: Dict[str, Any], include_retail: bool = True, api_
     并行调用全部 Agent（4 核心 + 可选散户行为）。
     api_keys: {agent_key: api_key} 细粒度 API Key 映射。
     """
-    brief = build_market_brief(stock_data)
+    # v0.12: 从 RAG 检索相关证据注入简报
+    evidence_ctx = fetch_evidence_context(
+        stock_data.get("symbol", ""),
+        stock_data.get("name", ""),
+    )
+    brief = build_market_brief(stock_data, evidence_context=evidence_ctx)
     api_keys = api_keys or {}
 
     keys = ["fundamental", "technical", "sentiment", "risk"]
