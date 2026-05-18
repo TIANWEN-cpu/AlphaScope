@@ -77,7 +77,7 @@ class DataPipeline:
         symbol: str = "",
         limit: int = 30,
     ) -> list[dict]:
-        """采集 → 去重 → 排序 → 存储 → 索引"""
+        """采集 → 去重 → 排序 → 事件抽取 → 存储 → 索引"""
         start = time.time()
         try:
             # 1. 从 Provider 获取
@@ -97,11 +97,14 @@ class DataPipeline:
             # 3. 可信度排序
             items = self._ranker.rank_items(items, source_key="source")
 
-            # 4. 持久化
+            # 4. 事件抽取 (v0.12)
+            items = self._enrich_news_with_events(items)
+
+            # 5. 持久化
             for item in items:
                 self._db.insert_news(self._to_news_row(item))
 
-            # 5. RAG 索引
+            # 6. RAG 索引
             self._index_news(items)
 
             latency = (time.time() - start) * 1000
@@ -182,6 +185,9 @@ class DataPipeline:
 
             items = self._dedup.dedup_announcements(items)
             items = self._ranker.rank_items(items, source_key="source")
+
+            # 事件分类 (v0.12)
+            items = self._enrich_announcements_with_events(items)
 
             for item in items:
                 self._db.insert_announcement(self._to_announcement_row(item))
@@ -419,6 +425,51 @@ class DataPipeline:
                 logger.info("[Pipeline] 公告 RAG 索引: %d chunks", count)
         except Exception as e:
             logger.debug("公告 RAG 索引失败: %s", e)
+
+    @staticmethod
+    def _enrich_news_with_events(items: list[dict]) -> list[dict]:
+        """用事件抽取器为新闻条目补充 event_type 和 sentiment"""
+        try:
+            from backend.events.extractor import EventExtractor
+            extractor = EventExtractor()
+            for item in items:
+                if item.get("event_type"):
+                    continue  # 已有事件类型, 跳过
+                events = extractor.extract_from_news_item(item)
+                if events:
+                    evt = events[0]
+                    item["event_type"] = evt.event_type
+                    item["sentiment"] = evt.sentiment
+                    item["importance"] = max(item.get("importance", 0.5), evt.importance)
+        except Exception as e:
+            logger.debug("新闻事件抽取跳过: %s", e)
+        return items
+
+    @staticmethod
+    def _enrich_announcements_with_events(items: list[dict]) -> list[dict]:
+        """用事件抽取器为公告条目补充 category"""
+        try:
+            from backend.events.extractor import EventExtractor
+            extractor = EventExtractor()
+            for item in items:
+                if item.get("category"):
+                    continue  # 已有分类, 跳过
+                events = extractor.extract_from_announcement(item)
+                if events:
+                    evt = events[0]
+                    # 映射 event_type → category
+                    type_to_cat = {
+                        "earnings": "earnings",
+                        "dividend": "dividend",
+                        "mna": "mna",
+                        "financing": "financing",
+                        "litigation": "litigation",
+                    }
+                    item["category"] = type_to_cat.get(evt.event_type, "other")
+                    item["importance"] = max(item.get("importance", 0.5), evt.importance)
+        except Exception as e:
+            logger.debug("公告事件抽取跳过: %s", e)
+        return items
 
     @staticmethod
     def _to_news_row(item: dict) -> dict:

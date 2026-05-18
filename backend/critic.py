@@ -89,12 +89,14 @@ def build_critic_prompt(
     market_brief: str,
     agent_results: Dict[str, Dict[str, Any]],
     available_evidence: str = "",
+    factor_context: str = "",
 ) -> str:
     """组装给审稿人的 user message。
 
     传入的是 agent 主键 -> 结果 dict,要求每个 dict 至少有 name/signal/confidence/reason,
     可选有 evidence/invalid_if/risks。
     available_evidence: v0.12 RAG 检索到的可用证据列表 (用于评估证据覆盖率)
+    factor_context: v0.12 量化因子分析 (用于评估因子一致性)
     """
     lines: List[str] = [
         f"标的:{stock_name}",
@@ -103,6 +105,8 @@ def build_critic_prompt(
         market_brief.strip() or "(无)",
         "",
     ]
+    if factor_context:
+        lines += ["==== 量化因子分析 ====", factor_context.strip(), ""]
     if available_evidence:
         lines += ["==== 可用证据 (数据源平台检索) ====", available_evidence.strip(), ""]
     lines += ["==== 待审稿的 Agent 输出 ===="]
@@ -256,7 +260,20 @@ def run_batch_critic(
 
     expected_keys = list(agent_results.keys())
     system_prompt = load_critic_system_prompt()
-    user_msg = build_critic_prompt(stock_name, market_brief, agent_results)
+
+    # v0.12: 获取因子上下文
+    factor_ctx = ""
+    try:
+        from backend.llm_agents import fetch_factor_context
+        # 从 market_brief 中提取 symbol
+        import re
+        sym_match = re.search(r"【标的】.*?\((\d{6})", market_brief)
+        if sym_match:
+            factor_ctx = fetch_factor_context(sym_match.group(1), stock_name)
+    except Exception:
+        pass
+
+    user_msg = build_critic_prompt(stock_name, market_brief, agent_results, factor_context=factor_ctx)
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_msg},

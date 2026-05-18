@@ -387,7 +387,22 @@ def fetch_evidence_context(symbol: str, stock_name: str = "", limit: int = 8) ->
         return ""
 
 
-def build_market_brief(stock_data: Dict[str, Any], evidence_context: str = "") -> str:
+def fetch_factor_context(symbol: str, stock_name: str = "", days: int = 30) -> str:
+    """生成量化因子摘要, 注入 Agent 简报 (v0.12)"""
+    try:
+        from backend.factors import get_factor_generator
+        from backend.factors.generator import format_factor_summary
+        gen = get_factor_generator()
+        report = gen.generate(symbol, stock_name, days=days, include_signals=True)
+        if report.news_count == 0 and report.event_count == 0 and report.report_count == 0:
+            return ""
+        return format_factor_summary(report)
+    except Exception as e:
+        logger.debug("因子分析失败: %s", e)
+        return ""
+
+
+def build_market_brief(stock_data: Dict[str, Any], evidence_context: str = "", factor_context: str = "") -> str:
     """把数据打包成一段简洁的市场简报"""
     base = f"""
 【标的】{stock_data['name']} ({stock_data['symbol']})
@@ -419,7 +434,6 @@ def build_market_brief(stock_data: Dict[str, Any], evidence_context: str = "") -
     if stock_data.get("related_news_brief"):
         base += f"\n【个股相关资讯（最近）】\n{stock_data['related_news_brief']}\n"
     if stock_data.get("announcements_brief"):
-        # v0.10:个股公告往往比新闻更硬,放在新闻之前能拉高其权重
         base += f"\n【个股近 30 天公告(已分类)】\n{stock_data['announcements_brief']}\n"
     if stock_data.get("industry_news_brief"):
         base += f"\n【行业相关动态】\n{stock_data['industry_news_brief']}\n"
@@ -433,6 +447,8 @@ def build_market_brief(stock_data: Dict[str, Any], evidence_context: str = "") -
         base += f"\n{stock_data['stock_fund_brief']}\n"
     if stock_data.get("market_fund_brief"):
         base += f"\n{stock_data['market_fund_brief']}\n"
+    if factor_context:
+        base += f"\n{factor_context}\n"
     if evidence_context:
         base += f"\n{evidence_context}\n"
     return base
@@ -870,12 +886,12 @@ def run_all_agents(stock_data: Dict[str, Any], include_retail: bool = True, api_
     并行调用全部 Agent（4 核心 + 可选散户行为）。
     api_keys: {agent_key: api_key} 细粒度 API Key 映射。
     """
-    # v0.12: 从 RAG 检索相关证据注入简报
-    evidence_ctx = fetch_evidence_context(
-        stock_data.get("symbol", ""),
-        stock_data.get("name", ""),
-    )
-    brief = build_market_brief(stock_data, evidence_context=evidence_ctx)
+    # v0.12: 从 RAG 检索相关证据 + 量化因子注入简报
+    symbol = stock_data.get("symbol", "")
+    stock_name = stock_data.get("name", "")
+    evidence_ctx = fetch_evidence_context(symbol, stock_name)
+    factor_ctx = fetch_factor_context(symbol, stock_name)
+    brief = build_market_brief(stock_data, evidence_context=evidence_ctx, factor_context=factor_ctx)
     api_keys = api_keys or {}
 
     keys = ["fundamental", "technical", "sentiment", "risk"]
