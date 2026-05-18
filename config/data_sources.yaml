@@ -1,0 +1,207 @@
+# AI-Finance 数据源配置 (v0.11)
+# 控制各数据源的启用、优先级、超时和重试策略
+# 优先级越高(数值越大), 在 Provider Registry 中越优先被选择
+
+version: "1.0"
+
+# ============== A 股行情数据源 ==============
+price_providers:
+  akshare:
+    enabled: true
+    priority: 60
+    timeout: 10
+    retry: 2
+    description: "AkShare 免费开源, 覆盖A/港/美股, 适合开发验证"
+
+  tushare:
+    enabled: false
+    priority: 85
+    timeout: 10
+    retry: 3
+    token_env: TUSHARE_TOKEN
+    description: "Tushare Pro, 需注册Token, 数据更稳定"
+
+  baostock:
+    enabled: true
+    priority: 50
+    timeout: 10
+    retry: 2
+    description: "BaoStock 免费, A股行情兜底"
+
+  openbb:
+    enabled: true
+    priority: 75
+    timeout: 15
+    retry: 2
+    description: "OpenBB 全球金融数据集成层"
+
+# ============== A 股公告数据源 ==============
+announcement_providers:
+  cninfo:
+    enabled: true
+    priority: 95
+    timeout: 15
+    retry: 3
+    description: "巨潮资讯 CNINFO - A股公告核心源"
+
+  tushare:
+    enabled: false
+    priority: 85
+    timeout: 10
+    retry: 3
+    token_env: TUSHARE_TOKEN
+    description: "Tushare anns_d 全量公告接口"
+
+  eastmoney:
+    enabled: true
+    priority: 60
+    timeout: 10
+    retry: 2
+    description: "东方财富公告"
+
+# ============== 研报数据源 ==============
+report_providers:
+  tushare:
+    enabled: false
+    priority: 90
+    timeout: 10
+    retry: 3
+    token_env: TUSHARE_TOKEN
+    description: "Tushare research_report 券商研报"
+
+  eastmoney:
+    enabled: true
+    priority: 70
+    timeout: 10
+    retry: 2
+    description: "东方财富个股研报"
+
+  akshare:
+    enabled: true
+    priority: 60
+    timeout: 10
+    retry: 2
+    description: "AkShare 聚合研报"
+
+# ============== 新闻/快讯数据源 ==============
+news_providers:
+  cls:
+    enabled: true
+    priority: 80
+    timeout: 10
+    retry: 2
+    description: "财联社快讯"
+
+  eastmoney:
+    enabled: true
+    priority: 70
+    timeout: 10
+    retry: 2
+    description: "东方财富快讯"
+
+  sina:
+    enabled: true
+    priority: 60
+    timeout: 10
+    retry: 2
+    description: "新浪财经快讯"
+
+  caixin:
+    enabled: true
+    priority: 50
+    timeout: 10
+    retry: 2
+    description: "财新摘要(注意版权)"
+
+# ============== 美股数据源 ==============
+us_providers:
+  sec:
+    enabled: true
+    priority: 95
+    timeout: 15
+    retry: 3
+    user_agent_env: SEC_USER_AGENT
+    description: "SEC EDGAR - 美股公告和财报核心源"
+
+  openbb:
+    enabled: true
+    priority: 80
+    timeout: 15
+    retry: 2
+    description: "OpenBB 美股行情和基本面"
+
+  fmp:
+    enabled: false
+    priority: 70
+    timeout: 10
+    retry: 2
+    api_key_env: FMP_API_KEY
+    description: "Financial Modeling Prep"
+
+  alpha_vantage:
+    enabled: false
+    priority: 60
+    timeout: 10
+    retry: 2
+    api_key_env: ALPHA_VANTAGE_API_KEY
+    description: "Alpha Vantage"
+
+# ============== 港股数据源 ==============
+hk_providers:
+  hkex:
+    enabled: true
+    priority: 95
+    timeout: 15
+    retry: 3
+    description: "HKEXnews - 港股公告核心源"
+
+  openbb:
+    enabled: true
+    priority: 75
+    timeout: 15
+    retry: 2
+    description: "OpenBB 港股行情"
+
+# ============== 宏观数据源 ==============
+macro_providers:
+  akshare:
+    enabled: true
+    priority: 80
+    timeout: 15
+    retry: 2
+    description: "AkShare 宏观数据(GDP/CPI/PPI/PMI等)"
+
+  openbb:
+    enabled: true
+    priority: 70
+    timeout: 15
+    retry: 2
+    description: "OpenBB FRED等全球宏观数据"
+
+# ============== 舆情/社交数据源 ==============
+sentiment_providers:
+  xueqiu:
+    enabled: false
+    priority: 50
+    timeout: 10
+    retry: 2
+    description: "雪球投资者讨论(需爬虫)"
+
+# ============== 新闻源可信度分级 ==============
+source_trust_levels:
+  # S级: 交易所/官方文件
+  S: ["cninfo", "sec", "hkex", "exchange"]
+  # A级: 专业数据源
+  A: ["tushare", "wind", "ifind", "choice", "fmp", "openbb"]
+  # B级: 主流媒体
+  B: ["cls", "eastmoney", "sina", "caixin", "mainstream_media"]
+  # C级: 社交/聚合
+  C: ["xueqiu", "weibo", "rss"]
+  # D级: 未知来源
+  D: ["unknown", "forum"]
+
+# 公告数据源优先级
+announcement_priority:
+  CN: "cninfo > tushare > eastmoney > akshare"
+  US: "sec > openbb > fmp"
+  HK: "hkex > openbb > third_party"
