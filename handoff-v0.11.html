@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>AI-Finance v0.11 Handoff</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; max-width: 960px; margin: 40px auto; padding: 20px; line-height: 1.7; color: #333; background: #fff; }
+h1 { border-bottom: 3px solid #0366d6; padding-bottom: 12px; color: #1a1a1a; }
+h2 { color: #0366d6; margin-top: 35px; border-left: 4px solid #0366d6; padding-left: 12px; }
+table { border-collapse: collapse; width: 100%; margin: 15px 0; font-size: 14px; }
+th, td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; }
+th { background: #f6f8fa; font-weight: 600; }
+tr:nth-child(even) { background: #f9f9f9; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; font-family: Consolas, monospace; }
+pre { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; color: inherit; padding: 0; }
+ul, ol { padding-left: 25px; }
+li { margin: 6px 0; }
+a { color: #0366d6; }
+strong { color: #1a1a1a; }
+.highlight { background: #fff3cd; padding: 12px 16px; border-radius: 6px; border-left: 4px solid #ffc107; margin: 15px 0; }
+.done { color: #28a745; }
+.todo { color: #dc3545; }
+</style>
+</head>
+<body>
+
+<h1>Handoff: AI-Finance v0.11 Provider Architecture Upgrade</h1>
+
+<h2>What was done</h2>
+<p>Completed a major v0.11 upgrade based on three planning documents. The upgrade transforms the project from "scripts calling APIs" into a "data source platform" with a Provider plugin architecture.</p>
+
+<p><strong>4 commits on <code>main</code>, all pushed to GitHub:</strong></p>
+<pre><code>bc9a919 docs: update README and CHANGELOG for v0.11
+f24b056 Merge v0.11-provider-system
+2d5ddbe feat: Docker, deps, news_data integration
+f331b51 feat: quality, storage, ingestion, RAG, observability
+6223be3 feat: Provider system and schemas</code></pre>
+
+<p><strong>40 files added/modified, +3,271 lines.</strong> Feature branch <code>v0.11-provider-system</code> also pushed.</p>
+
+<h2>Project location</h2>
+<ul>
+<li><strong>Repo</strong>: <code>D:/AI-FInance/AI--FINANCE/</code></li>
+<li><strong>GitHub</strong>: <a href="https://github.com/TIANWEN-cpu/AI--FINANCE">https://github.com/TIANWEN-cpu/AI--FINANCE</a></li>
+</ul>
+
+<h2>What was built</h2>
+<table>
+<tr><th>Layer</th><th>Path</th><th>Key files</th></tr>
+<tr><td><span class="done">&#10003;</span> Providers (9)</td><td><code>backend/providers/</code></td><td><code>base.py</code>, <code>registry.py</code>, <code>akshare_provider.py</code>, <code>tushare_provider.py</code>, <code>baostock_provider.py</code>, <code>openbb_provider.py</code>, <code>sec_provider.py</code>, <code>hkex_provider.py</code>, <code>cninfo_provider.py</code>, <code>cls_provider.py</code>, <code>eastmoney_provider.py</code></td></tr>
+<tr><td><span class="done">&#10003;</span> Schemas</td><td><code>backend/schemas/</code></td><td><code>news.py</code>, <code>report.py</code>, <code>announcement.py</code>, <code>market.py</code>, <code>evidence.py</code></td></tr>
+<tr><td><span class="done">&#10003;</span> Quality</td><td><code>backend/quality/</code></td><td><code>dedup.py</code> (fingerprint去重), <code>source_rank.py</code> (S/A/B/C/D可信度)</td></tr>
+<tr><td><span class="done">&#10003;</span> Storage</td><td><code>backend/storage/</code></td><td><code>db.py</code> (SQLite, 6 tables)</td></tr>
+<tr><td><span class="done">&#10003;</span> Ingestion</td><td><code>backend/ingestion/</code></td><td><code>scheduler.py</code> (DataScheduler)</td></tr>
+<tr><td><span class="done">&#10003;</span> RAG</td><td><code>backend/rag/</code></td><td><code>chunker.py</code>, <code>vector_store.py</code> (ChromaDB), <code>retriever.py</code></td></tr>
+<tr><td><span class="done">&#10003;</span> Observability</td><td><code>backend/observability/</code></td><td><code>source_health.py</code></td></tr>
+<tr><td><span class="done">&#10003;</span> Config</td><td><code>config/</code></td><td><code>data_sources.yaml</code> (新增)</td></tr>
+<tr><td><span class="done">&#10003;</span> Docker</td><td>项目根</td><td><code>Dockerfile</code>, <code>docker-compose.yml</code>, <code>.dockerignore</code></td></tr>
+<tr><td><span class="done">&#10003;</span> Integration</td><td><code>backend/news_data.py</code></td><td>新增 <code>fetch_*_via_provider()</code> 函数, 完全向后兼容</td></tr>
+</table>
+
+<h2>What is NOT done yet</h2>
+<ol>
+<li><span class="todo"><strong>Tushare integration testing</strong></span> - TushareProvider code written but needs <code>TUSHARE_TOKEN</code> to test. <code>research_report</code> and <code>anns_d</code> are the most critical missing data sources.</li>
+<li><span class="todo"><strong>news_data.py full refactoring</strong></span> - The plan called for splitting the 1270-line file into separate provider files. Only thin wrappers were added; originals remain intact.</li>
+<li><span class="todo"><strong>Frontend integration</strong></span> - <code>frontend/dashboard.py</code> (3225 lines) not updated. Need:
+   <ul>
+   <li>Add "数据源健康度" tab</li>
+   <li>Display data source and confidence on items</li>
+   <li>Add evidence citations to agent reports</li>
+   </ul>
+</li>
+<li><span class="todo"><strong>Evidence-driven Agent output</strong></span> - <code>EvidenceBundle</code> schema exists but not wired into agent prompts or outputs.</li>
+<li><span class="todo"><strong>RAG indexing pipeline</strong></span> - <code>Retriever</code> methods exist but no automated pipeline to feed data into ChromaDB.</li>
+<li><span class="todo"><strong>Ingestion scheduler jobs</strong></span> - <code>DataScheduler</code> exists but no concrete fetch jobs registered.</li>
+<li><span class="todo"><strong>Unit tests</strong></span> - No tests for new modules (providers, schemas, quality, storage, rag).</li>
+<li><span class="todo"><strong>BaoStock/OpenBB/SEC providers</strong></span> - Code written but not tested against live APIs.</li>
+<li><span class="todo"><strong>HKEX provider</strong></span> - Stub only, HTML parsing not implemented.</li>
+<li><span class="todo"><strong>Commercial provider stubs</strong></span> - Wind/iFinD/Choice/JY placeholders not created.</li>
+</ol>
+
+<h2>Dependencies to install</h2>
+<pre><code>pip install pydantic>=2.0.0 tenacity>=8.2.0 aiohttp>=3.9.0 chromadb>=0.4.0 apscheduler>=3.10.0
+# Optional:
+pip install tushare>=1.4.0 baostock>=0.8.8</code></pre>
+
+<h2>Environment variables needed</h2>
+<p>Existing (already in <code>.env</code>):</p>
+<ul>
+<li><code>DEEPSEEK_API_KEY</code>, <code>CLAUDE_API_KEY</code>, <code>GPT_API_KEY</code>, <code>MIMO_API_KEY</code>, <code>SENSENOVA_API_KEY</code></li>
+</ul>
+<p>New for v0.11:</p>
+<ul>
+<li><code>TUSHARE_TOKEN</code> - for Tushare Pro (研报/公告)</li>
+<li><code>SEC_USER_AGENT</code> - for SEC EDGAR (default: "AI-Finance research@example.com")</li>
+<li>Optional: <code>FMP_API_KEY</code>, <code>ALPHA_VANTAGE_API_KEY</code></li>
+</ul>
+
+<h2>Suggested next steps</h2>
+<div class="highlight">
+<ol>
+<li><strong>First priority</strong>: Wire Provider system into Streamlit dashboard - add source health tab and data source display</li>
+<li><strong>Second priority</strong>: Evidence-driven agent output - update prompts to require evidence_ids</li>
+<li><strong>Third priority</strong>: Unit tests for providers, schemas, quality modules</li>
+<li><strong>Fourth priority</strong>: Build concrete ingestion jobs and RAG indexing pipeline</li>
+<li><strong>Fifth priority</strong>: Get Tushare token and test TushareProvider live</li>
+</ol>
+</div>
+
+<h2>Skills to use next</h2>
+<ul>
+<li><code>brainstorming</code> - before designing frontend integration or evidence-driven agent changes</li>
+<li><code>writing-plans</code> - before tackling the frontend dashboard (3225 lines, complex)</li>
+<li><code>test-driven-development</code> - when writing tests for new modules</li>
+<li><code>systematic-debugging</code> - if live API testing reveals issues</li>
+</ul>
+
+</body>
+</html>
