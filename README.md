@@ -3,7 +3,21 @@
 > 安装日期：2026-05-16
 > 位置：克隆后的仓库目录
 > Python 环境：建议使用本地虚拟环境 `.venv` 或 `venvs/finance-agent-engineering`
-> 当前版本：**v0.11.0（Provider 插件架构 + 数据中台升级）**
+> 当前版本：**v0.12.0（数据管道 + 证据驱动 Agent）**
+
+## v0.12.0 新特性（数据管道 + 证据驱动 Agent）
+
+| 模块 | 主要能力 |
+|---|---|
+| **🔗 数据管道** | `backend/pipeline.py`：DataPipeline 串联 Provider → 去重 → 可信度排序 → SQLite 存储 → ChromaDB 索引，一条命令完成全流程采集 |
+| **⏱️ 采集任务** | `backend/ingestion/jobs.py`：6 个预定义采集任务（CN 新闻/研报/公告/行情/大盘 + US SEC），`create_default_scheduler()` 一键启动 |
+| **🔧 Provider 修复** | HKEX 实现 HTML 解析；SEC 实现 ticker→CIK 映射（使用 SEC 官方 `company_tickers.json`） |
+| **🧠 证据驱动 Agent** | Agent 分析前自动从 RAG 检索相关证据注入市场简报；Critic 新增第 6 维度：证据覆盖率评估 |
+| **📊 数据源健康度** | 新增 Tab 10：Provider 状态表、采集日志统计、RAG 索引状态、数据库记录数一览 |
+| **🧪 测试覆盖** | 新增 8 个测试文件覆盖 Pipeline/去重/可信度/数据库/调度器/Schema/SEC/HKEX |
+| **📰 三级回退** | `news_data.py` 的 `fetch_*_via_provider()` 现在优先走 Pipeline（v0.12）→ Registry（v0.11）→ 原有函数（兜底） |
+
+> v0.12 核心理念：**从"数据源平台"升级为"端到端数据管道 + 证据驱动研究系统"**。所有数据自动采集、去重、排序、持久化、索引；Agent 分析时自动检索证据，结论必须可追溯。
 
 ## v0.11.0 新特性（Provider 插件架构 + 数据中台）
 

@@ -1,4 +1,4 @@
-# AI-Finance Dockerfile (v0.11)
+# AI-Finance Dockerfile (v0.12)
 # 多阶段构建, 最小化镜像体积
 
 FROM python:3.11-slim AS base

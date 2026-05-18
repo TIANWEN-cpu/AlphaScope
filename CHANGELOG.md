@@ -1,5 +1,46 @@
 # Changelog
 
+## v0.12.0 - 2026-05-18
+
+### Data Pipeline Integration
+- Added `backend/pipeline.py` — `DataPipeline` class wiring Provider → Dedup → SourceRank → SQLite → ChromaDB into a unified ingestion flow.
+- Pipeline supports: `ingest_news()`, `ingest_reports()`, `ingest_announcements()`, `ingest_prices()`, `ingest_fundamentals()`, `ingest_fund_flow()`, `search_evidence()`.
+- All pipeline operations are logged to `source_fetch_logs` for observability.
+
+### Ingestion Scheduler Jobs
+- Added `backend/ingestion/jobs.py` — concrete fetch jobs for CN news (5min), CN reports (1hr), CN announcements (1hr), market snapshot (1hr), CN prices (daily), US SEC filings (15min).
+- `create_default_scheduler()` factory creates a fully configured `DataScheduler` with all default jobs.
+
+### Provider Fixes
+- **HKEX Provider**: Implemented proper HTML parsing for HKEXnews search results with fallback link extraction.
+- **SEC Provider**: Implemented ticker-to-CIK lookup using SEC's official `company_tickers.json` with in-memory caching. Fixed `_symbol_to_cik()` to return actual CIK numbers.
+
+### Evidence-Driven Agent Output
+- Added `fetch_evidence_context()` in `llm_agents.py` — retrieves RAG evidence and formats it for agent prompts.
+- `build_market_brief()` now accepts optional `evidence_context` parameter to include data platform evidence.
+- `run_all_agents()` automatically fetches evidence context before building the market brief.
+- Updated `critic.md` with 6th scoring dimension: evidence coverage rate.
+- `build_critic_prompt()` now accepts `available_evidence` parameter for evidence coverage assessment.
+
+### Frontend: Source Health Dashboard
+- Added Tab 10 "📊 数据源健康" to the Streamlit dashboard.
+- New `frontend/components/source_health_panel.py` — displays Provider health table, fetch log statistics, RAG index status, and database record counts.
+- Added `render_trust_badge()` helper for S/A/B/C/D trust level display.
+
+### Tests
+- Added `tests/test_schema_models.py` — tests for all Pydantic models (NewsItem, ResearchReport, Announcement, PriceBar, FundFlow, EvidenceItem, EvidenceBundle, AgentReport).
+- Added `tests/test_dedup.py` — tests for Deduplicator fingerprint and dedup logic.
+- Added `tests/test_source_rank.py` — tests for SourceRanker trust scoring and ranking.
+- Added `tests/test_db.py` — tests for Database insert/upsert with temporary SQLite.
+- Added `tests/test_scheduler.py` — tests for FetchJob tick/execute and DataScheduler lifecycle.
+- Added `tests/test_pipeline.py` — tests for DataPipeline data conversion and status.
+- Added `tests/test_sec_provider.py` — tests for SEC CIK lookup and filing parsing.
+- Added `tests/test_hkex_provider.py` — tests for HKEX HTML parsing and category guessing.
+
+### Integration
+- Updated `news_data.py` `fetch_*_via_provider()` functions to route through `DataPipeline` first (v0.12), then Provider Registry (v0.11), then original functions (fallback).
+- Updated dashboard footer to v0.12.
+
 ## v0.11.0 - 2026-05-18
 
 ### Provider Plugin Architecture

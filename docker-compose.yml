@@ -1,4 +1,4 @@
-# AI-Finance Docker Compose (v0.11)
+# AI-Finance Docker Compose (v0.12)
 # 支持: 主应用 + Redis缓存 + 可选ChromaDB
 
 version: "3.8"
