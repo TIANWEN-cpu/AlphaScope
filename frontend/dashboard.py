@@ -902,7 +902,7 @@ if st.session_state.get("show_ai_chat", False):
             st.rerun()
 
 # ============== 图表 ==============
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "📈 K 线 & 技术指标",
     "🤖 Agent 协作分析",
     "⚙️ AI 设置中心",
@@ -912,6 +912,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "💡 基本面",
     "📚 研究存档",
     "🎓 专家团圆桌",
+    "📊 数据源健康",
 ])
 
 with tab1:
@@ -3212,14 +3213,23 @@ with tab9:
         except Exception as _e:
             st.error(f"专家圆桌 Tab 渲染失败: {_e}")
 
+# ============== Tab 10: 数据源健康度 ==============
+with tab10:
+    try:
+        from components.source_health_panel import render_source_health_panel
+        render_source_health_panel()
+    except Exception as _health_e:
+        st.error(f"数据源健康度面板加载失败: {_health_e}")
+        st.info("请确认 backend/ 模块可正常导入")
+
 # ============== 底部 ==============
 st.markdown('<hr class="fancy">', unsafe_allow_html=True)
 st.html(f"""
 <div style='text-align:center; color:#9ca3af; font-size:0.82rem; padding:10px;'>
-    🚀 金融 Agent 工作台 v0.7 ·
-    数据: <strong>akshare</strong>(行情/资金/资讯/财务/股东/同业) ·
+    🚀 金融 Agent 工作台 v0.12 ·
+    数据: <strong>Provider 插件体系</strong>(AkShare/Tushare/SEC/HKEX/OpenBB) ·
     LLM: <strong>Claude · GPT · DeepSeek · Mimo · SenseNova · Kimi</strong>(6 厂商) ·
-    新增: 基本面增强 / AI 咨询 / 专家圆桌 / 资金细分 / 资讯时间轴 ·
+    新增: 数据管道 / 证据驱动 Agent / 数据源健康度 ·
     生成于 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 </div>
 """)
