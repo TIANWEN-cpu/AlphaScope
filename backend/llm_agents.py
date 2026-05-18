@@ -18,6 +18,9 @@ v2.0 新增：
 import os
 import json
 import re
+import threading
+import ipaddress
+from urllib.parse import urlsplit
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, Tuple, Optional, List
@@ -52,6 +55,50 @@ def _resolve_env(value: str) -> str:
     return re.sub(r'\$\{([^}]+)\}', replacer, value)
 
 
+def normalize_openai_base_url(base_url: str) -> str:
+    """Normalize OpenAI-compatible base URLs without corrupting explicit version paths."""
+    cleaned = (base_url or "").strip().rstrip("/")
+    if not cleaned:
+        return ""
+    if not cleaned.startswith(("http://", "https://")):
+        cleaned = "https://" + cleaned
+    path = urlsplit(cleaned).path.rstrip("/")
+    if re.search(r"/v\d+(?:/)?$", path):
+        return cleaned
+    return cleaned + "/v1"
+
+
+def _allow_local_base_url() -> bool:
+    return os.getenv("ALLOW_LOCAL_LLM_BASE_URL", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def validate_custom_base_url(base_url: str) -> str:
+    """Reject private/local custom endpoints unless explicitly enabled by environment."""
+    normalized = normalize_openai_base_url(base_url)
+    if not normalized or _allow_local_base_url():
+        return normalized
+    parsed = urlsplit(normalized)
+    host = (parsed.hostname or "").strip().lower().rstrip(".")
+    if not host:
+        raise ValueError("自定义 Base URL 缺少有效主机名")
+    if host == "localhost" or host.endswith(".localhost"):
+        raise ValueError("默认禁止连接 localhost 自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return normalized
+    if (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    ):
+        raise ValueError("默认禁止连接内网或本机自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1")
+    return normalized
+
+
 def load_providers(config_path: Optional[str] = None) -> Dict[str, Any]:
     """从 providers.yaml 加载 Provider 配置"""
     p = Path(config_path) if config_path else CONFIG_DIR / "providers.yaml"
@@ -64,9 +111,7 @@ def load_providers(config_path: Optional[str] = None) -> Dict[str, Any]:
             prov_id = prov["id"]
             api_host = _resolve_env(prov.get("apiHost", ""))
             api_key = _resolve_env(prov.get("apiKey", ""))
-            # 确保 api_host 以 /v1 结尾（OpenAI 兼容格式）
-            if api_host and not api_host.endswith("/v1"):
-                api_host = api_host.rstrip("/") + "/v1"
+            api_host = normalize_openai_base_url(api_host)
             providers[prov_id] = {
                 "api_key": api_key,
                 "base_url": api_host,
@@ -148,9 +193,9 @@ def get_vendor_config(vendor: str, api_key: Optional[str] = None, base_url: Opti
     if not base:
         return None
     if api_key or base_url:
-        normalized_base_url = (base_url or base.get("base_url") or "").strip().rstrip("/")
-        if normalized_base_url and not normalized_base_url.endswith("/v1"):
-            normalized_base_url += "/v1"
+        normalized_base_url = normalize_openai_base_url(base_url or base.get("base_url") or "")
+        if base_url:
+            normalized_base_url = validate_custom_base_url(normalized_base_url)
         return {
             **base,
             "api_key": api_key or base.get("api_key"),
@@ -173,6 +218,7 @@ def create_client(vendor: str, api_key: Optional[str] = None, base_url: Optional
 
 # ============== 客户端缓存 ==============
 _client_cache: Dict[str, OpenAI] = {}
+_client_cache_lock = threading.Lock()
 
 
 def get_client(vendor: str, api_key: Optional[str] = None, base_url: Optional[str] = None) -> OpenAI:
@@ -184,18 +230,19 @@ def get_client(vendor: str, api_key: Optional[str] = None, base_url: Optional[st
         return create_client(vendor, api_key, base_url)
     
     cache_key = vendor
-    if cache_key in _client_cache:
-        return _client_cache[cache_key]
-    
-    client = create_client(vendor)
-    _client_cache[cache_key] = client
-    return client
+    with _client_cache_lock:
+        if cache_key in _client_cache:
+            return _client_cache[cache_key]
+        client = create_client(vendor)
+        _client_cache[cache_key] = client
+        return client
 
 
 def clear_client_cache():
     """清理客户端缓存（热重载后调用）"""
     global _client_cache
-    _client_cache = {}
+    with _client_cache_lock:
+        _client_cache = {}
 
 
 # ============== Agent → 模型映射 ==============
@@ -370,6 +417,40 @@ def _extract_json(text: str) -> dict:
     if not text:
         return {}
 
+    def _balanced_json_candidates(raw: str) -> List[str]:
+        candidates: List[str] = []
+        start: Optional[int] = None
+        depth = 0
+        in_string = False
+        escape = False
+        for i, ch in enumerate(raw):
+            if start is None:
+                if ch == "{":
+                    start = i
+                    depth = 1
+                    in_string = False
+                    escape = False
+                continue
+            if escape:
+                escape = False
+                continue
+            if ch == "\\" and in_string:
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and start is not None:
+                    candidates.append(raw[start:i + 1])
+                    start = None
+        return candidates
+
     def _loads(candidate: str) -> dict:
         candidate = (candidate or "").strip()
         candidate = candidate.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
@@ -388,13 +469,12 @@ def _extract_json(text: str) -> dict:
             return _loads(m.group(1))
         except Exception:
             pass
-    # 3) 抓第一个 { ... } 平衡块
-    m = re.search(r"\{[\s\S]*\}", text)
-    if m:
+    # 3) 抓平衡的 JSON 对象块，避免贪婪正则吞掉多个对象或在畸形文本上卡住
+    for candidate in _balanced_json_candidates(text):
         try:
-            return _loads(m.group(0))
+            return _loads(candidate)
         except Exception:
-            pass
+            continue
     return {}
 
 
@@ -523,11 +603,14 @@ def run_custom_agent(agent_raw: dict, market_brief: str, api_key: Optional[str] 
     ]
     primary_vendor = resolved_provider
     last_err = None
-    for vd, md, bu in [(resolved_provider, resolved_model, resolved_base_url), (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], "")]:
+    for vd, md, bu, key_override in [
+        (resolved_provider, resolved_model, resolved_base_url, resolved_key),
+        (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], "", None),
+    ]:
         try:
             mtokens = 2048 if vd == "mimo" else 500
             call_messages = _strict_json_messages(messages) if vd == "mimo" else messages
-            text = _call_with(vd, md, call_messages, json_mode=True, max_tokens=mtokens, temperature=0.3, api_key=resolved_key, base_url=bu)
+            text = _call_with(vd, md, call_messages, json_mode=True, max_tokens=mtokens, temperature=0.3, api_key=key_override, base_url=bu)
             data = _extract_json(text)
             if not data or not data.get("signal"):
                 retry_messages = messages + [
@@ -536,7 +619,7 @@ def run_custom_agent(agent_raw: dict, market_brief: str, api_key: Optional[str] 
                 ]
                 if vd == "mimo":
                     retry_messages = _strict_json_messages(retry_messages)
-                text = _call_with(vd, md, retry_messages, json_mode=True, max_tokens=mtokens, temperature=0.1, api_key=resolved_key, base_url=bu)
+                text = _call_with(vd, md, retry_messages, json_mode=True, max_tokens=mtokens, temperature=0.1, api_key=key_override, base_url=bu)
                 data = _extract_json(text)
             if not data or not data.get("signal"):
                 last_err = f"{vd} 未返回有效 JSON"
@@ -699,11 +782,11 @@ def run_one_agent(agent_key: str, market_brief: str, api_key: Optional[str] = No
     ]
 
     last_err = None
-    for vd, md in [(vendor, model), FALLBACK_VENDOR_MODEL]:
+    for vd, md, key_override in [(vendor, model, api_key), (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], None)]:
         try:
             # Mimo 模型需要更大的 max_tokens,避免输出被截断导致 JSON 解析失败
             mtokens = 2048 if vd == "mimo" else 600
-            text = _call_with(vd, md, messages, json_mode=True, max_tokens=mtokens, temperature=0.3, api_key=api_key)
+            text = _call_with(vd, md, messages, json_mode=True, max_tokens=mtokens, temperature=0.3, api_key=key_override)
             data = _extract_json(text)
             if not data or not data.get("signal"):
                 # 同一供应商再补一次以纯 JSON 回复
@@ -711,7 +794,7 @@ def run_one_agent(agent_key: str, market_brief: str, api_key: Optional[str] = No
                 text = _call_with(vd, md, messages + [
                     {"role": "assistant", "content": text},
                     {"role": "user", "content": "请只输出符合格式的 JSON 对象,不要任何前后说明。"},
-                ], json_mode=True, max_tokens=retry_tokens, temperature=0.1, api_key=api_key)
+                ], json_mode=True, max_tokens=retry_tokens, temperature=0.1, api_key=key_override)
                 data = _extract_json(text)
 
             # 如果当前供应商两次都没拿到信号,且不是兜底供应商,尝试切换到兜底
@@ -831,9 +914,9 @@ def summarize_with_chairman(results: Dict[str, Any], stock_name: str, api_key: O
         {"role": "system", "content": "你是一位严谨克制的投资委员会主席，注重风控与可执行性。"},
         {"role": "user", "content": prompt},
     ]
-    for vd, md in [(vendor, model), FALLBACK_VENDOR_MODEL]:
+    for vd, md, key_override in [(vendor, model, api_key), (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], None)]:
         try:
-            return _call_with(vd, md, messages, json_mode=False, max_tokens=700, temperature=0.4, api_key=api_key)
+            return _call_with(vd, md, messages, json_mode=False, max_tokens=700, temperature=0.4, api_key=key_override)
         except Exception as e:
             last = f"主席总结生成失败 ({VENDORS[vd]['label']}/{md}): {e}"
             continue

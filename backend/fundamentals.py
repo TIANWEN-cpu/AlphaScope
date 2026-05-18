@@ -14,6 +14,7 @@ warnings.filterwarnings("ignore")
 import json
 import time
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from pathlib import Path
@@ -489,33 +490,34 @@ def load_fundamentals(symbol: str, stock_name: str, force_refresh: bool = False)
     )
 
     errors = []
-
-    try:
-        data.financials = fetch_financial_summary(symbol, periods=4)
-    except Exception as e:
-        errors.append(f"financials: {e}")
-
-    try:
-        data.top_holders = fetch_top_holders(symbol)
-    except Exception as e:
-        errors.append(f"top_holders: {e}")
-
-    try:
-        data.circulate_holders = fetch_circulate_holders(symbol)
-    except Exception as e:
-        errors.append(f"circulate_holders: {e}")
-
-    try:
-        data.inst_changes = fetch_inst_changes(symbol)
-    except Exception as e:
-        errors.append(f"inst_changes: {e}")
-
-    try:
-        industry, peers = fetch_industry_peers(symbol, top_k=8)
-        data.industry_name = industry
-        data.peers = peers
-    except Exception as e:
-        errors.append(f"peers: {e}")
+    jobs = {
+        "financials": lambda: fetch_financial_summary(symbol, periods=4),
+        "top_holders": lambda: fetch_top_holders(symbol),
+        "circulate_holders": lambda: fetch_circulate_holders(symbol),
+        "inst_changes": lambda: fetch_inst_changes(symbol),
+        "peers": lambda: fetch_industry_peers(symbol, top_k=8),
+    }
+    with ThreadPoolExecutor(max_workers=len(jobs)) as ex:
+        futures = {ex.submit(fn): name for name, fn in jobs.items()}
+        for fut in as_completed(futures):
+            name = futures[fut]
+            try:
+                result = fut.result()
+            except Exception as e:
+                errors.append(f"{name}: {e}")
+                continue
+            if name == "financials":
+                data.financials = result
+            elif name == "top_holders":
+                data.top_holders = result
+            elif name == "circulate_holders":
+                data.circulate_holders = result
+            elif name == "inst_changes":
+                data.inst_changes = result
+            elif name == "peers":
+                industry, peers = result
+                data.industry_name = industry
+                data.peers = peers
 
     # 全部失败才标 has_error
     if not data.financials and not data.top_holders and not data.peers:

@@ -7,6 +7,8 @@
 """
 import os
 import json
+import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +21,29 @@ INDEX_FILE = ARCHIVE_ROOT / "index.json"
 ROUNDTABLE_ROOT = REPORTS_DIR / "roundtables"
 
 
+def _safe_symbol(value: str) -> str:
+    symbol = str(value or "").strip()
+    if re.fullmatch(r"[A-Za-z0-9._-]{1,24}", symbol):
+        return symbol
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", symbol).strip("._-")
+    return cleaned[:24] or "unknown"
+
+
+def _safe_filename_part(value: str, default: str = "report") -> str:
+    text = str(value or "").strip()
+    text = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", text)
+    text = re.sub(r"\s+", "_", text).strip("._ ")
+    return text[:80] or default
+
+
+def _resolve_archive_path(path: str) -> Path:
+    p = Path(path).expanduser().resolve()
+    allowed_roots = [ARCHIVE_ROOT.resolve(), ROUNDTABLE_ROOT.resolve()]
+    if not any(p == root or root in p.parents for root in allowed_roots):
+        raise ValueError("报告路径不在允许的归档目录内")
+    return p
+
+
 def _ensure_dirs():
     ARCHIVE_ROOT.mkdir(parents=True, exist_ok=True)
     if not INDEX_FILE.exists():
@@ -28,17 +53,34 @@ def _ensure_dirs():
 def _load_index() -> list:
     _ensure_dirs()
     try:
-        return json.loads(INDEX_FILE.read_text(encoding="utf-8"))
-    except Exception:
+        data = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        backup = INDEX_FILE.with_suffix(f".corrupt-{datetime.now().strftime('%Y%m%d%H%M%S')}.json")
+        try:
+            INDEX_FILE.replace(backup)
+        except Exception:
+            pass
+        print(f"[Archive] 索引读取失败,已保留损坏文件: {e}")
         return []
 
 
 def _save_index(idx: list):
     _ensure_dirs()
-    INDEX_FILE.write_text(
-        json.dumps(idx, ensure_ascii=False, indent=2),
+    text = json.dumps(idx, ensure_ascii=False, indent=2)
+    with tempfile.NamedTemporaryFile(
+        "w",
         encoding="utf-8",
-    )
+        dir=str(ARCHIVE_ROOT),
+        delete=False,
+        prefix="index.",
+        suffix=".tmp",
+    ) as tmp:
+        tmp.write(text)
+        tmp_path = Path(tmp.name)
+    tmp_path.replace(INDEX_FILE)
 
 
 def save_report(
@@ -60,10 +102,12 @@ def save_report(
     _ensure_dirs()
     idx = _load_index()
     now = datetime.now()
+    safe_symbol = _safe_symbol(symbol)
+    safe_stock_name = _safe_filename_part(stock_name, default=safe_symbol)
 
     # 去重：同 symbol + report_type 在 dedupe_minutes 内不重复保存
     for item in idx:
-        if item.get("symbol") == symbol and item.get("type", "agent") == report_type:
+        if item.get("symbol") == safe_symbol and item.get("type", "agent") == report_type:
             try:
                 ts = datetime.fromisoformat(item["timestamp"])
                 if (now - ts).total_seconds() < dedupe_minutes * 60:
@@ -76,9 +120,9 @@ def save_report(
                 continue
 
     # 落盘
-    sub_dir = ARCHIVE_ROOT / symbol
+    sub_dir = ARCHIVE_ROOT / safe_symbol
     sub_dir.mkdir(parents=True, exist_ok=True)
-    fname = f"{now.strftime('%Y%m%d-%H%M%S')}-{stock_name}.md"
+    fname = f"{now.strftime('%Y%m%d-%H%M%S')}-{safe_stock_name}.md"
     fpath = sub_dir / fname
     fpath.write_text(report_md, encoding="utf-8")
 
@@ -117,7 +161,7 @@ def save_report(
         "time": now.strftime("%H:%M"),
         "type": report_type,
         "stock_name": stock_name,
-        "symbol": symbol,
+        "symbol": safe_symbol,
         "decision": summary.get("final", "未知"),
         "buy": summary.get("buy", 0),
         "sell": summary.get("sell", 0),
@@ -164,10 +208,12 @@ def save_roundtable(
     _ensure_dirs()
     idx = _load_index()
     now = datetime.now()
+    safe_symbol = _safe_symbol(symbol)
+    safe_stock_name = _safe_filename_part(stock_name, default=safe_symbol)
 
     # 去重:同 symbol 圆桌纪要 dedupe_minutes 内不重复
     for item in idx:
-        if item.get("symbol") == symbol and item.get("type") == "roundtable":
+        if item.get("symbol") == safe_symbol and item.get("type") == "roundtable":
             try:
                 ts = datetime.fromisoformat(item["timestamp"])
                 if (now - ts).total_seconds() < dedupe_minutes * 60:
@@ -180,9 +226,9 @@ def save_roundtable(
                 continue
 
     # 落盘
-    sub_dir = ROUNDTABLE_ROOT / symbol
+    sub_dir = ROUNDTABLE_ROOT / safe_symbol
     sub_dir.mkdir(parents=True, exist_ok=True)
-    fname = f"{now.strftime('%Y%m%d-%H%M%S')}-{stock_name}.md"
+    fname = f"{now.strftime('%Y%m%d-%H%M%S')}-{safe_stock_name}.md"
     fpath = sub_dir / fname
     fpath.write_text(md_text, encoding="utf-8")
 
@@ -239,7 +285,7 @@ def save_roundtable(
         "time": now.strftime("%H:%M"),
         "type": "roundtable",
         "stock_name": stock_name,
-        "symbol": symbol,
+        "symbol": safe_symbol,
         "decision": decision,
         "buy": summary.get("buy", 0),
         "sell": summary.get("sell", 0),
@@ -355,7 +401,10 @@ def list_reports(
 
 def load_report(path: str) -> str:
     """读取报告 markdown 全文"""
-    p = Path(path)
+    try:
+        p = _resolve_archive_path(path)
+    except Exception:
+        return "⚠️ 报告路径不在允许的归档目录内"
     if not p.exists():
         return f"⚠️ 报告文件不存在：{path}"
     return p.read_text(encoding="utf-8")
@@ -538,12 +587,15 @@ def get_combo_performance(min_samples: int = 1) -> list:
 
 def delete_report(path: str) -> bool:
     """删除单条报告（同时清理索引）"""
+    try:
+        p = _resolve_archive_path(path)
+    except Exception:
+        return False
     idx = _load_index()
     new_idx = [i for i in idx if i.get("path") != path]
     if len(new_idx) == len(idx):
         return False
     _save_index(new_idx)
-    p = Path(path)
     if p.exists():
         try:
             p.unlink()

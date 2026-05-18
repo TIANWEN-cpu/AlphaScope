@@ -270,7 +270,10 @@ def run_batch_critic(
     for vd, md in candidates:
         try:
             cfg = VENDORS.get(vd) or {}
-            if not api_key and not base_url and not (cfg.get("api_key") and cfg.get("base_url")):
+            is_primary = (vd, md) == primary
+            call_api_key = (api_key or None) if is_primary else None
+            call_base_url = (base_url or None) if is_primary else None
+            if not call_api_key and not call_base_url and not (cfg.get("api_key") and cfg.get("base_url")):
                 last_err = f"{vd} 未配置完整"
                 continue
             text = call_llm(
@@ -278,8 +281,8 @@ def run_batch_critic(
                 json_mode=True,
                 max_tokens=timeout_max_tokens,
                 temperature=0.2,
-                api_key=api_key or None,
-                base_url=base_url or None,
+                api_key=call_api_key,
+                base_url=call_base_url,
             )
             parsed = parse_critic_response(text, expected_keys)
             if not parsed["agents"]:

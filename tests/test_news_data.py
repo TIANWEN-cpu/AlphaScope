@@ -22,6 +22,8 @@ from news_data import (
     merge_announcements,
     build_announcements_brief_for_llm,
     fetch_stock_news_em,
+    _eastmoney_article_url,
+    _parse_eastmoney_search_payload,
     ANN_COLORS,
 )
 
@@ -76,6 +78,18 @@ def test_to_float_or_none_filters_nan():
     assert _to_float_or_none("abc") is None
     assert _to_float_or_none(1.5) == 1.5
     assert _to_float_or_none("2.3") == 2.3
+
+
+def test_eastmoney_article_url_requires_numeric_code():
+    assert _eastmoney_article_url("202601011234") == "http://finance.eastmoney.com/a/202601011234.html"
+    assert _eastmoney_article_url("../bad") == ""
+    assert _eastmoney_article_url("") == ""
+
+
+def test_parse_eastmoney_search_payload_jsonp():
+    payload = _parse_eastmoney_search_payload('cb({"result":{"cmsArticleWebOld":[{"title":"x"}]}});')
+    assert payload["result"]["cmsArticleWebOld"][0]["title"] == "x"
+    assert _parse_eastmoney_search_payload("not-json") == {}
 
 
 # ---------------- get_stock_related_news ----------------

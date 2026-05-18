@@ -1,5 +1,10 @@
 """Tests for backend.archive._summarize_critic — pure summarization helper."""
-from archive import _summarize_critic
+from archive import _safe_filename_part, _safe_symbol, _summarize_critic
+
+
+def test_safe_archive_names_strip_path_separators():
+    assert _safe_symbol("../600519") == "600519"
+    assert _safe_filename_part("a/b:c*?") == "a_b_c"
 
 
 def test_returns_none_when_critic_block_absent():

@@ -287,10 +287,13 @@ def run_expert(cfg, stock_brief: str, stock_name: str, global_ai_settings: Optio
     fallback = FALLBACK_VENDOR_MODEL
     last_err = ""
 
-    for vd, md, bu in [(preferred_vendor, preferred_model, base_url), (fallback[0], fallback[1], "")]:
+    for vd, md, bu, key_override in [
+        (preferred_vendor, preferred_model, base_url, api_key or None),
+        (fallback[0], fallback[1], "", None),
+    ]:
         # 检查厂商配置是否完整；自定义 Base URL 时允许使用临时配置。
         cfg_v = VENDORS.get(vd) or {}
-        if not bu and (not cfg_v.get("api_key") or not cfg_v.get("base_url")) and not api_key:
+        if not bu and (not cfg_v.get("api_key") or not cfg_v.get("base_url")) and not key_override:
             last_err = f"{vd} 未配置完整"
             continue
 
@@ -303,7 +306,7 @@ def run_expert(cfg, stock_brief: str, stock_name: str, global_ai_settings: Optio
                 json_mode=True,
                 max_tokens=mtokens,
                 temperature=0.4,
-                api_key=api_key or None,
+                api_key=key_override,
                 base_url=bu or None,
             )
             data = _extract_json(text)
@@ -318,8 +321,8 @@ def run_expert(cfg, stock_brief: str, stock_name: str, global_ai_settings: Optio
                     json_mode=True,
                     max_tokens=mtokens,
                     temperature=0.2,
-                    api_key=api_key or None,
-                base_url=bu or None,
+                    api_key=key_override,
+                    base_url=bu or None,
                 )
                 data = _extract_json(text2)
 
