@@ -3,7 +3,24 @@
 > 安装日期：2026-05-16
 > 位置：克隆后的仓库目录
 > Python 环境：建议使用本地虚拟环境 `.venv` 或 `venvs/finance-agent-engineering`
-> 当前版本：**v0.10.6（安全加固 + 归档与外部接口健壮性修复）**
+> 当前版本：**v0.11.0（Provider 插件架构 + 数据中台升级）**
+
+## v0.11.0 新特性（Provider 插件架构 + 数据中台）
+
+| 模块 | 主要能力 |
+|---|---|
+| **🔌 Provider 插件体系** | `backend/providers/`：9 个数据源插件（AkShare/Tushare/BaoStock/OpenBB/SEC/HKEX/CNInfo/CLS/EastMoney），统一接口 + 自动优先级选择 + 故障降级 |
+| **📐 标准化数据模型** | `backend/schemas/`：Pydantic 模型（NewsItem/ResearchReport/Announcement/PriceBar/FundFlow/EvidenceBundle），所有数据源输出统一格式 |
+| **🔍 数据质量层** | `backend/quality/`：Deduplicator（fingerprint 去重）+ SourceRanker（S/A/B/C/D 可信度分级排序） |
+| **💾 存储层** | `backend/storage/`：SQLite 数据库（6 张核心表：news_items/research_reports/announcements/price_bars/source_fetch_logs/evidence_items） |
+| **⏱️ 采集调度** | `backend/ingestion/`：DataScheduler 定时任务调度器，支持可配置采集频率 |
+| **🧠 RAG 检索层** | `backend/rag/`：TextChunker + ChromaDB VectorStore + Retriever，支持公告/研报/新闻语义检索 |
+| **📊 可观测性** | `backend/observability/`：SourceHealthMonitor 数据源健康监控 |
+| **🐳 Docker 支持** | `Dockerfile` + `docker-compose.yml`：容器化部署（app + Redis 缓存） |
+| **📰 news_data.py 集成** | 新增 `fetch_*_via_provider()` 函数，通过 Provider Registry 获取数据，失败自动回退到原有函数，完全向后兼容 |
+| **⚙️ 数据源配置** | `config/data_sources.yaml`：各数据源启用/优先级/超时/重试策略集中配置 |
+
+> v0.11 核心理念：**把散落的接口收敛为"多源 Provider 插件体系 + 原始数据归档 + 标准化数据模型 + RAG 证据链"**，从"脚本拼接口"升级为"数据源平台"。
 
 ## v0.10.6 新特性（维护）
 
@@ -71,38 +88,89 @@ python -m pip install "pyyaml>=6.0"
 │   └── TradingAgents\
 ├── backend\                    # 业务后端模块
 │   ├── llm_agents.py           # 5 Agent + 主席(v0.7 注册 kimi 厂商,暴露 call_llm)
-│   ├── news_data.py            # 财联社/东财/新浪/财新/研报
+│   ├── news_data.py            # 财联社/东财/新浪/财新/研报 + v0.11 Provider 集成
 │   ├── fund_flow.py            # 主力资金流向(个股 + 大盘)
 │   ├── fundamentals.py         # v0.7: 财务/股东/同业 + 24h 缓存
 │   ├── ai_chat.py              # v0.7: AI 咨询会话/上下文注入/30 轮截断
 │   ├── expert_panel.py         # v0.7: 5 专家并行 + 三段式 JSON + Markdown 纪要
-│   └── archive.py              # v0.7: save_roundtable + type_filter
-├── config\                     # v0.7 新增
-│   └── experts.yaml            # 5 位专家人设/推荐模型/止损偏好
+│   ├── archive.py              # v0.7: save_roundtable + type_filter
+│   ├── providers\              # v0.11: Provider 插件体系
+│   │   ├── base.py             # BaseProvider 基类 + 健康状态追踪
+│   │   ├── registry.py         # ProviderRegistry 自动发现/优先级/降级
+│   │   ├── akshare_provider.py # AkShare 免费数据源(行情/新闻/研报/公告/资金流)
+│   │   ├── tushare_provider.py # Tushare Pro(研报/公告/行情)
+│   │   ├── baostock_provider.py# BaoStock A股行情兜底
+│   │   ├── openbb_provider.py  # OpenBB 全球金融数据
+│   │   ├── sec_provider.py     # SEC EDGAR 美股公告/财报
+│   │   ├── hkex_provider.py    # HKEXnews 港股公告
+│   │   ├── cninfo_provider.py  # 巨潮资讯 A股公告核心源
+│   │   ├── cls_provider.py     # 财联社快讯
+│   │   └── eastmoney_provider.py# 东方财富搜索
+│   ├── schemas\                # v0.11: 标准化数据模型(Pydantic)
+│   │   ├── news.py             # NewsItem 新闻模型
+│   │   ├── report.py           # ResearchReport 研报模型
+│   │   ├── announcement.py     # Announcement 公告模型
+│   │   ├── market.py           # PriceBar/FundFlow 行情/资金流模型
+│   │   └── evidence.py         # EvidenceBundle 证据链模型
+│   ├── quality\                # v0.11: 数据质量层
+│   │   ├── dedup.py            # Deduplicator fingerprint 去重
+│   │   └── source_rank.py      # SourceRanker 可信度分级(S/A/B/C/D)
+│   ├── storage\                # v0.11: 存储层
+│   │   ├── db.py               # SQLite 数据库(6 张核心表)
+│   │   └── repositories\       # 数据仓库
+│   ├── ingestion\              # v0.11: 数据采集管道
+│   │   └── scheduler.py        # DataScheduler 定时任务调度
+│   ├── rag\                    # v0.11: RAG 检索增强生成
+│   │   ├── chunker.py          # TextChunker 文档分块
+│   │   ├── vector_store.py     # ChromaDB 向量存储
+│   │   └── retriever.py        # Retriever 统一检索接口
+│   └── observability\          # v0.11: 可观测性
+│       └── source_health.py    # SourceHealthMonitor 数据源健康监控
+├── config\                     # v0.7+ 配置
+│   ├── experts.yaml            # 5 位专家人设/推荐模型/止损偏好
+│   ├── providers.yaml          # LLM Provider 配置(6 厂商)
+│   └── data_sources.yaml       # v0.11: 数据源优先级/超时/重试配置
 ├── frontend\
-│   ├── dashboard.py            # 8 Tab 看板(v0.7 增加专家圆桌 Tab)
+│   ├── dashboard.py            # 8 Tab 看板
 │   └── components\             # v0.7 新增
 │       ├── fundamentals_panel.py
 │       ├── ai_chat_panel.py
-│       └── expert_panel_view.py
-├── cache\                      # v0.7 新增运行时
+│       ├── expert_panel_view.py
+│       └── ai_settings_center.py
+├── cache\                      # 运行时缓存
 │   └── fundamentals\           # {symbol}.json 24h 缓存
 ├── reports\
 │   ├── archive\                # AI 决策报告(type=agent)
-│   ├── roundtables\            # v0.7: 圆桌纪要(type=roundtable)
-│   ├── chat_history\           # v0.7: AI 咨询导出 Markdown
-│   └── streamlit-*.log
-├── requirements.txt            # v0.7 新增依赖声明
-├── data\        notebooks\
+│   ├── roundtables\            # 圆桌纪要(type=roundtable)
+│   └── chat_history\           # AI 咨询导出 Markdown
+├── Dockerfile                  # v0.11: Docker 镜像构建
+├── docker-compose.yml          # v0.11: 容器编排(app + Redis)
+├── requirements.txt            # 依赖声明
 └── venvs\
     └── finance-agent-engineering\
 ```
 
 ## 核心能力
 
-### 数据层
-- **akshare**：A 股 K 线/成交量/资金流向（个股+大盘）/快讯/研报/财报/股东/同业
-- **OpenBB**：全球金融数据接口（备用）
+### 数据层（v0.11 Provider 插件化）
+
+v0.11 将数据层升级为 **Provider 插件体系**，所有数据源统一抽象为 Provider，支持自动优先级选择和故障降级：
+
+| Provider | 覆盖市场 | 数据类型 | 优先级 |
+|----------|---------|---------|--------|
+| **CNInfo** (巨潮) | CN | 公告 | 95 |
+| **SEC EDGAR** | US | 公告/财报 | 95 |
+| **HKEXnews** | HK | 公告 | 95 |
+| **Tushare Pro** | CN | 研报/公告/行情 | 85 |
+| **CLS** (财联社) | CN | 快讯 | 80 |
+| **OpenBB** | US/HK/ALL | 行情/基本面 | 75 |
+| **EastMoney** | CN | 新闻/研报 | 70 |
+| **AkShare** | CN/ALL | 行情/新闻/研报/公告/资金流 | 60 |
+| **BaoStock** | CN | 行情兜底 | 50 |
+
+数据源配置集中在 `config/data_sources.yaml`，支持启用/禁用、优先级调整、超时和重试策略。
+
+原有 akshare/OpenBB 调用保持不变，新增 `fetch_*_via_provider()` 函数自动路由到最优数据源。
 
 ### 分析层（5 Agent + 主席 + 5 专家圆桌)
 
@@ -150,12 +218,11 @@ python -m pip install "pyyaml>=6.0"
 | numpy | 2.4.5 | 数值计算 |
 | plotly | 6.7.0 | 交互式图表 |
 | streamlit | 1.57.0 | Dashboard |
-| fastapi | 0.128.8 | 后端 API |
-| uvicorn | 0.40.0 | ASGI 服务器 |
-| langchain | 1.3.1 | LLM 应用框架 |
-| langgraph | 1.2.0 | 多 Agent 编排 |
-| chromadb | 1.5.9 | 向量库 |
-| mem0ai | 2.0.2 | Agent 记忆 |
+| pydantic | 2.x | 标准化数据模型（v0.11） |
+| chromadb | 0.4+ | 向量检索 RAG（v0.11） |
+| tenacity | 8.x | API 调用重试机制（v0.11） |
+| aiohttp | 3.9+ | 异步 HTTP 请求（v0.11） |
+| apscheduler | 3.10+ | 定时任务调度（v0.11） |
 
 ## API 配置
 
@@ -176,9 +243,22 @@ SENSENOVA_BASE_URL=https://api.sensenova.cn/compatible-mode/v1
 
 ## 快速启动
 
-### 启动看板
+### 方式一：直接运行
 ```bash
 python -m streamlit run frontend/dashboard.py --server.port 8501 --server.headless true
+```
+访问 http://localhost:8501
+
+### 方式二：Docker 部署（v0.11）
+```bash
+# 构建并启动（app + Redis）
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f app
+
+# 停止
+docker-compose down
 ```
 访问 http://localhost:8501
 
@@ -195,7 +275,24 @@ python backend/test_all_apis_v4.py
 ## 架构
 
 ```
-[数据层] akshare(行情/资金/资讯) + OpenBB(备用)
+[数据层] Provider 插件体系
+    ├─ CNInfo / SEC / HKEX (官方公告)
+    ├─ Tushare Pro (研报/公告)
+    ├─ AkShare / BaoStock (行情/资讯)
+    ├─ OpenBB (全球数据)
+    └─ CLS / EastMoney (快讯/搜索)
+    ↓ (自动优先级 + 故障降级)
+[标准化层] Pydantic 数据模型
+    ├─ NewsItem / ResearchReport / Announcement
+    └─ PriceBar / FundFlow / EvidenceBundle
+    ↓
+[质量层] 去重 + 可信度排序
+    ├─ Deduplicator (fingerprint 去重)
+    └─ SourceRanker (S/A/B/C/D 分级)
+    ↓
+[存储层] SQLite + ChromaDB
+    ├─ 6 张核心表 (news/reports/announcements/...)
+    └─ 向量检索 (RAG 证据链)
     ↓
 [分析层] 5 Agent 并行（5 厂商异构 LLM）
     ├─ 🏛️ 基本面 → Claude Sonnet 4.5
@@ -206,9 +303,11 @@ python backend/test_all_apis_v4.py
               ↓ (任一厂商故障 → DeepSeek 兜底)
     🎩 主席 → Claude Opus 4.7（综合输出执行决议）
     ↓
-[展示层] Streamlit + Plotly（7 Tab，含模型阵容透视）
+[展示层] Streamlit + Plotly（8 Tab，含模型阵容透视）
     ↓
 [沉淀层] 研究存档（Markdown + JSON 索引 + 模型组合元数据）
+    ↓
+[部署层] Docker 容器化（app + Redis 缓存）
 ```
 
 ## 决策质量验证案例（贵州茅台 600519）
@@ -226,6 +325,7 @@ python backend/test_all_apis_v4.py
 
 | 版本 | 日期 | 关键变更 |
 |------|------|------|
+| **v0.11.0** | **2026-05-18** | **Provider 插件架构（9 个数据源）+ 标准化数据模型 + 质量层 + 存储层 + RAG 检索 + 采集调度 + 可观测性 + Docker 支持** |
 | **v0.10.6** | **2026-05-18** | **LLM 兜底 Key 隔离、自定义 Base URL 防护、归档路径/索引加固、东财搜索与 URL 校验、JSON 提取与基本面并行加载优化** |
 | **v0.10.5** | **2026-05-17** | **行业/概念主题新闻主动搜索；快讯池 + 主题搜索合并去重；Agent/专家圆桌纳入关联概念动态** |
 | v0.10.4 | 2026-05-17 | 反查股票所属概念板块，新增“关联概念”资讯区与 LLM 概念简报 |
