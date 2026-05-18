@@ -15,12 +15,25 @@
 - **HKEX Provider**: Implemented proper HTML parsing for HKEXnews search results with fallback link extraction.
 - **SEC Provider**: Implemented ticker-to-CIK lookup using SEC's official `company_tickers.json` with in-memory caching. Fixed `_symbol_to_cik()` to return actual CIK numbers.
 
+### Event Extraction
+- Added `backend/events/extractor.py` — rule-based event extractor classifying news/announcements into 8 event types (earnings, dividend, M&A, financing, litigation, policy, supply_chain, insider) with sentiment scoring and importance rating.
+- Pipeline automatically enriches news with event_type/sentiment and announcements with category during ingestion.
+- Supports batch extraction via `extract_events_from_news()` and `extract_events_from_announcements()`.
+
+### Quantitative Factor Generation
+- Added `backend/factors/generator.py` — `FactorGenerator` computing 5 factor dimensions: news sentiment, event signal, analyst rating, fund flow, price momentum.
+- All factors normalized to [-1.0, 1.0] with configurable weights for composite scoring.
+- `fetch_factor_context()` in `llm_agents.py` injects factor analysis into agent market briefs.
+- `run_all_agents()` and `run_batch_critic()` now include factor context for more informed analysis.
+- Added `frontend/components/factor_panel.py` — interactive factor display in the Agent analysis tab.
+- Updated `critic.md` with 7th scoring dimension: factor consistency.
+
 ### Evidence-Driven Agent Output
 - Added `fetch_evidence_context()` in `llm_agents.py` — retrieves RAG evidence and formats it for agent prompts.
-- `build_market_brief()` now accepts optional `evidence_context` parameter to include data platform evidence.
-- `run_all_agents()` automatically fetches evidence context before building the market brief.
-- Updated `critic.md` with 6th scoring dimension: evidence coverage rate.
-- `build_critic_prompt()` now accepts `available_evidence` parameter for evidence coverage assessment.
+- `build_market_brief()` now accepts optional `evidence_context` and `factor_context` parameters.
+- `run_all_agents()` automatically fetches evidence + factor context before building the market brief.
+- Updated `critic.md` with 6th/7th scoring dimensions: evidence coverage rate, factor consistency.
+- `build_critic_prompt()` now accepts `available_evidence` and `factor_context` parameters.
 
 ### Frontend: Source Health Dashboard
 - Added Tab 10 "📊 数据源健康" to the Streamlit dashboard.
@@ -36,6 +49,7 @@
 - Added `tests/test_pipeline.py` — tests for DataPipeline data conversion and status.
 - Added `tests/test_sec_provider.py` — tests for SEC CIK lookup and filing parsing.
 - Added `tests/test_hkex_provider.py` — tests for HKEX HTML parsing and category guessing.
+- Added `tests/test_factors.py` — tests for FactorGenerator, FactorReport, rating scores, event category scores, and convenience functions.
 
 ### Integration
 - Updated `news_data.py` `fetch_*_via_provider()` functions to route through `DataPipeline` first (v0.12), then Provider Registry (v0.11), then original functions (fallback).
