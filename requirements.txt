@@ -1,4 +1,4 @@
-# AI-Finance Python dependencies
+# AI-Finance Python dependencies (v0.11)
 # 安装: python -m pip install -r requirements.txt
 
 # 核心运行时
@@ -17,7 +17,23 @@ openai>=1.10.0
 python-dotenv>=1.0.0
 
 # v0.7 新增
-pyyaml>=6.0          # 解析 config/experts.yaml(5 位专家圆桌人设)
+pyyaml>=6.0            # 解析 config/experts.yaml(5 位专家圆桌人设)
 
-# v0.9 开发依赖(可选,仅在跑 pytest 时需要)
-pytest>=7.0          # backend/tests 目录下的纯函数单元测试
+# v0.11 新增: Provider 插件体系
+pydantic>=2.0.0        # 标准化数据模型 (schemas/)
+tenacity>=8.2.0        # API 调用重试机制
+aiohttp>=3.9.0         # 异步 HTTP 请求
+
+# v0.11 新增: 存储层
+chromadb>=0.4.0        # 向量检索 (RAG)
+
+# v0.11 新增: 数据采集调度
+apscheduler>=3.10.0    # 定时任务调度
+
+# v0.11 新增: 可选数据源 (按需安装)
+# tushare>=1.4.0       # Tushare Pro (需 TUSHARE_TOKEN)
+# baostock>=0.8.8      # BaoStock 免费A股数据
+# openbb>=4.0.0        # OpenBB 全球金融数据
+
+# 开发依赖(可选,仅在跑 pytest 时需要)
+pytest>=7.0            # backend/tests 目录下的纯函数单元测试

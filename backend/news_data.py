@@ -1,5 +1,13 @@
 """
-财经资讯 & 研报数据聚合模块
+财经资讯 & 研报数据聚合模块 (v0.11)
+
+v0.11 新增: Provider 插件集成
+- fetch_news_via_provider(): 通过 Provider Registry 获取新闻
+- fetch_reports_via_provider(): 通过 Provider Registry 获取研报
+- fetch_announcements_via_provider(): 通过 Provider Registry 获取公告
+
+原有函数保持不变, 向后兼容。
+
 数据源:
 - 财联社电报 stock_info_global_cls
 - 东财快讯  stock_info_global_em
@@ -11,10 +19,13 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import json
+import logging
 import akshare as ak
 import pandas as pd
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 def _safe(fn, *args, **kwargs):
@@ -1236,6 +1247,102 @@ def build_research_brief_for_llm(reports: List[Dict], max_items: int = 8) -> str
 
     summary_line = "评级分布: " + " / ".join(f"{k}×{v}" for k, v in rating_counter.items())
     return summary_line + "\n" + "\n".join(lines)
+
+
+# ============== v0.11: Provider 插件集成 ==============
+
+def _get_registry():
+    """延迟导入 Provider Registry"""
+    try:
+        from providers.registry import get_registry
+        return get_registry()
+    except Exception as e:
+        logger.debug("Provider Registry 不可用: %s", e)
+        return None
+
+
+def fetch_news_via_provider(
+    market: str = "CN",
+    symbol: str = "",
+    limit: int = 30,
+    sources: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """通过 Provider Registry 获取新闻 (v0.11)
+
+    自动按优先级选择数据源, 失败时自动降级到下一源。
+    如果 Provider 系统不可用, 回退到原有函数。
+    """
+    registry = _get_registry()
+    if registry:
+        results = registry.get(
+            data_type="news",
+            market=market,
+            symbol=symbol,
+            limit=limit,
+        )
+        if results:
+            return results
+
+    # 回退到原有实现
+    return merge_news_items(
+        fetch_telegraph_cls(limit=limit),
+        fetch_telegraph_em(limit=limit),
+        fetch_telegraph_sina(limit=min(limit, 20)),
+    )
+
+
+def fetch_reports_via_provider(
+    symbol: str,
+    limit: int = 20,
+) -> List[Dict[str, Any]]:
+    """通过 Provider Registry 获取研报 (v0.11)"""
+    registry = _get_registry()
+    if registry:
+        results = registry.get(
+            data_type="reports",
+            market="CN",
+            symbol=symbol,
+            limit=limit,
+        )
+        if results:
+            return results
+
+    # 回退
+    return fetch_research_report(symbol, limit=limit)
+
+
+def fetch_announcements_via_provider(
+    symbol: str,
+    limit: int = 30,
+    start_date: str = "",
+    end_date: str = "",
+) -> List[Dict[str, Any]]:
+    """通过 Provider Registry 获取公告 (v0.11)"""
+    registry = _get_registry()
+    if registry:
+        results = registry.get(
+            data_type="announcements",
+            market="CN",
+            symbol=symbol,
+            limit=limit,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if results:
+            return results
+
+    # 回退
+    return fetch_announcements_cninfo(symbol, days=30, limit=limit)
+
+
+def get_provider_health_summary() -> str:
+    """获取所有数据源的健康状态摘要 (v0.11)"""
+    try:
+        from observability.source_health import SourceHealthMonitor
+        monitor = SourceHealthMonitor()
+        return monitor.get_source_summary()
+    except Exception:
+        return "Provider 健康监控不可用"
 
 
 if __name__ == "__main__":
