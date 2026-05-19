@@ -1052,7 +1052,7 @@ with tab2:
             render_factor_panel(symbol, stock_name)
             st.divider()
         except Exception as _factor_e:
-            logger.debug("因子面板跳过: %s", _factor_e)
+            pass  # 因子面板加载失败不影响主流程
 
         # ========== LLM 深度分析模式 ==========
         if use_llm and LLM_AVAILABLE:

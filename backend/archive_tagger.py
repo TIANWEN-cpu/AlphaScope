@@ -45,12 +45,21 @@ def _load_index() -> list:
 
 
 def _save_index(idx: list):
-    """保存归档索引。"""
+    """保存归档索引（原子写入）。"""
+    import tempfile
     ARCHIVE_ROOT.mkdir(parents=True, exist_ok=True)
-    INDEX_FILE.write_text(
-        json.dumps(idx, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=".tmp",
+        dir=ARCHIVE_ROOT, delete=False,
     )
+    try:
+        tmp.write(json.dumps(idx, ensure_ascii=False, indent=2))
+        tmp.flush()
+        tmp.close()
+        Path(tmp.name).replace(INDEX_FILE)
+    except Exception:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
 
 
 def _decision_to_signal(decision: str) -> str:

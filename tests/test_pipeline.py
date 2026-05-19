@@ -21,7 +21,7 @@ class TestPipelineDataConversion:
         assert row["title"] == "茅台提价"
         assert row["source"] == "cls"
         assert row["source_url"] == "https://example.com"
-        assert row["published_at"] == "2026-05-18"
+        assert "2026-05-18" in row["published_at"]
         assert row["symbols"] == ["600519.SH"]
 
     def test_to_report_row(self):

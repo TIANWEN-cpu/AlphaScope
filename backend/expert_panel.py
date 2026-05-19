@@ -785,7 +785,9 @@ if __name__ == "__main__":
             print(f"    view: {op.view[:80]}")
             print(f"    action: {op.action} | position: {op.position}% | stop: ¥{op.stop_loss:.2f}")
             if op.evidence:
-                print(f"    evidence: {op.evidence[0][:60]}...")
+                ev0 = op.evidence[0]
+                ev_str = str(ev0)[:60] if isinstance(ev0, dict) else ev0[:60]
+                print(f"    evidence: {ev_str}...")
         else:
             print(f"    error: {op.error_msg[:100]}")
 

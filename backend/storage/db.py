@@ -42,6 +42,7 @@ class Database:
         if self._initialized:
             return
         self._initialized = True
+        self._db_lock = threading.Lock()
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
@@ -180,114 +181,118 @@ class Database:
 
     def insert_news(self, item: dict) -> None:
         """插入新闻条目"""
-        cur = self._conn.cursor()
-        cur.execute(
-            """INSERT OR REPLACE INTO news_items
-            (id, title, summary, content, source, upstream, source_url,
-             published_at, fetched_at, symbols, industries, event_type,
-             sentiment, importance, confidence, license_level)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                item.get("id", ""),
-                item.get("title", ""),
-                item.get("summary", ""),
-                item.get("content", ""),
-                item.get("source", ""),
-                item.get("upstream", ""),
-                item.get("source_url", ""),
-                item.get("published_at", ""),
-                item.get("fetched_at", datetime.now().isoformat()),
-                json.dumps(item.get("symbols", []), ensure_ascii=False),
-                json.dumps(item.get("industries", []), ensure_ascii=False),
-                item.get("event_type", ""),
-                item.get("sentiment", 0),
-                item.get("importance", 0.5),
-                item.get("confidence", 0.6),
-                item.get("license_level", "research_only"),
-            ),
-        )
+        with self._db_lock:
+            cur = self._conn.cursor()
+            cur.execute(
+                """INSERT OR REPLACE INTO news_items
+                (id, title, summary, content, source, upstream, source_url,
+                 published_at, fetched_at, symbols, industries, event_type,
+                 sentiment, importance, confidence, license_level)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    item.get("id", ""),
+                    item.get("title", ""),
+                    item.get("summary", ""),
+                    item.get("content", ""),
+                    item.get("source", ""),
+                    item.get("upstream", ""),
+                    item.get("source_url", ""),
+                    item.get("published_at", ""),
+                    item.get("fetched_at", datetime.now().isoformat()),
+                    json.dumps(item.get("symbols", []), ensure_ascii=False),
+                    json.dumps(item.get("industries", []), ensure_ascii=False),
+                    item.get("event_type", ""),
+                    item.get("sentiment", 0),
+                    item.get("importance", 0.5),
+                    item.get("confidence", 0.6),
+                    item.get("license_level", "research_only"),
+                ),
+            )
         self._conn.commit()
 
     def insert_report(self, item: dict) -> None:
         """插入研报条目"""
-        cur = self._conn.cursor()
-        cur.execute(
-            """INSERT OR REPLACE INTO research_reports
-            (id, title, report_type, institution, authors, symbols, industry,
-             rating, target_price, summary, pdf_url, published_at, fetched_at,
-             source, source_url, pdf_hash, confidence, license_level)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                item.get("id", ""),
-                item.get("title", ""),
-                item.get("report_type", "company"),
-                item.get("institution", ""),
-                json.dumps(item.get("authors", []), ensure_ascii=False),
-                json.dumps(item.get("symbols", []), ensure_ascii=False),
-                item.get("industry", ""),
-                item.get("rating", ""),
-                item.get("target_price"),
-                item.get("summary", ""),
-                item.get("pdf_url", ""),
-                item.get("published_at", ""),
-                item.get("fetched_at", datetime.now().isoformat()),
-                item.get("source", ""),
-                item.get("source_url", ""),
-                item.get("pdf_hash", ""),
-                item.get("confidence", 0.8),
-                item.get("license_level", "restricted"),
-            ),
-        )
-        self._conn.commit()
+        with self._db_lock:
+            cur = self._conn.cursor()
+            cur.execute(
+                """INSERT OR REPLACE INTO research_reports
+                (id, title, report_type, institution, authors, symbols, industry,
+                 rating, target_price, summary, pdf_url, published_at, fetched_at,
+                 source, source_url, pdf_hash, confidence, license_level)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    item.get("id", ""),
+                    item.get("title", ""),
+                    item.get("report_type", "company"),
+                    item.get("institution", ""),
+                    json.dumps(item.get("authors", []), ensure_ascii=False),
+                    json.dumps(item.get("symbols", []), ensure_ascii=False),
+                    item.get("industry", ""),
+                    item.get("rating", ""),
+                    item.get("target_price"),
+                    item.get("summary", ""),
+                    item.get("pdf_url", ""),
+                    item.get("published_at", ""),
+                    item.get("fetched_at", datetime.now().isoformat()),
+                    item.get("source", ""),
+                    item.get("source_url", ""),
+                    item.get("pdf_hash", ""),
+                    item.get("confidence", 0.8),
+                    item.get("license_level", "restricted"),
+                ),
+            )
+            self._conn.commit()
 
     def insert_announcement(self, item: dict) -> None:
         """插入公告条目"""
-        cur = self._conn.cursor()
-        cur.execute(
-            """INSERT OR REPLACE INTO announcements
-            (id, symbol, company_name, title, category, published_at, fetched_at,
-             source, source_url, pdf_url, pdf_hash, parsed_text_path,
-             importance, confidence)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                item.get("id", ""),
-                item.get("symbol", ""),
-                item.get("company_name", ""),
-                item.get("title", ""),
-                item.get("category", ""),
-                item.get("published_at", ""),
-                item.get("fetched_at", datetime.now().isoformat()),
-                item.get("source", ""),
-                item.get("source_url", ""),
-                item.get("pdf_url", ""),
-                item.get("pdf_hash", ""),
-                item.get("parsed_text_path", ""),
-                item.get("importance", 0.5),
-                item.get("confidence", 0.9),
-            ),
-        )
-        self._conn.commit()
+        with self._db_lock:
+            cur = self._conn.cursor()
+            cur.execute(
+                """INSERT OR REPLACE INTO announcements
+                (id, symbol, company_name, title, category, published_at, fetched_at,
+                 source, source_url, pdf_url, pdf_hash, parsed_text_path,
+                 importance, confidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    item.get("id", ""),
+                    item.get("symbol", ""),
+                    item.get("company_name", ""),
+                    item.get("title", ""),
+                    item.get("category", ""),
+                    item.get("published_at", ""),
+                    item.get("fetched_at", datetime.now().isoformat()),
+                    item.get("source", ""),
+                    item.get("source_url", ""),
+                    item.get("pdf_url", ""),
+                    item.get("pdf_hash", ""),
+                    item.get("parsed_text_path", ""),
+                    item.get("importance", 0.5),
+                    item.get("confidence", 0.9),
+                ),
+            )
+            self._conn.commit()
 
     def insert_fetch_log(self, log: dict) -> None:
         """插入抓取日志"""
-        cur = self._conn.cursor()
-        cur.execute(
-            """INSERT INTO source_fetch_logs
-            (source, endpoint, status, latency_ms, items_count,
-             error_message, started_at, finished_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                log.get("source", ""),
-                log.get("endpoint", ""),
-                log.get("status", ""),
-                log.get("latency_ms", 0),
-                log.get("items_count", 0),
-                log.get("error_message", ""),
-                log.get("started_at", datetime.now().isoformat()),
-                log.get("finished_at", ""),
-            ),
-        )
-        self._conn.commit()
+        with self._db_lock:
+            cur = self._conn.cursor()
+            cur.execute(
+                """INSERT INTO source_fetch_logs
+                (source, endpoint, status, latency_ms, items_count,
+                 error_message, started_at, finished_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    log.get("source", ""),
+                    log.get("endpoint", ""),
+                    log.get("status", ""),
+                    log.get("latency_ms", 0),
+                    log.get("items_count", 0),
+                    log.get("error_message", ""),
+                    log.get("started_at", datetime.now().isoformat()),
+                    log.get("finished_at", ""),
+                ),
+            )
+            self._conn.commit()
 
     def close(self) -> None:
         if self._conn:
