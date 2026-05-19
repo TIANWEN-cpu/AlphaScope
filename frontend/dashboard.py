@@ -2585,11 +2585,21 @@ with tab4:
                     st.info("暂未识别到该股票的概念板块，或概念接口暂时不可用。")
                 else:
                     concept_kws = get_concept_keywords(concepts, limit=12)
-                    chip_html = " · ".join(
-                        f"<span style='display:inline-block; padding:2px 8px; margin:2px; "
-                        f"border-radius:6px; background:#eef2ff; color:#3730a3; font-size:0.78rem;'>{c.get('name', '')}</span>"
-                        for c in concepts
-                    )
+
+                    def _chip(c):
+                        name = c.get("name", "")
+                        precise = c.get("is_precise", False)
+                        bg = "#dbeafe" if precise else "#eef2ff"
+                        color = "#1e40af" if precise else "#3730a3"
+                        badge = " ★" if precise else ""
+                        return (
+                            f"<span style='display:inline-block; padding:2px 8px; margin:2px; "
+                            f"border-radius:6px; background:{bg}; color:{color}; "
+                            f"font-size:0.78rem; font-weight:{'600' if precise else '400'};"
+                            f"'>{name}{badge}</span>"
+                        )
+
+                    chip_html = " ".join(_chip(c) for c in concepts)
                     st.markdown(
                         f"<div style='color:#6b7280; font-size:0.9rem; margin-bottom:10px;'>"
                         f"识别到 <b>{len(concepts)}</b> 个关联概念<br>{chip_html}</div>",
@@ -2633,6 +2643,16 @@ with tab4:
                             summary = n.get("summary", "")
                             dt = n.get("datetime", "")
                             url = n.get("url", "")
+                            topic = n.get("topic", "")
+                            tags = n.get("matched_keywords", [])
+                            if topic and topic not in tags:
+                                tags = [topic] + tags
+                            tag_html = "".join(
+                                f"<span style='display:inline-block; background:#e0e7ff; color:#3730a3; "
+                                f"padding:1px 6px; border-radius:4px; font-size:0.68rem; "
+                                f"margin-right:4px;'>{t}</span>"
+                                for t in tags[:3]
+                            )
                             title_html = (
                                 f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>"
                                 if url
@@ -2647,6 +2667,7 @@ with tab4:
                                     <span style='color:#9ca3af; font-size:0.78rem;'>{dt}</span>
                                 </div>
                                 <div style='font-weight:500; font-size:0.94rem; margin-bottom:4px;'>{title_html}</div>
+                                {f"<div style='margin-bottom:4px;'>{tag_html}</div>" if tag_html else ""}
                                 <div style='color:#6b7280; font-size:0.84rem; line-height:1.5;'>{summary}</div>
                             </div>
                             """)
@@ -2725,6 +2746,16 @@ with tab4:
                             summary = n.get("summary", "")
                             dt = n.get("datetime", "")
                             url = n.get("url", "")
+                            topic = n.get("topic", "")
+                            tags = n.get("matched_keywords", [])
+                            if topic and topic not in tags:
+                                tags = [topic] + tags
+                            tag_html = "".join(
+                                f"<span style='display:inline-block; background:#fef3c7; color:#92400e; "
+                                f"padding:1px 6px; border-radius:4px; font-size:0.68rem; "
+                                f"margin-right:4px;'>{t}</span>"
+                                for t in tags[:3]
+                            )
                             title_html = (
                                 f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>"
                                 if url
@@ -2739,6 +2770,7 @@ with tab4:
                                     <span style='color:#9ca3af; font-size:0.78rem;'>{dt}</span>
                                 </div>
                                 <div style='font-weight:500; font-size:0.94rem; margin-bottom:4px;'>{title_html}</div>
+                                {f"<div style='margin-bottom:4px;'>{tag_html}</div>" if tag_html else ""}
                                 <div style='color:#6b7280; font-size:0.84rem; line-height:1.5;'>{summary}</div>
                             </div>
                             """)
