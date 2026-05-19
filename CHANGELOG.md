@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.14 - 2026-05-19
+
+### News Section Overhaul
+
+**Root cause fixes for empty concept/industry news:**
+
+- `fetch_stock_concepts` — rewrote from serial 50-board scan to East Money datacenter API (`RPT_F10_CORETHEME_BOARDTYPE`), 1 HTTP request returns all boards in <1s.
+- `fetch_industry_name` — added datacenter API as primary source, uses `board_type="行业"` to reliably identify industry boards. Fixed misidentification (e.g. "权重股" for 宁德时代 → "电力设备").
+- `fetch_keyword_news_em` — fixed Chinese keyword URL encoding in search cookie (`urllib.parse.quote`), which caused `curl_cffi` latin-1 encoding error returning 0 results.
+
+### Concept Relevance Sorting
+
+- Uses `IS_PRECISE` and `BOARD_RANK` fields from datacenter API to sort concepts by relevance.
+- Precise matches (★) ranked first, then industry boards, then generic/index boards.
+- Example: 贵州茅台 → ★白酒, ★超级品牌, ★电商概念 (instead of 大盘股, 标准普尔, 央视50).
+
+### News Tags
+
+- `get_concept_news` and `get_industry_news` now attach `matched_keywords` to each news item.
+- Dashboard displays matched keywords as colored tag chips below each news title.
+- Concept news tags (blue), industry news tags (amber).
+- `fetch_keyword_news_em` results include `topic` field showing the search keyword.
+
+### Cache Optimization
+
+- Concept/industry/main-business cache TTL reduced from 86400s (24h) to 3600s (1h).
+- Concept blacklist reduced from 12 to 5 entries.
+
+### Dependencies
+
+- Fixed `curl_cffi` import failure silently returning `[]` — added `requests` as fallback HTTP client.
+
 ## v0.13.1 - 2026-05-19
 
 ### Utility Modules
