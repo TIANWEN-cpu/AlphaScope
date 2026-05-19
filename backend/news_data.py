@@ -564,13 +564,16 @@ def fetch_keyword_news_em(keyword: str, limit: int = 20) -> List[Dict[str, Any]]
         "param": json.dumps(inner, ensure_ascii=False),
         "_": "1764599530176",
     }
+    from urllib.parse import quote as _urlencode
+
+    kw_encoded = _urlencode(keyword)
     headers = {
         "accept": "*/*",
         "accept-language": "en,zh-CN;q=0.9,zh;q=0.8",
         "cache-control": "no-cache",
-        "cookie": f"emshistory=%5B%22{keyword}%22%5D",
+        "cookie": f"emshistory=%5B%22{kw_encoded}%22%5D",
         "host": "search-api-web.eastmoney.com",
-        "referer": f"https://so.eastmoney.com/news/s?keyword={keyword}",
+        "referer": f"https://so.eastmoney.com/news/s?keyword={kw_encoded}",
         "user-agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
