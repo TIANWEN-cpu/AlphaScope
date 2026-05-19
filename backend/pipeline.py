@@ -16,6 +16,8 @@ from backend.quality.dedup import Deduplicator
 from backend.quality.source_rank import SourceRanker
 from backend.storage.db import Database
 from backend.rag.retriever import Retriever
+from backend.utils.tracer import traced, get_tracer
+from backend.utils.datetime_util import normalize_dt_str
 
 logger = logging.getLogger(__name__)
 
@@ -101,12 +103,13 @@ class DataPipeline:
         start = time.time()
         try:
             # 1. 从 Provider 获取
-            items = self._registry.get(
-                data_type="news",
-                market=market,
-                symbol=symbol,
-                limit=limit,
-            )
+            with traced("ingest_news.fetch", "pipeline", market=market, symbol=symbol):
+                items = self._registry.get(
+                    data_type="news",
+                    market=market,
+                    symbol=symbol,
+                    limit=limit,
+                )
             if not items:
                 self._log_fetch("news", "empty", "success", 0, 0)
                 return []
@@ -493,7 +496,7 @@ class DataPipeline:
 
     @staticmethod
     def _to_news_row(item: dict) -> dict:
-        """将 Provider 返回的 dict 转为 DB 新闻行格式"""
+        """将 Provider 返回的 dict 转为 DB 新闻行格式 (v0.13: datetime 归一化)"""
         return {
             "id": item.get("id", ""),
             "title": item.get("title", ""),
@@ -502,8 +505,8 @@ class DataPipeline:
             "source": item.get("source", ""),
             "upstream": item.get("upstream", ""),
             "source_url": item.get("source_url", item.get("url", "")),
-            "published_at": str(item.get("datetime", item.get("published_at", ""))),
-            "fetched_at": item.get("fetched_at", datetime.now().isoformat()),
+            "published_at": normalize_dt_str(item.get("datetime", item.get("published_at", ""))),
+            "fetched_at": normalize_dt_str(item.get("fetched_at", "")) or datetime.now().isoformat(),
             "symbols": item.get("symbols", []),
             "industries": item.get("industries", []),
             "event_type": item.get("event_type", ""),
@@ -515,7 +518,7 @@ class DataPipeline:
 
     @staticmethod
     def _to_report_row(item: dict) -> dict:
-        """将 Provider 返回的 dict 转为 DB 研报行格式"""
+        """将 Provider 返回的 dict 转为 DB 研报行格式 (v0.13: datetime 归一化)"""
         return {
             "id": item.get("id", ""),
             "title": item.get("title", ""),
@@ -528,8 +531,8 @@ class DataPipeline:
             "target_price": item.get("target_price"),
             "summary": item.get("summary", ""),
             "pdf_url": item.get("pdf_url", item.get("url", "")),
-            "published_at": str(item.get("datetime", item.get("published_at", ""))),
-            "fetched_at": item.get("fetched_at", datetime.now().isoformat()),
+            "published_at": normalize_dt_str(item.get("datetime", item.get("published_at", ""))),
+            "fetched_at": normalize_dt_str(item.get("fetched_at", "")) or datetime.now().isoformat(),
             "source": item.get("source", ""),
             "source_url": item.get("source_url", item.get("url", "")),
             "pdf_hash": item.get("pdf_hash", ""),
@@ -539,15 +542,15 @@ class DataPipeline:
 
     @staticmethod
     def _to_announcement_row(item: dict) -> dict:
-        """将 Provider 返回的 dict 转为 DB 公告行格式"""
+        """将 Provider 返回的 dict 转为 DB 公告行格式 (v0.13: datetime 归一化)"""
         return {
             "id": item.get("id", ""),
             "symbol": item.get("symbol", ""),
             "company_name": item.get("company_name", ""),
             "title": item.get("title", ""),
             "category": item.get("category", ""),
-            "published_at": str(item.get("datetime", item.get("published_at", ""))),
-            "fetched_at": item.get("fetched_at", datetime.now().isoformat()),
+            "published_at": normalize_dt_str(item.get("datetime", item.get("published_at", ""))),
+            "fetched_at": normalize_dt_str(item.get("fetched_at", "")) or datetime.now().isoformat(),
             "source": item.get("source", ""),
             "source_url": item.get("source_url", item.get("url", "")),
             "pdf_url": item.get("pdf_url", item.get("url", "")),

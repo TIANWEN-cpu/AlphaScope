@@ -351,7 +351,6 @@ def _safe_main_flow(brief: str) -> float:
     """从 fund_flow brief 文本里提取近 5 日主力净流入/流出数值（亿元）"""
     if not brief:
         return None
-    import re
     # 匹配 "主力合计净流入/流出: ±X.XX亿" 或 "主力净流入/流出 X.XX"
     patterns = [
         r"主力(?:合计)?净流[入出][^-+\d]*([+-]?\d+\.?\d*)",
