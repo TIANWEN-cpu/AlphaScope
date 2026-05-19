@@ -3,7 +3,18 @@
 > 安装日期：2026-05-16
 > 位置：克隆后的仓库目录
 > Python 环境：建议使用本地虚拟环境 `.venv` 或 `venvs/finance-agent-engineering`
-> 当前版本：**v0.13.0（Agent 模式系统 + 7 个新数据源 + 工程加固）**
+> 当前版本：**v0.13.1（工具模块 + 代码审查修复 + 依赖锁定）**
+
+## v0.13.1 新特性（工具模块 + 代码审查修复 + 依赖锁定）
+
+| 模块 | 主要能力 |
+|---|---|
+| **🛠️ 工具模块** | `backend/utils/datetime_util.py`：10+ 种中国金融数据源日期格式解析 + 时区归一化；`backend/utils/tracer.py`：轻量级 span 追踪（线程安全环形缓冲区），可升级到 OpenTelemetry |
+| **🧪 代码审查修复** | 修复 9 个问题：dashboard 重复缓存装饰器/未定义 logger、tracer 线程安全、archive_tagger 原子写入、db.py SQLite 并发锁、expert_panel 类型错误等 |
+| **📦 依赖锁定** | `requirements.txt` 全部用 `==` 固定版本，确保可复现构建 |
+| **🧪 新增测试** | test_agent_modes.py（27 条）、test_datetime_util.py、test_tracer.py，共 260 条测试全通过 |
+
+> v0.13.1 是 v0.13.0 的维护版本，不涉及新功能，仅补充工具模块、修复代码审查问题、锁定依赖版本。
 
 ## v0.13.0 新特性（Agent 模式系统 + 全球化数据源 + 工程加固）
 
@@ -17,9 +28,6 @@
 | **🔐 Prompt 注入防护** | `validators.py` 新增 `validate_stock_code()` + `sanitize_prompt_input()`，股票代码白名单 + 注入模式过滤 |
 | **🔒 线程安全单例** | DataPipeline/Database/VectorStore 全部改为 double-checked locking，解决 Streamlit 多线程竞态问题 |
 | **🏗️ 工程加固** | GitHub Actions CI（ruff + pytest）、Docker 资源限制 + 健康检查、.env.example + Makefile、生产代码与测试脚本分离 |
-| **🛠️ 工具模块** | `backend/utils/datetime_util.py`：10+ 种中国金融数据源日期格式解析 + 时区归一化；`backend/utils/tracer.py`：轻量级 span 追踪（线程安全环形缓冲区），可升级到 OpenTelemetry |
-| **🧪 代码审查修复** | 修复 9 个问题：dashboard 重复缓存装饰器/未定义 logger、tracer 线程安全、archive_tagger 原子写入、db.py SQLite 并发锁、expert_panel 类型错误等 |
-| **📦 依赖锁定** | `requirements.txt` 全部用 `==` 固定版本，确保可复现构建 |
 
 > v0.13 核心理念：**从"数据管道"升级为"多模式 Agent 分析 + 全球化另类数据源 + 多源交叉验证"**。标准模式 3 Agent 快速低成本，深入模式 5 Agent + Critic + 主席全面分析，自动模式智能路由。
 
@@ -359,6 +367,7 @@ python backend/test_all_apis_v4.py
 
 | 版本 | 日期 | 关键变更 |
 |------|------|------|
+| **v0.13.1** | **2026-05-19** | **工具模块（datetime_util/tracer）+ 代码审查修复（9 项）+ 依赖版本锁定 + 新增 3 个测试文件** |
 | **v0.13.0** | **2026-05-19** | **Agent 模式系统（标准/深入/自动）+ 模型配置化 + 7 个新数据源 + 证据聚合器 + 异常检测 + Prompt 注入防护 + 线程安全单例 + GitHub Actions CI + Docker 加固** |
 | **v0.12.0** | **2026-05-18** | **端到端数据管道 + 事件抽取 + 量化因子 + 证据驱动 Agent + 数据源健康度 + HKEX/SEC Provider 修复 + 9 个测试文件** |
 | **v0.11.0** | **2026-05-18** | **Provider 插件架构（9 个数据源）+ 标准化数据模型 + 质量层 + 存储层 + RAG 检索 + 采集调度 + 可观测性 + Docker 支持** |

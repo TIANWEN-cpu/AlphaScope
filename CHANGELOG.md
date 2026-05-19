@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.13.1 - 2026-05-19
+
+### Utility Modules
+- Added `backend/utils/datetime_util.py` — datetime parsing and timezone normalization for Chinese financial data sources. Handles 10+ datetime formats, normalizes to Asia/Shanghai timezone.
+- Added `backend/utils/tracer.py` — lightweight span-based tracing system with thread-safe ring buffer, context manager and decorator APIs. Can be optionally upgraded to OpenTelemetry.
+
+### Code Review Fixes
+- Fixed `frontend/dashboard.py`: removed duplicate `@st.cache_data` decorator on `get_stock_list()`, fixed undefined `logger` reference.
+- Fixed `backend/utils/tracer.py`: thread-safe `_trace_counter` increment in `start_span()`.
+- Fixed `backend/archive.py`: removed redundant `import re` inside function body.
+- Fixed `backend/expert_panel.py`: `TypeError` in `__main__` self-test when printing evidence dicts.
+- Fixed `backend/archive_tagger.py`: `_save_index()` now uses atomic write (temp file + replace).
+- Fixed `backend/storage/db.py`: added `threading.Lock` around all `insert_*` + `commit` operations to prevent concurrent SQLite writes.
+
+### Pipeline
+- Pipeline `_to_news_row` / `_to_report_row` / `_to_announcement_row` now normalize datetime strings via `normalize_dt_str()`.
+- Added `@st.cache_data(ttl=300)` to `get_stock_list()` in dashboard.
+
+### Dependencies
+- Pinned all dependency versions in `requirements.txt` with `==`.
+
+### Tests
+- Added `tests/test_agent_modes.py` — 27 tests for AnalysisMode enum, AgentModeEntry, AgentModeConfig, ModeResolver singleton (including thread safety), and convenience functions.
+- Added `tests/test_datetime_util.py` — tests for datetime parsing across 10+ formats, timezone normalization, and display formatting.
+- Added `tests/test_tracer.py` — tests for Span, Tracer ring buffer, traced context manager, traced_func decorator, and stats.
+
 ## v0.13.0 - 2026-05-19
 
 ### Agent Mode System (Highest Priority)
@@ -84,21 +110,6 @@
 - New `frontend/components/source_health_panel.py` — displays Provider health table, fetch log statistics, RAG index status, and database record counts.
 - Added `render_trust_badge()` helper for S/A/B/C/D trust level display.
 
-### Utility Modules
-- Added `backend/utils/datetime_util.py` — datetime parsing and timezone normalization for Chinese financial data sources. Handles 10+ datetime formats, normalizes to Asia/Shanghai timezone.
-- Added `backend/utils/tracer.py` — lightweight span-based tracing system with thread-safe ring buffer, context manager and decorator APIs. Can be optionally upgraded to OpenTelemetry.
-
-### Engineering Hardening (v0.13 code review)
-- Fixed `frontend/dashboard.py`: removed duplicate `@st.cache_data` decorator on `get_stock_list()`, fixed undefined `logger` reference.
-- Fixed `backend/utils/tracer.py`: thread-safe `_trace_counter` increment in `start_span()`.
-- Fixed `backend/archive.py`: removed redundant `import re` inside function body.
-- Fixed `backend/expert_panel.py`: `TypeError` in `__main__` self-test when printing evidence dicts.
-- Fixed `backend/archive_tagger.py`: `_save_index()` now uses atomic write (temp file + replace).
-- Fixed `backend/storage/db.py`: added `threading.Lock` around all `insert_*` + `commit` operations to prevent concurrent SQLite writes.
-- Added `@st.cache_data(ttl=300)` to `get_stock_list()` in dashboard.
-- Pipeline `_to_news_row` / `_to_report_row` / `_to_announcement_row` now normalize datetime strings via `normalize_dt_str()`.
-- Pinned all dependency versions in `requirements.txt` with `==`.
-
 ### Tests
 - Added `tests/test_schema_models.py` — tests for all Pydantic models (NewsItem, ResearchReport, Announcement, PriceBar, FundFlow, EvidenceItem, EvidenceBundle, AgentReport).
 - Added `tests/test_dedup.py` — tests for Deduplicator fingerprint and dedup logic.
@@ -109,9 +120,6 @@
 - Added `tests/test_sec_provider.py` — tests for SEC CIK lookup and filing parsing.
 - Added `tests/test_hkex_provider.py` — tests for HKEX HTML parsing and category guessing.
 - Added `tests/test_factors.py` — tests for FactorGenerator, FactorReport, rating scores, event category scores, and convenience functions.
-- Added `tests/test_agent_modes.py` — 27 tests for AnalysisMode enum, AgentModeEntry, AgentModeConfig, ModeResolver singleton (including thread safety), and convenience functions.
-- Added `tests/test_datetime_util.py` — tests for datetime parsing across 10+ formats, timezone normalization, and display formatting.
-- Added `tests/test_tracer.py` — tests for Span, Tracer ring buffer, traced context manager, traced_func decorator, and stats.
 
 ### Integration
 - Updated `news_data.py` `fetch_*_via_provider()` functions to route through `DataPipeline` first (v0.12), then Provider Registry (v0.11), then original functions (fallback).
