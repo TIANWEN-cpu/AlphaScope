@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.12.0 - 2026-05-19
+## v0.13.0 - 2026-05-19
 
 ### Agent Mode System (Highest Priority)
 - Added `backend/agent_modes.py` — three-tier analysis mode system: Standard (3 agents, DeepSeek, fast/cheap), Deep (5 agents + critic + chairman, Claude/GPT, full analysis), Auto (pre-screen then escalate if ambiguous).
