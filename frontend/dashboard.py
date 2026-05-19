@@ -2655,9 +2655,13 @@ with tab4:
             with sub_industry:
                 # v0.14: 如果行业名为空,尝试从概念板块中提取
                 if not industry:
-                    concepts_for_industry = cached_stock_concepts(symbol, stock_name) or []
+                    concepts_for_industry = (
+                        cached_stock_concepts(symbol, stock_name) or []
+                    )
                     if concepts_for_industry:
-                        industry = fetch_industry_name(symbol, concepts=concepts_for_industry)
+                        industry = fetch_industry_name(
+                            symbol, concepts=concepts_for_industry
+                        )
                 if not industry:
                     st.info("未能识别该股票的行业,无法生成行业新闻。")
                 else:
