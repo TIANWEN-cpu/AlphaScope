@@ -801,10 +801,12 @@ def _fetch_stock_boards_datacenter(
             continue
         seen.add(name)
         board_code = _clean_str(item.get("BOARD_CODE"))
+        board_type = _clean_str(item.get("BOARD_TYPE"))
         out.append(
             {
                 "name": name,
                 "code": board_code,
+                "board_type": board_type,
                 "pct_chg": None,
                 "lead_stock": "",
             }
@@ -1422,16 +1424,34 @@ def fetch_industry_name(
     # 优先: datacenter API 直接查板块类型
     if code:
         boards = _fetch_stock_boards_datacenter(code, max_concepts=30)
+        # 先找 BOARD_TYPE 明确标记为 "行业" 的板块
+        for b in boards:
+            if _clean_str(b.get("board_type")) == "行业":
+                name = _clean_str(b.get("name"))
+                if name and len(name) >= 2:
+                    return name
+        # 回退: 排除明显的指数/ETF/区域板块,取第一个行业风格的名称
+        _NON_INDUSTRY_SUFFIXES = (
+            "概念",
+            "指数",
+            "ETF",
+            "LOF",
+            "板块",
+            "通",
+            "50",
+            "180",
+            "300",
+        )
         for b in boards:
             name = _clean_str(b.get("name"))
-            if not name:
+            if not name or len(name) < 2:
                 continue
-            # 行业板块通常不是 "概念"、"指数" 等
-            is_concept = any(
-                name.endswith(s) for s in ("概念", "指数", "ETF", "LOF", "板块")
-            )
-            if not is_concept and len(name) >= 2:
-                return name
+            if any(name.endswith(s) for s in _NON_INDUSTRY_SUFFIXES):
+                continue
+            # 排除纯区域名
+            if name.endswith(("省", "市", "区")):
+                continue
+            return name
 
     df = _safe(ak.stock_individual_info_em, symbol=symbol)
     if df is not None and len(df):
