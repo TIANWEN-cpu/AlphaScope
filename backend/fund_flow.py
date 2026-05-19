@@ -3,7 +3,9 @@
 - 个股每日资金流向（主力/超大单/大单/中单/小单）
 - 大盘资金流向（上证/深证 + 主力分布）
 """
+
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import akshare as ak
@@ -70,7 +72,9 @@ def summarize_fund_flow(df: pd.DataFrame, recent_days: int = 5) -> Dict[str, Any
         "large_total_yi": to_yi(recent["大单净流入-净额"].sum()),
         "medium_total_yi": to_yi(recent["中单净流入-净额"].sum()),
         "small_total_yi": to_yi(recent["小单净流入-净额"].sum()),
-        "last_date": str(last["日期"].date()) if hasattr(last["日期"], "date") else str(last["日期"]),
+        "last_date": str(last["日期"].date())
+        if hasattr(last["日期"], "date")
+        else str(last["日期"]),
         "last_main_yi": to_yi(last["主力净流入-净额"]),
         "last_main_pct": float(last["主力净流入-净占比"]),
         "inflow_days": int((recent["主力净流入-净额"] > 0).sum()),
@@ -100,7 +104,7 @@ def build_fund_flow_brief_for_llm(summary: Dict[str, Any], kind: str = "个股")
 - 主力合计{direction}: {main:+.2f}亿元（流入{inflow_days}天/流出{outflow_days}天）
 - 超大单: {super_:+.2f}亿 | 大单: {large:+.2f}亿
 - 中单: {medium:+.2f}亿 | 小单: {small:+.2f}亿（散户）
-- 最新交易日（{summary.get('last_date', '')}）: 主力{last_main:+.2f}亿（占比 {last_pct:+.2f}%）"""
+- 最新交易日（{summary.get("last_date", "")}）: 主力{last_main:+.2f}亿（占比 {last_pct:+.2f}%）"""
 
 
 if __name__ == "__main__":
@@ -109,7 +113,11 @@ if __name__ == "__main__":
     print("=" * 70)
     df = fetch_individual_fund_flow("600519", days=10)
     if df is not None:
-        print(df[["日期", "收盘价", "涨跌幅", "主力净流入-净额", "主力净流入-净占比"]].to_string())
+        print(
+            df[
+                ["日期", "收盘价", "涨跌幅", "主力净流入-净额", "主力净流入-净占比"]
+            ].to_string()
+        )
         s = summarize_fund_flow(df, recent_days=5)
         print("\n--- 5 日汇总 ---")
         for k, v in s.items():

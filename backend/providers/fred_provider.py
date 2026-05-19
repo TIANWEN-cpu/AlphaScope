@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from backend.providers.base import BaseProvider
 
@@ -51,6 +51,7 @@ class FredProvider(BaseProvider):
 
     def _get(self, endpoint: str, params: Optional[Dict] = None) -> Any:
         import requests
+
         url = f"{self.BASE_URL}{endpoint}"
         params = params or {}
         params["api_key"] = self._api_key
@@ -66,11 +67,14 @@ class FredProvider(BaseProvider):
             # Return overview of key indicators
             return self._get_overview()
         try:
-            raw = self._get("/series/observations", {
-                "series_id": series_id,
-                "limit": query.get("limit", 30),
-                "sort_order": "desc",
-            })
+            raw = self._get(
+                "/series/observations",
+                {
+                    "series_id": series_id,
+                    "limit": query.get("limit", 30),
+                    "sort_order": "desc",
+                },
+            )
             observations = raw.get("observations", [])
             return {
                 "series_id": series_id,
@@ -88,11 +92,14 @@ class FredProvider(BaseProvider):
         result = {}
         for name, series_id in list(self.KEY_SERIES.items())[:8]:
             try:
-                raw = self._get("/series/observations", {
-                    "series_id": series_id,
-                    "limit": 2,
-                    "sort_order": "desc",
-                })
+                raw = self._get(
+                    "/series/observations",
+                    {
+                        "series_id": series_id,
+                        "limit": 2,
+                        "sort_order": "desc",
+                    },
+                )
                 observations = raw.get("observations", [])
                 if observations:
                     latest = observations[0]
@@ -108,11 +115,14 @@ class FredProvider(BaseProvider):
     def get_series(self, series_id: str, limit: int = 30) -> list:
         """Get time series data for a specific indicator"""
         try:
-            raw = self._get("/series/observations", {
-                "series_id": series_id,
-                "limit": limit,
-                "sort_order": "desc",
-            })
+            raw = self._get(
+                "/series/observations",
+                {
+                    "series_id": series_id,
+                    "limit": limit,
+                    "sort_order": "desc",
+                },
+            )
             return raw.get("observations", [])
         except Exception as e:
             logger.warning("FRED series %s failed: %s", series_id, e)
@@ -121,10 +131,13 @@ class FredProvider(BaseProvider):
     def search(self, query: str, limit: int = 10) -> list:
         """Search for economic series"""
         try:
-            raw = self._get("/series/search", {
-                "search_text": query,
-                "limit": limit,
-            })
+            raw = self._get(
+                "/series/search",
+                {
+                    "search_text": query,
+                    "limit": limit,
+                },
+            )
             return raw.get("seriess", [])
         except Exception as e:
             logger.warning("FRED search failed: %s", e)

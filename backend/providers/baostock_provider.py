@@ -38,7 +38,7 @@ class BaoStockProvider(BaseProvider):
         try:
             import baostock as bs
 
-            lg = bs.login()
+            bs.login()
             start = query.get("start_date", "2024-01-01")
             end = query.get("end_date", "")
             fields = "date,open,high,low,close,volume,amount,turn,pctChg"
@@ -55,20 +55,22 @@ class BaoStockProvider(BaseProvider):
             results = []
             while rs.error_code == "0" and rs.next():
                 row = rs.get_row_data()
-                results.append({
-                    "symbol": symbol,
-                    "market": "CN",
-                    "date": row[0],
-                    "open": float(row[1]) if row[1] else 0,
-                    "high": float(row[2]) if row[2] else 0,
-                    "low": float(row[3]) if row[3] else 0,
-                    "close": float(row[4]) if row[4] else 0,
-                    "volume": float(row[5]) if row[5] else 0,
-                    "amount": float(row[6]) if row[6] else 0,
-                    "turnover": float(row[7]) if row[7] else 0,
-                    "change_pct": float(row[8]) if row[8] else 0,
-                    "source": "baostock",
-                })
+                results.append(
+                    {
+                        "symbol": symbol,
+                        "market": "CN",
+                        "date": row[0],
+                        "open": float(row[1]) if row[1] else 0,
+                        "high": float(row[2]) if row[2] else 0,
+                        "low": float(row[3]) if row[3] else 0,
+                        "close": float(row[4]) if row[4] else 0,
+                        "volume": float(row[5]) if row[5] else 0,
+                        "amount": float(row[6]) if row[6] else 0,
+                        "turnover": float(row[7]) if row[7] else 0,
+                        "change_pct": float(row[8]) if row[8] else 0,
+                        "source": "baostock",
+                    }
+                )
             bs.logout()
             return results
         except Exception as e:
@@ -91,7 +93,7 @@ class BaoStockProvider(BaseProvider):
         try:
             import baostock as bs
 
-            lg = bs.login()
+            bs.login()
             year = query.get("year", "2025")
             quarter = query.get("quarter", "4")
 

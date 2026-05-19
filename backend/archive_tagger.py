@@ -7,6 +7,7 @@
   - 卖出命中: 该窗口收益 < 0
   - 观望命中: |该窗口收益| <= HOLD_HIT_THRESHOLD_PCT(默认 2%)
 """
+
 import json
 from pathlib import Path
 
@@ -23,8 +24,8 @@ HOLD_HIT_THRESHOLD_PCT = 2.0
 DRAWDOWN_WINDOW_DAYS = 10
 # 单点收益的所有 (天数, 字段名),按从近到远排列
 RETURN_KEYS = [
-    (3,  "3d_return"),
-    (5,  "5d_return"),
+    (3, "3d_return"),
+    (5, "5d_return"),
     (10, "10d_return"),
     (20, "20d_return"),
 ]
@@ -47,10 +48,14 @@ def _load_index() -> list:
 def _save_index(idx: list):
     """保存归档索引（原子写入）。"""
     import tempfile
+
     ARCHIVE_ROOT.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", suffix=".tmp",
-        dir=ARCHIVE_ROOT, delete=False,
+        mode="w",
+        encoding="utf-8",
+        suffix=".tmp",
+        dir=ARCHIVE_ROOT,
+        delete=False,
     )
     try:
         tmp.write(json.dumps(idx, ensure_ascii=False, indent=2))
@@ -75,7 +80,9 @@ def _decision_to_signal(decision: str) -> str:
     return ""
 
 
-def _compute_hit(signal: str, return_pct: float, hold_threshold: float = HOLD_HIT_THRESHOLD_PCT) -> int:
+def _compute_hit(
+    signal: str, return_pct: float, hold_threshold: float = HOLD_HIT_THRESHOLD_PCT
+) -> int:
     """根据信号方向与窗口收益判定是否命中。返回 1/0。"""
     if signal == "买入":
         return 1 if return_pct > 0 else 0
@@ -141,7 +148,9 @@ def tag_all_reports() -> dict:
         if "max_drawdown_10d" not in item:
             series = get_price_range(symbol, date_str, DRAWDOWN_WINDOW_DAYS)
             if series:
-                rel = [(close - report_close) / report_close * 100 for _, close in series]
+                rel = [
+                    (close - report_close) / report_close * 100 for _, close in series
+                ]
                 # 取最坏的相对跌幅,若全程未跌则记 0.0(便于统计零值)
                 dd = min(min(rel), 0.0)
                 item["max_drawdown_10d"] = round(dd, 2)

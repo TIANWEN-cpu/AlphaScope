@@ -5,7 +5,7 @@
 - 检测重复存档（同股票 5 分钟内不重复保存）
 - v0.7：新增 report_type 字段(agent/roundtable),新增 save_roundtable()
 """
-import os
+
 import json
 import re
 import tempfile
@@ -58,7 +58,9 @@ def _load_index() -> list:
     except FileNotFoundError:
         return []
     except Exception as e:
-        backup = INDEX_FILE.with_suffix(f".corrupt-{datetime.now().strftime('%Y%m%d%H%M%S')}.json")
+        backup = INDEX_FILE.with_suffix(
+            f".corrupt-{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+        )
         try:
             INDEX_FILE.replace(backup)
         except Exception:
@@ -107,7 +109,10 @@ def save_report(
 
     # 去重：同 symbol + report_type 在 dedupe_minutes 内不重复保存
     for item in idx:
-        if item.get("symbol") == safe_symbol and item.get("type", "agent") == report_type:
+        if (
+            item.get("symbol") == safe_symbol
+            and item.get("type", "agent") == report_type
+        ):
             try:
                 ts = datetime.fromisoformat(item["timestamp"])
                 if (now - ts).total_seconds() < dedupe_minutes * 60:
@@ -143,15 +148,19 @@ def save_report(
             "review": r.get("review") or None,
         }
     # 模型组合签名（基于实际生效的模型）
-    combo_signature = "|".join(
-        f"{k}:{v['vendor']}/{v['model']}"
-        for k, v in sorted(agent_models.items())
-    ) if agent_models else ""
+    combo_signature = (
+        "|".join(
+            f"{k}:{v['vendor']}/{v['model']}" for k, v in sorted(agent_models.items())
+        )
+        if agent_models
+        else ""
+    )
     # 主厂商组合签名（基于配置的主模型，便于按"理想配置"统计）
-    primary_combo_signature = "|".join(
-        f"{k}:{v['primary_vendor']}"
-        for k, v in sorted(agent_models.items())
-    ) if agent_models else ""
+    primary_combo_signature = (
+        "|".join(f"{k}:{v['primary_vendor']}" for k, v in sorted(agent_models.items()))
+        if agent_models
+        else ""
+    )
 
     # 更新索引
     summary = llm_result.get("summary", {})
@@ -177,7 +186,9 @@ def save_report(
         "combo_signature": combo_signature,
         "primary_combo_signature": primary_combo_signature,
         # 兜底统计：fallback_used 表示主厂商失败切到 DeepSeek，failed 表示连兜底都失败
-        "fallback_count": sum(1 for v in agent_models.values() if v.get("fallback_used")),
+        "fallback_count": sum(
+            1 for v in agent_models.values() if v.get("fallback_used")
+        ),
         "failed_count": sum(1 for v in agent_models.values() if not v["ok"]),
         # v0.9: critic 总览(每个 agent 的具体 review 已经在 agent_models[k]['review'] 里)
         "critic": _summarize_critic((llm_result or {}).get("critic"), agent_models),
@@ -295,7 +306,9 @@ def save_roundtable(
         "valid_count": summary.get("valid_count", 0),
         "total_count": summary.get("total_count", 0),
         "expert_snapshot": expert_snapshot,
-        "fallback_count": sum(1 for s in expert_snapshot.values() if s.get("fallback_used")),
+        "fallback_count": sum(
+            1 for s in expert_snapshot.values() if s.get("fallback_used")
+        ),
         "failed_count": sum(1 for s in expert_snapshot.values() if not s.get("ok")),
         "chairman_excerpt": excerpt,
         # 兼容字段(便于在 Tab7 共用列表渲染时不报错)
@@ -325,24 +338,26 @@ def _summarize_critic(critic_block, agent_models: dict):
     scores = [
         v["review"]["quality_score"]
         for v in agent_models.values()
-        if isinstance(v.get("review"), dict) and isinstance(v["review"].get("quality_score"), int)
+        if isinstance(v.get("review"), dict)
+        and isinstance(v["review"].get("quality_score"), int)
     ]
     avg_q = round(sum(scores) / len(scores), 1) if scores else None
     overconfident = sum(
-        1 for v in agent_models.values()
+        1
+        for v in agent_models.values()
         if isinstance(v.get("review"), dict) and v["review"].get("overconfident")
     )
     div = critic_block.get("divergence") or {}
     return {
         "ok": True,
         "vendor": critic_block.get("vendor", ""),
-        "model":  critic_block.get("model", ""),
+        "model": critic_block.get("model", ""),
         "fallback_used": bool(critic_block.get("fallback_used", False)),
         "avg_quality": avg_q,
         "reviewed_count": len(scores),
         "overconfident_count": overconfident,
-        "divergence_level":   div.get("level", ""),
-        "divergence_axis":    div.get("main_axis", ""),
+        "divergence_level": div.get("level", ""),
+        "divergence_axis": div.get("main_axis", ""),
         "divergence_summary": div.get("summary", ""),
     }
 
@@ -362,7 +377,7 @@ def _safe_main_flow(brief: str) -> float:
             try:
                 val = float(m.group(1))
                 # 如果文本明确写"流出"且数值为正，自动取负（防御）
-                if "流出" in brief[:m.start() + 20] and val > 0:
+                if "流出" in brief[: m.start() + 20] and val > 0:
                     val = -val
                 return val
             except Exception:
@@ -382,7 +397,9 @@ def list_reports(
     idx = _load_index()
     out = []
     for item in idx:
-        if stock_filter and stock_filter not in (item.get("stock_name", "") + item.get("symbol", "")):
+        if stock_filter and stock_filter not in (
+            item.get("stock_name", "") + item.get("symbol", "")
+        ):
             continue
         if decision_filter and decision_filter not in item.get("decision", ""):
             continue
@@ -450,7 +467,13 @@ def get_combo_stats() -> list:
         if not sig:
             continue
         if sig not in combos:
-            combos[sig] = {"count": 0, "buy": 0, "sell": 0, "hold": 0, "avg_conf_sum": 0.0}
+            combos[sig] = {
+                "count": 0,
+                "buy": 0,
+                "sell": 0,
+                "hold": 0,
+                "avg_conf_sum": 0.0,
+            }
         combos[sig]["count"] += 1
         d = item.get("decision", "")
         if "买入" in d:
@@ -463,14 +486,16 @@ def get_combo_stats() -> list:
     out = []
     for sig, v in combos.items():
         n = max(v["count"], 1)
-        out.append({
-            "combo": sig,
-            "count": v["count"],
-            "buy": v["buy"],
-            "sell": v["sell"],
-            "hold": v["hold"],
-            "avg_confidence": round(v["avg_conf_sum"] / n, 1),
-        })
+        out.append(
+            {
+                "combo": sig,
+                "count": v["count"],
+                "buy": v["buy"],
+                "sell": v["sell"],
+                "hold": v["hold"],
+                "avg_confidence": round(v["avg_conf_sum"] / n, 1),
+            }
+        )
     out.sort(key=lambda x: -x["count"])
     return out
 
@@ -491,6 +516,7 @@ def get_combo_performance(min_samples: int = 1) -> list:
     Returns:
         list[dict],按 5 日命中率降序、其次按样本量降序排序。
     """
+
     def _avg(values: list):
         cleaned = [v for v in values if isinstance(v, (int, float)) and v == v]
         if not cleaned:
@@ -512,15 +538,27 @@ def get_combo_performance(min_samples: int = 1) -> list:
         if not sig:
             continue
         decision = item.get("decision", "")
-        bucket = combos.setdefault(sig, {
-            "combo": sig,
-            "count": 0,
-            "buy": 0, "sell": 0, "hold": 0,
-            "ret_3d": [], "ret_5d": [], "ret_10d": [], "ret_20d": [],
-            "drawdown_10d": [],
-            "hit_3d": [], "hit_5d": [], "hit_10d": [],
-            "buy_hit_5d": [], "sell_hit_5d": [], "hold_hit_5d": [],
-        })
+        bucket = combos.setdefault(
+            sig,
+            {
+                "combo": sig,
+                "count": 0,
+                "buy": 0,
+                "sell": 0,
+                "hold": 0,
+                "ret_3d": [],
+                "ret_5d": [],
+                "ret_10d": [],
+                "ret_20d": [],
+                "drawdown_10d": [],
+                "hit_3d": [],
+                "hit_5d": [],
+                "hit_10d": [],
+                "buy_hit_5d": [],
+                "sell_hit_5d": [],
+                "hold_hit_5d": [],
+            },
+        )
         bucket["count"] += 1
         if "买入" in decision:
             bucket["buy"] += 1
@@ -555,23 +593,27 @@ def get_combo_performance(min_samples: int = 1) -> list:
         samples_5d = len(b["ret_5d"])
         if samples_5d < min_samples:
             continue
-        out.append({
-            "combo": sig,
-            "count": b["count"],
-            "buy": b["buy"], "sell": b["sell"], "hold": b["hold"],
-            "samples_with_label": samples_5d,
-            "avg_3d_return":  _avg(b["ret_3d"]),
-            "avg_5d_return":  _avg(b["ret_5d"]),
-            "avg_10d_return": _avg(b["ret_10d"]),
-            "avg_20d_return": _avg(b["ret_20d"]),
-            "avg_drawdown_10d": _avg(b["drawdown_10d"]),
-            "hit_rate_3d":  _rate(b["hit_3d"]),
-            "hit_rate_5d":  _rate(b["hit_5d"]),
-            "hit_rate_10d": _rate(b["hit_10d"]),
-            "buy_hit_rate_5d":  _rate(b["buy_hit_5d"]),
-            "sell_hit_rate_5d": _rate(b["sell_hit_5d"]),
-            "hold_hit_rate_5d": _rate(b["hold_hit_5d"]),
-        })
+        out.append(
+            {
+                "combo": sig,
+                "count": b["count"],
+                "buy": b["buy"],
+                "sell": b["sell"],
+                "hold": b["hold"],
+                "samples_with_label": samples_5d,
+                "avg_3d_return": _avg(b["ret_3d"]),
+                "avg_5d_return": _avg(b["ret_5d"]),
+                "avg_10d_return": _avg(b["ret_10d"]),
+                "avg_20d_return": _avg(b["ret_20d"]),
+                "avg_drawdown_10d": _avg(b["drawdown_10d"]),
+                "hit_rate_3d": _rate(b["hit_3d"]),
+                "hit_rate_5d": _rate(b["hit_5d"]),
+                "hit_rate_10d": _rate(b["hit_10d"]),
+                "buy_hit_rate_5d": _rate(b["buy_hit_5d"]),
+                "sell_hit_rate_5d": _rate(b["sell_hit_5d"]),
+                "hold_hit_rate_5d": _rate(b["hold_hit_5d"]),
+            }
+        )
 
     # 排序:先按 5 日命中率(None 视为 -1),其次按样本量
     out.sort(
@@ -609,4 +651,6 @@ if __name__ == "__main__":
     print("Stats:", get_stats())
     print("Recent reports:")
     for r in list_reports(limit=5):
-        print(f"  [{r['date']} {r['time']}] {r['stock_name']}({r['symbol']}) → {r['decision']} @{r['avg_confidence']}%")
+        print(
+            f"  [{r['date']} {r['time']}] {r['stock_name']}({r['symbol']}) → {r['decision']} @{r['avg_confidence']}%"
+        )

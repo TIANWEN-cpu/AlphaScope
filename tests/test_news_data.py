@@ -1,4 +1,5 @@
 """Tests for backend.news_data — keyword expansion and NaN-safe helpers."""
+
 import news_data
 
 from news_data import (
@@ -29,6 +30,7 @@ from news_data import (
 
 
 # ---------------- _expand_stock_keywords ----------------
+
 
 class TestExpandStockKeywords:
     def test_long_name_yields_full_prefix_suffix_and_symbol(self):
@@ -61,6 +63,7 @@ class TestExpandStockKeywords:
 
 # ---------------- _clean_str / _to_float_or_none ----------------
 
+
 def test_clean_str_filters_nan_and_none():
     assert _clean_str(None) == ""
     assert _clean_str("nan") == ""
@@ -81,23 +84,29 @@ def test_to_float_or_none_filters_nan():
 
 
 def test_eastmoney_article_url_requires_numeric_code():
-    assert _eastmoney_article_url("202601011234") == "http://finance.eastmoney.com/a/202601011234.html"
+    assert (
+        _eastmoney_article_url("202601011234")
+        == "http://finance.eastmoney.com/a/202601011234.html"
+    )
     assert _eastmoney_article_url("../bad") == ""
     assert _eastmoney_article_url("") == ""
 
 
 def test_parse_eastmoney_search_payload_jsonp():
-    payload = _parse_eastmoney_search_payload('cb({"result":{"cmsArticleWebOld":[{"title":"x"}]}});')
+    payload = _parse_eastmoney_search_payload(
+        'cb({"result":{"cmsArticleWebOld":[{"title":"x"}]}});'
+    )
     assert payload["result"]["cmsArticleWebOld"][0]["title"] == "x"
     assert _parse_eastmoney_search_payload("not-json") == {}
 
 
 # ---------------- get_stock_related_news ----------------
 
+
 def test_related_news_matches_short_brand_name():
     news = [
         {"title": "茅台一季报靓丽", "summary": "主力净流入"},
-        {"title": "比亚迪销量",     "summary": ""},
+        {"title": "比亚迪销量", "summary": ""},
         {"title": "代码 600519 异动", "summary": ""},
     ]
     hits = get_stock_related_news("贵州茅台", news, symbol="600519")
@@ -120,6 +129,7 @@ def test_related_news_respects_limit():
 
 
 # ---------------- classify_announcement ----------------
+
 
 class TestClassifyAnnouncement:
     def test_buyback_keyword(self):
@@ -162,6 +172,7 @@ class TestClassifyAnnouncement:
 
 # ---------------- merge_announcements ----------------
 
+
 def test_merge_announcements_dedupes_and_sorts():
     a = [
         {"title": "回购公告", "date": "2026-05-08", "source": "巨潮"},
@@ -189,7 +200,10 @@ def test_merge_announcements_drops_empty_and_titleless():
 
 
 def test_brief_for_llm_renders_top_n():
-    items = [{"title": f"公告{i}", "category": "回购", "date": "2026-05-17"} for i in range(10)]
+    items = [
+        {"title": f"公告{i}", "category": "回购", "date": "2026-05-17"}
+        for i in range(10)
+    ]
     brief = build_announcements_brief_for_llm(items, max_items=3)
     assert brief.count("\n") == 2  # 3 行 = 2 个换行
     assert "回购" in brief
@@ -200,6 +214,7 @@ def test_brief_for_llm_handles_empty():
 
 
 # ---------------- get_industry_keywords ----------------
+
 
 class TestGetIndustryKeywords:
     def test_strip_roman_suffix(self):
@@ -216,6 +231,7 @@ class TestGetIndustryKeywords:
 
 # ---------------- _expand_stock_keywords with products ----------------
 
+
 def test_expand_keywords_includes_products():
     kw = _expand_stock_keywords("贵州茅台", "600519", products=["茅台酒", "其他系列酒"])
     # 短产品名直接保留
@@ -228,11 +244,15 @@ def test_expand_keywords_includes_products():
 
 def test_expand_keywords_simplifies_long_product_descriptions():
     # 大智慧的真实主营产品名,过去被原样塞进关键词导致零命中
-    kw = _expand_stock_keywords("大智慧", "601519", products=[
-        "金融资讯及数据PC终端服务系统",
-        "证券公司综合服务系统",
-        "广告及互联网业务推广服务",
-    ])
+    kw = _expand_stock_keywords(
+        "大智慧",
+        "601519",
+        products=[
+            "金融资讯及数据PC终端服务系统",
+            "证券公司综合服务系统",
+            "广告及互联网业务推广服务",
+        ],
+    )
     # 应该出现核心词
     assert "金融资讯" in kw
     # 整段描述不应该出现
@@ -271,6 +291,7 @@ def test_expand_keywords_drops_short_or_generic_products():
 
 # ---------------- get_industry_news ----------------
 
+
 def test_industry_news_excludes_titles_already_matched():
     news = [
         {"title": "茅台一季报", "summary": ""},
@@ -292,6 +313,7 @@ def test_industry_news_handles_no_match():
 
 
 # ---------------- _simplify_product ----------------
+
 
 class TestSimplifyProduct:
     def test_short_product_returned_as_is(self):
@@ -335,6 +357,7 @@ class TestSimplifyProduct:
 
 # ---------------- _infer_industry_from_text ----------------
 
+
 class TestInferIndustry:
     def test_finance_keyword(self):
         assert _infer_industry_from_text("证券信息服务、大数据") == "证券信息服务"
@@ -352,6 +375,7 @@ class TestInferIndustry:
 
 # ---------------- fetch_stock_news_em (offline shape only) ----------------
 
+
 def test_fetch_stock_news_em_handles_empty_symbol():
     """空 symbol 时不应触网,直接返回空列表。"""
     assert fetch_stock_news_em("") == []
@@ -366,12 +390,15 @@ def test_fetch_keyword_news_em_handles_empty_keyword():
 
 # ---------------- extract_business_terms ----------------
 
+
 class TestExtractBusinessTerms:
     def test_dapuwei_real_scope(self):
-        scope = ("数据存储技术产品、微电子芯片技术产品、智能系统产品、机器学习产品、"
-                 "软件产品、硬件产品、大数据产品、云存储产品、信息安全产品、"
-                 "计算机技术产品、网络技术产品、通信技术及系统集成产品的研发、设计、"
-                 "测试、销售、咨询、服务;货物及技术进出口。")
+        scope = (
+            "数据存储技术产品、微电子芯片技术产品、智能系统产品、机器学习产品、"
+            "软件产品、硬件产品、大数据产品、云存储产品、信息安全产品、"
+            "计算机技术产品、网络技术产品、通信技术及系统集成产品的研发、设计、"
+            "测试、销售、咨询、服务;货物及技术进出口。"
+        )
         terms = extract_business_terms(scope)
         # 期望抽到这些行业级核心词
         assert "数据存储" in terms
@@ -387,7 +414,9 @@ class TestExtractBusinessTerms:
             assert "进出口" not in t
 
     def test_short_text_yields_short_list(self):
-        terms = extract_business_terms("茅台酒及系列酒的生产与销售;饮料、食品的生产、销售")
+        terms = extract_business_terms(
+            "茅台酒及系列酒的生产与销售;饮料、食品的生产、销售"
+        )
         # 茅台酒、饮料、食品 都是合法核心词;通用词被过滤
         assert "茅台酒" in terms
 
@@ -398,12 +427,25 @@ class TestExtractBusinessTerms:
     def test_caps_at_max_terms(self):
         long = "、".join([f"{c}{c}{c}产品" for c in "ABCDEFG"])
         # 全是 ASCII 段会被过滤,这里换成中文
-        long = "、".join(["甲甲甲", "乙乙乙", "丙丙丙", "丁丁丁", "戊戊戊", "己己己", "庚庚庚", "辛辛辛", "壬壬壬"])
+        long = "、".join(
+            [
+                "甲甲甲",
+                "乙乙乙",
+                "丙丙丙",
+                "丁丁丁",
+                "戊戊戊",
+                "己己己",
+                "庚庚庚",
+                "辛辛辛",
+                "壬壬壬",
+            ]
+        )
         terms = extract_business_terms(long, max_terms=3)
         assert len(terms) <= 3
 
 
 # ---------------- get_industry_news with extra_keywords ----------------
+
 
 def test_industry_news_uses_extra_keywords():
     news = [
@@ -416,7 +458,8 @@ def test_industry_news_uses_extra_keywords():
     assert any("白酒" in n["title"] for n in hits_no_extra)
     # 加上 extra_keywords 后,扩展词的新闻也能召回
     hits = get_industry_news(
-        "计算机设备", news,
+        "计算机设备",
+        news,
         extra_keywords=["数据存储", "机器学习"],
     )
     titles = {n["title"] for n in hits}
@@ -425,6 +468,7 @@ def test_industry_news_uses_extra_keywords():
 
 
 # ---------------- concept news helpers ----------------
+
 
 def test_concept_keywords_filters_broad_concepts_and_strips_suffix():
     concepts = [
@@ -465,7 +509,14 @@ def test_concept_news_respects_excluded_titles():
 
 def test_concepts_brief_includes_membership_and_news():
     concepts = [{"name": "存储芯片", "pct_chg": 2.35, "lead_stock": "大普微"}]
-    news = [{"title": "存储芯片板块走强", "summary": "国产替代加速", "source": "东财", "datetime": "2026-05-17"}]
+    news = [
+        {
+            "title": "存储芯片板块走强",
+            "summary": "国产替代加速",
+            "source": "东财",
+            "datetime": "2026-05-17",
+        }
+    ]
     brief = build_concepts_brief_for_llm(concepts, news)
     assert "所属概念" in brief
     assert "存储芯片" in brief
@@ -479,17 +530,26 @@ def test_concepts_brief_empty_returns_empty():
 
 # ---------------- topic news helpers ----------------
 
+
 def test_merge_news_items_dedupes_and_sorts():
     a = [
         {"title": "存储芯片板块走强", "datetime": "2026-05-16 09:00", "source": "东财"},
         {"title": "信创订单回暖", "datetime": "2026-05-15 10:00", "source": "财联社"},
     ]
     b = [
-        {"title": "存储芯片板块走强", "datetime": "2026-05-16 12:00", "source": "东财搜索"},
+        {
+            "title": "存储芯片板块走强",
+            "datetime": "2026-05-16 12:00",
+            "source": "东财搜索",
+        },
         {"title": "算力需求提升", "datetime": "2026-05-17 08:00", "source": "东财搜索"},
     ]
     merged = merge_news_items(a, b)
-    assert [n["title"] for n in merged] == ["算力需求提升", "存储芯片板块走强", "信创订单回暖"]
+    assert [n["title"] for n in merged] == [
+        "算力需求提升",
+        "存储芯片板块走强",
+        "信创订单回暖",
+    ]
     assert merged[1]["source"] == "东财"
 
 

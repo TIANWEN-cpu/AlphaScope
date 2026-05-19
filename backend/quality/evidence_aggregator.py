@@ -10,7 +10,6 @@ Replaces the simple "first one wins" fallback chain with "collect and cross-vali
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
 
@@ -20,6 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AggregatedEvidence:
     """Result of cross-validating data from multiple sources"""
+
     data_type: str  # news, report, announcement, price
     items: List[Dict[str, Any]] = field(default_factory=list)
     sources: List[str] = field(default_factory=list)
@@ -143,7 +143,9 @@ class EvidenceAggregator:
         if confirmed >= 2:
             logger.info(
                 "多源确认: %s 数据来自 %d 个源, 置信度 %.2f",
-                data_type, confirmed, confidence,
+                data_type,
+                confirmed,
+                confidence,
             )
 
         return result
@@ -159,18 +161,20 @@ class EvidenceAggregator:
             candidates = []
             for p_info in all_providers:
                 p = self._registry.get(p_info.get("name", ""))
-                if p and hasattr(p, 'data_types') and data_type in p.data_types:
-                    if hasattr(p, 'markets') and market in p.markets:
+                if p and hasattr(p, "data_types") and data_type in p.data_types:
+                    if hasattr(p, "markets") and market in p.markets:
                         candidates.append(p)
 
             # Sort by priority/trust level
-            candidates.sort(key=lambda p: getattr(p, 'priority', 99))
+            candidates.sort(key=lambda p: getattr(p, "priority", 99))
             return candidates[:max_sources]
         except Exception as e:
             logger.debug("Provider selection failed: %s", e)
             return []
 
-    def _cross_source_dedup(self, items: List[Dict[str, Any]], data_type: str) -> List[Dict[str, Any]]:
+    def _cross_source_dedup(
+        self, items: List[Dict[str, Any]], data_type: str
+    ) -> List[Dict[str, Any]]:
         """Deduplicate items across different sources"""
         if not items:
             return []
@@ -240,15 +244,15 @@ class EvidenceAggregator:
 
         # Count items confirmed by multiple sources
         multi_source_items = [i for i in items if i.get("_source_count", 1) >= 2]
-        confirmed = len(set(
-            src for item in multi_source_items
-            for src in item.get("_sources", [])
-        ))
+        confirmed = len(
+            set(src for item in multi_source_items for src in item.get("_sources", []))
+        )
 
         if confirmed >= 2:
             # Multi-source confirmation
             confidence = min(
-                self.SINGLE_SOURCE_CONFIDENCE + (confirmed - 1) * self.CONFIRMATION_BOOST,
+                self.SINGLE_SOURCE_CONFIDENCE
+                + (confirmed - 1) * self.CONFIRMATION_BOOST,
                 self.MAX_CONFIDENCE,
             )
         else:
@@ -276,9 +280,7 @@ class EvidenceAggregator:
             if len(sentiments) >= 2:
                 values = list(sentiments.values())
                 if max(values) - min(values) > 0.5:
-                    contradictions.append(
-                        f"情绪分歧: {sentiments}"
-                    )
+                    contradictions.append(f"情绪分歧: {sentiments}")
 
         return contradictions
 

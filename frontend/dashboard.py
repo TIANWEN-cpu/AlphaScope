@@ -4,13 +4,14 @@
 LLM: 5 厂商异构（Claude · GPT · DeepSeek · Mimo · SenseNova）
 v0.7 新增: 基本面增强 / AI 咨询悬浮 / 专家团圆桌 / 资金流细分 / 资讯时间轴
 """
+
 import sys
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import akshare as ak
@@ -19,10 +20,16 @@ from datetime import datetime, timedelta
 # LLM Agent 模块
 try:
     from llm_agents import (
-        run_all_agents, summarize_with_chairman, get_agent_model_table, AGENT_MODEL_CONFIG,
-        VENDORS, build_market_brief, get_default_agent_configs, run_custom_agents,
-        get_custom_agent_model_table, run_agents_with_mode, get_mode_model_table,
+        summarize_with_chairman,
+        AGENT_MODEL_CONFIG,
+        VENDORS,
+        build_market_brief,
+        get_default_agent_configs,
+        run_custom_agents,
+        get_custom_agent_model_table,
+        run_agents_with_mode,
     )
+
     LLM_AVAILABLE = True
 except Exception as e:
     LLM_AVAILABLE = False
@@ -31,30 +38,53 @@ except Exception as e:
 # 新闻 & 研报模块
 try:
     from news_data import (
-        fetch_telegraph_em, fetch_telegraph_cls, fetch_telegraph_sina,
-        fetch_research_report, get_stock_related_news,
-        build_news_brief_for_llm, build_research_brief_for_llm,
+        fetch_telegraph_em,
+        fetch_telegraph_cls,
+        fetch_telegraph_sina,
+        fetch_research_report,
+        get_stock_related_news,
+        build_news_brief_for_llm,
+        build_research_brief_for_llm,
         # v0.10: 公告 + 行业 + 主营业务
-        fetch_announcements_cninfo, fetch_announcements_em_today,
-        merge_announcements, build_announcements_brief_for_llm, ANN_COLORS,
-        fetch_main_business, fetch_industry_name, get_industry_news,
+        fetch_announcements_cninfo,
+        fetch_announcements_em_today,
+        merge_announcements,
+        build_announcements_brief_for_llm,
+        ANN_COLORS,
+        fetch_main_business,
+        fetch_industry_name,
+        get_industry_news,
         # v0.10.2: 个股专属新闻
         fetch_stock_news_em,
         # v0.10.3: 经营范围 -> 行业关键词
         extract_business_terms,
         # v0.10.4: 概念板块归属与概念新闻
-        fetch_stock_concepts, get_concept_news, get_concept_keywords,
+        fetch_stock_concepts,
+        get_concept_news,
+        get_concept_keywords,
         build_concepts_brief_for_llm,
         # v0.10.5: 行业/概念主题主动搜索
-        build_topic_news_keywords, fetch_topic_news_em, merge_news_items,
+        build_topic_news_keywords,
+        fetch_topic_news_em,
+        merge_news_items,
     )
+
     NEWS_AVAILABLE = True
-except Exception as e:
+except Exception:
     NEWS_AVAILABLE = False
 
 # 研究存档模块
 try:
-    from archive import save_report, list_reports, load_report, get_stats, delete_report, get_combo_stats, get_combo_performance
+    from archive import (
+        save_report,
+        list_reports,
+        load_report,
+        get_stats,
+        delete_report,
+        get_combo_stats,
+        get_combo_performance,
+    )
+
     ARCHIVE_AVAILABLE = True
 except Exception as e:
     ARCHIVE_AVAILABLE = False
@@ -63,6 +93,7 @@ except Exception as e:
 # 归档自动标签模块
 try:
     from archive_tagger import tag_all_reports
+
     TAGGER_AVAILABLE = True
 except Exception as e:
     TAGGER_AVAILABLE = False
@@ -71,9 +102,12 @@ except Exception as e:
 # 资金流向模块
 try:
     from fund_flow import (
-        fetch_individual_fund_flow, fetch_market_fund_flow,
-        summarize_fund_flow, build_fund_flow_brief_for_llm,
+        fetch_individual_fund_flow,
+        fetch_market_fund_flow,
+        summarize_fund_flow,
+        build_fund_flow_brief_for_llm,
     )
+
     FUND_AVAILABLE = True
 except Exception as e:
     FUND_AVAILABLE = False
@@ -82,6 +116,7 @@ except Exception as e:
 # v0.7 新增前端组件
 try:
     from components import fundamentals_panel, ai_chat_panel, expert_panel_view
+
     COMPONENTS_AVAILABLE = True
 except Exception as e:
     COMPONENTS_AVAILABLE = False
@@ -90,18 +125,21 @@ except Exception as e:
     # 基本面 Tab 仍可照常渲染，具体错误在对应功能入口处提示。
     try:
         from components import fundamentals_panel
+
         FUNDAMENTALS_PANEL_AVAILABLE = True
     except Exception as _fund_e:
         FUNDAMENTALS_PANEL_AVAILABLE = False
         FUNDAMENTALS_PANEL_ERROR = str(_fund_e)
     try:
         from components import ai_chat_panel
+
         AI_CHAT_PANEL_AVAILABLE = True
     except Exception as _chat_e:
         AI_CHAT_PANEL_AVAILABLE = False
         AI_CHAT_PANEL_ERROR = str(_chat_e)
     try:
         from components import expert_panel_view
+
         EXPERT_PANEL_AVAILABLE = True
     except Exception as _expert_e:
         EXPERT_PANEL_AVAILABLE = False
@@ -113,6 +151,7 @@ else:
 
 try:
     from components import ai_settings_center
+
     AI_SETTINGS_AVAILABLE = True
 except Exception as e:
     AI_SETTINGS_AVAILABLE = False
@@ -146,17 +185,25 @@ def _new_agent_template(idx: int) -> dict:
 def _render_agent_config_editor(symbol: str) -> list:
     configs = _ensure_agent_config_state(symbol)
     with st.expander("Agent 人设与数量管理", expanded=False):
-        st.caption("当前为会话内临时配置：可新增、复制、删除 Agent，并自定义人设、模型和卡片样式。")
+        st.caption(
+            "当前为会话内临时配置：可新增、复制、删除 Agent，并自定义人设、模型和卡片样式。"
+        )
         e1, e2, e3 = st.columns([1, 1, 1])
         with e1:
-            st.metric("启用 Agent 数", sum(1 for a in configs if a.get("enabled", True)))
+            st.metric(
+                "启用 Agent 数", sum(1 for a in configs if a.get("enabled", True))
+            )
         with e2:
-            if st.button("新增 Agent", use_container_width=True, key=f"agent_add_{symbol}"):
+            if st.button(
+                "新增 Agent", use_container_width=True, key=f"agent_add_{symbol}"
+            ):
                 configs.append(_new_agent_template(len(configs) + 1))
                 st.session_state[f"agent_config_{symbol}"] = configs
                 st.rerun()
         with e3:
-            if st.button("恢复默认 Agent", use_container_width=True, key=f"agent_reset_{symbol}"):
+            if st.button(
+                "恢复默认 Agent", use_container_width=True, key=f"agent_reset_{symbol}"
+            ):
                 st.session_state[f"agent_config_{symbol}"] = get_default_agent_configs()
                 st.rerun()
 
@@ -164,21 +211,66 @@ def _render_agent_config_editor(symbol: str) -> list:
             with st.expander(cfg.get("name", cfg.get("key", "Agent")), expanded=False):
                 c0, c1, c2, c3 = st.columns([0.8, 1.2, 1.2, 1])
                 with c0:
-                    cfg["enabled"] = st.checkbox("启用", value=cfg.get("enabled", True), key=f"agent_enabled_{symbol}_{i}")
-                    cfg["avatar"] = st.text_input("头像", value=cfg.get("avatar", "🤖"), key=f"agent_avatar_{symbol}_{i}")
+                    cfg["enabled"] = st.checkbox(
+                        "启用",
+                        value=cfg.get("enabled", True),
+                        key=f"agent_enabled_{symbol}_{i}",
+                    )
+                    cfg["avatar"] = st.text_input(
+                        "头像",
+                        value=cfg.get("avatar", "🤖"),
+                        key=f"agent_avatar_{symbol}_{i}",
+                    )
                 with c1:
-                    cfg["key"] = st.text_input("Key", value=cfg.get("key", f"agent_{i+1}"), key=f"agent_key_{symbol}_{i}")
-                    cfg["name"] = st.text_input("名称", value=cfg.get("name", "自定义 Agent"), key=f"agent_name_{symbol}_{i}")
+                    cfg["key"] = st.text_input(
+                        "Key",
+                        value=cfg.get("key", f"agent_{i + 1}"),
+                        key=f"agent_key_{symbol}_{i}",
+                    )
+                    cfg["name"] = st.text_input(
+                        "名称",
+                        value=cfg.get("name", "自定义 Agent"),
+                        key=f"agent_name_{symbol}_{i}",
+                    )
                 with c2:
-                    cfg["provider"] = st.text_input("Provider", value=cfg.get("provider", "deepseek"), key=f"agent_provider_{symbol}_{i}")
-                    cfg["model"] = st.text_input("Model", value=cfg.get("model", "deepseek-chat"), key=f"agent_model_{symbol}_{i}")
+                    cfg["provider"] = st.text_input(
+                        "Provider",
+                        value=cfg.get("provider", "deepseek"),
+                        key=f"agent_provider_{symbol}_{i}",
+                    )
+                    cfg["model"] = st.text_input(
+                        "Model",
+                        value=cfg.get("model", "deepseek-chat"),
+                        key=f"agent_model_{symbol}_{i}",
+                    )
                 with c3:
-                    cfg["card_style"] = st.selectbox("卡片样式", AGENT_CARD_STYLES, index=AGENT_CARD_STYLES.index(cfg.get("card_style", "default")) if cfg.get("card_style", "default") in AGENT_CARD_STYLES else 0, key=f"agent_style_{symbol}_{i}")
-                cfg["role"] = st.text_area("系统人设", value=cfg.get("role", ""), height=90, key=f"agent_role_{symbol}_{i}")
-                cfg["instruction"] = st.text_area("分析指令", value=cfg.get("instruction", ""), height=120, key=f"agent_instruction_{symbol}_{i}")
+                    cfg["card_style"] = st.selectbox(
+                        "卡片样式",
+                        AGENT_CARD_STYLES,
+                        index=AGENT_CARD_STYLES.index(cfg.get("card_style", "default"))
+                        if cfg.get("card_style", "default") in AGENT_CARD_STYLES
+                        else 0,
+                        key=f"agent_style_{symbol}_{i}",
+                    )
+                cfg["role"] = st.text_area(
+                    "系统人设",
+                    value=cfg.get("role", ""),
+                    height=90,
+                    key=f"agent_role_{symbol}_{i}",
+                )
+                cfg["instruction"] = st.text_area(
+                    "分析指令",
+                    value=cfg.get("instruction", ""),
+                    height=120,
+                    key=f"agent_instruction_{symbol}_{i}",
+                )
                 b1, b2 = st.columns([1, 1])
                 with b1:
-                    if st.button("复制该 Agent", use_container_width=True, key=f"agent_copy_{symbol}_{i}"):
+                    if st.button(
+                        "复制该 Agent",
+                        use_container_width=True,
+                        key=f"agent_copy_{symbol}_{i}",
+                    ):
                         clone = dict(cfg)
                         clone["key"] = f"{cfg.get('key', 'agent')}_copy"
                         clone["name"] = f"{cfg.get('name', 'Agent')} 副本"
@@ -186,7 +278,11 @@ def _render_agent_config_editor(symbol: str) -> list:
                         st.session_state[f"agent_config_{symbol}"] = configs
                         st.rerun()
                 with b2:
-                    if st.button("删除该 Agent", use_container_width=True, key=f"agent_delete_{symbol}_{i}"):
+                    if st.button(
+                        "删除该 Agent",
+                        use_container_width=True,
+                        key=f"agent_delete_{symbol}_{i}",
+                    ):
                         configs.pop(i)
                         st.session_state[f"agent_config_{symbol}"] = configs
                         st.rerun()
@@ -203,7 +299,8 @@ st.set_page_config(
 )
 
 # ============== 自定义 CSS ==============
-st.markdown("""
+st.markdown(
+    """
 <style>
     /* 全局字体 */
     html, body, [class*="css"] {
@@ -401,7 +498,10 @@ st.markdown("""
         font-weight: 500;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
+
 
 # ============== 数据获取（带缓存）==============
 def _to_tx_symbol(symbol: str) -> str:
@@ -421,7 +521,9 @@ def _to_tx_symbol(symbol: str) -> str:
 def _fetch_hist_tx(symbol: str, start: str, end: str):
     """腾讯接口兜底：返回与东财对齐的 12 列 DataFrame，缺失字段用合理默认值填充。"""
     tx_symbol = _to_tx_symbol(symbol)
-    df = ak.stock_zh_a_hist_tx(symbol=tx_symbol, start_date=start, end_date=end, adjust="qfq")
+    df = ak.stock_zh_a_hist_tx(
+        symbol=tx_symbol, start_date=start, end_date=end, adjust="qfq"
+    )
     if df is None or df.empty:
         return None
     # Tencent 列：date / open / close / high / low / amount
@@ -438,8 +540,22 @@ def _fetch_hist_tx(symbol: str, start: str, end: str):
     # 用收盘价估算成交量（避免成交量字段空导致图表炸）
     df["volume"] = (df["amount"] / df["close"].clip(lower=0.01)).round(0).astype(int)
     df["turnover"] = 0.0  # 换手率腾讯不提供，置 0
-    return df[["date", "code", "open", "close", "high", "low", "volume", "amount",
-               "amplitude", "pct_chg", "change", "turnover"]]
+    return df[
+        [
+            "date",
+            "code",
+            "open",
+            "close",
+            "high",
+            "low",
+            "volume",
+            "amount",
+            "amplitude",
+            "pct_chg",
+            "change",
+            "turnover",
+        ]
+    ]
 
 
 @st.cache_data(ttl=300)
@@ -468,8 +584,20 @@ def get_stock_hist(symbol: str, days: int = 180):
             adjust="qfq",
         )
         if df is not None and not df.empty:
-            expected_cols = ["date", "code", "open", "close", "high", "low", "volume", "amount",
-                             "amplitude", "pct_chg", "change", "turnover"]
+            expected_cols = [
+                "date",
+                "code",
+                "open",
+                "close",
+                "high",
+                "low",
+                "volume",
+                "amount",
+                "amplitude",
+                "pct_chg",
+                "change",
+                "turnover",
+            ]
             if len(df.columns) == len(expected_cols):
                 df.columns = expected_cols
             df["date"] = pd.to_datetime(df["date"])
@@ -502,6 +630,7 @@ def get_stock_info(symbol: str):
     if not info.get("股票简称"):
         try:
             import requests
+
             tx_sym = _to_tx_symbol(symbol)
             r = requests.get(f"http://qt.gtimg.cn/q={tx_sym}", timeout=3)
             r.encoding = "gbk"
@@ -516,6 +645,7 @@ def get_stock_info(symbol: str):
             pass
     return info
 
+
 @st.cache_data(ttl=300)
 def get_market_overview():
     """主要指数概览"""
@@ -525,6 +655,7 @@ def get_market_overview():
     except Exception:
         return pd.DataFrame()
 
+
 # ============== 资讯/研报缓存 ==============
 @st.cache_data(ttl=180)
 def cached_telegraph_em(limit: int = 200):
@@ -532,17 +663,20 @@ def cached_telegraph_em(limit: int = 200):
         return []
     return fetch_telegraph_em(limit=limit)
 
+
 @st.cache_data(ttl=180)
 def cached_telegraph_cls(limit: int = 30):
     if not NEWS_AVAILABLE:
         return []
     return fetch_telegraph_cls(limit=limit)
 
+
 @st.cache_data(ttl=180)
 def cached_telegraph_sina(limit: int = 20):
     if not NEWS_AVAILABLE:
         return []
     return fetch_telegraph_sina(limit=limit)
+
 
 @st.cache_data(ttl=600)
 def cached_research_report(symbol: str, limit: int = 20):
@@ -591,7 +725,9 @@ def cached_stock_news_em(symbol: str, limit: int = 20):
 def cached_topic_news_em(keywords_tuple, limit_each: int = 8, total_limit: int = 30):
     if not NEWS_AVAILABLE:
         return []
-    return fetch_topic_news_em(list(keywords_tuple or ()), limit_each=limit_each, total_limit=total_limit)
+    return fetch_topic_news_em(
+        list(keywords_tuple or ()), limit_each=limit_each, total_limit=total_limit
+    )
 
 
 @st.cache_data(ttl=86400)
@@ -600,6 +736,7 @@ def cached_stock_concepts(symbol: str, stock_name: str):
         return []
     return fetch_stock_concepts(symbol, stock_name=stock_name, max_concepts=12)
 
+
 # ============== 资金流向缓存 ==============
 @st.cache_data(ttl=300)
 def cached_individual_fund_flow(symbol: str, days: int = 30):
@@ -607,17 +744,20 @@ def cached_individual_fund_flow(symbol: str, days: int = 30):
         return None
     return fetch_individual_fund_flow(symbol, days=days)
 
+
 @st.cache_data(ttl=300)
 def cached_market_fund_flow(days: int = 30):
     if not FUND_AVAILABLE:
         return None
     return fetch_market_fund_flow(days=days)
 
+
 # ============== 技术指标计算 ==============
 def calc_ma(df, periods=[5, 10, 20, 60]):
     for p in periods:
         df[f"MA{p}"] = df["close"].rolling(p).mean()
     return df
+
 
 def calc_macd(df, fast=12, slow=26, signal=9):
     df["EMA_fast"] = df["close"].ewm(span=fast).mean()
@@ -627,6 +767,7 @@ def calc_macd(df, fast=12, slow=26, signal=9):
     df["MACD"] = (df["DIF"] - df["DEA"]) * 2
     return df
 
+
 def calc_rsi(df, period=14):
     delta = df["close"].diff()
     gain = delta.where(delta > 0, 0).rolling(period).mean()
@@ -635,13 +776,19 @@ def calc_rsi(df, period=14):
     df["RSI"] = 100 - (100 / (1 + rs))
     return df
 
+
 # ============== 标题 ==============
 col_t1, col_t2 = st.columns([3, 1])
 with col_t1:
-    st.markdown('<div class="gradient-title">📊 金融 Agent 工作台</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Multi-Agent · Real-time Data · A-Share Market</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="gradient-title">📊 金融 Agent 工作台</div>', unsafe_allow_html=True
+    )
+    st.markdown(
+        '<div class="subtitle">Multi-Agent · Real-time Data · A-Share Market</div>',
+        unsafe_allow_html=True,
+    )
 with col_t2:
-                st.html(f"""
+    st.html(f"""
     <div style='text-align:right; padding-top:15px;'>
         <div style='color:#888; font-size:0.8rem;'>当前时间</div>
         <div style='color:#1f2937; font-size:1.1rem; font-weight:600;'>{datetime.now().strftime("%Y-%m-%d %H:%M")}</div>
@@ -705,18 +852,25 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🤖 Agent 分析")
     enable_agents = st.checkbox("启用 Agent 模拟分析", value=True)
-    use_llm = st.checkbox("使用 LLM 深度分析（5 模型异构）", value=False, disabled=not LLM_AVAILABLE,
-                         help="勾选后调用 5 厂商异构 LLM（Claude / GPT / DeepSeek / Mimo / SenseNova）真实推理" if LLM_AVAILABLE else f"LLM 模块不可用: {LLM_ERROR}")
+    use_llm = st.checkbox(
+        "使用 LLM 深度分析（5 模型异构）",
+        value=False,
+        disabled=not LLM_AVAILABLE,
+        help="勾选后调用 5 厂商异构 LLM（Claude / GPT / DeepSeek / Mimo / SenseNova）真实推理"
+        if LLM_AVAILABLE
+        else f"LLM 模块不可用: {LLM_ERROR}",
+    )
 
     # v0.12: Analysis mode selector
     if LLM_AVAILABLE:
         try:
             from backend.agent_modes import get_mode_resolver, AnalysisMode
+
             _resolver = get_mode_resolver()
             _mode_choices = _resolver.list_modes()
             _mode_labels = [f"{m['name']}" for m in _mode_choices]
-            _mode_values = [m['value'] for m in _mode_choices]
-            _mode_descs = [m['description'] for m in _mode_choices]
+            _mode_values = [m["value"] for m in _mode_choices]
+            _mode_descs = [m["description"] for m in _mode_choices]
 
             selected_mode_idx = st.radio(
                 "分析模式",
@@ -736,12 +890,16 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🤖 AI 咨询")
     if st.button(
-        "🤖 打开 AI 咨询" if not st.session_state.get("show_ai_chat", False) else "✕ 关闭 AI 咨询",
+        "🤖 打开 AI 咨询"
+        if not st.session_state.get("show_ai_chat", False)
+        else "✕ 关闭 AI 咨询",
         use_container_width=True,
         key="sidebar_ai_chat_toggle",
         help="启用后,看板顶部出现可折叠的对话面板,任意 Tab 浏览中都能与 AI 多轮对话",
     ):
-        st.session_state["show_ai_chat"] = not st.session_state.get("show_ai_chat", False)
+        st.session_state["show_ai_chat"] = not st.session_state.get(
+            "show_ai_chat", False
+        )
         st.rerun()
     st.caption("也可以在主界面指标卡下方打开 AI 咨询。")
 
@@ -774,71 +932,94 @@ period_low = df["low"].min()
 period_change = (last["close"] / df.iloc[0]["close"] - 1) * 100
 total_amount = df["amount"].sum() / 1e8  # 亿元
 
-stock_name = info.get("股票简称") or (custom if use_custom else selected_label.split(" ")[0])
+stock_name = info.get("股票简称") or (
+    custom if use_custom else selected_label.split(" ")[0]
+)
 
 # ============== 指标卡片 ==============
 st.markdown(f"### {stock_name} · {symbol}")
 
 c1, c2, c3, c4, c5 = st.columns(5)
 
-day_chg = (last['close'] / prev['close'] - 1) * 100
+day_chg = (last["close"] / prev["close"] - 1) * 100
 chg_class = "metric-delta-up" if day_chg >= 0 else "metric-delta-down"
 chg_arrow = "▲" if day_chg >= 0 else "▼"
 
-c1.markdown(f"""
+c1.markdown(
+    f"""
 <div class="metric-card">
     <div class="metric-label">最新价</div>
-    <div class="metric-value">¥{last['close']:.2f}</div>
+    <div class="metric-value">¥{last["close"]:.2f}</div>
     <div class="{chg_class}">{chg_arrow} {abs(day_chg):.2f}%</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 period_class = "metric-delta-up" if period_change >= 0 else "metric-delta-down"
 period_arrow = "▲" if period_change >= 0 else "▼"
-c2.markdown(f"""
+c2.markdown(
+    f"""
 <div class="metric-card">
     <div class="metric-label">区间涨跌</div>
     <div class="metric-value">{period_change:+.2f}%</div>
     <div class="{period_class}">{period_arrow} {days} 日累计</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-c3.markdown(f"""
+c3.markdown(
+    f"""
 <div class="metric-card">
     <div class="metric-label">区间最高</div>
     <div class="metric-value">¥{period_high:.2f}</div>
-    <div class="metric-delta-up">{((period_high/last['close']-1)*100):+.1f}% 距今</div>
+    <div class="metric-delta-up">{((period_high / last["close"] - 1) * 100):+.1f}% 距今</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-c4.markdown(f"""
+c4.markdown(
+    f"""
 <div class="metric-card">
     <div class="metric-label">区间最低</div>
     <div class="metric-value">¥{period_low:.2f}</div>
-    <div class="metric-delta-down">{((period_low/last['close']-1)*100):+.1f}% 距今</div>
+    <div class="metric-delta-down">{((period_low / last["close"] - 1) * 100):+.1f}% 距今</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-c5.markdown(f"""
+c5.markdown(
+    f"""
 <div class="metric-card">
     <div class="metric-label">区间成交额</div>
     <div class="metric-value">{total_amount:.1f}<span style='font-size:1rem;color:#888;'> 亿</span></div>
-    <div style='color:#6b7280; font-size:0.85rem; margin-top:4px;'>换手 {last.get('turnover', 0):.2f}%</div>
+    <div style='color:#6b7280; font-size:0.85rem; margin-top:4px;'>换手 {last.get("turnover", 0):.2f}%</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # 主区快捷入口：侧边栏收起后仍可打开 AI 咨询，并提示原生侧栏展开按钮可用
 quick_col1, quick_col2, quick_col3 = st.columns([1.3, 1.3, 5])
 with quick_col1:
     if st.button(
-        "🤖 打开 AI 咨询" if not st.session_state.get("show_ai_chat", False) else "✕ 关闭 AI 咨询",
-        type="primary" if not st.session_state.get("show_ai_chat", False) else "secondary",
+        "🤖 打开 AI 咨询"
+        if not st.session_state.get("show_ai_chat", False)
+        else "✕ 关闭 AI 咨询",
+        type="primary"
+        if not st.session_state.get("show_ai_chat", False)
+        else "secondary",
         use_container_width=True,
         key="main_ai_chat_toggle",
         help="在当前股票上下文中进行多轮 AI 咨询",
     ):
-        st.session_state["show_ai_chat"] = not st.session_state.get("show_ai_chat", False)
+        st.session_state["show_ai_chat"] = not st.session_state.get(
+            "show_ai_chat", False
+        )
         st.rerun()
 with quick_col2:
     if not st.session_state.get("dismiss_sidebar_hint", False):
@@ -846,7 +1027,12 @@ with quick_col2:
         with hint_col:
             st.caption("📌 侧栏收起后，可点页面右上角 Streamlit 箭头重新展开。")
         with close_col:
-            if st.button("×", key="dismiss_sidebar_hint_btn", help="隐藏这条提示", use_container_width=True):
+            if st.button(
+                "×",
+                key="dismiss_sidebar_hint_btn",
+                help="隐藏这条提示",
+                use_container_width=True,
+            ):
                 st.session_state["dismiss_sidebar_hint"] = True
                 st.rerun()
 
@@ -912,7 +1098,10 @@ def build_chat_context() -> dict:
 # ============== v0.7: AI 咨询面板(在 Tab 之上,任意 Tab 浏览时都可见) ==============
 if st.session_state.get("show_ai_chat", False):
     if AI_CHAT_PANEL_AVAILABLE:
-        st.info("AI 投资咨询工作区已开启：会结合当前页面行情上下文回答，快捷问题会先填入输入框供你确认。", icon="🤖")
+        st.info(
+            "AI 投资咨询工作区已开启：会结合当前页面行情上下文回答，快捷问题会先填入输入框供你确认。",
+            icon="🤖",
+        )
         with st.expander("🤖 AI 投资咨询工作区", expanded=True):
             try:
                 chat_ctx = build_chat_context()
@@ -921,24 +1110,28 @@ if st.session_state.get("show_ai_chat", False):
                 st.error(f"AI 咨询面板渲染失败: {_e}")
         st.markdown('<hr class="fancy">', unsafe_allow_html=True)
     else:
-        st.error(f"AI 咨询组件未加载: {AI_CHAT_PANEL_ERROR if 'AI_CHAT_PANEL_ERROR' in dir() else '未知错误'}")
+        st.error(
+            f"AI 咨询组件未加载: {AI_CHAT_PANEL_ERROR if 'AI_CHAT_PANEL_ERROR' in dir() else '未知错误'}"
+        )
         if st.button("✕ 关闭 AI 咨询", key="close_broken_ai_chat", type="secondary"):
             st.session_state["show_ai_chat"] = False
             st.rerun()
 
 # ============== 图表 ==============
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
-    "📈 K 线 & 技术指标",
-    "🤖 Agent 协作分析",
-    "⚙️ AI 设置中心",
-    "📰 资讯 & 研报",
-    "💰 资金流向",
-    "📋 数据明细",
-    "💡 基本面",
-    "📚 研究存档",
-    "🎓 专家团圆桌",
-    "📊 数据源健康",
-])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
+    [
+        "📈 K 线 & 技术指标",
+        "🤖 Agent 协作分析",
+        "⚙️ AI 设置中心",
+        "📰 资讯 & 研报",
+        "💰 资金流向",
+        "📋 数据明细",
+        "💡 基本面",
+        "📚 研究存档",
+        "🎓 专家团圆桌",
+        "📊 数据源健康",
+    ]
+)
 
 with tab1:
     # 子图行数
@@ -958,7 +1151,8 @@ with tab1:
     subplot_titles.append("成交量")
 
     fig = make_subplots(
-        rows=rows, cols=1,
+        rows=rows,
+        cols=1,
         shared_xaxes=True,
         vertical_spacing=0.04,
         row_heights=row_heights,
@@ -966,52 +1160,123 @@ with tab1:
     )
 
     # K 线
-    fig.add_trace(go.Candlestick(
-        x=df["date"], open=df["open"], high=df["high"], low=df["low"], close=df["close"],
-        increasing=dict(line=dict(color="#ef5350", width=1), fillcolor="#ef5350"),
-        decreasing=dict(line=dict(color="#26a69a", width=1), fillcolor="#26a69a"),
-        name="K线",
-    ), row=1, col=1)
+    fig.add_trace(
+        go.Candlestick(
+            x=df["date"],
+            open=df["open"],
+            high=df["high"],
+            low=df["low"],
+            close=df["close"],
+            increasing=dict(line=dict(color="#ef5350", width=1), fillcolor="#ef5350"),
+            decreasing=dict(line=dict(color="#26a69a", width=1), fillcolor="#26a69a"),
+            name="K线",
+        ),
+        row=1,
+        col=1,
+    )
 
     # 均线
     if show_ma:
-        ma_colors = {"MA5": "#ff9800", "MA10": "#2196f3", "MA20": "#9c27b0", "MA60": "#607d8b"}
+        ma_colors = {
+            "MA5": "#ff9800",
+            "MA10": "#2196f3",
+            "MA20": "#9c27b0",
+            "MA60": "#607d8b",
+        }
         for ma, color in ma_colors.items():
             if ma in df.columns:
-                fig.add_trace(go.Scatter(
-                    x=df["date"], y=df[ma], mode="lines",
-                    line=dict(color=color, width=1.2),
-                    name=ma, opacity=0.85,
-                ), row=1, col=1)
+                fig.add_trace(
+                    go.Scatter(
+                        x=df["date"],
+                        y=df[ma],
+                        mode="lines",
+                        line=dict(color=color, width=1.2),
+                        name=ma,
+                        opacity=0.85,
+                    ),
+                    row=1,
+                    col=1,
+                )
 
     current_row = 2
     # MACD
     if show_macd:
         macd_colors = ["#ef5350" if v >= 0 else "#26a69a" for v in df["MACD"]]
-        fig.add_trace(go.Bar(x=df["date"], y=df["MACD"], marker_color=macd_colors, name="MACD"),
-                      row=current_row, col=1)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["DIF"], mode="lines",
-                                 line=dict(color="#ff9800", width=1), name="DIF"),
-                      row=current_row, col=1)
-        fig.add_trace(go.Scatter(x=df["date"], y=df["DEA"], mode="lines",
-                                 line=dict(color="#2196f3", width=1), name="DEA"),
-                      row=current_row, col=1)
+        fig.add_trace(
+            go.Bar(x=df["date"], y=df["MACD"], marker_color=macd_colors, name="MACD"),
+            row=current_row,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=df["DIF"],
+                mode="lines",
+                line=dict(color="#ff9800", width=1),
+                name="DIF",
+            ),
+            row=current_row,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=df["DEA"],
+                mode="lines",
+                line=dict(color="#2196f3", width=1),
+                name="DEA",
+            ),
+            row=current_row,
+            col=1,
+        )
         current_row += 1
 
     # RSI
     if show_rsi:
-        fig.add_trace(go.Scatter(x=df["date"], y=df["RSI"], mode="lines",
-                                 line=dict(color="#9c27b0", width=1.5), name="RSI"),
-                      row=current_row, col=1)
-        fig.add_hline(y=70, line_dash="dash", line_color="#ef5350", opacity=0.4, row=current_row, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color="#26a69a", opacity=0.4, row=current_row, col=1)
+        fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=df["RSI"],
+                mode="lines",
+                line=dict(color="#9c27b0", width=1.5),
+                name="RSI",
+            ),
+            row=current_row,
+            col=1,
+        )
+        fig.add_hline(
+            y=70,
+            line_dash="dash",
+            line_color="#ef5350",
+            opacity=0.4,
+            row=current_row,
+            col=1,
+        )
+        fig.add_hline(
+            y=30,
+            line_dash="dash",
+            line_color="#26a69a",
+            opacity=0.4,
+            row=current_row,
+            col=1,
+        )
         current_row += 1
 
     # 成交量
-    vol_colors = ["#ef5350" if c >= o else "#26a69a" for c, o in zip(df["close"], df["open"])]
-    fig.add_trace(go.Bar(x=df["date"], y=df["volume"], marker_color=vol_colors,
-                        name="成交量", opacity=0.7),
-                  row=current_row, col=1)
+    vol_colors = [
+        "#ef5350" if c >= o else "#26a69a" for c, o in zip(df["close"], df["open"])
+    ]
+    fig.add_trace(
+        go.Bar(
+            x=df["date"],
+            y=df["volume"],
+            marker_color=vol_colors,
+            name="成交量",
+            opacity=0.7,
+        ),
+        row=current_row,
+        col=1,
+    )
 
     fig.update_layout(
         height=700,
@@ -1048,6 +1313,7 @@ with tab2:
         # ========== 量化因子分析 (v0.12) ==========
         try:
             from frontend.components.factor_panel import render_factor_panel
+
             st.markdown("#### 📊 量化因子分析")
             render_factor_panel(symbol, stock_name)
             st.divider()
@@ -1057,10 +1323,20 @@ with tab2:
         # ========== LLM 深度分析模式 ==========
         if use_llm and LLM_AVAILABLE:
             st.markdown("#### 🧠 LLM 深度分析（可自定义 Agent 团队）")
-            agent_configs = ai_settings_center.ensure_agent_config_state(symbol) if AI_SETTINGS_AVAILABLE else _ensure_agent_config_state(symbol)
+            agent_configs = (
+                ai_settings_center.ensure_agent_config_state(symbol)
+                if AI_SETTINGS_AVAILABLE
+                else _ensure_agent_config_state(symbol)
+            )
             active_agent_count = sum(1 for a in agent_configs if a.get("enabled", True))
-            global_ai_settings = ai_settings_center.get_global_ai_settings() if AI_SETTINGS_AVAILABLE else {}
-            st.caption(f"{active_agent_count} 位 Agent 使用 AI 设置中心的人设与模型并行推理，避免单一模型偏见，约 20-60 秒。要修改 Agent/Key/模型，请打开「AI 设置中心」Tab。")
+            global_ai_settings = (
+                ai_settings_center.get_global_ai_settings()
+                if AI_SETTINGS_AVAILABLE
+                else {}
+            )
+            st.caption(
+                f"{active_agent_count} 位 Agent 使用 AI 设置中心的人设与模型并行推理，避免单一模型偏见，约 20-60 秒。要修改 Agent/Key/模型，请打开「AI 设置中心」Tab。"
+            )
 
             # 模型阵容展示条
             try:
@@ -1079,7 +1355,7 @@ with tab2:
                 st.html(f"""
                 <div class="model-lineup">
                     <div class="model-lineup-title">本次决策模型阵容（{active_agent_count} Agent 自定义团队）</div>
-                    <div class="model-lineup-row">{''.join(lineup_items)}</div>
+                    <div class="model-lineup-row">{"".join(lineup_items)}</div>
                 </div>
                 """)
             except Exception:
@@ -1087,7 +1363,9 @@ with tab2:
 
             col_run, col_info = st.columns([1, 4])
             with col_run:
-                run_btn = st.button("🚀 启动深度分析", type="primary", use_container_width=True)
+                run_btn = st.button(
+                    "🚀 启动深度分析", type="primary", use_container_width=True
+                )
 
             cache_key = f"llm_result_{symbol}_{days}"
 
@@ -1095,8 +1373,21 @@ with tab2:
                 with st.spinner(f"🤖 {active_agent_count} 位 Agent 正在并行分析中..."):
                     fundamentals_text = ""
                     if info:
-                        keys_of_interest = ["行业", "总市值", "流通市值", "市盈率", "市净率", "总股本", "流通股", "上市时间"]
-                        items = [f"{k}: {info.get(k, 'N/A')}" for k in keys_of_interest if k in info]
+                        keys_of_interest = [
+                            "行业",
+                            "总市值",
+                            "流通市值",
+                            "市盈率",
+                            "市净率",
+                            "总股本",
+                            "流通股",
+                            "上市时间",
+                        ]
+                        items = [
+                            f"{k}: {info.get(k, 'N/A')}"
+                            for k in keys_of_interest
+                            if k in info
+                        ]
                         fundamentals_text = "; ".join(items) if items else "暂无"
 
                     # 拉取真实新闻 & 研报
@@ -1116,9 +1407,13 @@ with tab2:
                             industry = cached_industry_name(symbol)
                             concepts = cached_stock_concepts(symbol, stock_name) or []
                             # v0.10.2: 优先取东财个股专属新闻,确保即使大盘快讯没匹配也至少有内容
-                            stock_specific = cached_stock_news_em(symbol, limit=10) or []
+                            stock_specific = (
+                                cached_stock_news_em(symbol, limit=10) or []
+                            )
                             keyword_matched = get_stock_related_news(
-                                stock_name, all_news, limit=8,
+                                stock_name,
+                                all_news,
+                                limit=8,
                                 symbol=symbol,
                                 products=main_biz.get("products"),
                             )
@@ -1126,29 +1421,48 @@ with tab2:
                             related = []
                             for src_list in (stock_specific, keyword_matched):
                                 for n in src_list:
-                                    key = (n.get("title", "").strip(), n.get("datetime", "")[:10])
+                                    key = (
+                                        n.get("title", "").strip(),
+                                        n.get("datetime", "")[:10],
+                                    )
                                     if not key[0] or key in seen_t2:
                                         continue
                                     seen_t2.add(key)
                                     related.append(n)
-                            related_brief = build_news_brief_for_llm(related[:10], max_items=10)
-                            market_brief_text = build_news_brief_for_llm(em_news[:6], max_items=6)
+                            related_brief = build_news_brief_for_llm(
+                                related[:10], max_items=10
+                            )
+                            market_brief_text = build_news_brief_for_llm(
+                                em_news[:6], max_items=6
+                            )
                             reports = cached_research_report(symbol, limit=15)
-                            research_brief = build_research_brief_for_llm(reports, max_items=8)
+                            research_brief = build_research_brief_for_llm(
+                                reports, max_items=8
+                            )
                             # v0.10: 个股公告 + 行业新闻进入 Agent 简报
                             cninfo_ann = cached_announcements_cninfo(symbol, days=30)
                             em_today = cached_announcements_em_today() or []
-                            em_for_stock = [a for a in em_today if a.get("code") == symbol]
+                            em_for_stock = [
+                                a for a in em_today if a.get("code") == symbol
+                            ]
                             ann_list = merge_announcements(cninfo_ann, em_for_stock)
-                            announcements_brief = build_announcements_brief_for_llm(ann_list, max_items=8)
+                            announcements_brief = build_announcements_brief_for_llm(
+                                ann_list, max_items=8
+                            )
                             if industry:
-                                excluded_titles = {n.get("title", "").strip() for n in (related or [])}
+                                excluded_titles = {
+                                    n.get("title", "").strip() for n in (related or [])
+                                }
                                 extra_ind_kws = extract_business_terms(
                                     (main_biz or {}).get("scope") or "", max_terms=8
                                 )
-                                extra_ind_kws += get_concept_keywords(concepts, limit=10)
+                                extra_ind_kws += get_concept_keywords(
+                                    concepts, limit=10
+                                )
                                 pool_ind_news = get_industry_news(
-                                    industry, all_news, limit=6,
+                                    industry,
+                                    all_news,
+                                    limit=6,
                                     exclude_titles=excluded_titles,
                                     extra_keywords=extra_ind_kws,
                                 )
@@ -1158,24 +1472,41 @@ with tab2:
                                     concepts=concepts,
                                     limit=8,
                                 )
-                                topic_ind_news = cached_topic_news_em(tuple(topic_kws), limit_each=6, total_limit=12)
+                                topic_ind_news = cached_topic_news_em(
+                                    tuple(topic_kws), limit_each=6, total_limit=12
+                                )
                                 topic_ind_news = [
-                                    n for n in topic_ind_news
+                                    n
+                                    for n in topic_ind_news
                                     if n.get("title", "").strip() not in excluded_titles
                                 ]
-                                ind_news = merge_news_items(pool_ind_news, topic_ind_news, limit=8)
-                                industry_news_brief = build_news_brief_for_llm(ind_news, max_items=8)
-                            concept_excluded = {n.get("title", "").strip() for n in (related or [])}
+                                ind_news = merge_news_items(
+                                    pool_ind_news, topic_ind_news, limit=8
+                                )
+                                industry_news_brief = build_news_brief_for_llm(
+                                    ind_news, max_items=8
+                                )
+                            concept_excluded = {
+                                n.get("title", "").strip() for n in (related or [])
+                            }
                             pool_concept_news = get_concept_news(
-                                concepts, all_news, limit=6, exclude_titles=concept_excluded
+                                concepts,
+                                all_news,
+                                limit=6,
+                                exclude_titles=concept_excluded,
                             )
                             concept_kws = get_concept_keywords(concepts, limit=8)
-                            topic_concept_news = cached_topic_news_em(tuple(concept_kws), limit_each=5, total_limit=10)
+                            topic_concept_news = cached_topic_news_em(
+                                tuple(concept_kws), limit_each=5, total_limit=10
+                            )
                             topic_concept_news = [
-                                n for n in topic_concept_news
+                                n
+                                for n in topic_concept_news
                                 if n.get("title", "").strip() not in concept_excluded
                             ]
-                            concept_news = merge_news_items(pool_concept_news, topic_concept_news, limit=8)
+                            concept_news = merge_news_items(
+                                pool_concept_news, topic_concept_news, limit=8
+                            )
                             concepts_brief = build_concepts_brief_for_llm(
                                 concepts, concept_news, max_concepts=10, max_news=8
                             )
@@ -1189,13 +1520,21 @@ with tab2:
                         try:
                             df_stock_fund = cached_individual_fund_flow(symbol, days=30)
                             if df_stock_fund is not None and len(df_stock_fund) > 0:
-                                s_stock = summarize_fund_flow(df_stock_fund, recent_days=5)
-                                stock_fund_brief = build_fund_flow_brief_for_llm(s_stock, kind=stock_name)
+                                s_stock = summarize_fund_flow(
+                                    df_stock_fund, recent_days=5
+                                )
+                                stock_fund_brief = build_fund_flow_brief_for_llm(
+                                    s_stock, kind=stock_name
+                                )
 
                             df_market_fund = cached_market_fund_flow(days=30)
                             if df_market_fund is not None and len(df_market_fund) > 0:
-                                s_market = summarize_fund_flow(df_market_fund, recent_days=5)
-                                market_fund_brief = build_fund_flow_brief_for_llm(s_market, kind="大盘")
+                                s_market = summarize_fund_flow(
+                                    df_market_fund, recent_days=5
+                                )
+                                market_fund_brief = build_fund_flow_brief_for_llm(
+                                    s_market, kind="大盘"
+                                )
                         except Exception as e:
                             st.warning(f"资金流向拉取失败（不影响 LLM 推理）: {e}")
 
@@ -1232,7 +1571,7 @@ with tab2:
                     }
                     try:
                         # v0.12: Use mode-based agent execution if available
-                        if 'analysis_mode' in dir():
+                        if "analysis_mode" in dir():
                             llm_result = run_agents_with_mode(
                                 stock_payload,
                                 mode=analysis_mode,
@@ -1240,7 +1579,11 @@ with tab2:
                                 global_ai_settings=global_ai_settings,
                             )
                         else:
-                            llm_result = run_custom_agents(stock_payload, agent_configs, global_ai_settings=global_ai_settings)
+                            llm_result = run_custom_agents(
+                                stock_payload,
+                                agent_configs,
+                                global_ai_settings=global_ai_settings,
+                            )
                         st.session_state[cache_key] = llm_result
                         st.session_state[cache_key + "_payload"] = stock_payload
                     except Exception as e:
@@ -1257,7 +1600,11 @@ with tab2:
                 mode_name = llm_result.get("mode_name", "")
                 auto_escalated = llm_result.get("auto_escalated", False)
                 if result_mode:
-                    mode_colors = {"standard": "#10b981", "deep": "#8b5cf6", "auto": "#f59e0b"}
+                    mode_colors = {
+                        "standard": "#10b981",
+                        "deep": "#8b5cf6",
+                        "auto": "#f59e0b",
+                    }
                     mode_color = mode_colors.get(result_mode, "#6b7280")
                     escalation_badge = ""
                     if result_mode == "auto" and auto_escalated:
@@ -1273,7 +1620,9 @@ with tab2:
                     )
 
                 cls_map = {"买入": "buy", "卖出": "sell", "观望": "hold"}
-                agent_keys_order = llm_result.get("agent_order") or list(llm_result.get("agents", {}).keys())
+                agent_keys_order = llm_result.get("agent_order") or list(
+                    llm_result.get("agents", {}).keys()
+                )
                 # 用 3 列网格更协调
                 cols = st.columns(2)
                 for idx, key in enumerate(agent_keys_order):
@@ -1322,8 +1671,16 @@ with tab2:
                         bullets = []
                         for kind, label, items in (
                             ("supported", "✅ 站得住的证据", review.get("supported")),
-                            ("contradictions", "❌ 与简报矛盾", review.get("contradictions")),
-                            ("missing_evidence", "🔍 漏掉的关键证据", review.get("missing_evidence")),
+                            (
+                                "contradictions",
+                                "❌ 与简报矛盾",
+                                review.get("contradictions"),
+                            ),
+                            (
+                                "missing_evidence",
+                                "🔍 漏掉的关键证据",
+                                review.get("missing_evidence"),
+                            ),
                         ):
                             if items:
                                 inner = "".join(f"<li>{i}</li>" for i in items)
@@ -1341,15 +1698,18 @@ with tab2:
                         if bullets:
                             review_block_html = (
                                 "<div style='margin-top:10px; padding:8px 10px; background:#f9fafb; "
-                                "border-left:3px solid " + q_color + "; border-radius:6px;'>"
-                                + "".join(bullets) + "</div>"
+                                "border-left:3px solid "
+                                + q_color
+                                + "; border-radius:6px;'>"
+                                + "".join(bullets)
+                                + "</div>"
                             )
                     with cols[idx % 2]:
                         st.html(f"""
                         <div class="agent-card {cls}">
                             <div>
-                                <span class="agent-name">{r['name']}</span>
-                                <span class="agent-signal {signal_class}">{r['signal']}</span>
+                                <span class="agent-name">{r["name"]}</span>
+                                <span class="agent-signal {signal_class}">{r["signal"]}</span>
                                 {status_dot}
                                 {quality_badge_html}
                             </div>
@@ -1360,13 +1720,13 @@ with tab2:
                             <div style='margin-top:10px;'>
                                 <div style='display:flex; justify-content:space-between; align-items:center;'>
                                     <span style='font-size:0.85rem; color:#6b7280;'>置信度</span>
-                                    <span style='font-weight:600; color:#1f2937;'>{r['confidence']}%</span>
+                                    <span style='font-weight:600; color:#1f2937;'>{r["confidence"]}%</span>
                                 </div>
                                 <div style='background:#f3f4f6; height:6px; border-radius:3px; margin-top:4px; overflow:hidden;'>
-                                    <div style='background:linear-gradient(90deg,#667eea,#764ba2); width:{r['confidence']}%; height:100%;'></div>
+                                    <div style='background:linear-gradient(90deg,#667eea,#764ba2); width:{r["confidence"]}%; height:100%;'></div>
                                 </div>
                             </div>
-                            <div class="agent-reason">{r['reason']}</div>
+                            <div class="agent-reason">{r["reason"]}</div>
                             {review_block_html}
                         </div>
                         """)
@@ -1385,10 +1745,10 @@ with tab2:
                             border:1px solid #e5e7eb; box-shadow:0 4px 12px rgba(0,0,0,0.05);'>
                     <div style='color:#6b7280; font-size:0.85rem; margin-bottom:8px;'>多 Agent 投票结果</div>
                     <div style='display:flex; justify-content:space-between; align-items:center;'>
-                        <div style='font-size:1.8rem; font-weight:700; color:{final_color};'>{summary['final']}</div>
+                        <div style='font-size:1.8rem; font-weight:700; color:{final_color};'>{summary["final"]}</div>
                         <div style='text-align:right;'>
-                            <div style='font-size:0.85rem; color:#6b7280;'>买入 {summary['buy']} · 卖出 {summary['sell']} · 观望 {summary['hold']}</div>
-                            <div style='font-size:1.1rem; font-weight:600; color:#1f2937;'>平均置信度 {summary['avg_confidence']:.0f}%</div>
+                            <div style='font-size:0.85rem; color:#6b7280;'>买入 {summary["buy"]} · 卖出 {summary["sell"]} · 观望 {summary["hold"]}</div>
+                            <div style='font-size:1.1rem; font-weight:600; color:#1f2937;'>平均置信度 {summary["avg_confidence"]:.0f}%</div>
                         </div>
                     </div>
                 </div>
@@ -1407,18 +1767,25 @@ with tab2:
                         ]
                         avg_q = round(sum(scores) / len(scores), 1) if scores else None
                         oc = sum(
-                            1 for r in llm_result.get("agents", {}).values()
-                            if isinstance(r.get("review"), dict) and r["review"].get("overconfident")
+                            1
+                            for r in llm_result.get("agents", {}).values()
+                            if isinstance(r.get("review"), dict)
+                            and r["review"].get("overconfident")
                         )
                         div = critic_block.get("divergence") or {}
                         level = div.get("level") or "无"
                         level_color = {
-                            "高": "#dc2626", "中": "#f59e0b", "低": "#16a34a", "无": "#9ca3af",
+                            "高": "#dc2626",
+                            "中": "#f59e0b",
+                            "低": "#16a34a",
+                            "无": "#9ca3af",
                         }.get(level, "#6b7280")
 
                         critic_vendor = critic_block.get("vendor", "?")
                         critic_model = critic_block.get("model", "?")
-                        critic_fb = " ⚠️ 已兜底" if critic_block.get("fallback_used") else ""
+                        critic_fb = (
+                            " ⚠️ 已兜底" if critic_block.get("fallback_used") else ""
+                        )
 
                         avg_q_text = f"{avg_q:.1f}" if avg_q is not None else "—"
                         st.html(f"""
@@ -1455,14 +1822,20 @@ with tab2:
                             """)
                         st.html("</div>")
                     elif critic_block.get("error"):
-                        st.caption(f"🧐 审稿员未能完成本次审稿: {critic_block.get('error')}")
+                        st.caption(
+                            f"🧐 审稿员未能完成本次审稿: {critic_block.get('error')}"
+                        )
 
                 # 主席总结
                 st.markdown("#### 🎩 投资委员会主席总结")
                 # 显示主席模型徽章
                 try:
-                    chair_vendor, chair_model = AGENT_MODEL_CONFIG.get("chairman", ("?", "?"))
-                    chair_vendor_label = VENDORS.get(chair_vendor, {}).get("label", chair_vendor)
+                    chair_vendor, chair_model = AGENT_MODEL_CONFIG.get(
+                        "chairman", ("?", "?")
+                    )
+                    chair_vendor_label = VENDORS.get(chair_vendor, {}).get(
+                        "label", chair_vendor
+                    )
                     chair_vendor_cls = chair_vendor_label.lower().replace(" ", "")
                     st.html(f"""
                     <div style='margin-bottom:8px;'>
@@ -1479,7 +1852,9 @@ with tab2:
                     if st.button("📝 生成主席总结", key="gen_chairman"):
                         with st.spinner("主席正在思考..."):
                             try:
-                                chairman_text = summarize_with_chairman(llm_result, stock_name)
+                                chairman_text = summarize_with_chairman(
+                                    llm_result, stock_name
+                                )
                                 st.session_state[chairman_key] = chairman_text
                                 st.rerun()
                             except Exception as e:
@@ -1499,7 +1874,11 @@ with tab2:
 
                     col_regen, col_export = st.columns([1, 1])
                     with col_regen:
-                        if st.button("🔄 重新生成", key="regen_chairman", use_container_width=True):
+                        if st.button(
+                            "🔄 重新生成",
+                            key="regen_chairman",
+                            use_container_width=True,
+                        ):
                             del st.session_state[chairman_key]
                             st.rerun()
                     with col_export:
@@ -1507,31 +1886,33 @@ with tab2:
                         # 模型阵容表
                         try:
                             lineup_rows_md = get_custom_agent_model_table(agent_configs)
-                            model_lineup_md = "\n".join([
-                                f"| {n} | {v} | `{m}` |"
-                                for _k, n, v, m in lineup_rows_md
-                            ])
+                            model_lineup_md = "\n".join(
+                                [
+                                    f"| {n} | {v} | `{m}` |"
+                                    for _k, n, v, m in lineup_rows_md
+                                ]
+                            )
                         except Exception:
                             model_lineup_md = ""
 
                         report_lines = [
                             f"# {stock_name}（{symbol}）AI 投研报告",
-                            f"",
+                            "",
                             f"> 生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  ",
-                            f"> 工作台：金融 Agent 工作台 v0.7（自定义多 Agent 架构）",
-                            f"",
-                            f"## 🧬 决策模型阵容",
-                            f"",
+                            "> 工作台：金融 Agent 工作台 v0.7（自定义多 Agent 架构）",
+                            "",
+                            "## 🧬 决策模型阵容",
+                            "",
                             f"本次决策由 {len(agent_keys_order)} 位自定义 Agent 组成投资委员会，每位可使用不同人设、厂商和模型：",
-                            f"",
-                            f"| 角色 | 厂商 | 模型 |",
-                            f"| --- | --- | --- |",
+                            "",
+                            "| 角色 | 厂商 | 模型 |",
+                            "| --- | --- | --- |",
                             model_lineup_md,
-                            f"",
-                            f"## 📊 行情快照",
-                            f"",
-                            f"| 项目 | 数值 |",
-                            f"| --- | --- |",
+                            "",
+                            "## 📊 行情快照",
+                            "",
+                            "| 项目 | 数值 |",
+                            "| --- | --- |",
                             f"| 最新价 | ¥{payload.get('close', 0):.2f} |",
                             f"| 当日涨跌 | {payload.get('day_change', 0):+.2f}% |",
                             f"| 区间涨跌（{payload.get('days', 0)}日） | {payload.get('period_change', 0):+.2f}% |",
@@ -1542,41 +1923,96 @@ with tab2:
                             f"| 当日换手率 | {payload.get('turnover', 0):.2f}% |",
                             f"| 5日量比 | {payload.get('vol_ratio', 1):.2f} |",
                             f"| 日波动率 | {payload.get('volatility', 0):.2f}% |",
-                            f"",
+                            "",
                         ]
 
                         if payload.get("stock_fund_brief"):
-                            report_lines += [f"## 💰 资金流向", "", "```", payload["stock_fund_brief"], "```", ""]
+                            report_lines += [
+                                "## 💰 资金流向",
+                                "",
+                                "```",
+                                payload["stock_fund_brief"],
+                                "```",
+                                "",
+                            ]
                         if payload.get("market_fund_brief"):
-                            report_lines += ["```", payload["market_fund_brief"], "```", ""]
+                            report_lines += [
+                                "```",
+                                payload["market_fund_brief"],
+                                "```",
+                                "",
+                            ]
 
                         if payload.get("research_brief"):
-                            report_lines += [f"## 📑 机构研报评级", "", payload["research_brief"], ""]
+                            report_lines += [
+                                "## 📑 机构研报评级",
+                                "",
+                                payload["research_brief"],
+                                "",
+                            ]
 
-                        if payload.get("announcements_brief") and payload["announcements_brief"] != "无近期公告":
-                            report_lines += [f"## 📋 个股近 30 天公告", "", "```", payload["announcements_brief"], "```", ""]
+                        if (
+                            payload.get("announcements_brief")
+                            and payload["announcements_brief"] != "无近期公告"
+                        ):
+                            report_lines += [
+                                "## 📋 个股近 30 天公告",
+                                "",
+                                "```",
+                                payload["announcements_brief"],
+                                "```",
+                                "",
+                            ]
 
                         if payload.get("related_news_brief"):
-                            report_lines += [f"## 📰 个股相关资讯", "", "```", payload["related_news_brief"][:1500], "```", ""]
+                            report_lines += [
+                                "## 📰 个股相关资讯",
+                                "",
+                                "```",
+                                payload["related_news_brief"][:1500],
+                                "```",
+                                "",
+                            ]
 
                         if payload.get("industry_news_brief"):
-                            report_lines += [f"## 🏭 行业相关动态", "", "```", payload["industry_news_brief"][:1500], "```", ""]
+                            report_lines += [
+                                "## 🏭 行业相关动态",
+                                "",
+                                "```",
+                                payload["industry_news_brief"][:1500],
+                                "```",
+                                "",
+                            ]
 
                         if payload.get("concepts_brief"):
-                            report_lines += [f"## 🧩 关联概念与板块动态", "", "```", payload["concepts_brief"][:1500], "```", ""]
+                            report_lines += [
+                                "## 🧩 关联概念与板块动态",
+                                "",
+                                "```",
+                                payload["concepts_brief"][:1500],
+                                "```",
+                                "",
+                            ]
 
-                        report_lines += [f"## 🤖 {len(agent_keys_order)} 位 Agent 独立观点（自定义团队）", ""]
+                        report_lines += [
+                            f"## 🤖 {len(agent_keys_order)} 位 Agent 独立观点（自定义团队）",
+                            "",
+                        ]
                         for k in agent_keys_order:
                             if k in llm_result["agents"]:
                                 r = llm_result["agents"][k]
                                 vendor_md = r.get("vendor", "?")
                                 model_md = r.get("model", "?")
-                                ok_md = "" if r.get("ok", True) else " ⚠️ *主模型失败已切兜底*"
+                                ok_md = (
+                                    ""
+                                    if r.get("ok", True)
+                                    else " ⚠️ *主模型失败已切兜底*"
+                                )
                                 report_lines += [
                                     f"### {r['name']}",
-                                    f"",
+                                    "",
                                     f"> 模型：**{vendor_md}** / `{model_md}`{ok_md}",
-                                    f"",
+                                    "",
                                     f"- **信号**：{r['signal']}",
                                     f"- **置信度**：{r['confidence']}%",
                                     f"- **理由**：{r['reason']}",
@@ -1596,14 +2032,20 @@ with tab2:
                                                 tags.append(f"`{etype}`")
                                             if date:
                                                 tags.append(f"`{date}`")
-                                            tag_suffix = (" " + " ".join(tags)) if tags else ""
-                                            report_lines.append(f"  - {claim}{tag_suffix}")
+                                            tag_suffix = (
+                                                (" " + " ".join(tags)) if tags else ""
+                                            )
+                                            report_lines.append(
+                                                f"  - {claim}{tag_suffix}"
+                                            )
                                         else:
                                             text = str(ev).strip()
                                             if text:
                                                 report_lines.append(f"  - {text}")
                                 if r.get("invalid_if"):
-                                    report_lines.append(f"- **失效条件**：{r['invalid_if']}")
+                                    report_lines.append(
+                                        f"- **失效条件**：{r['invalid_if']}"
+                                    )
                                 risks = r.get("risks") or []
                                 if risks:
                                     report_lines.append("- **主要风险**：")
@@ -1613,18 +2055,22 @@ with tab2:
 
                         # 主席模型署名
                         try:
-                            chair_v, chair_m = AGENT_MODEL_CONFIG.get("chairman", ("?", "?"))
-                            chair_v_label = VENDORS.get(chair_v, {}).get("label", chair_v)
+                            chair_v, chair_m = AGENT_MODEL_CONFIG.get(
+                                "chairman", ("?", "?")
+                            )
+                            chair_v_label = VENDORS.get(chair_v, {}).get(
+                                "label", chair_v
+                            )
                         except Exception:
                             chair_v_label, chair_m = "?", "?"
 
                         report_lines += [
-                            f"## 🗳️ 投票结果",
-                            f"",
+                            "## 🗳️ 投票结果",
+                            "",
                             f"- 买入 **{summary['buy']}** / 卖出 **{summary['sell']}** / 观望 **{summary['hold']}**",
                             f"- 平均置信度：**{summary['avg_confidence']:.0f}%**",
                             f"- **决策：{summary['final']}**",
-                            f"",
+                            "",
                         ]
 
                         # v0.9: 审稿员观察
@@ -1632,26 +2078,38 @@ with tab2:
                         if isinstance(critic_md, dict) and critic_md.get("ok"):
                             div_md = critic_md.get("divergence") or {}
                             report_lines += [
-                                f"## 🧐 审稿员观察",
-                                f"",
+                                "## 🧐 审稿员观察",
+                                "",
                                 f"> 审稿模型：**{critic_md.get('vendor', '?')}** / "
                                 f"`{critic_md.get('model', '?')}`"
-                                + ("（已兜底）" if critic_md.get("fallback_used") else ""),
-                                f"",
+                                + (
+                                    "（已兜底）"
+                                    if critic_md.get("fallback_used")
+                                    else ""
+                                ),
+                                "",
                                 f"- **分歧度**：{div_md.get('level', '无')}",
                             ]
                             if div_md.get("main_axis"):
-                                report_lines.append(f"- **主要分歧轴**：{div_md['main_axis']}")
+                                report_lines.append(
+                                    f"- **主要分歧轴**：{div_md['main_axis']}"
+                                )
                             if div_md.get("summary"):
-                                report_lines.append(f"- **分歧解读**：{div_md['summary']}")
+                                report_lines.append(
+                                    f"- **分歧解读**：{div_md['summary']}"
+                                )
                             report_lines.append("")
 
                             for k in agent_keys_order:
-                                review = (llm_result.get("agents", {}).get(k) or {}).get("review")
+                                review = (
+                                    llm_result.get("agents", {}).get(k) or {}
+                                ).get("review")
                                 if not review:
                                     continue
                                 ag_name = llm_result["agents"][k].get("name", k)
-                                report_lines.append(f"### {ag_name} · 审稿评分 {review.get('quality_score', '?')}")
+                                report_lines.append(
+                                    f"### {ag_name} · 审稿评分 {review.get('quality_score', '?')}"
+                                )
                                 if review.get("comment"):
                                     report_lines.append(f"> {review['comment']}")
                                 if review.get("supported"):
@@ -1671,15 +2129,15 @@ with tab2:
                                 report_lines.append("")
 
                         report_lines += [
-                            f"## 🎩 投资委员会主席总结",
-                            f"",
+                            "## 🎩 投资委员会主席总结",
+                            "",
                             f"> 模型：**{chair_v_label}** / `{chair_m}`",
-                            f"",
+                            "",
                             st.session_state[chairman_key],
-                            f"",
-                            f"---",
-                            f"",
-                            f"*本报告由金融 Agent 工作台 v0.9 基于多厂商异构 LLM + 独立审稿 Agent 自动生成,仅供研究参考,不构成投资建议。*",
+                            "",
+                            "---",
+                            "",
+                            "*本报告由金融 Agent 工作台 v0.9 基于多厂商异构 LLM + 独立审稿 Agent 自动生成,仅供研究参考,不构成投资建议。*",
                         ]
                         report_md = "\n".join(report_lines)
                         report_filename = f"{stock_name}_{symbol}_AI报告_{datetime.now().strftime('%Y%m%d_%H%M')}.md"
@@ -1699,11 +2157,16 @@ with tab2:
                                     )
                                     st.session_state[archive_key] = arc_res
                                 except Exception as _e:
-                                    st.session_state[archive_key] = {"saved": False, "reason": f"存档失败：{_e}"}
+                                    st.session_state[archive_key] = {
+                                        "saved": False,
+                                        "reason": f"存档失败：{_e}",
+                                    }
 
                             arc_res = st.session_state[archive_key]
                             if arc_res.get("saved"):
-                                st.success(f"📚 报告已自动存档至 `{arc_res['path']}`，可在「研究存档」Tab 检索历史决策。")
+                                st.success(
+                                    f"📚 报告已自动存档至 `{arc_res['path']}`，可在「研究存档」Tab 检索历史决策。"
+                                )
                             else:
                                 st.caption(f"📚 {arc_res.get('reason', '存档跳过')}")
 
@@ -1716,27 +2179,39 @@ with tab2:
                             key="download_report",
                         )
             else:
-                st.caption("点击「启动深度分析」开始调用当前 AI 设置中心里的 Agent 团队。")
+                st.caption(
+                    "点击「启动深度分析」开始调用当前 AI 设置中心里的 Agent 团队。"
+                )
 
         # ========== 规则化 Agent 模式 ==========
         else:
             st.markdown("#### 🤖 多 Agent 协作分析（规则化）")
-            st.caption("基于实时计算指标的快速推断。开启侧边栏「使用 LLM 深度分析」可获得真实 LLM 推理。")
+            st.caption(
+                "基于实时计算指标的快速推断。开启侧边栏「使用 LLM 深度分析」可获得真实 LLM 推理。"
+            )
 
             # 技术派
             if ma5 > ma20 and macd_val > 0:
                 tech_signal, tech_conf, tech_class = "买入", 75, "buy"
-                tech_reason = f"MA5({ma5:.2f}) 上穿 MA20({ma20:.2f})，MACD 红柱为正，短期动能向上"
+                tech_reason = (
+                    f"MA5({ma5:.2f}) 上穿 MA20({ma20:.2f})，MACD 红柱为正，短期动能向上"
+                )
             elif ma5 < ma20 and macd_val < 0:
                 tech_signal, tech_conf, tech_class = "卖出", 70, "sell"
-                tech_reason = f"MA5({ma5:.2f}) 下穿 MA20({ma20:.2f})，MACD 绿柱扩大，短期承压"
+                tech_reason = (
+                    f"MA5({ma5:.2f}) 下穿 MA20({ma20:.2f})，MACD 绿柱扩大，短期承压"
+                )
             else:
                 tech_signal, tech_conf, tech_class = "观望", 55, "hold"
-                tech_reason = f"均线纠缠，MACD 信号不明确，建议等待方向选择"
+                tech_reason = "均线纠缠，MACD 信号不明确，建议等待方向选择"
 
             # 趋势派
             if period_change > 10:
-                trend_signal, trend_conf, trend_class = "买入" if recent_chg > 0 else "观望", 68, "buy" if recent_chg > 0 else "hold"
+                trend_signal, trend_conf, trend_class = (
+                    "买入" if recent_chg > 0 else "观望",
+                    68,
+                    "buy" if recent_chg > 0 else "hold",
+                )
                 trend_reason = f"区间涨幅 {period_change:.1f}%，处于上升趋势中"
             elif period_change < -10:
                 trend_signal, trend_conf, trend_class = "卖出", 65, "sell"
@@ -1768,10 +2243,34 @@ with tab2:
                 risk_reason = f"日波动率 {volatility:.2f}%，处于正常区间"
 
             agents = [
-                {"name": "📐 技术分析师", "signal": tech_signal, "conf": tech_conf, "reason": tech_reason, "cls": tech_class},
-                {"name": "📈 趋势跟踪师", "signal": trend_signal, "conf": trend_conf, "reason": trend_reason, "cls": trend_class},
-                {"name": "💰 量价分析师", "signal": vol_signal, "conf": vol_conf, "reason": vol_reason, "cls": vol_class},
-                {"name": "⚠️ 风险控制师", "signal": risk_signal, "conf": risk_conf, "reason": risk_reason, "cls": risk_class},
+                {
+                    "name": "📐 技术分析师",
+                    "signal": tech_signal,
+                    "conf": tech_conf,
+                    "reason": tech_reason,
+                    "cls": tech_class,
+                },
+                {
+                    "name": "📈 趋势跟踪师",
+                    "signal": trend_signal,
+                    "conf": trend_conf,
+                    "reason": trend_reason,
+                    "cls": trend_class,
+                },
+                {
+                    "name": "💰 量价分析师",
+                    "signal": vol_signal,
+                    "conf": vol_conf,
+                    "reason": vol_reason,
+                    "cls": vol_class,
+                },
+                {
+                    "name": "⚠️ 风险控制师",
+                    "signal": risk_signal,
+                    "conf": risk_conf,
+                    "reason": risk_reason,
+                    "cls": risk_class,
+                },
             ]
 
             cols = st.columns(2)
@@ -1779,21 +2278,21 @@ with tab2:
                 with cols[idx % 2]:
                     signal_class = f"signal-{agent['cls']}"
                     st.html(f"""
-                    <div class="agent-card {agent['cls']}">
+                    <div class="agent-card {agent["cls"]}">
                         <div>
-                            <span class="agent-name">{agent['name']}</span>
-                            <span class="agent-signal {signal_class}">{agent['signal']}</span>
+                            <span class="agent-name">{agent["name"]}</span>
+                            <span class="agent-signal {signal_class}">{agent["signal"]}</span>
                         </div>
                         <div style='margin-top:10px;'>
                             <div style='display:flex; justify-content:space-between; align-items:center;'>
                                 <span style='font-size:0.85rem; color:#6b7280;'>置信度</span>
-                                <span style='font-weight:600; color:#1f2937;'>{agent['conf']}%</span>
+                                <span style='font-weight:600; color:#1f2937;'>{agent["conf"]}%</span>
                             </div>
                             <div style='background:#f3f4f6; height:6px; border-radius:3px; margin-top:4px; overflow:hidden;'>
-                                <div style='background:linear-gradient(90deg,#667eea,#764ba2); width:{agent['conf']}%; height:100%;'></div>
+                                <div style='background:linear-gradient(90deg,#667eea,#764ba2); width:{agent["conf"]}%; height:100%;'></div>
                             </div>
                         </div>
-                        <div class="agent-reason">{agent['reason']}</div>
+                        <div class="agent-reason">{agent["reason"]}</div>
                     </div>
                     """)
 
@@ -1832,12 +2331,16 @@ with tab3:
     if AI_SETTINGS_AVAILABLE:
         ai_settings_center.render_ai_settings_center(symbol)
     else:
-        st.error(f"AI 设置中心未加载: {AI_SETTINGS_ERROR if 'AI_SETTINGS_ERROR' in dir() else '未知错误'}")
+        st.error(
+            f"AI 设置中心未加载: {AI_SETTINGS_ERROR if 'AI_SETTINGS_ERROR' in dir() else '未知错误'}"
+        )
 
 with tab4:
     st.markdown("#### 📰 实时资讯 & 机构研报")
     if not NEWS_AVAILABLE:
-        st.error(f"新闻模块加载失败: {NEWS_ERROR if 'NEWS_ERROR' in dir() else '未知错误'}")
+        st.error(
+            f"新闻模块加载失败: {NEWS_ERROR if 'NEWS_ERROR' in dir() else '未知错误'}"
+        )
     else:
         # 顶部操作栏 + v0.7 视图切换
         col_refresh, col_view, col_info = st.columns([1, 2, 4])
@@ -1855,7 +2358,9 @@ with tab4:
                 index=1,
             )
         with col_info:
-            st.caption("时间轴模式合并三源最近 10 条按时间倒序;分类模式展示原有子 Tab。")
+            st.caption(
+                "时间轴模式合并三源最近 10 条按时间倒序;分类模式展示原有子 Tab。"
+            )
 
         # ---------- v0.7 时间轴模式 ----------
         if "时间轴" in view_mode:
@@ -1867,9 +2372,14 @@ with tab4:
 
             def _parse_dt(item):
                 s = str(item.get("datetime", "")).strip()
-                for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
-                            "%m-%d %H:%M:%S", "%m-%d %H:%M",
-                            "%H:%M:%S", "%H:%M"):
+                for fmt in (
+                    "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%d %H:%M",
+                    "%m-%d %H:%M:%S",
+                    "%m-%d %H:%M",
+                    "%H:%M:%S",
+                    "%H:%M",
+                ):
                     try:
                         d = datetime.strptime(s, fmt)
                         if d.year == 1900:
@@ -1889,7 +2399,11 @@ with tab4:
                     f"合并财联社 / 东财 / 新浪,共 <b>{len(merged_sorted)}</b> 条(按时间倒序)</div>",
                     unsafe_allow_html=True,
                 )
-                src_color_map = {"东财": "#1976d2", "财联社": "#d32f2f", "新浪": "#f57c00"}
+                src_color_map = {
+                    "东财": "#1976d2",
+                    "财联社": "#d32f2f",
+                    "新浪": "#f57c00",
+                }
                 for n in merged_sorted:
                     src = n.get("source", "")
                     src_color = src_color_map.get(src, "#666")
@@ -1897,7 +2411,11 @@ with tab4:
                     summary = n.get("summary", "")
                     dt = n.get("datetime", "")
                     url = n.get("url", "")
-                    title_html = f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>" if url else title
+                    title_html = (
+                        f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>"
+                        if url
+                        else title
+                    )
                     st.html(f"""
                     <div style='background:white; border-left:3px solid {src_color}; padding:12px 16px;
                                 margin-bottom:10px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.04);'>
@@ -1914,14 +2432,16 @@ with tab4:
         # ---------- 原有分类模式 ----------
         else:
             # v0.10: 子 Tab 拆分为 5 个,公告与行业新闻独立成区
-            sub_tab1, sub_ann, sub_concept, sub_industry, sub_tab2, sub_tab3 = st.tabs([
-                f"🎯 {stock_name} 相关资讯",
-                "📋 个股公告",
-                "🧩 关联概念",
-                "🏭 行业新闻",
-                "🌐 大盘快讯（财联社/东财/新浪）",
-                "📑 机构研报评级",
-            ])
+            sub_tab1, sub_ann, sub_concept, sub_industry, sub_tab2, sub_tab3 = st.tabs(
+                [
+                    f"🎯 {stock_name} 相关资讯",
+                    "📋 个股公告",
+                    "🧩 关联概念",
+                    "🏭 行业新闻",
+                    "🌐 大盘快讯（财联社/东财/新浪）",
+                    "📑 机构研报评级",
+                ]
+            )
 
             # ---------- 子 Tab 1: 个股相关 ----------
             with sub_tab1:
@@ -1936,7 +2456,9 @@ with tab4:
                     # 然后追加关键词在大盘快讯里匹配的条目。两类用 (title, date) 去重。
                     stock_specific = cached_stock_news_em(symbol, limit=20) or []
                     keyword_matched = get_stock_related_news(
-                        stock_name, all_news, limit=30,
+                        stock_name,
+                        all_news,
+                        limit=30,
                         symbol=symbol,
                         products=main_biz.get("products"),
                     )
@@ -1944,18 +2466,26 @@ with tab4:
                     related = []
                     for src_list in (stock_specific, keyword_matched):
                         for n in src_list:
-                            key = (n.get("title", "").strip(), n.get("datetime", "")[:10])
+                            key = (
+                                n.get("title", "").strip(),
+                                n.get("datetime", "")[:10],
+                            )
                             if not key[0] or key in seen:
                                 continue
                             seen.add(key)
                             related.append(n)
-    
+
                 if not related:
-                    st.info(f"近期未发现与「{stock_name}」直接相关的资讯，建议查看大盘快讯或研报。")
+                    st.info(
+                        f"近期未发现与「{stock_name}」直接相关的资讯，建议查看大盘快讯或研报。"
+                    )
                 else:
                     # v0.10.3: 把召回逻辑透明化 —— 显示个股相关用了哪些关键词,以及 N 条来自东财个股 API、N 条来自大盘快讯关键词命中
                     from news_data import _expand_stock_keywords
-                    stock_kws = _expand_stock_keywords(stock_name, symbol, products=main_biz.get("products"))
+
+                    stock_kws = _expand_stock_keywords(
+                        stock_name, symbol, products=main_biz.get("products")
+                    )
                     n_specific = len(stock_specific or [])
                     n_total = len(related)
                     n_kw = max(0, n_total - n_specific)
@@ -1969,13 +2499,21 @@ with tab4:
                     )
                     for n in related:
                         src = n.get("source", "")
-                        src_color = {"东财": "#1976d2", "财联社": "#d32f2f", "新浪": "#f57c00"}.get(src, "#666")
+                        src_color = {
+                            "东财": "#1976d2",
+                            "财联社": "#d32f2f",
+                            "新浪": "#f57c00",
+                        }.get(src, "#666")
                         title = n.get("title", "")
                         summary = n.get("summary", "")
                         dt = n.get("datetime", "")
                         url = n.get("url", "")
-    
-                        title_html = f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>" if url else title
+
+                        title_html = (
+                            f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>"
+                            if url
+                            else title
+                        )
                         st.html(f"""
                         <div style='background:white; border-left:3px solid {src_color}; padding:12px 16px; margin-bottom:10px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.04);'>
                             <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;'>
@@ -1992,15 +2530,21 @@ with tab4:
                 with st.spinner("正在加载公告..."):
                     cninfo_ann = cached_announcements_cninfo(symbol, days=30)
                     em_ann_today = cached_announcements_em_today() or []
-                    em_ann_for_stock = [a for a in em_ann_today if a.get("code") == symbol]
+                    em_ann_for_stock = [
+                        a for a in em_ann_today if a.get("code") == symbol
+                    ]
                     ann_list = merge_announcements(cninfo_ann, em_ann_for_stock)
 
                 if not ann_list:
-                    st.info(f"近 30 天内未发现 {stock_name}({symbol}) 的公告。可能是接口暂时不可用,稍后刷新重试。")
+                    st.info(
+                        f"近 30 天内未发现 {stock_name}({symbol}) 的公告。可能是接口暂时不可用,稍后刷新重试。"
+                    )
                 else:
                     cat_counts = {}
                     for a in ann_list:
-                        cat_counts[a.get("category", "其他")] = cat_counts.get(a.get("category", "其他"), 0) + 1
+                        cat_counts[a.get("category", "其他")] = (
+                            cat_counts.get(a.get("category", "其他"), 0) + 1
+                        )
                     summary_chips = " · ".join(
                         f"<span style='color:{ANN_COLORS.get(c, '#6b7280')};'>{c} {n}</span>"
                         for c, n in sorted(cat_counts.items(), key=lambda x: -x[1])
@@ -2017,7 +2561,11 @@ with tab4:
                         url = a.get("url", "")
                         date = a.get("date", "")
                         src = a.get("source", "")
-                        title_html = f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>" if url else title
+                        title_html = (
+                            f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>"
+                            if url
+                            else title
+                        )
                         st.html(f"""
                         <div style='background:white; border-left:3px solid {cc}; padding:10px 14px;
                                     margin-bottom:8px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.04);'>
@@ -2056,26 +2604,40 @@ with tab4:
                             tuple(concept_kws[:8]), limit_each=6, total_limit=24
                         )
                         topic_concept_news = [
-                            n for n in topic_concept_news
+                            n
+                            for n in topic_concept_news
                             if n.get("title", "").strip() not in excluded
                         ]
-                        concept_news = merge_news_items(pool_concept_news, topic_concept_news, limit=30)
+                        concept_news = merge_news_items(
+                            pool_concept_news, topic_concept_news, limit=30
+                        )
                     if concept_kws:
                         st.caption("匹配词: " + " · ".join(concept_kws))
                     if not concept_news:
-                        st.caption("近期未在快讯池或东财主题搜索中发现这些概念的直接相关新闻。")
+                        st.caption(
+                            "近期未在快讯池或东财主题搜索中发现这些概念的直接相关新闻。"
+                        )
                     else:
                         st.caption(
                             f"快讯池命中 {len(pool_concept_news)} 条 + 主题搜索补充 {len(topic_concept_news)} 条"
                         )
                         for n in concept_news:
                             src = n.get("source", "")
-                            src_color = {"东财": "#1976d2", "东财搜索": "#1976d2", "财联社": "#d32f2f", "新浪": "#f57c00"}.get(src, "#666")
+                            src_color = {
+                                "东财": "#1976d2",
+                                "东财搜索": "#1976d2",
+                                "财联社": "#d32f2f",
+                                "新浪": "#f57c00",
+                            }.get(src, "#666")
                             title = n.get("title", "")
                             summary = n.get("summary", "")
                             dt = n.get("datetime", "")
                             url = n.get("url", "")
-                            title_html = f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>" if url else title
+                            title_html = (
+                                f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>"
+                                if url
+                                else title
+                            )
                             st.html(f"""
                             <div style='background:white; border-left:3px solid {src_color}; padding:10px 14px;
                                         margin-bottom:8px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.04);'>
@@ -2105,7 +2667,9 @@ with tab4:
                     with st.spinner("正在筛选并搜索行业新闻..."):
                         excluded = {n.get("title", "").strip() for n in (related or [])}
                         pool_ind_news = get_industry_news(
-                            industry, all_news, limit=30,
+                            industry,
+                            all_news,
+                            limit=30,
                             exclude_titles=excluded,
                             extra_keywords=extra_kws,
                         )
@@ -2119,12 +2683,17 @@ with tab4:
                             tuple(topic_kws), limit_each=6, total_limit=24
                         )
                         topic_ind_news = [
-                            n for n in topic_ind_news
+                            n
+                            for n in topic_ind_news
                             if n.get("title", "").strip() not in excluded
                         ]
-                        ind_news = merge_news_items(pool_ind_news, topic_ind_news, limit=30)
+                        ind_news = merge_news_items(
+                            pool_ind_news, topic_ind_news, limit=30
+                        )
                     if not ind_news:
-                        st.caption(f"近期未发现「{industry}」行业的快讯或主题搜索新闻。")
+                        st.caption(
+                            f"近期未发现「{industry}」行业的快讯或主题搜索新闻。"
+                        )
                     else:
                         # 关键词诊断:让用户看到行业新闻匹配用了哪些词
                         kw_chips = " · ".join(topic_kws or [industry] + list(extra_kws))
@@ -2137,12 +2706,21 @@ with tab4:
                         )
                         for n in ind_news:
                             src = n.get("source", "")
-                            src_color = {"东财": "#1976d2", "东财搜索": "#1976d2", "财联社": "#d32f2f", "新浪": "#f57c00"}.get(src, "#666")
+                            src_color = {
+                                "东财": "#1976d2",
+                                "东财搜索": "#1976d2",
+                                "财联社": "#d32f2f",
+                                "新浪": "#f57c00",
+                            }.get(src, "#666")
                             title = n.get("title", "")
                             summary = n.get("summary", "")
                             dt = n.get("datetime", "")
                             url = n.get("url", "")
-                            title_html = f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>" if url else title
+                            title_html = (
+                                f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>"
+                                if url
+                                else title
+                            )
                             st.html(f"""
                             <div style='background:white; border-left:3px solid {src_color}; padding:10px 14px;
                                         margin-bottom:8px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.04);'>
@@ -2160,8 +2738,13 @@ with tab4:
             with sub_tab2:
                 src_choice = st.radio(
                     "选择资讯源",
-                    ["📡 财联社（实时电报）", "💹 东方财富（覆盖最广）", "🔔 新浪财经（速度最快）"],
-                    horizontal=True, label_visibility="collapsed",
+                    [
+                        "📡 财联社（实时电报）",
+                        "💹 东方财富（覆盖最广）",
+                        "🔔 新浪财经（速度最快）",
+                    ],
+                    horizontal=True,
+                    label_visibility="collapsed",
                 )
                 if "财联社" in src_choice:
                     items = cached_telegraph_cls(limit=20)
@@ -2172,14 +2755,21 @@ with tab4:
                 else:
                     items = cached_telegraph_sina(limit=20)
                     src, src_color = "新浪", "#f57c00"
-    
-                st.markdown(f"<div style='color:#6b7280; font-size:0.85rem; margin-bottom:10px;'>{src} · 共 <b>{len(items)}</b> 条</div>", unsafe_allow_html=True)
+
+                st.markdown(
+                    f"<div style='color:#6b7280; font-size:0.85rem; margin-bottom:10px;'>{src} · 共 <b>{len(items)}</b> 条</div>",
+                    unsafe_allow_html=True,
+                )
                 for n in items:
                     title = n.get("title", "")
                     summary = n.get("summary", "")
                     dt = n.get("datetime", "")
                     url = n.get("url", "")
-                    title_html = f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>" if url else title
+                    title_html = (
+                        f"<a href='{url}' target='_blank' style='color:#1f2937; text-decoration:none;'>{title}</a>"
+                        if url
+                        else title
+                    )
                     st.html(f"""
                     <div style='background:white; border-left:3px solid {src_color}; padding:10px 14px; margin-bottom:8px; border-radius:6px;'>
                         <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;'>
@@ -2189,12 +2779,12 @@ with tab4:
                         <div style='color:#6b7280; font-size:0.83rem; line-height:1.5;'>{summary}</div>
                     </div>
                     """)
-    
+
             # ---------- 子 Tab 3: 研报评级 ----------
             with sub_tab3:
                 with st.spinner(f"正在抓取 {stock_name} 的研报..."):
                     reports = cached_research_report(symbol, limit=20)
-    
+
                 if not reports:
                     st.info(f"暂未抓到 {stock_name}（{symbol}）的近期研报。")
                 else:
@@ -2206,62 +2796,102 @@ with tab4:
                         if not rating or rating.lower() == "nan":
                             rating = "未评级"
                         rating_dist[rating] = rating_dist.get(rating, 0) + 1
-    
+
                     col_pie, col_table = st.columns([1, 2])
                     with col_pie:
                         st.markdown("##### 评级分布")
                         rating_colors_map = {
-                            "买入": "#ef5350", "增持": "#ff9800", "强烈推荐": "#d32f2f",
-                            "持有": "#9e9e9e", "观望": "#9e9e9e", "中性": "#9e9e9e",
-                            "减持": "#26a69a", "卖出": "#00897b",
+                            "买入": "#ef5350",
+                            "增持": "#ff9800",
+                            "强烈推荐": "#d32f2f",
+                            "持有": "#9e9e9e",
+                            "观望": "#9e9e9e",
+                            "中性": "#9e9e9e",
+                            "减持": "#26a69a",
+                            "卖出": "#00897b",
                         }
-                        pie_colors = [rating_colors_map.get(k, "#bdbdbd") for k in rating_dist.keys()]
-                        fig_rating = go.Figure(data=[go.Pie(
-                            labels=list(rating_dist.keys()),
-                            values=list(rating_dist.values()),
-                            hole=0.55,
-                            marker=dict(colors=pie_colors, line=dict(color="white", width=2)),
-                            textinfo="label+percent",
-                            textfont=dict(size=12),
-                        )])
+                        pie_colors = [
+                            rating_colors_map.get(k, "#bdbdbd")
+                            for k in rating_dist.keys()
+                        ]
+                        fig_rating = go.Figure(
+                            data=[
+                                go.Pie(
+                                    labels=list(rating_dist.keys()),
+                                    values=list(rating_dist.values()),
+                                    hole=0.55,
+                                    marker=dict(
+                                        colors=pie_colors,
+                                        line=dict(color="white", width=2),
+                                    ),
+                                    textinfo="label+percent",
+                                    textfont=dict(size=12),
+                                )
+                            ]
+                        )
                         fig_rating.update_layout(
                             height=280,
                             margin=dict(l=10, r=10, t=10, b=10),
                             showlegend=False,
                         )
                         st.plotly_chart(fig_rating, use_container_width=True)
-    
+
                     with col_table:
                         st.markdown("##### 评级一览（近期）")
                         rdf = pd.DataFrame(reports)
                         if "pdf" in rdf.columns:
-                            rdf["报告"] = rdf.apply(lambda r: f"📄 {r['title']}" if r.get("pdf") else r["title"], axis=1)
+                            rdf["报告"] = rdf.apply(
+                                lambda r: (
+                                    f"📄 {r['title']}" if r.get("pdf") else r["title"]
+                                ),
+                                axis=1,
+                            )
                         show_cols = ["date", "institution", "rating", "title"]
-                        rename = {"date": "日期", "institution": "机构", "rating": "评级", "title": "报告"}
-                        show_df = rdf[show_cols].rename(columns=rename) if all(c in rdf.columns for c in show_cols) else rdf
-    
+                        rename = {
+                            "date": "日期",
+                            "institution": "机构",
+                            "rating": "评级",
+                            "title": "报告",
+                        }
+                        show_df = (
+                            rdf[show_cols].rename(columns=rename)
+                            if all(c in rdf.columns for c in show_cols)
+                            else rdf
+                        )
+
                         def color_rating(v):
                             c = rating_colors_map.get(str(v).strip(), "#666")
                             return f"color: {c}; font-weight: 600"
-    
+
                         styled = show_df.style.map(color_rating, subset=["评级"])
-                        st.dataframe(styled, height=320, use_container_width=True, hide_index=True)
-    
+                        st.dataframe(
+                            styled,
+                            height=320,
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
                     # 研报列表（可点击 PDF）
                     st.markdown("##### 研报详情（点击查看 PDF）")
                     import math as _math
+
                     def _is_num(x):
                         try:
                             return x is not None and not _math.isnan(float(x))
                         except (TypeError, ValueError):
                             return False
+
                     for r in reports[:8]:
                         rating = r.get("rating") or ""
                         # NaN-safe: 评级字段可能是 nan 字符串
                         if rating.strip().lower() == "nan":
                             rating = "未评级"
                         rc = rating_colors_map.get(rating, "#9e9e9e")
-                        pdf_link = f"<a href='{r.get('pdf','')}' target='_blank' style='color:#667eea;'>📄 PDF</a>" if r.get("pdf") else ""
+                        pdf_link = (
+                            f"<a href='{r.get('pdf', '')}' target='_blank' style='color:#667eea;'>📄 PDF</a>"
+                            if r.get("pdf")
+                            else ""
+                        )
                         eps = r.get("eps_2026")
                         pe = r.get("pe_2026")
                         forecast = ""
@@ -2275,28 +2905,34 @@ with tab4:
                             <div style='display:flex; justify-content:space-between; align-items:center;'>
                                 <div>
                                     <span style='background:{rc}; color:white; padding:2px 10px; border-radius:4px; font-size:0.74rem; font-weight:600; margin-right:8px;'>{rating}</span>
-                                    <span style='font-weight:600; color:#1f2937;'>{r.get('institution', '')}</span>
+                                    <span style='font-weight:600; color:#1f2937;'>{r.get("institution", "")}</span>
                                     {forecast}
                                 </div>
-                                <div style='color:#9ca3af; font-size:0.78rem;'>{r.get('date', '')} · {pdf_link}</div>
+                                <div style='color:#9ca3af; font-size:0.78rem;'>{r.get("date", "")} · {pdf_link}</div>
                             </div>
-                            <div style='margin-top:6px; color:#374151; font-size:0.92rem;'>{r.get('title', '')}</div>
+                            <div style='margin-top:6px; color:#374151; font-size:0.92rem;'>{r.get("title", "")}</div>
                         </div>
                         """)
 
 with tab5:
     st.markdown("#### 💰 资金流向（主力 / 超大单 / 大单 / 中单 / 小单）")
     if not FUND_AVAILABLE:
-        st.error(f"资金流向模块加载失败: {FUND_ERROR if 'FUND_ERROR' in dir() else '未知错误'}")
+        st.error(
+            f"资金流向模块加载失败: {FUND_ERROR if 'FUND_ERROR' in dir() else '未知错误'}"
+        )
     else:
         # 顶部刷新栏
         col_r, col_i = st.columns([1, 5])
         with col_r:
-            if st.button("🔄 刷新资金数据", use_container_width=True, key="refresh_fund"):
+            if st.button(
+                "🔄 刷新资金数据", use_container_width=True, key="refresh_fund"
+            ):
                 st.cache_data.clear()
                 st.rerun()
         with col_i:
-            st.caption("数据缓存 5 分钟。资金面是 A 股最关键的同步指标，主力连续流出常领先股价。")
+            st.caption(
+                "数据缓存 5 分钟。资金面是 A 股最关键的同步指标，主力连续流出常领先股价。"
+            )
 
         sub_f1, sub_f2 = st.tabs([f"🎯 {stock_name} 个股资金", "🌐 大盘资金"])
 
@@ -2324,13 +2960,29 @@ with tab5:
                     </div>"""
 
                 with kc1:
-                    st.markdown(fund_card("近5日主力净额", s["main_total_yi"], f"流入{s['inflow_days']}天 / 流出{s['outflow_days']}天"), unsafe_allow_html=True)
+                    st.markdown(
+                        fund_card(
+                            "近5日主力净额",
+                            s["main_total_yi"],
+                            f"流入{s['inflow_days']}天 / 流出{s['outflow_days']}天",
+                        ),
+                        unsafe_allow_html=True,
+                    )
                 with kc2:
-                    st.markdown(fund_card("近5日超大单", s["super_total_yi"], "机构主力"), unsafe_allow_html=True)
+                    st.markdown(
+                        fund_card("近5日超大单", s["super_total_yi"], "机构主力"),
+                        unsafe_allow_html=True,
+                    )
                 with kc3:
-                    st.markdown(fund_card("近5日大单", s["large_total_yi"], "游资/大户"), unsafe_allow_html=True)
+                    st.markdown(
+                        fund_card("近5日大单", s["large_total_yi"], "游资/大户"),
+                        unsafe_allow_html=True,
+                    )
                 with kc4:
-                    st.markdown(fund_card("近5日小单", s["small_total_yi"], "散户"), unsafe_allow_html=True)
+                    st.markdown(
+                        fund_card("近5日小单", s["small_total_yi"], "散户"),
+                        unsafe_allow_html=True,
+                    )
 
                 st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
@@ -2347,19 +2999,31 @@ with tab5:
                 with col_chart1:
                     st.markdown("##### 主力资金 30 日流向（亿元）")
                     fig_main = go.Figure()
-                    colors = ["#ef5350" if v >= 0 else "#26a69a" for v in df_ff_show["主力_亿"]]
-                    fig_main.add_trace(go.Bar(
-                        x=df_ff_show["日期"], y=df_ff_show["主力_亿"],
-                        marker_color=colors, name="主力净流入",
-                        hovertemplate="%{x|%Y-%m-%d}<br>主力: %{y:+.2f}亿<extra></extra>",
-                    ))
+                    colors = [
+                        "#ef5350" if v >= 0 else "#26a69a"
+                        for v in df_ff_show["主力_亿"]
+                    ]
+                    fig_main.add_trace(
+                        go.Bar(
+                            x=df_ff_show["日期"],
+                            y=df_ff_show["主力_亿"],
+                            marker_color=colors,
+                            name="主力净流入",
+                            hovertemplate="%{x|%Y-%m-%d}<br>主力: %{y:+.2f}亿<extra></extra>",
+                        )
+                    )
                     # 收盘价副轴
-                    fig_main.add_trace(go.Scatter(
-                        x=df_ff_show["日期"], y=df_ff_show["收盘价"],
-                        mode="lines", line=dict(color="#667eea", width=1.8),
-                        name="收盘价", yaxis="y2",
-                        hovertemplate="%{x|%Y-%m-%d}<br>收盘: ¥%{y:.2f}<extra></extra>",
-                    ))
+                    fig_main.add_trace(
+                        go.Scatter(
+                            x=df_ff_show["日期"],
+                            y=df_ff_show["收盘价"],
+                            mode="lines",
+                            line=dict(color="#667eea", width=1.8),
+                            name="收盘价",
+                            yaxis="y2",
+                            hovertemplate="%{x|%Y-%m-%d}<br>收盘: ¥%{y:.2f}<extra></extra>",
+                        )
+                    )
                     fig_main.update_layout(
                         height=320,
                         margin=dict(l=10, r=10, t=20, b=10),
@@ -2368,29 +3032,51 @@ with tab5:
                         legend=dict(orientation="h", x=0, y=1.08),
                         hovermode="x unified",
                         xaxis=dict(showgrid=False),
-                        yaxis=dict(title="主力净流入 (亿)", gridcolor="#f3f4f6", zeroline=True, zerolinecolor="#cbd5e1", zerolinewidth=1),
-                        yaxis2=dict(title="收盘价", overlaying="y", side="right", showgrid=False),
+                        yaxis=dict(
+                            title="主力净流入 (亿)",
+                            gridcolor="#f3f4f6",
+                            zeroline=True,
+                            zerolinecolor="#cbd5e1",
+                            zerolinewidth=1,
+                        ),
+                        yaxis2=dict(
+                            title="收盘价", overlaying="y", side="right", showgrid=False
+                        ),
                     )
                     st.plotly_chart(fig_main, use_container_width=True)
 
                 with col_chart2:
                     st.markdown("##### 五类资金近5日累计")
                     cats = ["超大单", "大单", "中单", "小单"]
-                    vals = [s["super_total_yi"], s["large_total_yi"], s["medium_total_yi"], s["small_total_yi"]]
+                    vals = [
+                        s["super_total_yi"],
+                        s["large_total_yi"],
+                        s["medium_total_yi"],
+                        s["small_total_yi"],
+                    ]
                     bar_colors = ["#ef5350" if v >= 0 else "#26a69a" for v in vals]
-                    fig_cat = go.Figure(go.Bar(
-                        x=vals, y=cats, orientation="h",
-                        marker_color=bar_colors,
-                        text=[f"{v:+.2f}亿" for v in vals],
-                        textposition="auto",
-                    ))
+                    fig_cat = go.Figure(
+                        go.Bar(
+                            x=vals,
+                            y=cats,
+                            orientation="h",
+                            marker_color=bar_colors,
+                            text=[f"{v:+.2f}亿" for v in vals],
+                            textposition="auto",
+                        )
+                    )
                     fig_cat.update_layout(
                         height=320,
                         margin=dict(l=10, r=10, t=20, b=10),
                         plot_bgcolor="white",
                         paper_bgcolor="white",
                         showlegend=False,
-                        xaxis=dict(title="净流入 (亿)", gridcolor="#f3f4f6", zeroline=True, zerolinecolor="#cbd5e1"),
+                        xaxis=dict(
+                            title="净流入 (亿)",
+                            gridcolor="#f3f4f6",
+                            zeroline=True,
+                            zerolinecolor="#cbd5e1",
+                        ),
                         yaxis=dict(showgrid=False),
                     )
                     st.plotly_chart(fig_cat, use_container_width=True)
@@ -2399,18 +3085,36 @@ with tab5:
                 st.markdown("##### 资金流向明细（近 15 日）")
                 tbl = df_ff.tail(15).iloc[::-1].copy()
                 tbl["日期"] = tbl["日期"].dt.strftime("%Y-%m-%d")
-                tbl_show_cols = ["日期", "收盘价", "涨跌幅", "主力净流入-净额", "主力净流入-净占比",
-                                 "超大单净流入-净额", "大单净流入-净额", "中单净流入-净额", "小单净流入-净额"]
+                tbl_show_cols = [
+                    "日期",
+                    "收盘价",
+                    "涨跌幅",
+                    "主力净流入-净额",
+                    "主力净流入-净占比",
+                    "超大单净流入-净额",
+                    "大单净流入-净额",
+                    "中单净流入-净额",
+                    "小单净流入-净额",
+                ]
                 tbl = tbl[[c for c in tbl_show_cols if c in tbl.columns]].copy()
                 # 元转亿
-                for col in ["主力净流入-净额", "超大单净流入-净额", "大单净流入-净额", "中单净流入-净额", "小单净流入-净额"]:
+                for col in [
+                    "主力净流入-净额",
+                    "超大单净流入-净额",
+                    "大单净流入-净额",
+                    "中单净流入-净额",
+                    "小单净流入-净额",
+                ]:
                     if col in tbl.columns:
                         tbl[col] = tbl[col] / 1e8
 
                 rename_fund = {
-                    "主力净流入-净额": "主力(亿)", "主力净流入-净占比": "主力占比%",
-                    "超大单净流入-净额": "超大单(亿)", "大单净流入-净额": "大单(亿)",
-                    "中单净流入-净额": "中单(亿)", "小单净流入-净额": "小单(亿)",
+                    "主力净流入-净额": "主力(亿)",
+                    "主力净流入-净占比": "主力占比%",
+                    "超大单净流入-净额": "超大单(亿)",
+                    "大单净流入-净额": "大单(亿)",
+                    "中单净流入-净额": "中单(亿)",
+                    "小单净流入-净额": "小单(亿)",
                 }
                 tbl = tbl.rename(columns=rename_fund)
 
@@ -2423,45 +3127,69 @@ with tab5:
                     return ""
 
                 fmt_dict = {
-                    "收盘价": "{:.2f}", "涨跌幅": "{:+.2f}",
-                    "主力(亿)": "{:+.2f}", "主力占比%": "{:+.2f}",
-                    "超大单(亿)": "{:+.2f}", "大单(亿)": "{:+.2f}",
-                    "中单(亿)": "{:+.2f}", "小单(亿)": "{:+.2f}",
+                    "收盘价": "{:.2f}",
+                    "涨跌幅": "{:+.2f}",
+                    "主力(亿)": "{:+.2f}",
+                    "主力占比%": "{:+.2f}",
+                    "超大单(亿)": "{:+.2f}",
+                    "大单(亿)": "{:+.2f}",
+                    "中单(亿)": "{:+.2f}",
+                    "小单(亿)": "{:+.2f}",
                 }
                 fmt_dict = {k: v for k, v in fmt_dict.items() if k in tbl.columns}
                 num_cols = [c for c in fmt_dict.keys() if c != "收盘价"]
 
                 st.dataframe(
                     tbl.style.format(fmt_dict).map(color_pos_neg, subset=num_cols),
-                    height=460, use_container_width=True, hide_index=True,
+                    height=460,
+                    use_container_width=True,
+                    hide_index=True,
                 )
 
                 # ---------- v0.7 P0-4: 4 类资金细分 + 主力进出场判定 ----------
-                st.markdown('<hr style="margin:1.5rem 0; border:none; height:1px; '
-                            'background:linear-gradient(90deg,transparent,#e5e7eb,transparent);" />',
-                            unsafe_allow_html=True)
+                st.markdown(
+                    '<hr style="margin:1.5rem 0; border:none; height:1px; '
+                    'background:linear-gradient(90deg,transparent,#e5e7eb,transparent);" />',
+                    unsafe_allow_html=True,
+                )
                 st.markdown("##### 🪙 4 类资金细分(超大/大/中/小单)")
 
                 # 饼图(用绝对值)+ 5 日柱图
                 ext_c1, ext_c2 = st.columns([1, 1.4])
 
                 cats4 = ["超大单", "大单", "中单", "小单"]
-                vals4 = [s.get("super_total_yi", 0), s.get("large_total_yi", 0),
-                         s.get("medium_total_yi", 0), s.get("small_total_yi", 0)]
+                vals4 = [
+                    s.get("super_total_yi", 0),
+                    s.get("large_total_yi", 0),
+                    s.get("medium_total_yi", 0),
+                    s.get("small_total_yi", 0),
+                ]
                 with ext_c1:
                     abs_vals = [abs(v) for v in vals4]
                     pie_colors4 = ["#ef5350" if v >= 0 else "#26a69a" for v in vals4]
-                    fig_pie4 = go.Figure(data=[go.Pie(
-                        labels=[f"{c}({v:+.2f}亿)" for c, v in zip(cats4, vals4)],
-                        values=abs_vals if sum(abs_vals) > 0 else [1, 1, 1, 1],
-                        hole=0.5,
-                        marker=dict(colors=pie_colors4, line=dict(color="white", width=2)),
-                        textinfo="label+percent",
-                        textfont=dict(size=11),
-                    )])
+                    fig_pie4 = go.Figure(
+                        data=[
+                            go.Pie(
+                                labels=[
+                                    f"{c}({v:+.2f}亿)" for c, v in zip(cats4, vals4)
+                                ],
+                                values=abs_vals if sum(abs_vals) > 0 else [1, 1, 1, 1],
+                                hole=0.5,
+                                marker=dict(
+                                    colors=pie_colors4,
+                                    line=dict(color="white", width=2),
+                                ),
+                                textinfo="label+percent",
+                                textfont=dict(size=11),
+                            )
+                        ]
+                    )
                     fig_pie4.update_layout(
-                        title=dict(text="近 5 日 4 类资金净流向占比", x=0.5, font=dict(size=12)),
-                        height=320, margin=dict(l=10, r=10, t=40, b=10),
+                        title=dict(
+                            text="近 5 日 4 类资金净流向占比", x=0.5, font=dict(size=12)
+                        ),
+                        height=320,
+                        margin=dict(l=10, r=10, t=40, b=10),
                         showlegend=False,
                     )
                     st.plotly_chart(fig_pie4, use_container_width=True)
@@ -2476,20 +3204,58 @@ with tab5:
                     df_5d["d_label"] = df_5d["日期"].dt.strftime("%m-%d")
 
                     fig_5d = go.Figure()
-                    fig_5d.add_trace(go.Bar(name="超大单", x=df_5d["d_label"], y=df_5d["超大_亿"],
-                                             marker_color="#ef5350"))
-                    fig_5d.add_trace(go.Bar(name="大单", x=df_5d["d_label"], y=df_5d["大_亿"],
-                                             marker_color="#fb923c"))
-                    fig_5d.add_trace(go.Bar(name="中单", x=df_5d["d_label"], y=df_5d["中_亿"],
-                                             marker_color="#9ca3af"))
-                    fig_5d.add_trace(go.Bar(name="小单", x=df_5d["d_label"], y=df_5d["小_亿"],
-                                             marker_color="#26a69a"))
+                    fig_5d.add_trace(
+                        go.Bar(
+                            name="超大单",
+                            x=df_5d["d_label"],
+                            y=df_5d["超大_亿"],
+                            marker_color="#ef5350",
+                        )
+                    )
+                    fig_5d.add_trace(
+                        go.Bar(
+                            name="大单",
+                            x=df_5d["d_label"],
+                            y=df_5d["大_亿"],
+                            marker_color="#fb923c",
+                        )
+                    )
+                    fig_5d.add_trace(
+                        go.Bar(
+                            name="中单",
+                            x=df_5d["d_label"],
+                            y=df_5d["中_亿"],
+                            marker_color="#9ca3af",
+                        )
+                    )
+                    fig_5d.add_trace(
+                        go.Bar(
+                            name="小单",
+                            x=df_5d["d_label"],
+                            y=df_5d["小_亿"],
+                            marker_color="#26a69a",
+                        )
+                    )
                     fig_5d.update_layout(
-                        title=dict(text="近 5 日 4 类资金按日趋势(亿元)", x=0.5, font=dict(size=12)),
-                        height=320, margin=dict(l=10, r=10, t=40, b=20),
-                        barmode="group", plot_bgcolor="white",
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                        yaxis=dict(gridcolor="#f1f5f9", zeroline=True, zerolinecolor="#cbd5e1"),
+                        title=dict(
+                            text="近 5 日 4 类资金按日趋势(亿元)",
+                            x=0.5,
+                            font=dict(size=12),
+                        ),
+                        height=320,
+                        margin=dict(l=10, r=10, t=40, b=20),
+                        barmode="group",
+                        plot_bgcolor="white",
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1,
+                        ),
+                        yaxis=dict(
+                            gridcolor="#f1f5f9", zeroline=True, zerolinecolor="#cbd5e1"
+                        ),
                         xaxis=dict(showgrid=False),
                     )
                     st.plotly_chart(fig_5d, use_container_width=True)
@@ -2498,27 +3264,35 @@ with tab5:
                 super_5d_yi = float(s.get("super_total_yi", 0) or 0)
                 large_5d_yi = float(s.get("large_total_yi", 0) or 0)
                 small_5d_yi = float(s.get("small_total_yi", 0) or 0)
-                if super_5d_yi > 0.5:        # 5000 万 = 0.5 亿
+                if super_5d_yi > 0.5:  # 5000 万 = 0.5 亿
                     judge_label = "🟥 主力进场"
                     judge_color = "#ef5350"
                     if small_5d_yi < -0.3:
-                        judge_detail = (f"超大单近 5 日净流入 {super_5d_yi:+.2f} 亿(>5000万),"
-                                        f"散户净流出 {small_5d_yi:+.2f} 亿,典型主力底部吸筹特征。")
+                        judge_detail = (
+                            f"超大单近 5 日净流入 {super_5d_yi:+.2f} 亿(>5000万),"
+                            f"散户净流出 {small_5d_yi:+.2f} 亿,典型主力底部吸筹特征。"
+                        )
                     else:
                         judge_detail = f"超大单近 5 日净流入 {super_5d_yi:+.2f} 亿(>5000万),机构主导买入。"
                 elif super_5d_yi < -0.5:
                     judge_label = "🟩 主力出货"
                     judge_color = "#26a69a"
                     if small_5d_yi > 0.3:
-                        judge_detail = (f"超大单近 5 日净流出 {super_5d_yi:+.2f} 亿,散户净流入 "
-                                        f"{small_5d_yi:+.2f} 亿,警惕主力借利好出货 / 散户接盘。")
+                        judge_detail = (
+                            f"超大单近 5 日净流出 {super_5d_yi:+.2f} 亿,散户净流入 "
+                            f"{small_5d_yi:+.2f} 亿,警惕主力借利好出货 / 散户接盘。"
+                        )
                     else:
-                        judge_detail = f"超大单近 5 日净流出 {super_5d_yi:+.2f} 亿,主力撤退中。"
+                        judge_detail = (
+                            f"超大单近 5 日净流出 {super_5d_yi:+.2f} 亿,主力撤退中。"
+                        )
                 else:
                     judge_label = "🟨 主力观望"
                     judge_color = "#ff9800"
-                    judge_detail = (f"超大单近 5 日净额 {super_5d_yi:+.2f} 亿(±5000万 内),"
-                                    f"主力暂未明确选择方向。")
+                    judge_detail = (
+                        f"超大单近 5 日净额 {super_5d_yi:+.2f} 亿(±5000万 内),"
+                        f"主力暂未明确选择方向。"
+                    )
 
                 st.html(f"""
                 <div style='background:#f8f9fb; border-left:5px solid {judge_color};
@@ -2539,6 +3313,7 @@ with tab5:
                 s_m = summarize_fund_flow(df_mf, recent_days=5)
 
                 mc1, mc2, mc3, mc4 = st.columns(4)
+
                 def fund_card2(label, value_yi, sub=""):
                     pos = value_yi >= 0
                     color = "#ef5350" if pos else "#26a69a"
@@ -2549,14 +3324,31 @@ with tab5:
                         <div class='metric-value' style='color:{color}; font-size:1.5rem;'>{sign}{value_yi:.0f}<span style='font-size:0.85rem; color:#9ca3af; margin-left:4px;'>亿</span></div>
                         <div style='color:#9ca3af; font-size:0.78rem; margin-top:4px;'>{sub}</div>
                     </div>"""
+
                 with mc1:
-                    st.markdown(fund_card2("近5日主力净额", s_m["main_total_yi"], f"流入{s_m['inflow_days']}天 / 流出{s_m['outflow_days']}天"), unsafe_allow_html=True)
+                    st.markdown(
+                        fund_card2(
+                            "近5日主力净额",
+                            s_m["main_total_yi"],
+                            f"流入{s_m['inflow_days']}天 / 流出{s_m['outflow_days']}天",
+                        ),
+                        unsafe_allow_html=True,
+                    )
                 with mc2:
-                    st.markdown(fund_card2("近5日超大单", s_m["super_total_yi"], "机构主力"), unsafe_allow_html=True)
+                    st.markdown(
+                        fund_card2("近5日超大单", s_m["super_total_yi"], "机构主力"),
+                        unsafe_allow_html=True,
+                    )
                 with mc3:
-                    st.markdown(fund_card2("近5日大单", s_m["large_total_yi"], "游资/大户"), unsafe_allow_html=True)
+                    st.markdown(
+                        fund_card2("近5日大单", s_m["large_total_yi"], "游资/大户"),
+                        unsafe_allow_html=True,
+                    )
                 with mc4:
-                    st.markdown(fund_card2("近5日小单", s_m["small_total_yi"], "散户"), unsafe_allow_html=True)
+                    st.markdown(
+                        fund_card2("近5日小单", s_m["small_total_yi"], "散户"),
+                        unsafe_allow_html=True,
+                    )
 
                 st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
@@ -2565,18 +3357,29 @@ with tab5:
 
                 st.markdown("##### 大盘主力资金 30 日趋势 vs 上证指数")
                 fig_mf = go.Figure()
-                colors2 = ["#ef5350" if v >= 0 else "#26a69a" for v in df_mf_show["主力_亿"]]
-                fig_mf.add_trace(go.Bar(
-                    x=df_mf_show["日期"], y=df_mf_show["主力_亿"],
-                    marker_color=colors2, name="主力净流入(亿)",
-                    hovertemplate="%{x|%Y-%m-%d}<br>主力: %{y:+.0f}亿<extra></extra>",
-                ))
-                fig_mf.add_trace(go.Scatter(
-                    x=df_mf_show["日期"], y=df_mf_show["上证-收盘价"],
-                    mode="lines", line=dict(color="#667eea", width=2),
-                    name="上证指数", yaxis="y2",
-                    hovertemplate="%{x|%Y-%m-%d}<br>上证: %{y:.2f}<extra></extra>",
-                ))
+                colors2 = [
+                    "#ef5350" if v >= 0 else "#26a69a" for v in df_mf_show["主力_亿"]
+                ]
+                fig_mf.add_trace(
+                    go.Bar(
+                        x=df_mf_show["日期"],
+                        y=df_mf_show["主力_亿"],
+                        marker_color=colors2,
+                        name="主力净流入(亿)",
+                        hovertemplate="%{x|%Y-%m-%d}<br>主力: %{y:+.0f}亿<extra></extra>",
+                    )
+                )
+                fig_mf.add_trace(
+                    go.Scatter(
+                        x=df_mf_show["日期"],
+                        y=df_mf_show["上证-收盘价"],
+                        mode="lines",
+                        line=dict(color="#667eea", width=2),
+                        name="上证指数",
+                        yaxis="y2",
+                        hovertemplate="%{x|%Y-%m-%d}<br>上证: %{y:.2f}<extra></extra>",
+                    )
+                )
                 fig_mf.update_layout(
                     height=380,
                     margin=dict(l=10, r=10, t=20, b=10),
@@ -2585,8 +3388,15 @@ with tab5:
                     legend=dict(orientation="h", x=0, y=1.08),
                     hovermode="x unified",
                     xaxis=dict(showgrid=False),
-                    yaxis=dict(title="主力净流入 (亿)", gridcolor="#f3f4f6", zeroline=True, zerolinecolor="#cbd5e1"),
-                    yaxis2=dict(title="上证指数", overlaying="y", side="right", showgrid=False),
+                    yaxis=dict(
+                        title="主力净流入 (亿)",
+                        gridcolor="#f3f4f6",
+                        zeroline=True,
+                        zerolinecolor="#cbd5e1",
+                    ),
+                    yaxis2=dict(
+                        title="上证指数", overlaying="y", side="right", showgrid=False
+                    ),
                 )
                 st.plotly_chart(fig_mf, use_container_width=True)
 
@@ -2594,23 +3404,49 @@ with tab6:
     st.markdown("#### 📋 近期交易数据")
     display_df = df.tail(30).iloc[::-1].copy()
     display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
-    display_cols = ["date", "open", "high", "low", "close", "volume", "amount", "pct_chg", "turnover"]
+    display_cols = [
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount",
+        "pct_chg",
+        "turnover",
+    ]
     rename_map = {
-        "date": "日期", "open": "开盘", "high": "最高", "low": "最低", "close": "收盘",
-        "volume": "成交量", "amount": "成交额", "pct_chg": "涨跌幅%", "turnover": "换手率%"
+        "date": "日期",
+        "open": "开盘",
+        "high": "最高",
+        "low": "最低",
+        "close": "收盘",
+        "volume": "成交量",
+        "amount": "成交额",
+        "pct_chg": "涨跌幅%",
+        "turnover": "换手率%",
     }
     display_df = display_df[display_cols].rename(columns=rename_map)
 
     st.dataframe(
-        display_df.style.format({
-            "开盘": "{:.2f}", "最高": "{:.2f}", "最低": "{:.2f}", "收盘": "{:.2f}",
-            "成交量": "{:,.0f}", "成交额": "{:,.0f}",
-            "涨跌幅%": "{:+.2f}", "换手率%": "{:.2f}",
-        }).map(
-            lambda v: "color: #ef5350" if isinstance(v, (int, float)) and v > 0 else (
-                "color: #26a69a" if isinstance(v, (int, float)) and v < 0 else ""
+        display_df.style.format(
+            {
+                "开盘": "{:.2f}",
+                "最高": "{:.2f}",
+                "最低": "{:.2f}",
+                "收盘": "{:.2f}",
+                "成交量": "{:,.0f}",
+                "成交额": "{:,.0f}",
+                "涨跌幅%": "{:+.2f}",
+                "换手率%": "{:.2f}",
+            }
+        ).map(
+            lambda v: (
+                "color: #ef5350"
+                if isinstance(v, (int, float)) and v > 0
+                else ("color: #26a69a" if isinstance(v, (int, float)) and v < 0 else "")
             ),
-            subset=["涨跌幅%"]
+            subset=["涨跌幅%"],
         ),
         height=500,
         use_container_width=True,
@@ -2635,7 +3471,9 @@ with tab7:
                         </div>
                         """)
     else:
-        st.warning(f"基本面组件未加载: {FUNDAMENTALS_PANEL_ERROR if 'FUNDAMENTALS_PANEL_ERROR' in dir() else '未知错误'}")
+        st.warning(
+            f"基本面组件未加载: {FUNDAMENTALS_PANEL_ERROR if 'FUNDAMENTALS_PANEL_ERROR' in dir() else '未知错误'}"
+        )
         st.markdown("#### 💡 基本面信息")
         if info:
             info_items = list(info.items())
@@ -2654,15 +3492,25 @@ with tab7:
 # ============== Tab 7: 研究存档 ==============
 with tab8:
     st.markdown("#### 📚 研究存档")
-    st.caption("每次 LLM 深度分析的报告会自动归档到此处，支持检索、后验标签和模型组合统计。")
+    st.caption(
+        "每次 LLM 深度分析的报告会自动归档到此处，支持检索、后验标签和模型组合统计。"
+    )
 
     if TAGGER_AVAILABLE:
         with st.expander("🏷️ 历史归档自动标签", expanded=False):
-            st.caption("为未打标签的报告计算 3/5/10 日后验涨跌幅，用于后续验证模型信号。")
-            if st.button("刷新行情标签", use_container_width=True, help="为未打标签的报告计算 3/5/10 日涨跌幅"):
+            st.caption(
+                "为未打标签的报告计算 3/5/10 日后验涨跌幅，用于后续验证模型信号。"
+            )
+            if st.button(
+                "刷新行情标签",
+                use_container_width=True,
+                help="为未打标签的报告计算 3/5/10 日涨跌幅",
+            ):
                 with st.spinner("正在计算行情标签..."):
                     result = tag_all_reports()
-                    st.success(f"完成：新标签 {result['tagged']} 条，跳过 {result['skipped']} 条，失败 {result['errors']} 条")
+                    st.success(
+                        f"完成：新标签 {result['tagged']} 条，跳过 {result['skipped']} 条，失败 {result['errors']} 条"
+                    )
                     st.rerun()
     else:
         st.caption("历史归档自动标签模块未加载。")
@@ -2674,36 +3522,51 @@ with tab8:
 
         # 顶部统计卡片
         sc1, sc2, sc3, sc4, sc5 = st.columns(5)
-        sc1.markdown(f"""
+        sc1.markdown(
+            f"""
         <div class="metric-card">
             <div class="metric-label">报告总数</div>
-            <div class="metric-value">{stats['total']}</div>
+            <div class="metric-value">{stats["total"]}</div>
         </div>
-        """, unsafe_allow_html=True)
-        sc2.markdown(f"""
+        """,
+            unsafe_allow_html=True,
+        )
+        sc2.markdown(
+            f"""
         <div class="metric-card">
             <div class="metric-label">覆盖股票</div>
-            <div class="metric-value">{stats['stocks']}</div>
+            <div class="metric-value">{stats["stocks"]}</div>
         </div>
-        """, unsafe_allow_html=True)
-        sc3.markdown(f"""
+        """,
+            unsafe_allow_html=True,
+        )
+        sc3.markdown(
+            f"""
         <div class="metric-card">
             <div class="metric-label">建议买入</div>
-            <div class="metric-value" style='color:#ef5350;'>{stats['buy']}</div>
+            <div class="metric-value" style='color:#ef5350;'>{stats["buy"]}</div>
         </div>
-        """, unsafe_allow_html=True)
-        sc4.markdown(f"""
+        """,
+            unsafe_allow_html=True,
+        )
+        sc4.markdown(
+            f"""
         <div class="metric-card">
             <div class="metric-label">建议卖出</div>
-            <div class="metric-value" style='color:#26a69a;'>{stats['sell']}</div>
+            <div class="metric-value" style='color:#26a69a;'>{stats["sell"]}</div>
         </div>
-        """, unsafe_allow_html=True)
-        sc5.markdown(f"""
+        """,
+            unsafe_allow_html=True,
+        )
+        sc5.markdown(
+            f"""
         <div class="metric-card">
             <div class="metric-label">建议观望</div>
-            <div class="metric-value" style='color:#ff9800;'>{stats['hold']}</div>
+            <div class="metric-value" style='color:#ff9800;'>{stats["hold"]}</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         # 多模型异构架构 v0.5：模型组合健康度小卡（仅当索引存在 combo 数据时显示）
         if stats.get("distinct_combos", 0) > 0 or stats.get("fallback_total", 0) > 0:
@@ -2712,7 +3575,7 @@ with tab8:
                 st.html(f"""
                 <div class="metric-card">
                     <div class="metric-label">出现过的模型组合</div>
-                    <div class="metric-value" style='color:#6366f1;'>{stats.get('distinct_combos', 0)}</div>
+                    <div class="metric-value" style='color:#6366f1;'>{stats.get("distinct_combos", 0)}</div>
                 </div>
                 """)
             with mc2:
@@ -2734,42 +3597,66 @@ with tab8:
 
             with viz_col1:
                 # 决策分布 donut
-                pie_fig = go.Figure(data=[go.Pie(
-                    labels=["建议买入", "建议卖出", "建议观望"],
-                    values=[stats["buy"], stats["sell"], stats["hold"]],
-                    hole=0.55,
-                    marker=dict(colors=["#ef5350", "#26a69a", "#ff9800"]),
-                    textinfo="label+percent",
-                    textposition="outside",
-                )])
+                pie_fig = go.Figure(
+                    data=[
+                        go.Pie(
+                            labels=["建议买入", "建议卖出", "建议观望"],
+                            values=[stats["buy"], stats["sell"], stats["hold"]],
+                            hole=0.55,
+                            marker=dict(colors=["#ef5350", "#26a69a", "#ff9800"]),
+                            textinfo="label+percent",
+                            textposition="outside",
+                        )
+                    ]
+                )
                 pie_fig.update_layout(
                     title=dict(text="决策分布", x=0.5, font=dict(size=14)),
                     height=280,
                     margin=dict(l=20, r=20, t=50, b=20),
                     showlegend=False,
-                    annotations=[dict(text=f"<b>{stats['total']}</b><br>报告", x=0.5, y=0.5, font=dict(size=18), showarrow=False)],
+                    annotations=[
+                        dict(
+                            text=f"<b>{stats['total']}</b><br>报告",
+                            x=0.5,
+                            y=0.5,
+                            font=dict(size=18),
+                            showarrow=False,
+                        )
+                    ],
                 )
                 st.plotly_chart(pie_fig, use_container_width=True)
 
             with viz_col2:
                 # 近 14 日活跃度
                 from collections import Counter
+
                 date_counter = Counter()
                 for r in all_reports:
                     date_counter[r.get("date", "")] += 1
 
                 today = datetime.now().date()
-                dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(13, -1, -1)]
+                dates = [
+                    (today - timedelta(days=i)).strftime("%Y-%m-%d")
+                    for i in range(13, -1, -1)
+                ]
                 counts = [date_counter.get(d, 0) for d in dates]
-                date_labels = [(today - timedelta(days=i)).strftime("%m-%d") for i in range(13, -1, -1)]
+                date_labels = [
+                    (today - timedelta(days=i)).strftime("%m-%d")
+                    for i in range(13, -1, -1)
+                ]
 
                 act_fig = go.Figure()
-                act_fig.add_trace(go.Bar(
-                    x=date_labels, y=counts,
-                    marker=dict(color=["#3b82f6" if c > 0 else "#e5e7eb" for c in counts]),
-                    text=[c if c > 0 else "" for c in counts],
-                    textposition="outside",
-                ))
+                act_fig.add_trace(
+                    go.Bar(
+                        x=date_labels,
+                        y=counts,
+                        marker=dict(
+                            color=["#3b82f6" if c > 0 else "#e5e7eb" for c in counts]
+                        ),
+                        text=[c if c > 0 else "" for c in counts],
+                        textposition="outside",
+                    )
+                )
                 act_fig.update_layout(
                     title=dict(text="近 14 日研究活跃度", x=0.5, font=dict(size=14)),
                     height=280,
@@ -2787,14 +3674,16 @@ with tab8:
             top_stocks = stock_counter.most_common(10)
             if len(top_stocks) > 1:
                 with st.expander("📊 高频研究股票 TOP", expanded=False):
-                    rank_fig = go.Figure(go.Bar(
-                        x=[c for _, c in top_stocks][::-1],
-                        y=[s for s, _ in top_stocks][::-1],
-                        orientation="h",
-                        marker=dict(color="#6366f1"),
-                        text=[c for _, c in top_stocks][::-1],
-                        textposition="outside",
-                    ))
+                    rank_fig = go.Figure(
+                        go.Bar(
+                            x=[c for _, c in top_stocks][::-1],
+                            y=[s for s, _ in top_stocks][::-1],
+                            orientation="h",
+                            marker=dict(color="#6366f1"),
+                            text=[c for _, c in top_stocks][::-1],
+                            textposition="outside",
+                        )
+                    )
                     rank_fig.update_layout(
                         height=max(220, 32 * len(top_stocks)),
                         margin=dict(l=20, r=40, t=20, b=20),
@@ -2808,14 +3697,25 @@ with tab8:
         combo_stats = get_combo_stats()
         if combo_stats:
             with st.expander("🧬 模型组合信号统计 / 待收益回测", expanded=False):
-                st.caption("当前展示的是不同模型组合的历史信号分布和平均置信度，不伪造真实胜率；收益命中率需要结合自动标签后的 3/5/10 日表现继续计算。")
+                st.caption(
+                    "当前展示的是不同模型组合的历史信号分布和平均置信度，不伪造真实胜率；收益命中率需要结合自动标签后的 3/5/10 日表现继续计算。"
+                )
 
                 combo_df = pd.DataFrame(combo_stats)
                 combo_df["combo_display"] = combo_df["combo"].apply(
                     lambda x: x[:50] + "..." if len(x) > 50 else x
                 )
                 st.dataframe(
-                    combo_df[["combo_display", "count", "buy", "sell", "hold", "avg_confidence"]],
+                    combo_df[
+                        [
+                            "combo_display",
+                            "count",
+                            "buy",
+                            "sell",
+                            "hold",
+                            "avg_confidence",
+                        ]
+                    ],
                     column_config={
                         "combo_display": st.column_config.TextColumn(
                             "组合签名", help="完整签名可在 tooltip 中查看"
@@ -2838,13 +3738,15 @@ with tab8:
                         c["combo"][:40] + "..." if len(c["combo"]) > 40 else c["combo"]
                         for c in combo_stats
                     ]
-                    bar_fig = go.Figure(go.Bar(
-                        x=bar_labels,
-                        y=[c["count"] for c in combo_stats],
-                        marker=dict(color="#6366f1"),
-                        text=[c["count"] for c in combo_stats],
-                        textposition="outside",
-                    ))
+                    bar_fig = go.Figure(
+                        go.Bar(
+                            x=bar_labels,
+                            y=[c["count"] for c in combo_stats],
+                            marker=dict(color="#6366f1"),
+                            text=[c["count"] for c in combo_stats],
+                            textposition="outside",
+                        )
+                    )
                     bar_fig.update_layout(
                         title=dict(text="各组合出现次数", x=0.5, font=dict(size=13)),
                         height=300,
@@ -2859,25 +3761,34 @@ with tab8:
                     total_buy = sum(c["buy"] for c in combo_stats)
                     total_sell = sum(c["sell"] for c in combo_stats)
                     total_hold = sum(c["hold"] for c in combo_stats)
-                    sig_fig = go.Figure(data=[go.Pie(
-                        labels=["买入", "卖出", "观望"],
-                        values=[total_buy, total_sell, total_hold],
-                        hole=0.5,
-                        marker=dict(colors=["#ef5350", "#26a69a", "#ff9800"]),
-                        textinfo="label+percent",
-                        textposition="outside",
-                    )])
+                    sig_fig = go.Figure(
+                        data=[
+                            go.Pie(
+                                labels=["买入", "卖出", "观望"],
+                                values=[total_buy, total_sell, total_hold],
+                                hole=0.5,
+                                marker=dict(colors=["#ef5350", "#26a69a", "#ff9800"]),
+                                textinfo="label+percent",
+                                textposition="outside",
+                            )
+                        ]
+                    )
                     sig_fig.update_layout(
-                        title=dict(text="信号分布（全组合汇总）", x=0.5, font=dict(size=13)),
+                        title=dict(
+                            text="信号分布（全组合汇总）", x=0.5, font=dict(size=13)
+                        ),
                         height=300,
                         margin=dict(l=20, r=20, t=40, b=20),
                         showlegend=False,
-                        annotations=[dict(
-                            text=f"<b>{total_buy + total_sell + total_hold}</b><br>信号",
-                            x=0.5, y=0.5,
-                            font=dict(size=16),
-                            showarrow=False,
-                        )],
+                        annotations=[
+                            dict(
+                                text=f"<b>{total_buy + total_sell + total_hold}</b><br>信号",
+                                x=0.5,
+                                y=0.5,
+                                font=dict(size=16),
+                                showarrow=False,
+                            )
+                        ],
                     )
                     st.plotly_chart(sig_fig, use_container_width=True)
 
@@ -2902,13 +3813,21 @@ with tab8:
 
                 perf_df = pd.DataFrame(combo_perf)
                 perf_df["combo_display"] = perf_df["combo"].apply(
-                    lambda x: x[:50] + "..." if isinstance(x, str) and len(x) > 50 else x
+                    lambda x: (
+                        x[:50] + "..." if isinstance(x, str) and len(x) > 50 else x
+                    )
                 )
                 show_cols = [
-                    "combo_display", "count", "samples_with_label",
-                    "avg_5d_return", "avg_10d_return", "avg_20d_return",
+                    "combo_display",
+                    "count",
+                    "samples_with_label",
+                    "avg_5d_return",
+                    "avg_10d_return",
+                    "avg_20d_return",
                     "avg_drawdown_10d",
-                    "hit_rate_5d", "buy_hit_rate_5d", "hold_hit_rate_5d",
+                    "hit_rate_5d",
+                    "buy_hit_rate_5d",
+                    "hold_hit_rate_5d",
                 ]
                 show_cols = [c for c in show_cols if c in perf_df.columns]
                 st.dataframe(
@@ -2916,14 +3835,30 @@ with tab8:
                     column_config={
                         "combo_display": st.column_config.TextColumn("组合签名"),
                         "count": st.column_config.NumberColumn("总样本"),
-                        "samples_with_label": st.column_config.NumberColumn("已回填(5日)"),
-                        "avg_5d_return":  st.column_config.NumberColumn("5日均收益", format="%.2f%%"),
-                        "avg_10d_return": st.column_config.NumberColumn("10日均收益", format="%.2f%%"),
-                        "avg_20d_return": st.column_config.NumberColumn("20日均收益", format="%.2f%%"),
-                        "avg_drawdown_10d": st.column_config.NumberColumn("10日均回撤", format="%.2f%%"),
-                        "hit_rate_5d":     st.column_config.NumberColumn("5日命中率", format="%.0f%%"),
-                        "buy_hit_rate_5d": st.column_config.NumberColumn("买入5日命中率", format="%.0f%%"),
-                        "hold_hit_rate_5d": st.column_config.NumberColumn("观望5日命中率", format="%.0f%%"),
+                        "samples_with_label": st.column_config.NumberColumn(
+                            "已回填(5日)"
+                        ),
+                        "avg_5d_return": st.column_config.NumberColumn(
+                            "5日均收益", format="%.2f%%"
+                        ),
+                        "avg_10d_return": st.column_config.NumberColumn(
+                            "10日均收益", format="%.2f%%"
+                        ),
+                        "avg_20d_return": st.column_config.NumberColumn(
+                            "20日均收益", format="%.2f%%"
+                        ),
+                        "avg_drawdown_10d": st.column_config.NumberColumn(
+                            "10日均回撤", format="%.2f%%"
+                        ),
+                        "hit_rate_5d": st.column_config.NumberColumn(
+                            "5日命中率", format="%.0f%%"
+                        ),
+                        "buy_hit_rate_5d": st.column_config.NumberColumn(
+                            "买入5日命中率", format="%.0f%%"
+                        ),
+                        "hold_hit_rate_5d": st.column_config.NumberColumn(
+                            "观望5日命中率", format="%.0f%%"
+                        ),
                     },
                     hide_index=True,
                     use_container_width=True,
@@ -2935,20 +3870,40 @@ with tab8:
                         "「🏷️ 历史归档自动标签」中点击「刷新行情标签」重新计算。"
                     )
                 else:
-                    top_perf = [c for c in combo_perf if c.get("avg_5d_return") is not None][:5]
+                    top_perf = [
+                        c for c in combo_perf if c.get("avg_5d_return") is not None
+                    ][:5]
                     if top_perf:
-                        ret_fig = go.Figure(go.Bar(
-                            x=[c["avg_5d_return"] for c in top_perf][::-1],
-                            y=[(c["combo"][:40] + "...") if len(c["combo"]) > 40 else c["combo"]
-                               for c in top_perf][::-1],
-                            orientation="h",
-                            marker=dict(color=["#ef5350" if c["avg_5d_return"] > 0 else "#26a69a"
-                                               for c in top_perf][::-1]),
-                            text=[f"{c['avg_5d_return']:+.2f}%" for c in top_perf][::-1],
-                            textposition="outside",
-                        ))
+                        ret_fig = go.Figure(
+                            go.Bar(
+                                x=[c["avg_5d_return"] for c in top_perf][::-1],
+                                y=[
+                                    (c["combo"][:40] + "...")
+                                    if len(c["combo"]) > 40
+                                    else c["combo"]
+                                    for c in top_perf
+                                ][::-1],
+                                orientation="h",
+                                marker=dict(
+                                    color=[
+                                        "#ef5350"
+                                        if c["avg_5d_return"] > 0
+                                        else "#26a69a"
+                                        for c in top_perf
+                                    ][::-1]
+                                ),
+                                text=[f"{c['avg_5d_return']:+.2f}%" for c in top_perf][
+                                    ::-1
+                                ],
+                                textposition="outside",
+                            )
+                        )
                         ret_fig.update_layout(
-                            title=dict(text="Top 5 组合 · 5 日平均收益", x=0.5, font=dict(size=13)),
+                            title=dict(
+                                text="Top 5 组合 · 5 日平均收益",
+                                x=0.5,
+                                font=dict(size=13),
+                            ),
                             height=max(220, 36 * len(top_perf) + 80),
                             margin=dict(l=20, r=80, t=40, b=20),
                             xaxis=dict(showgrid=True, gridcolor="#f1f5f9", title="%"),
@@ -2962,17 +3917,31 @@ with tab8:
         # 检索栏(v0.7 增加类型过滤)
         fc0, fc1, fc2, fc3, fc4 = st.columns([1.5, 2, 2, 2, 2])
         with fc0:
-            f_type = st.selectbox("类型", ["全部", "Agent 报告", "圆桌纪要"], key="arc_type")
+            f_type = st.selectbox(
+                "类型", ["全部", "Agent 报告", "圆桌纪要"], key="arc_type"
+            )
         with fc1:
-            f_stock = st.text_input("🔍 股票名称/代码", placeholder="如：贵州茅台 或 600519", key="arc_stock")
+            f_stock = st.text_input(
+                "🔍 股票名称/代码",
+                placeholder="如：贵州茅台 或 600519",
+                key="arc_stock",
+            )
         with fc2:
-            f_decision = st.selectbox("决策类型", ["全部", "建议买入", "建议卖出", "建议观望"], key="arc_decision")
+            f_decision = st.selectbox(
+                "决策类型",
+                ["全部", "建议买入", "建议卖出", "建议观望"],
+                key="arc_decision",
+            )
         with fc3:
             f_date_from = st.date_input("起始日期", value=None, key="arc_from")
         with fc4:
             f_date_to = st.date_input("结束日期", value=None, key="arc_to")
 
-        type_filter_map = {"全部": None, "Agent 报告": "agent", "圆桌纪要": "roundtable"}
+        type_filter_map = {
+            "全部": None,
+            "Agent 报告": "agent",
+            "圆桌纪要": "roundtable",
+        }
         reports = safe_list_reports(
             stock_filter=f_stock or None,
             decision_filter=None if f_decision == "全部" else f_decision,
@@ -2985,7 +3954,9 @@ with tab8:
         st.markdown(f"**命中 {len(reports)} 条报告**")
 
         if not reports:
-            st.caption("暂无符合条件的存档报告。请先在「Agent 协作分析」Tab 启动深度分析，报告会自动归档。")
+            st.caption(
+                "暂无符合条件的存档报告。请先在「Agent 协作分析」Tab 启动深度分析，报告会自动归档。"
+            )
         else:
             # 列表 + 详情切换
             view_key = "arc_view_path"
@@ -3017,7 +3988,13 @@ with tab8:
                     ]:
                         dval = r.get(dkey)
                         if dval is not None:
-                            dcolor = "#ef5350" if dval > 0 else "#26a69a" if dval < 0 else "#6b7280"
+                            dcolor = (
+                                "#ef5350"
+                                if dval > 0
+                                else "#26a69a"
+                                if dval < 0
+                                else "#6b7280"
+                            )
                             demoji = "🔴" if dval > 0 else "🟢" if dval < 0 else "⚪"
                             ret_html += f"<span style='color:{dcolor}; margin-left:10px;'>{demoji} {dlabel} {dval:+.2f}%</span>"
 
@@ -3037,12 +4014,18 @@ with tab8:
                         hit_text = "5日命中" if hit_5 == 1 else "5日未中"
                         ret_html += (
                             f"<span style='color:{hit_color}; margin-left:10px;'>✓ {hit_text}</span>"
-                            if hit_5 == 1 else
-                            f"<span style='color:{hit_color}; margin-left:10px;'>✗ {hit_text}</span>"
+                            if hit_5 == 1
+                            else f"<span style='color:{hit_color}; margin-left:10px;'>✗ {hit_text}</span>"
                         )
 
                     day_chg = r.get("day_change", 0) or 0
-                    chg_color = "#ef5350" if day_chg > 0 else "#26a69a" if day_chg < 0 else "#6b7280"
+                    chg_color = (
+                        "#ef5350"
+                        if day_chg > 0
+                        else "#26a69a"
+                        if day_chg < 0
+                        else "#6b7280"
+                    )
 
                     # v0.9: 审稿质量徽标(归档元数据里有 critic 摘要才显示)
                     critic_meta = r.get("critic") or {}
@@ -3070,7 +4053,11 @@ with tab8:
                             )
                         level = critic_meta.get("divergence_level")
                         if level and level != "无":
-                            lc = {"高": "#dc2626", "中": "#f59e0b", "低": "#16a34a"}.get(level, "#9ca3af")
+                            lc = {
+                                "高": "#dc2626",
+                                "中": "#f59e0b",
+                                "低": "#16a34a",
+                            }.get(level, "#9ca3af")
                             critic_html += (
                                 f"<span style='margin-left:8px; color:{lc};' "
                                 f"title='审稿人判定的 Agent 之间分歧度'>分歧 {level}</span>"
@@ -3083,34 +4070,43 @@ with tab8:
                                     border-left:4px solid {decision_color};'>
                             <div style='display:flex; justify-content:space-between; align-items:center;'>
                                 <div>
-                                    <strong style='font-size:1.05rem;'>{r['stock_name']}</strong>
-                                    <span style='color:#9ca3af; margin-left:8px; font-size:0.85rem;'>{r['symbol']}</span>
-                                    <span style='color:{decision_color}; margin-left:14px; font-weight:600;'>{r['decision']}</span>
-                                    <span style='color:#6b7280; margin-left:10px; font-size:0.85rem;'>置信度 {r['avg_confidence']}%</span>
+                                    <strong style='font-size:1.05rem;'>{r["stock_name"]}</strong>
+                                    <span style='color:#9ca3af; margin-left:8px; font-size:0.85rem;'>{r["symbol"]}</span>
+                                    <span style='color:{decision_color}; margin-left:14px; font-weight:600;'>{r["decision"]}</span>
+                                    <span style='color:#6b7280; margin-left:10px; font-size:0.85rem;'>置信度 {r["avg_confidence"]}%</span>
                                 </div>
                                 <div style='color:#9ca3af; font-size:0.82rem;'>
-                                    {r['date']} {r['time']}
+                                    {r["date"]} {r["time"]}
                                 </div>
                             </div>
                             <div style='margin-top:8px; color:#4b5563; font-size:0.88rem;'>
-                                收盘 ¥{r.get('close', 0) or 0:.2f}
+                                收盘 ¥{r.get("close", 0) or 0:.2f}
                                 <span style='color:{chg_color}; margin-left:6px;'>({day_chg:+.2f}%)</span>
-                                <span style='color:#9ca3af; margin-left:12px;'>买{r['buy']}/卖{r['sell']}/观{r['hold']}</span>
+                                <span style='color:#9ca3af; margin-left:12px;'>买{r["buy"]}/卖{r["sell"]}/观{r["hold"]}</span>
                                 {flow_html}
                                 {ret_html}
                                 {critic_html}
                             </div>
                             <div style='margin-top:6px; color:#6b7280; font-size:0.82rem; font-style:italic;'>
-                                💬 {r.get('chairman_excerpt', '')}…
+                                💬 {r.get("chairman_excerpt", "")}…
                             </div>
                         </div>
                         """)
                     with col_btn:
-                        st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
-                        if st.button("查看", key=f"view_{r['path']}", use_container_width=True):
+                        st.markdown(
+                            "<div style='height:14px;'></div>", unsafe_allow_html=True
+                        )
+                        if st.button(
+                            "查看", key=f"view_{r['path']}", use_container_width=True
+                        ):
                             st.session_state[view_key] = r["path"]
                             st.rerun()
-                        if st.button("🗑", key=f"del_{r['path']}", use_container_width=True, help="删除此报告"):
+                        if st.button(
+                            "🗑",
+                            key=f"del_{r['path']}",
+                            use_container_width=True,
+                            help="删除此报告",
+                        ):
                             delete_report(r["path"])
                             st.rerun()
             else:
@@ -3136,7 +4132,9 @@ with tab8:
 # ============== Tab 9: 专家团圆桌（v0.7 新增）==============
 with tab9:
     if not EXPERT_PANEL_AVAILABLE:
-        st.error(f"专家团圆桌组件未加载: {EXPERT_PANEL_ERROR if 'EXPERT_PANEL_ERROR' in dir() else '未知错误'}")
+        st.error(
+            f"专家团圆桌组件未加载: {EXPERT_PANEL_ERROR if 'EXPERT_PANEL_ERROR' in dir() else '未知错误'}"
+        )
     else:
         try:
             # 复用 llm_agents.build_market_brief() 拼接简报
@@ -3159,7 +4157,9 @@ with tab9:
                     df_fund_t8 = cached_individual_fund_flow(symbol, days=30)
                     if df_fund_t8 is not None and len(df_fund_t8) > 0:
                         s_t8 = summarize_fund_flow(df_fund_t8, recent_days=5)
-                        stock_fund_brief_t8 = build_fund_flow_brief_for_llm(s_t8, kind=stock_name)
+                        stock_fund_brief_t8 = build_fund_flow_brief_for_llm(
+                            s_t8, kind=stock_name
+                        )
                 except Exception:
                     pass
 
@@ -3181,7 +4181,9 @@ with tab9:
                     # v0.10.2: 与 Tab 2 一致,先取个股专属新闻,再补关键词命中
                     stock_specific_t8 = cached_stock_news_em(symbol, limit=10) or []
                     keyword_matched_t8 = get_stock_related_news(
-                        stock_name, all_t8, limit=8,
+                        stock_name,
+                        all_t8,
+                        limit=8,
                         symbol=symbol,
                         products=main_biz_t8.get("products"),
                     )
@@ -3189,20 +4191,29 @@ with tab9:
                     related_t8 = []
                     for src_list in (stock_specific_t8, keyword_matched_t8):
                         for n in src_list:
-                            key = (n.get("title", "").strip(), n.get("datetime", "")[:10])
+                            key = (
+                                n.get("title", "").strip(),
+                                n.get("datetime", "")[:10],
+                            )
                             if not key[0] or key in seen_t9:
                                 continue
                             seen_t9.add(key)
                             related_t8.append(n)
-                    related_brief_t8 = build_news_brief_for_llm(related_t8[:10], max_items=10)
+                    related_brief_t8 = build_news_brief_for_llm(
+                        related_t8[:10], max_items=10
+                    )
                     if industry_t8:
-                        excluded_t8 = {n.get("title", "").strip() for n in (related_t8 or [])}
+                        excluded_t8 = {
+                            n.get("title", "").strip() for n in (related_t8 or [])
+                        }
                         extra_t8 = extract_business_terms(
                             (main_biz_t8 or {}).get("scope") or "", max_terms=8
                         )
                         extra_t8 += get_concept_keywords(concepts_t8, limit=10)
                         pool_ind_t8 = get_industry_news(
-                            industry_t8, all_t8, limit=6,
+                            industry_t8,
+                            all_t8,
+                            limit=6,
                             exclude_titles=excluded_t8,
                             extra_keywords=extra_t8,
                         )
@@ -3212,53 +4223,81 @@ with tab9:
                             concepts=concepts_t8,
                             limit=8,
                         )
-                        topic_ind_t8 = cached_topic_news_em(tuple(topic_kws_t8), limit_each=6, total_limit=12)
+                        topic_ind_t8 = cached_topic_news_em(
+                            tuple(topic_kws_t8), limit_each=6, total_limit=12
+                        )
                         topic_ind_t8 = [
-                            n for n in topic_ind_t8
+                            n
+                            for n in topic_ind_t8
                             if n.get("title", "").strip() not in excluded_t8
                         ]
                         ind_t8 = merge_news_items(pool_ind_t8, topic_ind_t8, limit=8)
-                        industry_news_brief_t8 = build_news_brief_for_llm(ind_t8, max_items=6)
-                    concept_excluded_t8 = {n.get("title", "").strip() for n in (related_t8 or [])}
+                        industry_news_brief_t8 = build_news_brief_for_llm(
+                            ind_t8, max_items=6
+                        )
+                    concept_excluded_t8 = {
+                        n.get("title", "").strip() for n in (related_t8 or [])
+                    }
                     pool_concept_t8 = get_concept_news(
                         concepts_t8, all_t8, limit=6, exclude_titles=concept_excluded_t8
                     )
                     concept_kws_t8 = get_concept_keywords(concepts_t8, limit=8)
-                    topic_concept_t8 = cached_topic_news_em(tuple(concept_kws_t8), limit_each=5, total_limit=10)
+                    topic_concept_t8 = cached_topic_news_em(
+                        tuple(concept_kws_t8), limit_each=5, total_limit=10
+                    )
                     topic_concept_t8 = [
-                        n for n in topic_concept_t8
+                        n
+                        for n in topic_concept_t8
                         if n.get("title", "").strip() not in concept_excluded_t8
                     ]
-                    concept_news_t8 = merge_news_items(pool_concept_t8, topic_concept_t8, limit=8)
+                    concept_news_t8 = merge_news_items(
+                        pool_concept_t8, topic_concept_t8, limit=8
+                    )
                     concepts_brief_t8 = build_concepts_brief_for_llm(
                         concepts_t8, concept_news_t8, max_concepts=10, max_news=8
                     )
                     cninfo_t8 = cached_announcements_cninfo(symbol, days=30) or []
                     em_today_t8 = cached_announcements_em_today() or []
-                    em_for_stock_t8 = [a for a in em_today_t8 if a.get("code") == symbol]
+                    em_for_stock_t8 = [
+                        a for a in em_today_t8 if a.get("code") == symbol
+                    ]
                     ann_t8 = merge_announcements(cninfo_t8, em_for_stock_t8)
-                    announcements_brief_t8 = build_announcements_brief_for_llm(ann_t8, max_items=8)
+                    announcements_brief_t8 = build_announcements_brief_for_llm(
+                        ann_t8, max_items=8
+                    )
                     rep_t8 = cached_research_report(symbol, limit=10) or []
-                    research_brief_t8 = build_research_brief_for_llm(rep_t8, max_items=6)
+                    research_brief_t8 = build_research_brief_for_llm(
+                        rep_t8, max_items=6
+                    )
                 except Exception:
                     pass
 
             stock_payload_t8 = {
-                "name": stock_name, "symbol": symbol,
-                "close": float(last["close"]), "day_change": float(day_chg),
+                "name": stock_name,
+                "symbol": symbol,
+                "close": float(last["close"]),
+                "day_change": float(day_chg),
                 "period_change": float(period_change),
-                "period_high": float(period_high), "period_low": float(period_low),
+                "period_high": float(period_high),
+                "period_low": float(period_low),
                 "days": days,
-                "ma5": f"{ma5_v:.2f}", "ma20": f"{ma20_v:.2f}", "ma60": f"{ma60_v:.2f}",
-                "macd": f"{macd_v:.3f}", "dif": f"{dif_v:.3f}", "dea": f"{dea_v:.3f}",
+                "ma5": f"{ma5_v:.2f}",
+                "ma20": f"{ma20_v:.2f}",
+                "ma60": f"{ma60_v:.2f}",
+                "macd": f"{macd_v:.3f}",
+                "dif": f"{dif_v:.3f}",
+                "dea": f"{dea_v:.3f}",
                 "rsi": f"{rsi_v:.2f}",
                 "volume": float(last["volume"]),
                 "total_amount": float(total_amount),
                 "turnover": float(last.get("turnover", 0)),
                 "vol_ratio": float(vol_ratio_v),
                 "volatility": float(volatility_v),
-                "fundamentals": "; ".join(f"{k}: {v}" for k, v in (info or {}).items()
-                                          if k in ("行业", "总市值", "市盈率", "市净率")),
+                "fundamentals": "; ".join(
+                    f"{k}: {v}"
+                    for k, v in (info or {}).items()
+                    if k in ("行业", "总市值", "市盈率", "市净率")
+                ),
                 "stock_fund_brief": stock_fund_brief_t8,
                 "related_news_brief": related_brief_t8,
                 "announcements_brief": announcements_brief_t8,
@@ -3266,10 +4305,14 @@ with tab9:
                 "concepts_brief": concepts_brief_t8,
                 "research_brief": research_brief_t8,
             }
-            stock_brief_t8 = build_market_brief(stock_payload_t8) if LLM_AVAILABLE else (
-                f"【{stock_name}({symbol})】最新价 ¥{last['close']:.2f},当日 {day_chg:+.2f}%,"
-                f"区间涨跌 {period_change:+.2f}% MA5/20/60: {ma5_v:.2f}/{ma20_v:.2f}/{ma60_v:.2f}"
-                + ("\n" + stock_fund_brief_t8 if stock_fund_brief_t8 else "")
+            stock_brief_t8 = (
+                build_market_brief(stock_payload_t8)
+                if LLM_AVAILABLE
+                else (
+                    f"【{stock_name}({symbol})】最新价 ¥{last['close']:.2f},当日 {day_chg:+.2f}%,"
+                    f"区间涨跌 {period_change:+.2f}% MA5/20/60: {ma5_v:.2f}/{ma20_v:.2f}/{ma60_v:.2f}"
+                    + ("\n" + stock_fund_brief_t8 if stock_fund_brief_t8 else "")
+                )
             )
 
             expert_panel_view.render(symbol, stock_name, stock_brief_t8)
@@ -3280,6 +4323,7 @@ with tab9:
 with tab10:
     try:
         from components.source_health_panel import render_source_health_panel
+
         render_source_health_panel()
     except Exception as _health_e:
         st.error(f"数据源健康度面板加载失败: {_health_e}")

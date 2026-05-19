@@ -1,4 +1,5 @@
 """快速测试 Mimo 代理"""
+
 import os
 from dotenv import load_dotenv
 from openai import OpenAI

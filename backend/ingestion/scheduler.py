@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -118,7 +117,7 @@ class DataScheduler:
 
 
 # 采集频率常量 (秒)
-FETCH_INTERVAL_FAST = 60        # 1分钟 - 大盘快讯
-FETCH_INTERVAL_MEDIUM = 300     # 5分钟 - 个股新闻
-FETCH_INTERVAL_SLOW = 3600      # 1小时 - 公告
-FETCH_INTERVAL_DAILY = 86400    # 24小时 - 日线行情
+FETCH_INTERVAL_FAST = 60  # 1分钟 - 大盘快讯
+FETCH_INTERVAL_MEDIUM = 300  # 5分钟 - 个股新闻
+FETCH_INTERVAL_SLOW = 3600  # 1小时 - 公告
+FETCH_INTERVAL_DAILY = 86400  # 24小时 - 日线行情

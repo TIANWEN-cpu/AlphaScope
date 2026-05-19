@@ -20,7 +20,14 @@ logger = logging.getLogger(__name__)
 class WindProvider(BaseProvider):
     name = "wind"
     markets = ["CN"]
-    data_types = ["news", "reports", "announcements", "prices", "fundamentals", "fund_flow"]
+    data_types = [
+        "news",
+        "reports",
+        "announcements",
+        "prices",
+        "fundamentals",
+        "fund_flow",
+    ]
     priority = 98
     license_level = "commercial"
 
@@ -42,16 +49,26 @@ class WindProvider(BaseProvider):
             return False
 
     def get_news(self, query: dict, **kwargs) -> list[dict]:
-        raise NotImplementedError("Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK")
+        raise NotImplementedError(
+            "Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK"
+        )
 
     def get_reports(self, query: dict, **kwargs) -> list[dict]:
-        raise NotImplementedError("Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK")
+        raise NotImplementedError(
+            "Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK"
+        )
 
     def get_announcements(self, query: dict, **kwargs) -> list[dict]:
-        raise NotImplementedError("Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK")
+        raise NotImplementedError(
+            "Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK"
+        )
 
     def get_prices(self, query: dict, **kwargs) -> list[dict]:
-        raise NotImplementedError("Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK")
+        raise NotImplementedError(
+            "Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK"
+        )
 
     def get_fundamentals(self, query: dict, **kwargs) -> dict:
-        raise NotImplementedError("Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK")
+        raise NotImplementedError(
+            "Wind Provider 需要配置 WIND_API_KEY 和安装 WindPy SDK"
+        )

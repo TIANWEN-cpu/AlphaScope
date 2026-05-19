@@ -40,10 +40,10 @@ class Event:
     source_url: str = ""
     symbols: list[str] = field(default_factory=list)
     industries: list[str] = field(default_factory=list)
-    sentiment: float = 0.0      # -1.0 ~ 1.0
-    importance: float = 0.5     # 0.0 ~ 1.0
+    sentiment: float = 0.0  # -1.0 ~ 1.0
+    importance: float = 0.5  # 0.0 ~ 1.0
     published_at: Optional[datetime] = None
-    evidence_id: str = ""       # 关联的原始数据 ID
+    evidence_id: str = ""  # 关联的原始数据 ID
 
     def __post_init__(self):
         if not self.id:
@@ -57,10 +57,26 @@ _EVENT_RULES: list[dict] = [
     {
         "type": "earnings",
         "keywords": [
-            "业绩预告", "业绩快报", "盈利预增", "盈利预减", "净利润增长",
-            "净利润下降", "扭亏为盈", "由盈转亏", "年报", "季报", "中报",
-            "营业收入增长", "营收增长", "每股收益", "ROE", "净资产收益率",
-            "业绩大幅增长", "业绩大幅下降", "超预期", "低于预期",
+            "业绩预告",
+            "业绩快报",
+            "盈利预增",
+            "盈利预减",
+            "净利润增长",
+            "净利润下降",
+            "扭亏为盈",
+            "由盈转亏",
+            "年报",
+            "季报",
+            "中报",
+            "营业收入增长",
+            "营收增长",
+            "每股收益",
+            "ROE",
+            "净资产收益率",
+            "业绩大幅增长",
+            "业绩大幅下降",
+            "超预期",
+            "低于预期",
         ],
         "title_patterns": [
             r"20\d{2}年.*年度报告",
@@ -78,8 +94,15 @@ _EVENT_RULES: list[dict] = [
     {
         "type": "dividend",
         "keywords": [
-            "分红", "派息", "送股", "转增", "权益分派", "利润分配",
-            "每10股派", "每10股送", "每10股转",
+            "分红",
+            "派息",
+            "送股",
+            "转增",
+            "权益分派",
+            "利润分配",
+            "每10股派",
+            "每10股送",
+            "每10股转",
         ],
         "title_patterns": [
             r"权益分派",
@@ -95,8 +118,17 @@ _EVENT_RULES: list[dict] = [
     {
         "type": "mna",
         "keywords": [
-            "收购", "合并", "重组", "要约收购", "资产注入", "借壳",
-            "私有化", "吸收合并", "换股", "标的资产", "交易对方",
+            "收购",
+            "合并",
+            "重组",
+            "要约收购",
+            "资产注入",
+            "借壳",
+            "私有化",
+            "吸收合并",
+            "换股",
+            "标的资产",
+            "交易对方",
         ],
         "title_patterns": [
             r"重大资产.*重组",
@@ -112,9 +144,19 @@ _EVENT_RULES: list[dict] = [
     {
         "type": "financing",
         "keywords": [
-            "配股", "增发", "定向增发", "非公开发行", "可转债",
-            "公司债", "中期票据", "短期融资券", "融资", "募集资金",
-            "IPO", "发行", "申购",
+            "配股",
+            "增发",
+            "定向增发",
+            "非公开发行",
+            "可转债",
+            "公司债",
+            "中期票据",
+            "短期融资券",
+            "融资",
+            "募集资金",
+            "IPO",
+            "发行",
+            "申购",
         ],
         "title_patterns": [
             r"非公开发行",
@@ -131,9 +173,19 @@ _EVENT_RULES: list[dict] = [
     {
         "type": "litigation",
         "keywords": [
-            "诉讼", "仲裁", "处罚", "立案", "调查", "违规",
-            "行政处罚", "监管措施", "警示函", "通报批评",
-            "退市风险", "ST", "*ST",
+            "诉讼",
+            "仲裁",
+            "处罚",
+            "立案",
+            "调查",
+            "违规",
+            "行政处罚",
+            "监管措施",
+            "警示函",
+            "通报批评",
+            "退市风险",
+            "ST",
+            "*ST",
         ],
         "title_patterns": [
             r"收到.*处罚",
@@ -149,9 +201,21 @@ _EVENT_RULES: list[dict] = [
     {
         "type": "policy",
         "keywords": [
-            "政策", "监管", "法规", "条例", "指导意见",
-            "国务院", "证监会", "央行", "银保监", "发改委",
-            "降准", "降息", "加息", "MLF", "LPR",
+            "政策",
+            "监管",
+            "法规",
+            "条例",
+            "指导意见",
+            "国务院",
+            "证监会",
+            "央行",
+            "银保监",
+            "发改委",
+            "降准",
+            "降息",
+            "加息",
+            "MLF",
+            "LPR",
         ],
         "title_patterns": [
             r"关于.*意见",
@@ -167,8 +231,14 @@ _EVENT_RULES: list[dict] = [
     {
         "type": "supply_chain",
         "keywords": [
-            "中标", "合同", "订单", "供货", "采购",
-            "战略合作", "框架协议", "项目中标",
+            "中标",
+            "合同",
+            "订单",
+            "供货",
+            "采购",
+            "战略合作",
+            "框架协议",
+            "项目中标",
         ],
         "title_patterns": [
             r"中标.*公告",
@@ -184,9 +254,17 @@ _EVENT_RULES: list[dict] = [
     {
         "type": "insider",
         "keywords": [
-            "增持", "减持", "回购", "管理层变动", "董事辞职",
-            "高管变更", "控股股东", "实际控制人", "举牌",
-            "股份回购", "员工持股",
+            "增持",
+            "减持",
+            "回购",
+            "管理层变动",
+            "董事辞职",
+            "高管变更",
+            "控股股东",
+            "实际控制人",
+            "举牌",
+            "股份回购",
+            "员工持股",
         ],
         "title_patterns": [
             r"增持.*公告",
@@ -204,9 +282,19 @@ _EVENT_RULES: list[dict] = [
 
 # 宏观事件关键词 (不关联个股)
 _MACRO_KEYWORDS = [
-    "GDP", "CPI", "PPI", "PMI", "社融", "M2",
-    "美联储", "非农", "通胀", "利率决议",
-    "贸易战", "关税", "地缘政治",
+    "GDP",
+    "CPI",
+    "PPI",
+    "PMI",
+    "社融",
+    "M2",
+    "美联储",
+    "非农",
+    "通胀",
+    "利率决议",
+    "贸易战",
+    "关税",
+    "地缘政治",
 ]
 
 
@@ -244,30 +332,34 @@ class EventExtractor:
             if not matched:
                 continue
 
-            events.append(Event(
-                event_type=rule["type"],
-                title=self._extract_title(text),
-                summary=self._extract_summary(text),
-                source=source,
-                source_url=source_url,
-                symbols=symbols or [],
-                sentiment=sentiment,
-                importance=rule.get("importance", 0.5),
-                published_at=published_at,
-            ))
+            events.append(
+                Event(
+                    event_type=rule["type"],
+                    title=self._extract_title(text),
+                    summary=self._extract_summary(text),
+                    source=source,
+                    source_url=source_url,
+                    symbols=symbols or [],
+                    sentiment=sentiment,
+                    importance=rule.get("importance", 0.5),
+                    published_at=published_at,
+                )
+            )
 
         # 如果没匹配到任何规则, 归类为 other
         if not events:
-            events.append(Event(
-                event_type="other",
-                title=self._extract_title(text),
-                summary=self._extract_summary(text)[:200],
-                source=source,
-                source_url=source_url,
-                symbols=symbols or [],
-                importance=0.3,
-                published_at=published_at,
-            ))
+            events.append(
+                Event(
+                    event_type="other",
+                    title=self._extract_title(text),
+                    summary=self._extract_summary(text)[:200],
+                    source=source,
+                    source_url=source_url,
+                    symbols=symbols or [],
+                    importance=0.3,
+                    published_at=published_at,
+                )
+            )
 
         return events
 
@@ -319,8 +411,12 @@ class EventExtractor:
     def _calc_sentiment(self, rule: dict, text_lower: str) -> float:
         """基于关键词计算情绪分"""
         sent_kw = rule.get("sentiment_keywords", {})
-        pos_hits = sum(1 for kw in sent_kw.get("positive", []) if kw.lower() in text_lower)
-        neg_hits = sum(1 for kw in sent_kw.get("negative", []) if kw.lower() in text_lower)
+        pos_hits = sum(
+            1 for kw in sent_kw.get("positive", []) if kw.lower() in text_lower
+        )
+        neg_hits = sum(
+            1 for kw in sent_kw.get("negative", []) if kw.lower() in text_lower
+        )
 
         total = pos_hits + neg_hits
         if total == 0:

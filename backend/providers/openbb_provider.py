@@ -41,18 +41,20 @@ class OpenBBProvider(BaseProvider):
 
             results = []
             for date, row in df.iterrows():
-                results.append({
-                    "symbol": symbol,
-                    "market": query.get("market", "US"),
-                    "date": str(date),
-                    "open": float(row.get("open", 0)),
-                    "high": float(row.get("high", 0)),
-                    "low": float(row.get("low", 0)),
-                    "close": float(row.get("close", 0)),
-                    "volume": float(row.get("volume", 0)),
-                    "amount": 0,
-                    "source": "openbb",
-                })
+                results.append(
+                    {
+                        "symbol": symbol,
+                        "market": query.get("market", "US"),
+                        "date": str(date),
+                        "open": float(row.get("open", 0)),
+                        "high": float(row.get("high", 0)),
+                        "low": float(row.get("low", 0)),
+                        "close": float(row.get("close", 0)),
+                        "volume": float(row.get("volume", 0)),
+                        "amount": 0,
+                        "source": "openbb",
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("OpenBB prices failed: %s", e)

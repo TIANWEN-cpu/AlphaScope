@@ -1,7 +1,11 @@
 """第三轮探测：重试 GPT 503，深挖 SenseNova 模型，Mimo 参数细节"""
-import os, time, json
+
+import os
+import time
+import json
 from dotenv import load_dotenv
 from project_paths import ENV_FILE
+
 load_dotenv(ENV_FILE)
 from openai import OpenAI
 import requests
@@ -84,10 +88,18 @@ except Exception as e:
 print("\n【5】GPT 503 重试 (gpt-4o-mini)")
 for i in range(3):
     try:
-        client = OpenAI(api_key=os.getenv("GPT_API_KEY"), base_url=os.getenv("GPT_BASE_URL")+"/v1", timeout=15)
-        r = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role":"user","content":"Hi"}], max_tokens=10)
-        print(f"  尝试 {i+1}: OK -> {r.choices[0].message.content[:30]}")
+        client = OpenAI(
+            api_key=os.getenv("GPT_API_KEY"),
+            base_url=os.getenv("GPT_BASE_URL") + "/v1",
+            timeout=15,
+        )
+        r = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Hi"}],
+            max_tokens=10,
+        )
+        print(f"  尝试 {i + 1}: OK -> {r.choices[0].message.content[:30]}")
         break
     except Exception as e:
-        print(f"  尝试 {i+1}: {str(e)[:120]}")
+        print(f"  尝试 {i + 1}: {str(e)[:120]}")
         time.sleep(2)

@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -26,24 +25,35 @@ logger = logging.getLogger(__name__)
 # ---- 事件类型 → 情绪映射 ----
 
 _EVENT_CATEGORY_SCORES: dict[str, float] = {
-    "earnings": 0.3,       # 业绩报告中性偏正, 具体看内容
-    "dividend": 0.4,       # 分红一般利好
-    "mna": 0.2,            # 并购中性, 取决于具体情况
-    "financing": -0.2,     # 融资偏利空 (稀释)
-    "litigation": -0.6,    # 诉讼/处罚利空
-    "policy": 0.0,         # 政策中性
-    "supply_chain": 0.3,   # 中标/合同利好
-    "insider": 0.0,        # 增减持需看方向
+    "earnings": 0.3,  # 业绩报告中性偏正, 具体看内容
+    "dividend": 0.4,  # 分红一般利好
+    "mna": 0.2,  # 并购中性, 取决于具体情况
+    "financing": -0.2,  # 融资偏利空 (稀释)
+    "litigation": -0.6,  # 诉讼/处罚利空
+    "policy": 0.0,  # 政策中性
+    "supply_chain": 0.3,  # 中标/合同利好
+    "insider": 0.0,  # 增减持需看方向
 }
 
 # 研报评级 → 数值映射
 _RATING_SCORES: dict[str, float] = {
-    "买入": 1.0, "强烈推荐": 1.0, "推荐": 0.7, "增持": 0.5,
-    "持有": 0.0, "中性": 0.0, "观望": -0.2,
-    "减持": -0.5, "卖出": -1.0, "回避": -0.7,
-    "buy": 1.0, "strong_buy": 1.0, "overweight": 0.5,
-    "hold": 0.0, "neutral": 0.0,
-    "underweight": -0.5, "sell": -1.0,
+    "买入": 1.0,
+    "强烈推荐": 1.0,
+    "推荐": 0.7,
+    "增持": 0.5,
+    "持有": 0.0,
+    "中性": 0.0,
+    "观望": -0.2,
+    "减持": -0.5,
+    "卖出": -1.0,
+    "回避": -0.7,
+    "buy": 1.0,
+    "strong_buy": 1.0,
+    "overweight": 0.5,
+    "hold": 0.0,
+    "neutral": 0.0,
+    "underweight": -0.5,
+    "sell": -1.0,
 }
 
 # 因子权重配置
@@ -59,6 +69,7 @@ DEFAULT_WEIGHTS: dict[str, float] = {
 @dataclass
 class FactorReport:
     """单只股票的因子报告"""
+
     symbol: str
     stock_name: str = ""
     computed_at: str = ""
@@ -167,8 +178,7 @@ class FactorGenerator:
         """批量生成因子报告"""
         names = stock_names or {}
         return [
-            self.generate(s, stock_name=names.get(s, ""), days=days)
-            for s in symbols
+            self.generate(s, stock_name=names.get(s, ""), days=days) for s in symbols
         ]
 
     # ---- 各维度因子计算 ----
@@ -182,6 +192,7 @@ class FactorGenerator:
     ) -> None:
         """新闻情绪因子: 加权平均新闻情绪"""
         from backend.storage.db import Database
+
         db = Database()
         rows = db.conn.execute(
             """SELECT title, sentiment, importance, confidence, published_at
@@ -205,17 +216,19 @@ class FactorGenerator:
 
         total_weight = sum(w for _, w, _ in sentiments)
         if total_weight > 0:
-            report.news_sentiment = max(-1.0, min(1.0,
-                sum(s * w for s, w, _ in sentiments) / total_weight
-            ))
+            report.news_sentiment = max(
+                -1.0, min(1.0, sum(s * w for s, w, _ in sentiments) / total_weight)
+            )
 
         if include_signals:
             for sent, _, title in sentiments[:10]:
-                report.signals.append({
-                    "type": "news",
-                    "title": title[:60],
-                    "sentiment": round(sent, 2),
-                })
+                report.signals.append(
+                    {
+                        "type": "news",
+                        "title": title[:60],
+                        "sentiment": round(sent, 2),
+                    }
+                )
 
     def _compute_event_signal(
         self,
@@ -226,6 +239,7 @@ class FactorGenerator:
     ) -> None:
         """事件信号因子: 基于公告事件类型打分"""
         from backend.storage.db import Database
+
         db = Database()
         rows = db.conn.execute(
             """SELECT title, category, importance, published_at
@@ -250,18 +264,20 @@ class FactorGenerator:
 
         total_imp = sum(imp for _, imp, _, _ in scores)
         if total_imp > 0:
-            report.event_signal = max(-1.0, min(1.0,
-                sum(s for s, _, _, _ in scores) / total_imp
-            ))
+            report.event_signal = max(
+                -1.0, min(1.0, sum(s for s, _, _, _ in scores) / total_imp)
+            )
 
         if include_signals:
             for score, _, title, cat in scores[:10]:
-                report.signals.append({
-                    "type": "event",
-                    "category": cat,
-                    "title": title[:60],
-                    "score": round(score, 2),
-                })
+                report.signals.append(
+                    {
+                        "type": "event",
+                        "category": cat,
+                        "title": title[:60],
+                        "score": round(score, 2),
+                    }
+                )
 
     def _compute_analyst_rating(
         self,
@@ -272,6 +288,7 @@ class FactorGenerator:
     ) -> None:
         """分析师评级因子: 评级打分 + 目标价溢价"""
         from backend.storage.db import Database
+
         db = Database()
         rows = db.conn.execute(
             """SELECT title, rating, target_price, institution, published_at
@@ -300,18 +317,20 @@ class FactorGenerator:
         if not ratings:
             return
 
-        report.analyst_rating = max(-1.0, min(1.0,
-            sum(r for r, _, _ in ratings) / len(ratings)
-        ))
+        report.analyst_rating = max(
+            -1.0, min(1.0, sum(r for r, _, _ in ratings) / len(ratings))
+        )
 
         if include_signals:
             for score, inst, title in ratings[:10]:
-                report.signals.append({
-                    "type": "analyst",
-                    "institution": inst or "",
-                    "title": title[:60],
-                    "rating_score": round(score, 2),
-                })
+                report.signals.append(
+                    {
+                        "type": "analyst",
+                        "institution": inst or "",
+                        "title": title[:60],
+                        "rating_score": round(score, 2),
+                    }
+                )
 
     def _compute_fund_flow(
         self,
@@ -322,6 +341,7 @@ class FactorGenerator:
         """资金流向因子: 主力净流入趋势"""
         try:
             from backend.fund_flow import summarize_fund_flow
+
             summary = summarize_fund_flow(symbol, days=5)
         except Exception:
             return
@@ -353,13 +373,15 @@ class FactorGenerator:
         report.fund_flow = max(-1.0, min(1.0, flow_score))
 
         if include_signals:
-            report.signals.append({
-                "type": "fund_flow",
-                "last_main_yi": round(last_main_yi, 2),
-                "main_total_yi": round(main_total, 2),
-                "inflow_days": inflow_days,
-                "outflow_days": outflow_days,
-            })
+            report.signals.append(
+                {
+                    "type": "fund_flow",
+                    "last_main_yi": round(last_main_yi, 2),
+                    "main_total_yi": round(main_total, 2),
+                    "inflow_days": inflow_days,
+                    "outflow_days": outflow_days,
+                }
+            )
 
     def _compute_momentum(
         self,
@@ -370,6 +392,7 @@ class FactorGenerator:
     ) -> None:
         """价格动量因子: 涨跌幅 + 成交量变化"""
         from backend.storage.db import Database
+
         db = Database()
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
         rows = db.conn.execute(
@@ -387,7 +410,9 @@ class FactorGenerator:
         recent = rows[-5:] if len(rows) >= 5 else rows
         short_return = 0.0
         if recent[0]["close"] and recent[0]["close"] > 0:
-            short_return = (recent[-1]["close"] - recent[0]["close"]) / recent[0]["close"]
+            short_return = (recent[-1]["close"] - recent[0]["close"]) / recent[0][
+                "close"
+            ]
 
         # 中期动量: 全周期涨跌幅
         mid_return = 0.0
@@ -397,27 +422,31 @@ class FactorGenerator:
         # 成交量变化: 近期 vs 前期
         vol_score = 0.0
         if len(rows) >= 10:
-            early_vol = sum(r["volume"] or 0 for r in rows[:len(rows)//2])
-            late_vol = sum(r["volume"] or 0 for r in rows[len(rows)//2:])
+            early_vol = sum(r["volume"] or 0 for r in rows[: len(rows) // 2])
+            late_vol = sum(r["volume"] or 0 for r in rows[len(rows) // 2 :])
             if early_vol > 0:
                 vol_change = (late_vol - early_vol) / early_vol
                 vol_score = max(-1.0, min(1.0, vol_change))
 
         # 组合: 60% 短期动量 + 20% 中期动量 + 20% 量能变化
-        momentum = 0.6 * max(-1.0, min(1.0, short_return * 10)) + \
-                   0.2 * max(-1.0, min(1.0, mid_return * 5)) + \
-                   0.2 * vol_score
+        momentum = (
+            0.6 * max(-1.0, min(1.0, short_return * 10))
+            + 0.2 * max(-1.0, min(1.0, mid_return * 5))
+            + 0.2 * vol_score
+        )
 
         report.momentum = max(-1.0, min(1.0, momentum))
 
         if include_signals:
-            report.signals.append({
-                "type": "momentum",
-                "short_return_pct": round(short_return * 100, 2),
-                "mid_return_pct": round(mid_return * 100, 2),
-                "volume_change_pct": round(vol_score * 100, 2),
-                "data_points": len(rows),
-            })
+            report.signals.append(
+                {
+                    "type": "momentum",
+                    "short_return_pct": round(short_return * 100, 2),
+                    "mid_return_pct": round(mid_return * 100, 2),
+                    "volume_change_pct": round(vol_score * 100, 2),
+                    "data_points": len(rows),
+                }
+            )
 
     def _weighted_composite(self, report: FactorReport) -> float:
         """加权计算综合因子"""
@@ -454,7 +483,9 @@ def get_factor_generator() -> FactorGenerator:
     return _generator
 
 
-def generate_factor_report(symbol: str, stock_name: str = "", days: int = 30) -> FactorReport:
+def generate_factor_report(
+    symbol: str, stock_name: str = "", days: int = 30
+) -> FactorReport:
     """生成单只股票因子报告"""
     return get_factor_generator().generate(symbol, stock_name, days)
 
@@ -488,14 +519,24 @@ def format_factor_summary(report: FactorReport) -> str:
         for sig in report.signals[:5]:
             sig_type = sig.get("type", "")
             if sig_type == "news":
-                lines.append(f"  - [新闻] {sig.get('title', '')} (情绪: {sig.get('sentiment', 0):+.2f})")
+                lines.append(
+                    f"  - [新闻] {sig.get('title', '')} (情绪: {sig.get('sentiment', 0):+.2f})"
+                )
             elif sig_type == "event":
-                lines.append(f"  - [公告:{sig.get('category', '')}] {sig.get('title', '')} (得分: {sig.get('score', 0):+.2f})")
+                lines.append(
+                    f"  - [公告:{sig.get('category', '')}] {sig.get('title', '')} (得分: {sig.get('score', 0):+.2f})"
+                )
             elif sig_type == "analyst":
-                lines.append(f"  - [研报] {sig.get('institution', '')}: {sig.get('title', '')} (评级: {sig.get('rating_score', 0):+.2f})")
+                lines.append(
+                    f"  - [研报] {sig.get('institution', '')}: {sig.get('title', '')} (评级: {sig.get('rating_score', 0):+.2f})"
+                )
             elif sig_type == "fund_flow":
-                lines.append(f"  - [资金] 主力净流入: {sig.get('last_main_yi', 0):.2f}亿, 连续流入{sig.get('inflow_days', 0)}天")
+                lines.append(
+                    f"  - [资金] 主力净流入: {sig.get('last_main_yi', 0):.2f}亿, 连续流入{sig.get('inflow_days', 0)}天"
+                )
             elif sig_type == "momentum":
-                lines.append(f"  - [动量] 近期涨幅: {sig.get('short_return_pct', 0):+.1f}%, 量能变化: {sig.get('volume_change_pct', 0):+.1f}%")
+                lines.append(
+                    f"  - [动量] 近期涨幅: {sig.get('short_return_pct', 0):+.1f}%, 量能变化: {sig.get('volume_change_pct', 0):+.1f}%"
+                )
 
     return "\n".join(lines)

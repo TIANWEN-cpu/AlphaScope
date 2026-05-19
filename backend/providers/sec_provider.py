@@ -98,20 +98,24 @@ class SECProvider(BaseProvider):
                 desc = descriptions[i] if i < len(descriptions) else ""
                 doc_url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc_no}/{primary_docs[i]}"
 
-                results.append({
-                    "source": "sec",
-                    "upstream": "sec",
-                    "symbol": symbol,
-                    "company_name": company,
-                    "title": f"{forms[i]} - {desc}" if desc else f"{forms[i]} - {company}",
-                    "category": self._form_to_category(forms[i]),
-                    "datetime": dates[i],
-                    "url": doc_url,
-                    "source_url": doc_url,
-                    "form_type": forms[i],
-                    "accession_number": accessions[i],
-                    "confidence": 0.95,
-                })
+                results.append(
+                    {
+                        "source": "sec",
+                        "upstream": "sec",
+                        "symbol": symbol,
+                        "company_name": company,
+                        "title": f"{forms[i]} - {desc}"
+                        if desc
+                        else f"{forms[i]} - {company}",
+                        "category": self._form_to_category(forms[i]),
+                        "datetime": dates[i],
+                        "url": doc_url,
+                        "source_url": doc_url,
+                        "form_type": forms[i],
+                        "accession_number": accessions[i],
+                        "confidence": 0.95,
+                    }
+                )
 
             self._record_success(0)
             return results

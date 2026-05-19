@@ -32,6 +32,7 @@ class TushareProvider(BaseProvider):
             if not self._token:
                 raise ValueError("TUSHARE_TOKEN 环境变量未设置")
             import tushare as ts
+
             self._pro = ts.pro_api(self._token)
         return self._pro
 
@@ -57,19 +58,25 @@ class TushareProvider(BaseProvider):
 
             results = []
             for _, row in df.head(query.get("limit", 50)).iterrows():
-                results.append({
-                    "source": "tushare",
-                    "upstream": "tushare",
-                    "title": str(row.get("title", "")).strip(),
-                    "institution": str(row.get("org_name", "")).strip(),
-                    "authors": [str(row.get("author", ""))] if row.get("author") else [],
-                    "report_type": str(row.get("report_type", "")).strip(),
-                    "industry": str(row.get("industry_name", "")).strip(),
-                    "rating": str(row.get("rating_name", "")).strip(),
-                    "symbols": [str(row.get("stock_code", ""))] if row.get("stock_code") else [],
-                    "datetime": str(row.get("pub_date", "")).strip(),
-                    "pdf_url": str(row.get("url", "")).strip(),
-                })
+                results.append(
+                    {
+                        "source": "tushare",
+                        "upstream": "tushare",
+                        "title": str(row.get("title", "")).strip(),
+                        "institution": str(row.get("org_name", "")).strip(),
+                        "authors": [str(row.get("author", ""))]
+                        if row.get("author")
+                        else [],
+                        "report_type": str(row.get("report_type", "")).strip(),
+                        "industry": str(row.get("industry_name", "")).strip(),
+                        "rating": str(row.get("rating_name", "")).strip(),
+                        "symbols": [str(row.get("stock_code", ""))]
+                        if row.get("stock_code")
+                        else [],
+                        "datetime": str(row.get("pub_date", "")).strip(),
+                        "pdf_url": str(row.get("url", "")).strip(),
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("Tushare reports failed: %s", e)
@@ -93,15 +100,17 @@ class TushareProvider(BaseProvider):
 
             results = []
             for _, row in df.head(query.get("limit", 50)).iterrows():
-                results.append({
-                    "source": "tushare",
-                    "upstream": "tushare",
-                    "symbol": str(row.get("ts_code", "")).strip(),
-                    "title": str(row.get("title", "")).strip(),
-                    "datetime": str(row.get("ann_date", "")).strip(),
-                    "url": str(row.get("url", "")).strip(),
-                    "pdf_url": str(row.get("url", "")).strip(),
-                })
+                results.append(
+                    {
+                        "source": "tushare",
+                        "upstream": "tushare",
+                        "symbol": str(row.get("ts_code", "")).strip(),
+                        "title": str(row.get("title", "")).strip(),
+                        "datetime": str(row.get("ann_date", "")).strip(),
+                        "url": str(row.get("url", "")).strip(),
+                        "pdf_url": str(row.get("url", "")).strip(),
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("Tushare announcements failed: %s", e)
@@ -126,19 +135,21 @@ class TushareProvider(BaseProvider):
 
             results = []
             for _, row in df.iterrows():
-                results.append({
-                    "symbol": symbol,
-                    "market": "CN",
-                    "date": str(row.get("trade_date", "")),
-                    "open": float(row.get("open", 0)),
-                    "high": float(row.get("high", 0)),
-                    "low": float(row.get("low", 0)),
-                    "close": float(row.get("close", 0)),
-                    "volume": float(row.get("vol", 0)),
-                    "amount": float(row.get("amount", 0)),
-                    "change_pct": float(row.get("pct_chg", 0)),
-                    "source": "tushare",
-                })
+                results.append(
+                    {
+                        "symbol": symbol,
+                        "market": "CN",
+                        "date": str(row.get("trade_date", "")),
+                        "open": float(row.get("open", 0)),
+                        "high": float(row.get("high", 0)),
+                        "low": float(row.get("low", 0)),
+                        "close": float(row.get("close", 0)),
+                        "volume": float(row.get("vol", 0)),
+                        "amount": float(row.get("amount", 0)),
+                        "change_pct": float(row.get("pct_chg", 0)),
+                        "source": "tushare",
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("Tushare prices failed: %s", e)

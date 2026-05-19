@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Any, Dict, List, Optional
 
 from backend.providers.base import BaseProvider
 
@@ -37,6 +36,7 @@ class RedditProvider(BaseProvider):
         if self._client is None:
             try:
                 import praw
+
                 self._client = praw.Reddit(
                     client_id=os.getenv("REDDIT_CLIENT_ID", ""),
                     client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
@@ -61,16 +61,20 @@ class RedditProvider(BaseProvider):
             mentions = []
             sentiment_scores = []
 
-            for submission in subreddit.search(symbol, limit=query.get("limit", 20), sort="new"):
+            for submission in subreddit.search(
+                symbol, limit=query.get("limit", 20), sort="new"
+            ):
                 title = submission.title
                 score = submission.score
-                mentions.append({
-                    "title": title,
-                    "score": score,
-                    "url": submission.url,
-                    "created": submission.created_utc,
-                    "num_comments": submission.num_comments,
-                })
+                mentions.append(
+                    {
+                        "title": title,
+                        "score": score,
+                        "url": submission.url,
+                        "created": submission.created_utc,
+                        "num_comments": submission.num_comments,
+                    }
+                )
                 # Simple sentiment: positive upvotes = bullish
                 if score > 100:
                     sentiment_scores.append(0.7)
@@ -79,7 +83,11 @@ class RedditProvider(BaseProvider):
                 else:
                     sentiment_scores.append(0.3)
 
-            avg_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.5
+            avg_sentiment = (
+                sum(sentiment_scores) / len(sentiment_scores)
+                if sentiment_scores
+                else 0.5
+            )
             return {
                 "symbol": symbol,
                 "mention_count": len(mentions),
@@ -103,16 +111,22 @@ class RedditProvider(BaseProvider):
         try:
             subreddit = client.subreddit("wallstreetbets+stocks")
             result = []
-            for submission in subreddit.search(symbol, limit=query.get("limit", 10), sort="hot"):
-                result.append({
-                    "title": submission.title,
-                    "summary": submission.selftext[:200] if submission.selftext else "",
-                    "source": "reddit/wallstreetbets",
-                    "datetime": str(submission.created_utc),
-                    "url": submission.url,
-                    "symbols": [symbol],
-                    "sentiment": 0.7 if submission.score > 100 else 0.5,
-                })
+            for submission in subreddit.search(
+                symbol, limit=query.get("limit", 10), sort="hot"
+            ):
+                result.append(
+                    {
+                        "title": submission.title,
+                        "summary": submission.selftext[:200]
+                        if submission.selftext
+                        else "",
+                        "source": "reddit/wallstreetbets",
+                        "datetime": str(submission.created_utc),
+                        "url": submission.url,
+                        "symbols": [symbol],
+                        "sentiment": 0.7 if submission.score > 100 else 0.5,
+                    }
+                )
             return result
         except Exception as e:
             logger.warning("Reddit news failed: %s", e)

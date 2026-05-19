@@ -15,13 +15,14 @@ v0.11 新增: Provider 插件集成
 - 财新摘要  stock_news_main_cx
 - 东财个股研报 stock_research_report_em
 """
+
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import json
 import logging
 import akshare as ak
-import pandas as pd
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -32,7 +33,7 @@ def _safe(fn, *args, **kwargs):
     """统一的接口容错包装"""
     try:
         return fn(*args, **kwargs)
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -44,13 +45,15 @@ def fetch_telegraph_cls(limit: int = 30) -> List[Dict[str, Any]]:
     df = df.head(limit).copy()
     out = []
     for _, row in df.iterrows():
-        out.append({
-            "source": "财联社",
-            "title": str(row.get("标题", "")).strip(),
-            "summary": str(row.get("内容", "")).strip()[:200],
-            "datetime": f"{row.get('发布日期', '')} {row.get('发布时间', '')}".strip(),
-            "url": "",
-        })
+        out.append(
+            {
+                "source": "财联社",
+                "title": str(row.get("标题", "")).strip(),
+                "summary": str(row.get("内容", "")).strip()[:200],
+                "datetime": f"{row.get('发布日期', '')} {row.get('发布时间', '')}".strip(),
+                "url": "",
+            }
+        )
     return out
 
 
@@ -62,13 +65,15 @@ def fetch_telegraph_em(limit: int = 30) -> List[Dict[str, Any]]:
     df = df.head(limit).copy()
     out = []
     for _, row in df.iterrows():
-        out.append({
-            "source": "东财",
-            "title": str(row.get("标题", "")).strip(),
-            "summary": str(row.get("摘要", "")).strip()[:200],
-            "datetime": str(row.get("发布时间", "")).strip(),
-            "url": str(row.get("链接", "")).strip(),
-        })
+        out.append(
+            {
+                "source": "东财",
+                "title": str(row.get("标题", "")).strip(),
+                "summary": str(row.get("摘要", "")).strip()[:200],
+                "datetime": str(row.get("发布时间", "")).strip(),
+                "url": str(row.get("链接", "")).strip(),
+            }
+        )
     return out
 
 
@@ -87,13 +92,15 @@ def fetch_telegraph_sina(limit: int = 20) -> List[Dict[str, Any]]:
             end = content.find("】")
             if end > 0:
                 title = content[1:end]
-        out.append({
-            "source": "新浪",
-            "title": title[:80],
-            "summary": content[:200],
-            "datetime": str(row.get("时间", "")).strip(),
-            "url": "",
-        })
+        out.append(
+            {
+                "source": "新浪",
+                "title": title[:80],
+                "summary": content[:200],
+                "datetime": str(row.get("时间", "")).strip(),
+                "url": "",
+            }
+        )
     return out
 
 
@@ -106,14 +113,16 @@ def fetch_caixin(limit: int = 10) -> List[Dict[str, Any]]:
     out = []
     for _, row in df.iterrows():
         summary = str(row.get("summary", "")).strip()
-        out.append({
-            "source": "财新",
-            "title": summary[:60],
-            "summary": summary[:200],
-            "datetime": "",
-            "url": str(row.get("url", "")).strip(),
-            "tag": str(row.get("tag", "")).strip(),
-        })
+        out.append(
+            {
+                "source": "财新",
+                "title": summary[:60],
+                "summary": summary[:200],
+                "datetime": "",
+                "url": str(row.get("url", "")).strip(),
+                "tag": str(row.get("tag", "")).strip(),
+            }
+        )
     return out
 
 
@@ -123,6 +132,7 @@ def _clean_str(value, default: str = "") -> str:
         return default
     try:
         import math
+
         if isinstance(value, float) and math.isnan(value):
             return default
     except Exception:
@@ -139,6 +149,7 @@ def _to_float_or_none(value):
         return None
     try:
         import math
+
         f = float(value)
         if math.isnan(f):
             return None
@@ -158,6 +169,7 @@ def _eastmoney_article_url(code: Any) -> str:
 def _parse_eastmoney_search_payload(text: str) -> Dict[str, Any]:
     import json as _json
     import re as _re
+
     m = _re.search(r"^[^(]+\((.+)\)\s*;?\s*$", text or "", _re.DOTALL)
     if not m:
         return {}
@@ -208,41 +220,45 @@ def _fetch_eastmoney_search_text(cf_requests, params: dict, headers: dict) -> st
 # 一条公告可能命中多个关键词,priority 用来挑出最有价值的标签;
 # 例如同时含"业绩预告"和"修订",取业绩预告。数字越小越高优。
 _ANN_RULES: List[tuple] = [
-    ("业绩预告",     1, ["业绩预告", "业绩预增", "业绩预减", "业绩预亏", "业绩快报"]),
-    ("年报/季报",    2, ["年度报告", "半年度报告", "第一季度报告", "第三季度报告", "季度报告"]),
-    ("回购",         3, ["回购"]),
-    ("股权激励",     4, ["股权激励", "限制性股票激励"]),
-    ("减持",         5, ["减持", "减持计划", "减持股份"]),
-    ("增持",         5, ["增持"]),
-    ("股权质押",     6, ["质押", "解除质押"]),
-    ("分红送转",     7, ["利润分配", "派息", "送转", "股东大会"]),
-    ("解禁",         8, ["解除限售", "解禁"]),
-    ("重大合同",     9, ["重大合同", "重大经营合同", "签署"]),
+    ("业绩预告", 1, ["业绩预告", "业绩预增", "业绩预减", "业绩预亏", "业绩快报"]),
+    (
+        "年报/季报",
+        2,
+        ["年度报告", "半年度报告", "第一季度报告", "第三季度报告", "季度报告"],
+    ),
+    ("回购", 3, ["回购"]),
+    ("股权激励", 4, ["股权激励", "限制性股票激励"]),
+    ("减持", 5, ["减持", "减持计划", "减持股份"]),
+    ("增持", 5, ["增持"]),
+    ("股权质押", 6, ["质押", "解除质押"]),
+    ("分红送转", 7, ["利润分配", "派息", "送转", "股东大会"]),
+    ("解禁", 8, ["解除限售", "解禁"]),
+    ("重大合同", 9, ["重大合同", "重大经营合同", "签署"]),
     ("重大资产重组", 10, ["重组", "收购", "出售资产", "股权转让"]),
-    ("关联交易",     11, ["关联交易", "对外担保"]),
-    ("监管问询",     12, ["问询函", "关注函", "监管函", "立案"]),
-    ("ST/退市",      13, ["特别处理", "退市"]),
-    ("调研活动",     20, ["调研", "投资者关系", "业绩说明会"]),
+    ("关联交易", 11, ["关联交易", "对外担保"]),
+    ("监管问询", 12, ["问询函", "关注函", "监管函", "立案"]),
+    ("ST/退市", 13, ["特别处理", "退市"]),
+    ("调研活动", 20, ["调研", "投资者关系", "业绩说明会"]),
 ]
 
 # 公告类型 → 颜色,UI 直接用
 ANN_COLORS: Dict[str, str] = {
-    "业绩预告":     "#ef5350",
-    "年报/季报":    "#f59e0b",
-    "回购":         "#16a34a",
-    "增持":         "#16a34a",
-    "股权激励":     "#16a34a",
-    "减持":         "#dc2626",
-    "股权质押":     "#dc2626",
-    "解禁":         "#f59e0b",
-    "分红送转":     "#0ea5e9",
-    "重大合同":     "#16a34a",
+    "业绩预告": "#ef5350",
+    "年报/季报": "#f59e0b",
+    "回购": "#16a34a",
+    "增持": "#16a34a",
+    "股权激励": "#16a34a",
+    "减持": "#dc2626",
+    "股权质押": "#dc2626",
+    "解禁": "#f59e0b",
+    "分红送转": "#0ea5e9",
+    "重大合同": "#16a34a",
     "重大资产重组": "#a855f7",
-    "关联交易":     "#9ca3af",
-    "监管问询":     "#dc2626",
-    "ST/退市":      "#dc2626",
-    "调研活动":     "#9ca3af",
-    "其他":         "#6b7280",
+    "关联交易": "#9ca3af",
+    "监管问询": "#dc2626",
+    "ST/退市": "#dc2626",
+    "调研活动": "#9ca3af",
+    "其他": "#6b7280",
 }
 
 
@@ -265,16 +281,18 @@ def classify_announcement(title: str) -> str:
 
 
 def _date_n_days_ago(days: int) -> str:
-    from datetime import datetime, timedelta
+    from datetime import timedelta
+
     return (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
 
 
 def _date_today() -> str:
-    from datetime import datetime
     return datetime.now().strftime("%Y%m%d")
 
 
-def fetch_announcements_cninfo(symbol: str, days: int = 30, limit: int = 40) -> List[Dict[str, Any]]:
+def fetch_announcements_cninfo(
+    symbol: str, days: int = 30, limit: int = 40
+) -> List[Dict[str, Any]]:
     """巨潮资讯个股公告(支持按代码 + 日期范围筛选,质量最高)。
 
     Returns 列表,每条字段:
@@ -288,8 +306,10 @@ def fetch_announcements_cninfo(symbol: str, days: int = 30, limit: int = 40) -> 
         return []
     df = _safe(
         ak.stock_zh_a_disclosure_report_cninfo,
-        symbol=symbol, market="沪深京",
-        keyword="", category="",
+        symbol=symbol,
+        market="沪深京",
+        keyword="",
+        category="",
         start_date=_date_n_days_ago(days),
         end_date=_date_today(),
     )
@@ -301,17 +321,21 @@ def fetch_announcements_cninfo(symbol: str, days: int = 30, limit: int = 40) -> 
         title = _clean_str(row.get("公告标题"))
         if not title:
             continue
-        out.append({
-            "title": title,
-            "category": classify_announcement(title),
-            "date": _clean_str(row.get("公告时间"))[:10],
-            "url":  _clean_str(row.get("公告链接")),
-            "source": "巨潮",
-        })
+        out.append(
+            {
+                "title": title,
+                "category": classify_announcement(title),
+                "date": _clean_str(row.get("公告时间"))[:10],
+                "url": _clean_str(row.get("公告链接")),
+                "source": "巨潮",
+            }
+        )
     return out
 
 
-def fetch_announcements_em_today(date_str: Optional[str] = None, limit: int = 60) -> List[Dict[str, Any]]:
+def fetch_announcements_em_today(
+    date_str: Optional[str] = None, limit: int = 60
+) -> List[Dict[str, Any]]:
     """东财全市场当日公告。supplements 巨潮接口,有时巨潮当日还没收录,东财已经发布。
 
     返回字段对齐 :func:`fetch_announcements_cninfo`,额外带 ``code`` / ``name``,便于行业过滤。
@@ -326,17 +350,19 @@ def fetch_announcements_em_today(date_str: Optional[str] = None, limit: int = 60
         title = _clean_str(row.get("公告标题"))
         if not title:
             continue
-        out.append({
-            "title": title,
-            "category": classify_announcement(
-                title + " " + _clean_str(row.get("公告类型"))
-            ),
-            "date":   _clean_str(row.get("公告日期"))[:10],
-            "url":    _clean_str(row.get("网址")),
-            "source": "东财",
-            "code":   _clean_str(row.get("代码")),
-            "name":   _clean_str(row.get("名称")),
-        })
+        out.append(
+            {
+                "title": title,
+                "category": classify_announcement(
+                    title + " " + _clean_str(row.get("公告类型"))
+                ),
+                "date": _clean_str(row.get("公告日期"))[:10],
+                "url": _clean_str(row.get("网址")),
+                "source": "东财",
+                "code": _clean_str(row.get("代码")),
+                "name": _clean_str(row.get("名称")),
+            }
+        )
     return out
 
 
@@ -355,7 +381,9 @@ def merge_announcements(*lists: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-def build_announcements_brief_for_llm(items: List[Dict[str, Any]], max_items: int = 8) -> str:
+def build_announcements_brief_for_llm(
+    items: List[Dict[str, Any]], max_items: int = 8
+) -> str:
     """把公告列表压缩成给 LLM 看的简报。"""
     if not items:
         return "无近期公告"
@@ -377,16 +405,18 @@ def fetch_research_report(symbol: str, limit: int = 20) -> List[Dict[str, Any]]:
     df = df.head(limit).copy()
     out = []
     for _, row in df.iterrows():
-        out.append({
-            "title":       _clean_str(row.get("报告名称")),
-            "rating":      _clean_str(row.get("东财评级")),
-            "institution": _clean_str(row.get("机构")),
-            "date":        _clean_str(row.get("日期")),
-            "industry":    _clean_str(row.get("行业")),
-            "eps_2026":    _to_float_or_none(row.get("2026-盈利预测-收益")),
-            "pe_2026":     _to_float_or_none(row.get("2026-盈利预测-市盈率")),
-            "pdf":         _clean_str(row.get("报告PDF链接")),
-        })
+        out.append(
+            {
+                "title": _clean_str(row.get("报告名称")),
+                "rating": _clean_str(row.get("东财评级")),
+                "institution": _clean_str(row.get("机构")),
+                "date": _clean_str(row.get("日期")),
+                "industry": _clean_str(row.get("行业")),
+                "eps_2026": _to_float_or_none(row.get("2026-盈利预测-收益")),
+                "pe_2026": _to_float_or_none(row.get("2026-盈利预测-市盈率")),
+                "pdf": _clean_str(row.get("报告PDF链接")),
+            }
+        )
     return out
 
 
@@ -442,9 +472,11 @@ def fetch_stock_news_em(symbol: str, limit: int = 20) -> List[Dict[str, Any]]:
         "cookie": f"emshistory=%5B%22{symbol}%22%5D",
         "host": "search-api-web.eastmoney.com",
         "referer": f"https://so.eastmoney.com/news/s?keyword={symbol}",
-        "user-agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/142.0.0.0 Safari/537.36"),
+        "user-agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/142.0.0.0 Safari/537.36"
+        ),
     }
     text = _fetch_eastmoney_search_text(_cf_requests, params, headers)
     payload = _parse_eastmoney_search_payload(text)
@@ -466,13 +498,15 @@ def fetch_stock_news_em(symbol: str, limit: int = 20) -> List[Dict[str, Any]]:
         code = _clean_str(a.get("code"))
         if code:
             url = _eastmoney_article_url(code)
-        out.append({
-            "source": _clean_str(a.get("mediaName")) or "东方财富",
-            "title": title,
-            "summary": content[:240],
-            "datetime": _clean_str(a.get("date")),
-            "url": url,
-        })
+        out.append(
+            {
+                "source": _clean_str(a.get("mediaName")) or "东方财富",
+                "title": title,
+                "summary": content[:240],
+                "datetime": _clean_str(a.get("date")),
+                "url": url,
+            }
+        )
     return out
 
 
@@ -522,9 +556,11 @@ def fetch_keyword_news_em(keyword: str, limit: int = 20) -> List[Dict[str, Any]]
         "cookie": f"emshistory=%5B%22{keyword}%22%5D",
         "host": "search-api-web.eastmoney.com",
         "referer": f"https://so.eastmoney.com/news/s?keyword={keyword}",
-        "user-agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/142.0.0.0 Safari/537.36"),
+        "user-agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/142.0.0.0 Safari/537.36"
+        ),
     }
     text = _fetch_eastmoney_search_text(_cf_requests, params, headers)
     payload = _parse_eastmoney_search_payload(text)
@@ -542,14 +578,16 @@ def fetch_keyword_news_em(keyword: str, limit: int = 20) -> List[Dict[str, Any]]
         content = _clean_str(a.get("content")).replace("<em>", "").replace("</em>", "")
         content = content.replace("　", "").replace("\r\n", " ")
         code = _clean_str(a.get("code"))
-        out.append({
-            "source": "东财搜索",
-            "topic": keyword,
-            "title": title,
-            "summary": content[:240],
-            "datetime": _clean_str(a.get("date")),
-            "url": _eastmoney_article_url(code),
-        })
+        out.append(
+            {
+                "source": "东财搜索",
+                "topic": keyword,
+                "title": title,
+                "summary": content[:240],
+                "datetime": _clean_str(a.get("date")),
+                "url": _eastmoney_article_url(code),
+            }
+        )
     return out
 
 
@@ -558,7 +596,9 @@ def _news_date_key(item: Dict[str, Any]) -> str:
     return _clean_str(item.get("datetime")) or _clean_str(item.get("date"))
 
 
-def merge_news_items(*lists: List[Dict[str, Any]], limit: Optional[int] = None) -> List[Dict[str, Any]]:
+def merge_news_items(
+    *lists: List[Dict[str, Any]], limit: Optional[int] = None
+) -> List[Dict[str, Any]]:
     """合并多路新闻,按 title+date 去重并尽量按时间倒序。
 
     传参顺序仍有意义:同一标题同一天重复时,保留先出现的数据源。
@@ -733,12 +773,14 @@ def fetch_stock_concepts(
         if code not in cons_codes and (stock_name and stock_name not in names):
             continue
         seen.add(name)
-        out.append({
-            "name": name,
-            "code": board_code,
-            "pct_chg": _to_float_or_none(row.get("涨跌幅")),
-            "lead_stock": _clean_str(row.get("领涨股票")),
-        })
+        out.append(
+            {
+                "name": name,
+                "code": board_code,
+                "pct_chg": _to_float_or_none(row.get("涨跌幅")),
+                "lead_stock": _clean_str(row.get("领涨股票")),
+            }
+        )
         if len(out) >= max_concepts:
             break
     return out
@@ -840,9 +882,23 @@ def _simplify_product(name: str) -> List[str]:
     if not name:
         return []
 
-    SUFFIXES = ("解决方案", "服务系统", "服务平台", "推广服务",
-                "终端服务", "终端", "服务", "系统", "平台", "业务",
-                "产品", "方案", "工具", "软件", "客户端")
+    SUFFIXES = (
+        "解决方案",
+        "服务系统",
+        "服务平台",
+        "推广服务",
+        "终端服务",
+        "终端",
+        "服务",
+        "系统",
+        "平台",
+        "业务",
+        "产品",
+        "方案",
+        "工具",
+        "软件",
+        "客户端",
+    )
     cleaned = name
     changed = True
     while changed:
@@ -861,10 +917,32 @@ def _simplify_product(name: str) -> List[str]:
         fragments = new_frags
 
     out: List[str] = []
-    GENERIC = {"证券", "公司", "服务", "数据", "终端", "系统", "客户",
-               "平台", "信息", "互联", "网络", "技术", "产品", "业务",
-               "互联网", "广告", "网站", "用户", "运营", "管理",
-               "数字化", "智能", "数据化", "云端"}
+    GENERIC = {
+        "证券",
+        "公司",
+        "服务",
+        "数据",
+        "终端",
+        "系统",
+        "客户",
+        "平台",
+        "信息",
+        "互联",
+        "网络",
+        "技术",
+        "产品",
+        "业务",
+        "互联网",
+        "广告",
+        "网站",
+        "用户",
+        "运营",
+        "管理",
+        "数字化",
+        "智能",
+        "数据化",
+        "云端",
+    }
     for f in fragments:
         f = f.strip()
         for s in SUFFIXES:
@@ -914,10 +992,36 @@ def _expand_stock_keywords(
     name = (stock_name or "").strip()
     if name:
         keywords.append(name)
-        for suffix in ("银行", "证券", "股份", "集团", "控股", "科技", "能源",
-                       "传媒", "保险", "实业", "电子", "电力", "汽车", "重工",
-                       "地产", "医药", "食品", "化学", "化工", "信息", "通信",
-                       "网络", "软件", "环保", "建设", "工业", "机械", "国际"):
+        for suffix in (
+            "银行",
+            "证券",
+            "股份",
+            "集团",
+            "控股",
+            "科技",
+            "能源",
+            "传媒",
+            "保险",
+            "实业",
+            "电子",
+            "电力",
+            "汽车",
+            "重工",
+            "地产",
+            "医药",
+            "食品",
+            "化学",
+            "化工",
+            "信息",
+            "通信",
+            "网络",
+            "软件",
+            "环保",
+            "建设",
+            "工业",
+            "机械",
+            "国际",
+        ):
             if name.endswith(suffix) and len(name) > len(suffix) + 1:
                 trimmed = name[: -len(suffix)]
                 if len(trimmed) >= 2:
@@ -932,7 +1036,7 @@ def _expand_stock_keywords(
         keywords.append(str(symbol).strip())
 
     # 主营产品 -> 核心词
-    for raw in (products or []):
+    for raw in products or []:
         for token in _simplify_product(raw):
             keywords.append(token)
 
@@ -963,7 +1067,7 @@ def get_industry_keywords(industry: str) -> List[str]:
     # akshare 行业名常带罗马数字后缀(白酒Ⅱ / 化工Ⅲ),剥掉
     for suffix in ("Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ"):
         if industry.endswith(suffix) and len(industry) > 1:
-            base = industry[: -1]
+            base = industry[:-1]
             if base and base not in out:
                 out.append(base)
     return out
@@ -989,7 +1093,7 @@ def fetch_main_business(symbol: str) -> Dict[str, Any]:
         "industry": _clean_str(row.get("行业")),
         "products": products[:6],
         "main_business": _clean_str(row.get("主营业务")),
-        "scope":         _clean_str(row.get("经营范围")),
+        "scope": _clean_str(row.get("经营范围")),
     }
 
 
@@ -1011,13 +1115,55 @@ def extract_business_terms(scope_text: str, max_terms: int = 8) -> List[str]:
         return []
 
     SUFFIXES_3 = ("技术产品", "解决方案", "技术开发", "系统集成", "及系统集成")
-    SUFFIXES_2 = ("产品", "技术", "服务", "系统", "设备", "平台", "装备",
-                  "工程", "材料", "设计", "解决", "运营", "管理", "进出口")
-    GENERIC = {"数据", "信息", "技术", "产品", "服务", "系统", "设备",
-               "平台", "客户", "网络", "软件", "硬件", "通信", "互联网",
-               "智能", "管理", "运营", "工程", "解决", "测试", "咨询",
-               "销售", "进口", "出口", "生产", "其他", "项目",
-               "技术进出口", "防伪开发", "防伪", "进出口"}
+    SUFFIXES_2 = (
+        "产品",
+        "技术",
+        "服务",
+        "系统",
+        "设备",
+        "平台",
+        "装备",
+        "工程",
+        "材料",
+        "设计",
+        "解决",
+        "运营",
+        "管理",
+        "进出口",
+    )
+    GENERIC = {
+        "数据",
+        "信息",
+        "技术",
+        "产品",
+        "服务",
+        "系统",
+        "设备",
+        "平台",
+        "客户",
+        "网络",
+        "软件",
+        "硬件",
+        "通信",
+        "互联网",
+        "智能",
+        "管理",
+        "运营",
+        "工程",
+        "解决",
+        "测试",
+        "咨询",
+        "销售",
+        "进口",
+        "出口",
+        "生产",
+        "其他",
+        "项目",
+        "技术进出口",
+        "防伪开发",
+        "防伪",
+        "进出口",
+    }
 
     text = str(scope_text)
     SEPARATORS = ["、", "，", ",", ";", "；", "/", "(", ")", "(", ")", "和", "及"]
@@ -1069,25 +1215,93 @@ def _infer_industry_from_text(text: str) -> str:
     text = str(text)
     # 白名单按"重要 + 长词优先"排序,长词排前避免短词误中(例如"证券保险" 应识别为证券)
     HINTS = [
-        "证券信息服务", "金融信息服务", "信息技术服务",
-        "白酒", "啤酒", "葡萄酒", "饮料", "乳制品",
-        "证券", "银行", "保险", "信托", "期货", "基金",
-        "光伏", "风电", "电池", "新能源", "半导体", "芯片",
-        "医药", "医疗器械", "生物制品", "中药", "创新药",
-        "汽车", "整车", "汽车零部件", "新能源汽车",
-        "钢铁", "煤炭", "有色金属", "稀土", "化工", "石油",
-        "房地产", "建筑", "建材", "水泥", "工程",
-        "传媒", "游戏", "影视", "广告", "出版",
-        "通信", "5G", "运营商", "通信设备",
-        "软件", "计算机", "云计算", "数据中心", "人工智能",
-        "互联网", "电商", "O2O", "外卖", "金融科技",
-        "食品", "调味品", "速冻", "肉制品",
-        "纺织", "服装", "家纺", "鞋类",
-        "家电", "白电", "黑电", "厨电",
-        "机械", "重工", "工程机械", "机器人", "自动化",
-        "物流", "快递", "航运", "港口",
-        "教育", "酒店", "旅游", "餐饮",
-        "环保", "节能", "新材料",
+        "证券信息服务",
+        "金融信息服务",
+        "信息技术服务",
+        "白酒",
+        "啤酒",
+        "葡萄酒",
+        "饮料",
+        "乳制品",
+        "证券",
+        "银行",
+        "保险",
+        "信托",
+        "期货",
+        "基金",
+        "光伏",
+        "风电",
+        "电池",
+        "新能源",
+        "半导体",
+        "芯片",
+        "医药",
+        "医疗器械",
+        "生物制品",
+        "中药",
+        "创新药",
+        "汽车",
+        "整车",
+        "汽车零部件",
+        "新能源汽车",
+        "钢铁",
+        "煤炭",
+        "有色金属",
+        "稀土",
+        "化工",
+        "石油",
+        "房地产",
+        "建筑",
+        "建材",
+        "水泥",
+        "工程",
+        "传媒",
+        "游戏",
+        "影视",
+        "广告",
+        "出版",
+        "通信",
+        "5G",
+        "运营商",
+        "通信设备",
+        "软件",
+        "计算机",
+        "云计算",
+        "数据中心",
+        "人工智能",
+        "互联网",
+        "电商",
+        "O2O",
+        "外卖",
+        "金融科技",
+        "食品",
+        "调味品",
+        "速冻",
+        "肉制品",
+        "纺织",
+        "服装",
+        "家纺",
+        "鞋类",
+        "家电",
+        "白电",
+        "黑电",
+        "厨电",
+        "机械",
+        "重工",
+        "工程机械",
+        "机器人",
+        "自动化",
+        "物流",
+        "快递",
+        "航运",
+        "港口",
+        "教育",
+        "酒店",
+        "旅游",
+        "餐饮",
+        "环保",
+        "节能",
+        "新材料",
     ]
     # 显式品牌/产品 → 行业映射,弥补主营文本不直接含行业关键词的情况
     PRODUCT_TO_INDUSTRY = [
@@ -1138,7 +1352,10 @@ def fetch_industry_name(symbol: str) -> str:
     df3 = _safe(ak.stock_zyjs_ths, symbol=symbol)
     if df3 is not None and len(df3):
         row = df3.iloc[0]
-        text = " ".join(_clean_str(row.get(c)) for c in ("主营业务", "产品类型", "产品名称", "经营范围"))
+        text = " ".join(
+            _clean_str(row.get(c))
+            for c in ("主营业务", "产品类型", "产品名称", "经营范围")
+        )
         ind = _infer_industry_from_text(text)
         if ind:
             return ind
@@ -1161,7 +1378,9 @@ def get_stock_related_news(
     也参与匹配。``industry`` 仅在调用方愿意接受行业新闻时使用——一般通过
     :func:`get_industry_news` 单独获取。
     """
-    keywords = _expand_stock_keywords(stock_name, symbol, industry=industry, products=products)
+    keywords = _expand_stock_keywords(
+        stock_name, symbol, industry=industry, products=products
+    )
     if not keywords:
         return []
 
@@ -1194,7 +1413,7 @@ def get_industry_news(
     会和 ``industry`` 一并加入匹配集合,显著提升小盘股 / 行业泛化股的召回。
     """
     keywords = list(get_industry_keywords(industry))
-    for kw in (extra_keywords or []):
+    for kw in extra_keywords or []:
         kw = (kw or "").strip()
         if kw and kw not in keywords:
             keywords.append(kw)
@@ -1245,16 +1464,20 @@ def build_research_brief_for_llm(reports: List[Dict], max_items: int = 8) -> str
             f"- [{r.get('date', '')}] {r.get('institution', '')}: 《{r.get('title', '')[:40]}》评级={rating}"
         )
 
-    summary_line = "评级分布: " + " / ".join(f"{k}×{v}" for k, v in rating_counter.items())
+    summary_line = "评级分布: " + " / ".join(
+        f"{k}×{v}" for k, v in rating_counter.items()
+    )
     return summary_line + "\n" + "\n".join(lines)
 
 
 # ============== v0.11: Provider 插件集成 ==============
 
+
 def _get_registry():
     """延迟导入 Provider Registry"""
     try:
         from providers.registry import get_registry
+
         return get_registry()
     except Exception as e:
         logger.debug("Provider Registry 不可用: %s", e)
@@ -1275,6 +1498,7 @@ def fetch_news_via_provider(
     # v0.12: 优先使用 Pipeline
     try:
         from pipeline import get_pipeline
+
         results = get_pipeline().ingest_news(market=market, symbol=symbol, limit=limit)
         if results:
             return results
@@ -1308,6 +1532,7 @@ def fetch_reports_via_provider(
     """通过 Provider Registry 获取研报 (v0.11, v0.12 增强)"""
     try:
         from pipeline import get_pipeline
+
         results = get_pipeline().ingest_reports(symbol=symbol, limit=limit)
         if results:
             return results
@@ -1337,9 +1562,12 @@ def fetch_announcements_via_provider(
     """通过 Provider Registry 获取公告 (v0.11, v0.12 增强)"""
     try:
         from pipeline import get_pipeline
+
         results = get_pipeline().ingest_announcements(
-            symbol=symbol, limit=limit,
-            start_date=start_date, end_date=end_date,
+            symbol=symbol,
+            limit=limit,
+            start_date=start_date,
+            end_date=end_date,
         )
         if results:
             return results
@@ -1366,6 +1594,7 @@ def get_provider_health_summary() -> str:
     """获取所有数据源的健康状态摘要 (v0.11)"""
     try:
         from observability.source_health import SourceHealthMonitor
+
         monitor = SourceHealthMonitor()
         return monitor.get_source_summary()
     except Exception:
@@ -1397,7 +1626,11 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("测试 4: 个股相关资讯（贵州茅台）")
     print("=" * 70)
-    all_news = fetch_telegraph_em(limit=200) + fetch_telegraph_cls(limit=20) + fetch_telegraph_sina(limit=20)
+    all_news = (
+        fetch_telegraph_em(limit=200)
+        + fetch_telegraph_cls(limit=20)
+        + fetch_telegraph_sina(limit=20)
+    )
     related = get_stock_related_news("贵州茅台", all_news, limit=5)
     print(f"匹配到 {len(related)} 条")
     for x in related:

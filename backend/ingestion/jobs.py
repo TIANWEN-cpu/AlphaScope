@@ -11,7 +11,6 @@ from datetime import datetime
 from .scheduler import (
     DataScheduler,
     FetchJob,
-    FETCH_INTERVAL_FAST,
     FETCH_INTERVAL_MEDIUM,
     FETCH_INTERVAL_SLOW,
     FETCH_INTERVAL_DAILY,
@@ -41,9 +40,11 @@ def _is_us_trading_hour() -> bool:
 
 # ---- 采集任务函数 ----
 
+
 def fetch_cn_news():
     """采集 A 股新闻/快讯"""
     from backend.pipeline import get_pipeline
+
     pipeline = get_pipeline()
     items = pipeline.ingest_news(market="CN", limit=50)
     logger.info("[Job] CN 新闻采集: %d 条", len(items))
@@ -52,6 +53,7 @@ def fetch_cn_news():
 def fetch_cn_reports():
     """采集 A 股研报 (热门个股)"""
     from backend.pipeline import get_pipeline
+
     pipeline = get_pipeline()
     # 对热门个股采集研报
     hot_symbols = ["600519", "000001", "300750", "601318", "000858"]
@@ -65,6 +67,7 @@ def fetch_cn_reports():
 def fetch_cn_announcements():
     """采集 A 股公告"""
     from backend.pipeline import get_pipeline
+
     pipeline = get_pipeline()
     hot_symbols = ["600519", "000001", "300750", "601318", "000858"]
     total = 0
@@ -77,6 +80,7 @@ def fetch_cn_announcements():
 def fetch_market_snapshot():
     """采集大盘快照行情"""
     from backend.pipeline import get_pipeline
+
     pipeline = get_pipeline()
     # 主要指数
     for idx in ["000001", "399001", "399006"]:
@@ -87,6 +91,7 @@ def fetch_market_snapshot():
 def fetch_us_filings():
     """采集美股 SEC filings"""
     from backend.pipeline import get_pipeline
+
     pipeline = get_pipeline()
     us_symbols = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"]
     total = 0
@@ -99,6 +104,7 @@ def fetch_us_filings():
 def fetch_cn_prices():
     """采集 A 股日线行情 (收盘后)"""
     from backend.pipeline import get_pipeline
+
     pipeline = get_pipeline()
     hot_symbols = ["600519", "000001", "300750", "601318", "000858"]
     total = 0
@@ -109,6 +115,7 @@ def fetch_cn_prices():
 
 
 # ---- 调度器工厂 ----
+
 
 def create_default_scheduler() -> DataScheduler:
     """创建默认数据采集调度器
@@ -123,47 +130,59 @@ def create_default_scheduler() -> DataScheduler:
     """
     scheduler = DataScheduler()
 
-    scheduler.add_job(FetchJob(
-        name="cn_news",
-        func=fetch_cn_news,
-        interval_seconds=FETCH_INTERVAL_MEDIUM,
-        description="A 股新闻/快讯 (每 5 分钟)",
-    ))
+    scheduler.add_job(
+        FetchJob(
+            name="cn_news",
+            func=fetch_cn_news,
+            interval_seconds=FETCH_INTERVAL_MEDIUM,
+            description="A 股新闻/快讯 (每 5 分钟)",
+        )
+    )
 
-    scheduler.add_job(FetchJob(
-        name="cn_reports",
-        func=fetch_cn_reports,
-        interval_seconds=FETCH_INTERVAL_SLOW,
-        description="A 股研报 (每小时)",
-    ))
+    scheduler.add_job(
+        FetchJob(
+            name="cn_reports",
+            func=fetch_cn_reports,
+            interval_seconds=FETCH_INTERVAL_SLOW,
+            description="A 股研报 (每小时)",
+        )
+    )
 
-    scheduler.add_job(FetchJob(
-        name="cn_announcements",
-        func=fetch_cn_announcements,
-        interval_seconds=FETCH_INTERVAL_SLOW,
-        description="A 股公告 (每小时)",
-    ))
+    scheduler.add_job(
+        FetchJob(
+            name="cn_announcements",
+            func=fetch_cn_announcements,
+            interval_seconds=FETCH_INTERVAL_SLOW,
+            description="A 股公告 (每小时)",
+        )
+    )
 
-    scheduler.add_job(FetchJob(
-        name="market_snapshot",
-        func=fetch_market_snapshot,
-        interval_seconds=FETCH_INTERVAL_SLOW,
-        description="大盘快照 (每小时)",
-    ))
+    scheduler.add_job(
+        FetchJob(
+            name="market_snapshot",
+            func=fetch_market_snapshot,
+            interval_seconds=FETCH_INTERVAL_SLOW,
+            description="大盘快照 (每小时)",
+        )
+    )
 
-    scheduler.add_job(FetchJob(
-        name="cn_prices",
-        func=fetch_cn_prices,
-        interval_seconds=FETCH_INTERVAL_DAILY,
-        description="A 股日线行情 (每日)",
-    ))
+    scheduler.add_job(
+        FetchJob(
+            name="cn_prices",
+            func=fetch_cn_prices,
+            interval_seconds=FETCH_INTERVAL_DAILY,
+            description="A 股日线行情 (每日)",
+        )
+    )
 
-    scheduler.add_job(FetchJob(
-        name="us_filings",
-        func=fetch_us_filings,
-        interval_seconds=FETCH_INTERVAL_MEDIUM * 3,  # 15 分钟
-        description="美股 SEC filings (每 15 分钟)",
-    ))
+    scheduler.add_job(
+        FetchJob(
+            name="us_filings",
+            func=fetch_us_filings,
+            interval_seconds=FETCH_INTERVAL_MEDIUM * 3,  # 15 分钟
+            description="美股 SEC filings (每 15 分钟)",
+        )
+    )
 
     logger.info("默认调度器已创建, 共 %d 个任务", len(scheduler._jobs))
     return scheduler

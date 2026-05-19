@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
 
 from backend.providers.base import BaseProvider
 
@@ -35,6 +34,7 @@ class GoogleTrendsProvider(BaseProvider):
             return {}
         try:
             from pytrends.request import TrendReq
+
             pytrends = TrendReq(hl="en-US", tz=360)
             pytrends.build_payload(
                 kw_list=[keyword],
@@ -73,6 +73,7 @@ class GoogleTrendsProvider(BaseProvider):
             return {}
         try:
             from pytrends.request import TrendReq
+
             pytrends = TrendReq(hl="en-US", tz=360)
             pytrends.build_payload(kw_list=[keyword], timeframe="today 3-m")
             related = pytrends.related_queries()

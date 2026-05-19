@@ -1,11 +1,10 @@
 """HKEX Provider 单元测试"""
 
-import pytest
-
 
 class TestHKEXProvider:
     def test_guess_category(self):
         from backend.providers.hkex_provider import HKEXProvider
+
         p = HKEXProvider()
         assert p._guess_category("末期股息派付公告") == "dividend"
         assert p._guess_category("截至2025年12月31日止年度业绩") == "earnings"
@@ -16,6 +15,7 @@ class TestHKEXProvider:
 
     def test_init(self):
         from backend.providers.hkex_provider import HKEXProvider
+
         p = HKEXProvider()
         assert p.name == "hkex"
         assert "HK" in p.markets
@@ -23,6 +23,7 @@ class TestHKEXProvider:
 
     def test_parse_hkex_html_table_rows(self):
         from backend.providers.hkex_provider import HKEXProvider
+
         p = HKEXProvider()
         html = """
         <tr>
@@ -44,6 +45,7 @@ class TestHKEXProvider:
     def test_parse_hkex_html_fallback_links(self):
         """结构化解析失败时, 应兜底提取链接"""
         from backend.providers.hkex_provider import HKEXProvider
+
         p = HKEXProvider()
         html = '<a href="/documents/2026/report.pdf">2025年度报告摘要</a>'
         results = p._parse_hkex_html(html, "00700")
@@ -52,6 +54,7 @@ class TestHKEXProvider:
 
     def test_parse_hkex_html_empty(self):
         from backend.providers.hkex_provider import HKEXProvider
+
         p = HKEXProvider()
         results = p._parse_hkex_html("<html><body>无结果</body></html>", "00700")
         assert results == []
@@ -59,6 +62,7 @@ class TestHKEXProvider:
     def test_parse_hkex_html_url_completion(self):
         """相对 URL 应补全为绝对 URL"""
         from backend.providers.hkex_provider import HKEXProvider
+
         p = HKEXProvider()
         html = '<tr><td>2026-05-18</td><td><a href="/news/file.pdf">标题</a></td></tr>'
         results = p._parse_hkex_html(html, "00700")

@@ -1,12 +1,22 @@
 """Tests for lightweight tracing module"""
+
 import pytest
 import time
 
-import sys, os
+import sys
+import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from backend.utils.tracer import Tracer, Span, traced, traced_func, get_tracer, get_all_stats
+from backend.utils.tracer import (
+    Tracer,
+    Span,
+    traced,
+    traced_func,
+    get_tracer,
+    get_all_stats,
+)
 
 
 class TestSpan:

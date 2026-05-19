@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
 
 from backend.providers.base import BaseProvider
 
@@ -32,6 +31,7 @@ class NorthboundProvider(BaseProvider):
         """Get northbound capital flow data"""
         try:
             import akshare as ak
+
             # Daily northbound flow
             df = ak.stock_hsgt_north_net_flow_in_em(symbol="北向")
             if df is None or df.empty:
@@ -39,14 +39,20 @@ class NorthboundProvider(BaseProvider):
             limit = query.get("limit", 30)
             result = []
             for _, row in df.tail(limit).iterrows():
-                result.append({
-                    "date": str(row.get("date", row.get("日期", ""))),
-                    "net_flow": float(row.get("value", row.get("当日净流入", 0))),
-                    "buy_volume": float(row.get("当日买入", 0)) if "当日买入" in row.index else 0,
-                    "sell_volume": float(row.get("当日卖出", 0)) if "当日卖出" in row.index else 0,
-                    "source": "northbound",
-                    "type": "northbound_flow",
-                })
+                result.append(
+                    {
+                        "date": str(row.get("date", row.get("日期", ""))),
+                        "net_flow": float(row.get("value", row.get("当日净流入", 0))),
+                        "buy_volume": float(row.get("当日买入", 0))
+                        if "当日买入" in row.index
+                        else 0,
+                        "sell_volume": float(row.get("当日卖出", 0))
+                        if "当日卖出" in row.index
+                        else 0,
+                        "source": "northbound",
+                        "type": "northbound_flow",
+                    }
+                )
             return result
         except Exception as e:
             logger.warning("Northbound flow failed: %s", e)
@@ -56,19 +62,26 @@ class NorthboundProvider(BaseProvider):
         """Get top northbound holdings"""
         try:
             import akshare as ak
+
             df = ak.stock_hsgt_hold_stock_em(market="北向")
             if df is None or df.empty:
                 return []
             limit = query.get("limit", 50)
             result = []
             for _, row in df.head(limit).iterrows():
-                result.append({
-                    "symbol": str(row.get("代码", "")),
-                    "name": str(row.get("名称", "")),
-                    "holding_ratio": float(row.get("持股占比", 0)) if "持股占比" in row.index else 0,
-                    "net_flow": float(row.get("当日净买入", 0)) if "当日净买入" in row.index else 0,
-                    "source": "northbound",
-                })
+                result.append(
+                    {
+                        "symbol": str(row.get("代码", "")),
+                        "name": str(row.get("名称", "")),
+                        "holding_ratio": float(row.get("持股占比", 0))
+                        if "持股占比" in row.index
+                        else 0,
+                        "net_flow": float(row.get("当日净买入", 0))
+                        if "当日净买入" in row.index
+                        else 0,
+                        "source": "northbound",
+                    }
+                )
             return result
         except Exception as e:
             logger.warning("Northbound holdings failed: %s", e)

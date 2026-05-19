@@ -9,8 +9,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Any
 
 import streamlit as st
 import pandas as pd
@@ -26,6 +24,7 @@ def render_source_health_panel():
     st.markdown("### 🔌 Provider 状态")
     try:
         from backend.observability.source_health import SourceHealthMonitor
+
         monitor = SourceHealthMonitor()
         report = monitor.get_health_report()
 
@@ -38,17 +37,23 @@ def render_source_health_panel():
         if report.get("providers"):
             rows = []
             for p in report["providers"]:
-                status_icon = {"healthy": "🟢", "degraded": "🟡", "unhealthy": "🔴"}.get(
-                    p["status"], "⚪"
+                status_icon = {
+                    "healthy": "🟢",
+                    "degraded": "🟡",
+                    "unhealthy": "🔴",
+                }.get(p["status"], "⚪")
+                latency = (
+                    f"{p['avg_latency_ms']:.0f}ms" if p["avg_latency_ms"] > 0 else "N/A"
                 )
-                latency = f"{p['avg_latency_ms']:.0f}ms" if p["avg_latency_ms"] > 0 else "N/A"
-                rows.append({
-                    "状态": status_icon,
-                    "Provider": p["name"],
-                    "延迟": latency,
-                    "连续失败": p["consecutive_failures"],
-                    "错误": p.get("error", "")[:50] if p.get("error") else "",
-                })
+                rows.append(
+                    {
+                        "状态": status_icon,
+                        "Provider": p["name"],
+                        "延迟": latency,
+                        "连续失败": p["consecutive_failures"],
+                        "错误": p.get("error", "")[:50] if p.get("error") else "",
+                    }
+                )
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
@@ -61,6 +66,7 @@ def render_source_health_panel():
     st.markdown("### 📋 最近采集日志")
     try:
         from backend.storage.db import Database
+
         db = Database()
         cur = db.conn.cursor()
         cur.execute(
@@ -74,7 +80,9 @@ def render_source_health_panel():
             df = pd.DataFrame([dict(r) for r in rows])
             # 格式化延迟
             if "latency_ms" in df.columns:
-                df["latency_ms"] = df["latency_ms"].apply(lambda x: f"{x:.0f}ms" if x else "N/A")
+                df["latency_ms"] = df["latency_ms"].apply(
+                    lambda x: f"{x:.0f}ms" if x else "N/A"
+                )
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.info("暂无采集日志 (调度器未运行或尚未采集数据)")
@@ -99,7 +107,11 @@ def render_source_health_panel():
                 )
             if "success_rate" not in df_stats.columns and "total" in df_stats.columns:
                 df_stats["success_rate"] = df_stats.apply(
-                    lambda r: f"{r['success']/max(r['total'],1)*100:.0f}%" if r.get("total") else "N/A",
+                    lambda r: (
+                        f"{r['success'] / max(r['total'], 1) * 100:.0f}%"
+                        if r.get("total")
+                        else "N/A"
+                    ),
                     axis=1,
                 )
             st.dataframe(df_stats, use_container_width=True, hide_index=True)
@@ -111,10 +123,13 @@ def render_source_health_panel():
     st.markdown("### 🧠 RAG 向量索引")
     try:
         from backend.rag.vector_store import VectorStore
+
         store = VectorStore()
         stats = store.get_collection_stats()
         if stats:
-            rows = [{"Collection": name, "文档数": count} for name, count in stats.items()]
+            rows = [
+                {"Collection": name, "文档数": count} for name, count in stats.items()
+            ]
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True, hide_index=True)
             total = sum(stats.values())
@@ -128,6 +143,7 @@ def render_source_health_panel():
     st.markdown("### 💾 数据库状态")
     try:
         from backend.storage.db import Database, DB_PATH
+
         db = Database()
         tables = [
             ("news_items", "新闻"),
@@ -157,6 +173,7 @@ def render_trust_badge(source: str) -> str:
     """为数据源渲染可信度徽标"""
     try:
         from backend.quality.source_rank import SourceRanker
+
         ranker = SourceRanker()
         level = ranker.get_trust_level(source)
         badge_map = {

@@ -1,12 +1,11 @@
 """Tests for Agent Mode System (v0.12)"""
-import pytest
-import tempfile
+
 import threading
-from pathlib import Path
-from unittest.mock import patch
 
 # Ensure project root is on sys.path
-import sys, os
+import sys
+import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -72,9 +71,13 @@ class TestAgentModeConfig:
     def _make_config(self, mode=AnalysisMode.DEEP, agents=None):
         if agents is None:
             agents = [
-                AgentModeEntry(key="fundamental", provider="claude", model="claude-sonnet-4-5"),
+                AgentModeEntry(
+                    key="fundamental", provider="claude", model="claude-sonnet-4-5"
+                ),
                 AgentModeEntry(key="technical", provider="gpt", model="gpt-5.2"),
-                AgentModeEntry(key="sentiment", provider="deepseek", model="deepseek-chat"),
+                AgentModeEntry(
+                    key="sentiment", provider="deepseek", model="deepseek-chat"
+                ),
             ]
         return AgentModeConfig(
             mode=mode,
@@ -245,7 +248,8 @@ class TestModeResolverWithCustomConfig:
 
     def test_custom_agents(self, tmp_path):
         cfg = tmp_path / "models.yaml"
-        cfg.write_text("""
+        cfg.write_text(
+            """
 version: "1.0"
 modes:
   standard:
@@ -263,7 +267,9 @@ modes:
 fallback:
   provider: deepseek
   model: deepseek-chat
-""", encoding="utf-8")
+""",
+            encoding="utf-8",
+        )
         resolver = ModeResolver(config_path=str(cfg))
         config = resolver.resolve(AnalysisMode.STANDARD)
         assert config.name == "自定义标准"
@@ -278,6 +284,7 @@ class TestConvenienceFunctions:
         ModeResolver._instance = None
         # Also reset module-level singleton
         import backend.agent_modes as mod
+
         mod._resolver_instance = None
 
     def teardown_method(self):

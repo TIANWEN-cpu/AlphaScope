@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from .base import BaseProvider
 
@@ -30,6 +29,7 @@ class EastMoneyProvider(BaseProvider):
 
         try:
             import requests
+
             url = "https://search-api-web.eastmoney.com/search/jsonp"
             params = {
                 "cb": "jQuery",
@@ -47,22 +47,23 @@ class EastMoneyProvider(BaseProvider):
             start = text.find("(") + 1
             end = text.rfind(")")
             import json
+
             data = json.loads(text[start:end])
-            items = (
-                data.get("result", {})
-                .get("cmsArticleWebOld", {})
-                .get("list", [])
-            )
+            items = data.get("result", {}).get("cmsArticleWebOld", {}).get("list", [])
             results = []
             for item in items:
-                results.append({
-                    "source": "eastmoney",
-                    "upstream": "eastmoney",
-                    "title": item.get("title", "").replace("<em>", "").replace("</em>", ""),
-                    "summary": item.get("content", "")[:200],
-                    "datetime": item.get("date", ""),
-                    "url": item.get("url", ""),
-                })
+                results.append(
+                    {
+                        "source": "eastmoney",
+                        "upstream": "eastmoney",
+                        "title": item.get("title", "")
+                        .replace("<em>", "")
+                        .replace("</em>", ""),
+                        "summary": item.get("content", "")[:200],
+                        "datetime": item.get("date", ""),
+                        "url": item.get("url", ""),
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("EastMoney search failed: %s", e)
@@ -73,6 +74,7 @@ class EastMoneyProvider(BaseProvider):
         # 通过 AkShare 的东财研报接口获取
         try:
             import akshare as ak
+
             symbol = query.get("symbol", "")
             if not symbol:
                 return []
@@ -81,16 +83,18 @@ class EastMoneyProvider(BaseProvider):
                 return []
             results = []
             for _, row in df.head(query.get("limit", 30)).iterrows():
-                results.append({
-                    "source": "eastmoney",
-                    "upstream": "eastmoney",
-                    "title": str(row.get("报告名称", "")).strip(),
-                    "institution": str(row.get("机构", "")).strip(),
-                    "rating": str(row.get("最新评级", "")).strip(),
-                    "datetime": str(row.get("日期", "")).strip(),
-                    "pdf_url": str(row.get("报告链接", "")).strip(),
-                    "symbols": [symbol],
-                })
+                results.append(
+                    {
+                        "source": "eastmoney",
+                        "upstream": "eastmoney",
+                        "title": str(row.get("报告名称", "")).strip(),
+                        "institution": str(row.get("机构", "")).strip(),
+                        "rating": str(row.get("最新评级", "")).strip(),
+                        "datetime": str(row.get("日期", "")).strip(),
+                        "pdf_url": str(row.get("报告链接", "")).strip(),
+                        "symbols": [symbol],
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("EastMoney reports failed: %s", e)

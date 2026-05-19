@@ -15,6 +15,7 @@ Critic / 审稿 Agent 服务(v0.9)。
 依赖:
 - llm_agents.call_llm 与 _extract_json
 """
+
 from __future__ import annotations
 
 import json
@@ -207,11 +208,11 @@ def parse_critic_response(
             seen.add(key)
             agents_out[key] = {
                 "quality_score": _safe_int_score(item.get("quality_score")),
-                "supported":        _safe_str_list(item.get("supported")),
-                "contradictions":   _safe_str_list(item.get("contradictions")),
+                "supported": _safe_str_list(item.get("supported")),
+                "contradictions": _safe_str_list(item.get("contradictions")),
                 "missing_evidence": _safe_str_list(item.get("missing_evidence")),
-                "overconfident":    bool(item.get("overconfident", False)),
-                "comment":          _safe_str(item.get("comment"), max_len=200),
+                "overconfident": bool(item.get("overconfident", False)),
+                "comment": _safe_str(item.get("comment"), max_len=200),
             }
 
     div_raw = data.get("divergence") if isinstance(data.get("divergence"), dict) else {}
@@ -221,7 +222,7 @@ def parse_critic_response(
     divergence = {
         "level": level,
         "main_axis": _safe_str(div_raw.get("main_axis"), max_len=40),
-        "summary":   _safe_str(div_raw.get("summary"),   max_len=240),
+        "summary": _safe_str(div_raw.get("summary"), max_len=240),
     }
 
     return {"agents": agents_out, "divergence": divergence}
@@ -254,8 +255,13 @@ def run_batch_critic(
     """
     if not agent_results:
         return {
-            "agents": {}, "divergence": {"level": "无", "main_axis": "", "summary": ""},
-            "ok": True, "vendor": "", "model": "", "fallback_used": False, "error": "",
+            "agents": {},
+            "divergence": {"level": "无", "main_axis": "", "summary": ""},
+            "ok": True,
+            "vendor": "",
+            "model": "",
+            "fallback_used": False,
+            "error": "",
         }
 
     expected_keys = list(agent_results.keys())
@@ -265,15 +271,19 @@ def run_batch_critic(
     factor_ctx = ""
     try:
         from backend.llm_agents import fetch_factor_context
+
         # 从 market_brief 中提取 symbol
         import re
+
         sym_match = re.search(r"【标的】.*?\((\d{6})", market_brief)
         if sym_match:
             factor_ctx = fetch_factor_context(sym_match.group(1), stock_name)
     except Exception:
         pass
 
-    user_msg = build_critic_prompt(stock_name, market_brief, agent_results, factor_context=factor_ctx)
+    user_msg = build_critic_prompt(
+        stock_name, market_brief, agent_results, factor_context=factor_ctx
+    )
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_msg},
@@ -294,11 +304,17 @@ def run_batch_critic(
             is_primary = (vd, md) == primary
             call_api_key = (api_key or None) if is_primary else None
             call_base_url = (base_url or None) if is_primary else None
-            if not call_api_key and not call_base_url and not (cfg.get("api_key") and cfg.get("base_url")):
+            if (
+                not call_api_key
+                and not call_base_url
+                and not (cfg.get("api_key") and cfg.get("base_url"))
+            ):
                 last_err = f"{vd} 未配置完整"
                 continue
             text = call_llm(
-                vendor=vd, model=md, messages=messages,
+                vendor=vd,
+                model=md,
+                messages=messages,
                 json_mode=True,
                 max_tokens=timeout_max_tokens,
                 temperature=0.2,
@@ -339,13 +355,15 @@ if __name__ == "__main__":
     fake_agents = {
         "fundamental": {
             "name": "🏛️ 基本面分析师",
-            "signal": "买入", "confidence": 78,
+            "signal": "买入",
+            "confidence": 78,
             "reason": "高 ROE + 行业龙头",
             "evidence": [{"type": "fundamental", "claim": "ROE 30%"}],
         },
         "technical": {
             "name": "📐 技术分析师",
-            "signal": "卖出", "confidence": 65,
+            "signal": "卖出",
+            "confidence": 65,
             "reason": "短期超买",
             "evidence": [{"type": "technical", "claim": "RSI > 80"}],
             "risks": ["回踩 MA60"],
@@ -355,14 +373,37 @@ if __name__ == "__main__":
     print("--- prompt sample ---")
     print(prompt[:400])
 
-    fake_resp = json.dumps({
-        "agents": [
-            {"key": "fundamental", "quality_score": 80, "supported": ["ROE 30%"], "contradictions": [], "missing_evidence": [], "overconfident": False, "comment": "扎实"},
-            {"key": "technical", "quality_score": 50, "supported": [], "contradictions": ["与简报中 RSI 65 不符"], "missing_evidence": [], "overconfident": True, "comment": "数字引用错误"},
-            {"key": "ghost", "quality_score": 99, "comment": "应该被过滤"},
-        ],
-        "divergence": {"level": "中", "main_axis": "估值 vs 短期超买", "summary": "基本面看长期,技术看短期。"},
-    }, ensure_ascii=False)
+    fake_resp = json.dumps(
+        {
+            "agents": [
+                {
+                    "key": "fundamental",
+                    "quality_score": 80,
+                    "supported": ["ROE 30%"],
+                    "contradictions": [],
+                    "missing_evidence": [],
+                    "overconfident": False,
+                    "comment": "扎实",
+                },
+                {
+                    "key": "technical",
+                    "quality_score": 50,
+                    "supported": [],
+                    "contradictions": ["与简报中 RSI 65 不符"],
+                    "missing_evidence": [],
+                    "overconfident": True,
+                    "comment": "数字引用错误",
+                },
+                {"key": "ghost", "quality_score": 99, "comment": "应该被过滤"},
+            ],
+            "divergence": {
+                "level": "中",
+                "main_axis": "估值 vs 短期超买",
+                "summary": "基本面看长期,技术看短期。",
+            },
+        },
+        ensure_ascii=False,
+    )
     parsed = parse_critic_response(fake_resp, list(fake_agents.keys()))
     print("\n--- parsed ---")
     print(json.dumps(parsed, ensure_ascii=False, indent=2))

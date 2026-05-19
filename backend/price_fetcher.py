@@ -3,6 +3,7 @@
 - 获取股票指定日期后的 N 个交易日收盘价
 - 获取股票指定日期后区间收盘价序列(用于回撤/区间收益计算)
 """
+
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
@@ -67,10 +68,12 @@ def _load_history(symbol: str, base_date: datetime) -> Optional[pd.DataFrame]:
     if date_col is None or close_col is None:
         return None
 
-    out = pd.DataFrame({
-        "date": pd.to_datetime(df[date_col]).dt.strftime("%Y-%m-%d"),
-        "close": pd.to_numeric(df[close_col], errors="coerce"),
-    })
+    out = pd.DataFrame(
+        {
+            "date": pd.to_datetime(df[date_col]).dt.strftime("%Y-%m-%d"),
+            "close": pd.to_numeric(df[close_col], errors="coerce"),
+        }
+    )
     out = out.dropna(subset=["close"]).sort_values("date").reset_index(drop=True)
     return out if not out.empty else None
 
@@ -138,10 +141,12 @@ def get_price_range(
     if future.empty:
         return []
 
-    return list(zip(
-        future["date"].tolist(),
-        [float(v) for v in future["close"].tolist()],
-    ))
+    return list(
+        zip(
+            future["date"].tolist(),
+            [float(v) for v in future["close"].tolist()],
+        )
+    )
 
 
 if __name__ == "__main__":
@@ -150,4 +155,6 @@ if __name__ == "__main__":
     price = get_price_after("600519", "2024-01-02", 5)
     print(f"600519 after 5 trading days from 2024-01-02: {price}")
     series = get_price_range("600519", "2024-01-02", 10)
-    print(f"600519 range (10 days): {len(series)} samples, last={series[-1] if series else None}")
+    print(
+        f"600519 range (10 days): {len(series)} samples, last={series[-1] if series else None}"
+    )

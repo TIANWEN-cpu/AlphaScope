@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import logging
 import time
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +54,14 @@ class BaseProvider(ABC):
     priority: int = 50
     license_level: str = "research_only"
     # v0.12: Enhanced provider metadata
-    data_class: str = "fundamental"  # price | fundamental | sentiment | macro | event | alternative
-    freshness: str = "daily"         # realtime | intraday | daily | weekly | monthly
-    cost_tier: str = "free"          # free | freemium | paid
-    rate_limit: dict = field(default_factory=lambda: {"per_minute": 60, "per_day": None})
+    data_class: str = (
+        "fundamental"  # price | fundamental | sentiment | macro | event | alternative
+    )
+    freshness: str = "daily"  # realtime | intraday | daily | weekly | monthly
+    cost_tier: str = "free"  # free | freemium | paid
+    rate_limit: dict = field(
+        default_factory=lambda: {"per_minute": 60, "per_day": None}
+    )
     requires_key: bool = False
 
     def __init__(self) -> None:

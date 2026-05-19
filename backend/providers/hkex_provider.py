@@ -68,14 +68,14 @@ class HKEXProvider(BaseProvider):
         row_patterns = [
             # pattern 1: table row with date and link
             re.compile(
-                r'<tr[^>]*>.*?<td[^>]*>(\d{4}-\d{2}-\d{2})</td>.*?'
+                r"<tr[^>]*>.*?<td[^>]*>(\d{4}-\d{2}-\d{2})</td>.*?"
                 r'<a[^>]*href="([^"]*)"[^>]*>([^<]*)</a>.*?</tr>',
                 re.DOTALL,
             ),
             # pattern 2: div-based layout
             re.compile(
                 r'<div[^>]*class="[^"]*result[^"]*"[^>]*>.*?'
-                r'(\d{4}-\d{2}-\d{2}).*?'
+                r"(\d{4}-\d{2}-\d{2}).*?"
                 r'<a[^>]*href="([^"]*)"[^>]*>([^<]*)</a>',
                 re.DOTALL,
             ),
@@ -93,18 +93,20 @@ class HKEXProvider(BaseProvider):
                     if url and not url.startswith("http"):
                         url = "https://www1.hkexnews.hk" + url
 
-                    results.append({
-                        "source": "hkex",
-                        "upstream": "hkex",
-                        "symbol": symbol,
-                        "company_name": "",
-                        "title": title,
-                        "category": self._guess_category(title),
-                        "datetime": date_str,
-                        "url": url,
-                        "source_url": url,
-                        "confidence": 0.95,
-                    })
+                    results.append(
+                        {
+                            "source": "hkex",
+                            "upstream": "hkex",
+                            "symbol": symbol,
+                            "company_name": "",
+                            "title": title,
+                            "category": self._guess_category(title),
+                            "datetime": date_str,
+                            "url": url,
+                            "source_url": url,
+                            "confidence": 0.95,
+                        }
+                    )
                 break  # 用第一个匹配成功的 pattern
 
         # 兜底: 如果结构化解析失败, 尝试提取所有链接
@@ -119,18 +121,20 @@ class HKEXProvider(BaseProvider):
                     continue
                 if not url.startswith("http"):
                     url = "https://www1.hkexnews.hk" + url
-                results.append({
-                    "source": "hkex",
-                    "upstream": "hkex",
-                    "symbol": symbol,
-                    "company_name": "",
-                    "title": title,
-                    "category": self._guess_category(title),
-                    "datetime": "",
-                    "url": url,
-                    "source_url": url,
-                    "confidence": 0.95,
-                })
+                results.append(
+                    {
+                        "source": "hkex",
+                        "upstream": "hkex",
+                        "symbol": symbol,
+                        "company_name": "",
+                        "title": title,
+                        "category": self._guess_category(title),
+                        "datetime": "",
+                        "url": url,
+                        "source_url": url,
+                        "confidence": 0.95,
+                    }
+                )
 
         return results
 

@@ -8,7 +8,9 @@
 - 24 小时本地文件缓存（cache/fundamentals/{symbol}.json）
 - 所有 akshare 调用经 _safe() 包装，单接口失败不影响整体
 """
+
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import json
@@ -35,32 +37,35 @@ CACHE_TTL_SECONDS = 86400  # 24 小时
 @dataclass
 class FinancialPeriod:
     """单期财务核心指标"""
+
     period: str = ""
-    revenue_yi: float = 0.0          # 营业收入(亿元)
-    net_profit_yi: float = 0.0       # 归母净利润(亿元)
-    gross_margin_pct: float = 0.0    # 毛利率(%)
-    roe_pct: float = 0.0             # ROE(%)
-    debt_ratio_pct: float = 0.0      # 资产负债率(%)
-    yoy_revenue: float = 0.0         # 营收同比增速(%)
-    yoy_net_profit: float = 0.0      # 净利同比增速(%)
+    revenue_yi: float = 0.0  # 营业收入(亿元)
+    net_profit_yi: float = 0.0  # 归母净利润(亿元)
+    gross_margin_pct: float = 0.0  # 毛利率(%)
+    roe_pct: float = 0.0  # ROE(%)
+    debt_ratio_pct: float = 0.0  # 资产负债率(%)
+    yoy_revenue: float = 0.0  # 营收同比增速(%)
+    yoy_net_profit: float = 0.0  # 净利同比增速(%)
 
 
 @dataclass
 class ShareholderRow:
     """股东行（用于十大股东 / 流通股东 / 机构变动）"""
+
     rank: int = 0
     name: str = ""
-    shares_yi: float = 0.0   # 持股数(亿股)
-    ratio_pct: float = 0.0   # 持股比例(%)
-    change_type: str = ""    # 变动方向：增持/减持/不变/新进/退出
+    shares_yi: float = 0.0  # 持股数(亿股)
+    ratio_pct: float = 0.0  # 持股比例(%)
+    change_type: str = ""  # 变动方向：增持/减持/不变/新进/退出
 
 
 @dataclass
 class PeerRow:
     """同业对比行"""
+
     symbol: str = ""
     name: str = ""
-    total_mcap_yi: float = 0.0     # 总市值(亿元)
+    total_mcap_yi: float = 0.0  # 总市值(亿元)
     pe: float = 0.0
     pb: float = 0.0
     roe_pct: float = 0.0
@@ -72,6 +77,7 @@ class PeerRow:
 @dataclass
 class FundamentalsData:
     """单股基本面整合容器"""
+
     symbol: str = ""
     stock_name: str = ""
     data_date: str = ""
@@ -196,7 +202,9 @@ def fetch_financial_summary(symbol: str, periods: int = 4) -> List[FinancialPeri
         return []
 
     # 提取日期列（形如 "20240930" 的列）
-    date_cols = [c for c in df.columns if isinstance(c, str) and re.match(r"^\d{8}$", c)]
+    date_cols = [
+        c for c in df.columns if isinstance(c, str) and re.match(r"^\d{8}$", c)
+    ]
     if not date_cols:
         return []
     # 倒序后取前 periods 列
@@ -232,16 +240,28 @@ def fetch_financial_summary(symbol: str, periods: int = 4) -> List[FinancialPeri
     for dcol in date_cols:
         # 格式化期间：20240930 → 2024-09-30
         period_str = f"{dcol[:4]}-{dcol[4:6]}-{dcol[6:8]}"
-        out.append(FinancialPeriod(
-            period=period_str,
-            revenue_yi=_to_yi(row_revenue.get(dcol)) if row_revenue is not None else 0.0,
-            net_profit_yi=_to_yi(row_net.get(dcol)) if row_net is not None else 0.0,
-            gross_margin_pct=_to_float(row_gross.get(dcol)) if row_gross is not None else 0.0,
-            roe_pct=_to_float(row_roe.get(dcol)) if row_roe is not None else 0.0,
-            debt_ratio_pct=_to_float(row_debt.get(dcol)) if row_debt is not None else 0.0,
-            yoy_revenue=_to_float(row_yoy_rev.get(dcol)) if row_yoy_rev is not None else 0.0,
-            yoy_net_profit=_to_float(row_yoy_np.get(dcol)) if row_yoy_np is not None else 0.0,
-        ))
+        out.append(
+            FinancialPeriod(
+                period=period_str,
+                revenue_yi=_to_yi(row_revenue.get(dcol))
+                if row_revenue is not None
+                else 0.0,
+                net_profit_yi=_to_yi(row_net.get(dcol)) if row_net is not None else 0.0,
+                gross_margin_pct=_to_float(row_gross.get(dcol))
+                if row_gross is not None
+                else 0.0,
+                roe_pct=_to_float(row_roe.get(dcol)) if row_roe is not None else 0.0,
+                debt_ratio_pct=_to_float(row_debt.get(dcol))
+                if row_debt is not None
+                else 0.0,
+                yoy_revenue=_to_float(row_yoy_rev.get(dcol))
+                if row_yoy_rev is not None
+                else 0.0,
+                yoy_net_profit=_to_float(row_yoy_np.get(dcol))
+                if row_yoy_np is not None
+                else 0.0,
+            )
+        )
     return out
 
 
@@ -260,26 +280,38 @@ def _to_market_symbol(symbol: str) -> str:
 
 
 # ============== 股东结构 ==============
-def _normalize_shareholder_df(df: pd.DataFrame, limit: int = 10) -> List[ShareholderRow]:
+def _normalize_shareholder_df(
+    df: pd.DataFrame, limit: int = 10
+) -> List[ShareholderRow]:
     """通用股东表归一化"""
     if df is None or len(df) == 0:
         return []
     df = df.copy().head(limit)
 
     # 识别字段
-    name_col = next((c for c in df.columns if "股东" in str(c) and "名称" in str(c)), None) or \
-               next((c for c in df.columns if str(c).strip() in ("股东名称", "名称")), None)
+    name_col = next(
+        (c for c in df.columns if "股东" in str(c) and "名称" in str(c)), None
+    ) or next((c for c in df.columns if str(c).strip() in ("股东名称", "名称")), None)
     if name_col is None:
         # 尝试首个字符串列
         for c in df.columns:
             if df[c].dtype == object:
                 name_col = c
                 break
-    shares_col = next((c for c in df.columns if "持股数" in str(c) or "持有数量" in str(c)), None) or \
-                 next((c for c in df.columns if "数量" in str(c)), None)
-    ratio_col = next((c for c in df.columns if "比例" in str(c) or "占比" in str(c) or "持股比" in str(c)), None)
-    change_col = next((c for c in df.columns if "增减" in str(c) and "比" not in str(c)), None) or \
-                 next((c for c in df.columns if "变化" in str(c) or "变动" in str(c)), None)
+    shares_col = next(
+        (c for c in df.columns if "持股数" in str(c) or "持有数量" in str(c)), None
+    ) or next((c for c in df.columns if "数量" in str(c)), None)
+    ratio_col = next(
+        (
+            c
+            for c in df.columns
+            if "比例" in str(c) or "占比" in str(c) or "持股比" in str(c)
+        ),
+        None,
+    )
+    change_col = next(
+        (c for c in df.columns if "增减" in str(c) and "比" not in str(c)), None
+    ) or next((c for c in df.columns if "变化" in str(c) or "变动" in str(c)), None)
 
     out = []
     for i, (_, row) in enumerate(df.iterrows(), 1):
@@ -295,13 +327,15 @@ def _normalize_shareholder_df(df: pd.DataFrame, limit: int = 10) -> List[Shareho
         if 0 < ratio < 1.0:
             ratio = ratio * 100
 
-        out.append(ShareholderRow(
-            rank=int(_to_float(row.get("名次", i)) or i),
-            name=str(row[name_col]).strip() if name_col else "",
-            shares_yi=shares_yi,
-            ratio_pct=ratio,
-            change_type=str(row[change_col]).strip() if change_col else "",
-        ))
+        out.append(
+            ShareholderRow(
+                rank=int(_to_float(row.get("名次", i)) or i),
+                name=str(row[name_col]).strip() if name_col else "",
+                shares_yi=shares_yi,
+                ratio_pct=ratio,
+                change_type=str(row[change_col]).strip() if change_col else "",
+            )
+        )
     return out
 
 
@@ -331,23 +365,37 @@ def fetch_inst_changes(symbol: str) -> List[ShareholderRow]:
         return []
     df = df.copy().head(15)
     # 该接口返回字段不固定，做容错
-    name_col = next((c for c in df.columns if "机构" in str(c) and ("名" in str(c) or "称" in str(c))), None)
+    name_col = next(
+        (
+            c
+            for c in df.columns
+            if "机构" in str(c) and ("名" in str(c) or "称" in str(c))
+        ),
+        None,
+    )
     if name_col is None:
         name_col = next((c for c in df.columns if df[c].dtype == object), None)
-    shares_col = next((c for c in df.columns if "持股数" in str(c) or "持仓" in str(c)), None)
-    ratio_col = next((c for c in df.columns if "占" in str(c) and "%" in str(c)), None) or \
-                next((c for c in df.columns if "比例" in str(c)), None)
-    change_col = next((c for c in df.columns if "变" in str(c) or "增减" in str(c)), None)
+    shares_col = next(
+        (c for c in df.columns if "持股数" in str(c) or "持仓" in str(c)), None
+    )
+    ratio_col = next(
+        (c for c in df.columns if "占" in str(c) and "%" in str(c)), None
+    ) or next((c for c in df.columns if "比例" in str(c)), None)
+    change_col = next(
+        (c for c in df.columns if "变" in str(c) or "增减" in str(c)), None
+    )
 
     out = []
     for i, (_, row) in enumerate(df.iterrows(), 1):
-        out.append(ShareholderRow(
-            rank=i,
-            name=str(row[name_col]).strip() if name_col else "",
-            shares_yi=_to_yi(row[shares_col]) if shares_col else 0.0,
-            ratio_pct=_to_float(row[ratio_col]) if ratio_col else 0.0,
-            change_type=str(row[change_col]).strip() if change_col else "",
-        ))
+        out.append(
+            ShareholderRow(
+                rank=i,
+                name=str(row[name_col]).strip() if name_col else "",
+                shares_yi=_to_yi(row[shares_col]) if shares_col else 0.0,
+                ratio_pct=_to_float(row[ratio_col]) if ratio_col else 0.0,
+                change_type=str(row[change_col]).strip() if change_col else "",
+            )
+        )
     return out
 
 
@@ -360,6 +408,7 @@ def _get_industry_name(symbol: str) -> str:
     需要的板块名是 "白酒"（不带后缀），必须清理。
     """
     import time
+
     df = None
     for _attempt in range(3):
         df = _safe(ak.stock_individual_info_em, symbol=symbol)
@@ -391,8 +440,12 @@ def _get_industry_constituents(industry: str) -> List[Tuple[str, str]]:
     df = _safe(ak.stock_board_industry_cons_em, symbol=industry)
     if df is None or len(df) == 0:
         return []
-    sym_col = next((c for c in df.columns if str(c).strip() in ("代码", "股票代码")), None)
-    name_col = next((c for c in df.columns if str(c).strip() in ("名称", "股票名称")), None)
+    sym_col = next(
+        (c for c in df.columns if str(c).strip() in ("代码", "股票代码")), None
+    )
+    name_col = next(
+        (c for c in df.columns if str(c).strip() in ("名称", "股票名称")), None
+    )
     if not sym_col or not name_col:
         return []
     out = []
@@ -423,7 +476,10 @@ def fetch_industry_peers(symbol: str, top_k: int = 8) -> Tuple[str, List[PeerRow
     code_col = next((c for c in spot_df.columns if str(c).strip() == "代码"), None)
     name_col = next((c for c in spot_df.columns if str(c).strip() == "名称"), None)
     mcap_col = next((c for c in spot_df.columns if "总市值" in str(c)), None)
-    pe_col = next((c for c in spot_df.columns if str(c).strip() in ("市盈率-动态", "市盈率")), None)
+    pe_col = next(
+        (c for c in spot_df.columns if str(c).strip() in ("市盈率-动态", "市盈率")),
+        None,
+    )
     pb_col = next((c for c in spot_df.columns if str(c).strip() == "市净率"), None)
 
     if not code_col:
@@ -453,30 +509,36 @@ def fetch_industry_peers(symbol: str, top_k: int = 8) -> Tuple[str, List[PeerRow
         match = sub[sub[code_col] == code]
         if len(match) == 0:
             # 本股不在 spot_df，可能是停牌：手动构造一个最简行
-            rows.append(PeerRow(
-                symbol=code,
-                name=next((n for s, n in constituents if s == code), code),
-                is_self=(code == symbol),
-            ))
+            rows.append(
+                PeerRow(
+                    symbol=code,
+                    name=next((n for s, n in constituents if s == code), code),
+                    is_self=(code == symbol),
+                )
+            )
             continue
         r = match.iloc[0]
-        rows.append(PeerRow(
-            symbol=code,
-            name=str(r[name_col]).strip() if name_col else "",
-            total_mcap_yi=float(r["_mcap_yi"]),
-            pe=_to_float(r[pe_col]) if pe_col else 0.0,
-            pb=_to_float(r[pb_col]) if pb_col else 0.0,
-            roe_pct=0.0,            # spot_em 不返回 ROE，留空（前端显示 -）
-            yoy_revenue_pct=0.0,    # 同上
-            yoy_net_profit_pct=0.0,
-            is_self=(code == symbol),
-        ))
+        rows.append(
+            PeerRow(
+                symbol=code,
+                name=str(r[name_col]).strip() if name_col else "",
+                total_mcap_yi=float(r["_mcap_yi"]),
+                pe=_to_float(r[pe_col]) if pe_col else 0.0,
+                pb=_to_float(r[pb_col]) if pb_col else 0.0,
+                roe_pct=0.0,  # spot_em 不返回 ROE，留空（前端显示 -）
+                yoy_revenue_pct=0.0,  # 同上
+                yoy_net_profit_pct=0.0,
+                is_self=(code == symbol),
+            )
+        )
 
     return industry, rows
 
 
 # ============== 单次入口（带 24h 缓存） ==============
-def load_fundamentals(symbol: str, stock_name: str, force_refresh: bool = False) -> FundamentalsData:
+def load_fundamentals(
+    symbol: str, stock_name: str, force_refresh: bool = False
+) -> FundamentalsData:
     """单次入口：5 路并行 fetch + 24h 缓存。任一 fetch 失败不影响其他"""
     if not force_refresh:
         cached = _read_cache(symbol)
@@ -532,6 +594,7 @@ def load_fundamentals(symbol: str, stock_name: str, force_refresh: bool = False)
 # ============== 命令行自测 ==============
 if __name__ == "__main__":
     import sys
+
     code = sys.argv[1] if len(sys.argv) > 1 else "600519"
     name_map = {"600519": "贵州茅台", "300059": "东方财富", "000858": "五粮液"}
     name = name_map.get(code, code)
@@ -542,17 +605,21 @@ if __name__ == "__main__":
 
     t0 = time.time()
     data = load_fundamentals(code, name, force_refresh=True)
-    print(f"\n首次拉取耗时 {time.time()-t0:.1f}s\n")
+    print(f"\n首次拉取耗时 {time.time() - t0:.1f}s\n")
 
     print(f"--- 财务摘要 ({len(data.financials)} 期) ---")
     for f in data.financials:
-        print(f"  [{f.period}] 营收 {f.revenue_yi:.2f}亿 | 净利 {f.net_profit_yi:.2f}亿 | "
-              f"毛利率 {f.gross_margin_pct:.2f}% | ROE {f.roe_pct:.2f}% | "
-              f"负债率 {f.debt_ratio_pct:.2f}% | 营收同比 {f.yoy_revenue:+.2f}%")
+        print(
+            f"  [{f.period}] 营收 {f.revenue_yi:.2f}亿 | 净利 {f.net_profit_yi:.2f}亿 | "
+            f"毛利率 {f.gross_margin_pct:.2f}% | ROE {f.roe_pct:.2f}% | "
+            f"负债率 {f.debt_ratio_pct:.2f}% | 营收同比 {f.yoy_revenue:+.2f}%"
+        )
 
     print(f"\n--- 十大股东 ({len(data.top_holders)} 行) ---")
     for h in data.top_holders[:5]:
-        print(f"  #{h.rank} {h.name[:20]:<22} {h.shares_yi:.4f}亿股 {h.ratio_pct:.2f}% {h.change_type}")
+        print(
+            f"  #{h.rank} {h.name[:20]:<22} {h.shares_yi:.4f}亿股 {h.ratio_pct:.2f}% {h.change_type}"
+        )
 
     print(f"\n--- 流通股东 ({len(data.circulate_holders)} 行) ---")
     for h in data.circulate_holders[:5]:
@@ -565,8 +632,10 @@ if __name__ == "__main__":
     print(f"\n--- 同业对比 行业={data.industry_name} ({len(data.peers)} 行) ---")
     for p in data.peers:
         flag = "★本股" if p.is_self else "    "
-        print(f"  {flag} {p.symbol} {p.name[:8]:<10} 市值 {p.total_mcap_yi:>8.1f}亿 "
-              f"PE {p.pe:>6.2f} PB {p.pb:>5.2f}")
+        print(
+            f"  {flag} {p.symbol} {p.name[:8]:<10} 市值 {p.total_mcap_yi:>8.1f}亿 "
+            f"PE {p.pe:>6.2f} PB {p.pb:>5.2f}"
+        )
 
     if data.has_error:
         print(f"\n[错误] {data.error_msg}")
@@ -575,5 +644,5 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     t1 = time.time()
     data2 = load_fundamentals(code, name)
-    print(f"二次读取（走缓存）耗时 {time.time()-t1:.3f}s")
+    print(f"二次读取（走缓存）耗时 {time.time() - t1:.3f}s")
     print(f"缓存文件: {_cache_path(code)}")

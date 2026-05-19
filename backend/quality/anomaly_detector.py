@@ -11,8 +11,6 @@ Simple rule-based + historical comparison to detect obviously bad data:
 from __future__ import annotations
 
 import logging
-import re
-from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -89,7 +87,9 @@ class AnomalyDetector:
 
         return anomalies
 
-    def check_news(self, news: Dict[str, Any], all_news: Optional[List[Dict[str, Any]]] = None) -> List[str]:
+    def check_news(
+        self, news: Dict[str, Any], all_news: Optional[List[Dict[str, Any]]] = None
+    ) -> List[str]:
         """
         Check a news item for anomalies.
 
@@ -104,7 +104,7 @@ class AnomalyDetector:
 
         title = news.get("title", "")
         dt = news.get("datetime", "")
-        source = news.get("source", "")
+        news.get("source", "")
 
         # Title too short
         if len(title.strip()) < self.MIN_TITLE_LENGTH:
@@ -117,13 +117,12 @@ class AnomalyDetector:
         # Duplicate timestamp check
         if all_news and dt:
             same_ts_count = sum(
-                1 for n in all_news
+                1
+                for n in all_news
                 if n.get("datetime") == dt and n.get("title") == title
             )
             if same_ts_count > self.MAX_DUPLICATE_TIMESTAMP:
-                anomalies.append(
-                    f"同一时间戳({dt})同标题出现{same_ts_count}次"
-                )
+                anomalies.append(f"同一时间戳({dt})同标题出现{same_ts_count}次")
 
         return anomalies
 
@@ -151,19 +150,23 @@ class AnomalyDetector:
                 history = prices[:i] if i > 0 else []
                 anomalies = self.check_price(bar, history, symbol)
                 if anomalies:
-                    price_results.append({
-                        "date": bar.get("date", "unknown"),
-                        "anomalies": anomalies,
-                    })
+                    price_results.append(
+                        {
+                            "date": bar.get("date", "unknown"),
+                            "anomalies": anomalies,
+                        }
+                    )
 
         if news:
             for item in news:
                 anomalies = self.check_news(item, news)
                 if anomalies:
-                    news_results.append({
-                        "title": item.get("title", "")[:50],
-                        "anomalies": anomalies,
-                    })
+                    news_results.append(
+                        {
+                            "title": item.get("title", "")[:50],
+                            "anomalies": anomalies,
+                        }
+                    )
 
         total = len(price_results) + len(news_results)
         if total > 0:
@@ -193,7 +196,7 @@ class AnomalyDetector:
         if not text:
             return False
         # Count Chinese chars, ASCII chars, and other
-        chinese = sum(1 for c in text if '一' <= c <= '鿿')
+        chinese = sum(1 for c in text if "一" <= c <= "鿿")
         ascii_chars = sum(1 for c in text if ord(c) < 128)
         total = len(text.strip())
         if total == 0:

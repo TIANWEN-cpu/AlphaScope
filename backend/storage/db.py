@@ -9,9 +9,7 @@ import json
 import logging
 import sqlite3
 import threading
-import time
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -167,10 +165,18 @@ class Database:
 
         # 创建索引
         cur.execute("CREATE INDEX IF NOT EXISTS idx_news_source ON news_items(source)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_news_published ON news_items(published_at)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_reports_source ON research_reports(source)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_announcements_symbol ON announcements(symbol)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_announcements_source ON announcements(source)")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_news_published ON news_items(published_at)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_reports_source ON research_reports(source)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_announcements_symbol ON announcements(symbol)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_announcements_source ON announcements(source)"
+        )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_price_symbol ON price_bars(symbol)")
 
         self._conn.commit()

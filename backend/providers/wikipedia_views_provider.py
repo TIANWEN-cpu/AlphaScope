@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from backend.providers.base import BaseProvider
 
@@ -32,6 +32,7 @@ class WikipediaViewsProvider(BaseProvider):
 
     def _get(self, endpoint: str, params: Optional[Dict] = None) -> Any:
         import requests
+
         url = f"{self.BASE_URL}{endpoint}"
         headers = {"User-Agent": "AI-Finance/1.0 (https://github.com/ai-finance)"}
         resp = requests.get(url, headers=headers, params=params or {}, timeout=15)
@@ -45,6 +46,7 @@ class WikipediaViewsProvider(BaseProvider):
             return {}
         try:
             from datetime import datetime, timedelta
+
             end = datetime.now().strftime("%Y%m%d")
             start = (datetime.now() - timedelta(days=30)).strftime("%Y%m%d")
 
@@ -58,7 +60,13 @@ class WikipediaViewsProvider(BaseProvider):
                     if items:
                         views = [item.get("views", 0) for item in items]
                         avg_views = sum(views) / len(views) if views else 0
-                        recent = sum(views[-7:]) / 7 if len(views) >= 7 else views[-1] if views else 0
+                        recent = (
+                            sum(views[-7:]) / 7
+                            if len(views) >= 7
+                            else views[-1]
+                            if views
+                            else 0
+                        )
                         trend_pct = ((recent - avg_views) / max(avg_views, 1)) * 100
 
                         return {

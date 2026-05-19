@@ -25,14 +25,16 @@ class CLSProvider(BaseProvider):
                 return []
             results = []
             for _, row in df.head(query.get("limit", 30)).iterrows():
-                results.append({
-                    "source": "cls",
-                    "upstream": "cls",
-                    "title": str(row.get("标题", "")).strip(),
-                    "summary": str(row.get("内容", "")).strip()[:200],
-                    "datetime": f"{row.get('发布日期', '')} {row.get('发布时间', '')}".strip(),
-                    "url": "",
-                })
+                results.append(
+                    {
+                        "source": "cls",
+                        "upstream": "cls",
+                        "title": str(row.get("标题", "")).strip(),
+                        "summary": str(row.get("内容", "")).strip()[:200],
+                        "datetime": f"{row.get('发布日期', '')} {row.get('发布时间', '')}".strip(),
+                        "url": "",
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("CLS news failed: %s", e)

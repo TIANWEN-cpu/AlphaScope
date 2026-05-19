@@ -3,6 +3,7 @@
 Keep runtime files relative to the repository root so a cloned copy works from
 any directory and does not expose machine-specific paths.
 """
+
 from pathlib import Path
 
 
@@ -12,4 +13,3 @@ CONFIG_DIR = PROJECT_ROOT / "config"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 CACHE_DIR = PROJECT_ROOT / "cache"
 ENV_FILE = PROJECT_ROOT / ".env"
-

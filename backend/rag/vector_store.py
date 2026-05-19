@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -42,6 +41,7 @@ class VectorStore:
     def _get_client(self):
         if self._client is None:
             import chromadb
+
             self._client = chromadb.PersistentClient(path=str(CHROMA_DIR))
         return self._client
 
@@ -95,12 +95,18 @@ class VectorStore:
 
         docs = []
         for i in range(len(results["documents"][0])):
-            docs.append({
-                "text": results["documents"][0][i],
-                "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                "distance": results["distances"][0][i] if results["distances"] else 0,
-                "id": results["ids"][0][i] if results["ids"] else "",
-            })
+            docs.append(
+                {
+                    "text": results["documents"][0][i],
+                    "metadata": results["metadatas"][0][i]
+                    if results["metadatas"]
+                    else {},
+                    "distance": results["distances"][0][i]
+                    if results["distances"]
+                    else 0,
+                    "id": results["ids"][0][i] if results["ids"] else "",
+                }
+            )
         return docs
 
     def get_collection_stats(self) -> dict:

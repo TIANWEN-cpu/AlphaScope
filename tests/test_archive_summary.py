@@ -1,4 +1,5 @@
 """Tests for backend.archive._summarize_critic — pure summarization helper."""
+
 from archive import _safe_filename_part, _safe_symbol, _summarize_critic
 
 
@@ -22,13 +23,17 @@ def test_summarizes_quality_and_divergence():
         "vendor": "Claude",
         "model": "claude-opus-4-7",
         "fallback_used": False,
-        "divergence": {"level": "中", "main_axis": "估值 vs 资金", "summary": "短期与长期"},
+        "divergence": {
+            "level": "中",
+            "main_axis": "估值 vs 资金",
+            "summary": "短期与长期",
+        },
     }
     agent_models = {
         "fundamental": {"review": {"quality_score": 80, "overconfident": False}},
-        "technical":   {"review": {"quality_score": 60, "overconfident": True}},
-        "risk":        {"review": {"quality_score": 70, "overconfident": False}},
-        "sentiment":   {"review": None},  # 没被审到的不算入
+        "technical": {"review": {"quality_score": 60, "overconfident": True}},
+        "risk": {"review": {"quality_score": 70, "overconfident": False}},
+        "sentiment": {"review": None},  # 没被审到的不算入
     }
     out = _summarize_critic(critic, agent_models)
     assert out["ok"] is True

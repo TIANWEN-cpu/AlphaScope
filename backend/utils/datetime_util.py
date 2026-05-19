@@ -20,21 +20,23 @@ _CST = timezone(timedelta(hours=8))
 
 # Common formats from Chinese data sources
 _DT_FORMATS = [
-    "%Y-%m-%d %H:%M:%S",       # "2026-05-19 10:30:00"
-    "%Y-%m-%d %H:%M",          # "2026-05-19 10:30"
-    "%Y/%m/%d %H:%M:%S",       # "2026/05/19 10:30:00"
-    "%Y/%m/%d %H:%M",          # "2026/05/19 10:30"
-    "%Y%m%d%H%M%S",            # "20260519103000"
-    "%Y%m%d%H%M",              # "202605191030"
-    "%Y-%m-%d",                # "2026-05-19"
-    "%Y/%m/%d",                # "2026/05/19"
-    "%Y%m%d",                  # "20260519"
-    "%m-%d %H:%M",             # "05-19 10:30" (year implied)
-    "%m/%d %H:%M",             # "05/19 10:30"
+    "%Y-%m-%d %H:%M:%S",  # "2026-05-19 10:30:00"
+    "%Y-%m-%d %H:%M",  # "2026-05-19 10:30"
+    "%Y/%m/%d %H:%M:%S",  # "2026/05/19 10:30:00"
+    "%Y/%m/%d %H:%M",  # "2026/05/19 10:30"
+    "%Y%m%d%H%M%S",  # "20260519103000"
+    "%Y%m%d%H%M",  # "202605191030"
+    "%Y-%m-%d",  # "2026-05-19"
+    "%Y/%m/%d",  # "2026/05/19"
+    "%Y%m%d",  # "20260519"
+    "%m-%d %H:%M",  # "05-19 10:30" (year implied)
+    "%m/%d %H:%M",  # "05/19 10:30"
 ]
 
 
-def parse_dt(value: Optional[str | datetime], assume_tz: timezone = _CST) -> Optional[datetime]:
+def parse_dt(
+    value: Optional[str | datetime], assume_tz: timezone = _CST
+) -> Optional[datetime]:
     """Parse a datetime string or pass-through a datetime to a tz-aware datetime.
 
     Returns None if *value* is empty / unparseable.
@@ -74,7 +76,9 @@ def parse_dt(value: Optional[str | datetime], assume_tz: timezone = _CST) -> Opt
     return None
 
 
-def normalize_dt_str(value: Optional[str | datetime], assume_tz: timezone = _CST) -> str:
+def normalize_dt_str(
+    value: Optional[str | datetime], assume_tz: timezone = _CST
+) -> str:
     """Parse then re-emit as ISO-8601 with offset.  Returns '' on failure."""
     dt = parse_dt(value, assume_tz)
     if dt is None:

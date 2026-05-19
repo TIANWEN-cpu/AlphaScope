@@ -11,10 +11,11 @@ AI 咨询服务层（v0.7 新增）
 
 LLM 调用统一走 llm_agents.call_llm；默认厂商通过 .env AI_CHAT_PROVIDER 配置。
 """
+
 import os
 import sys
 import inspect
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
 
@@ -41,6 +42,7 @@ def _call_llm_compat(payload: dict, api_key: Optional[str] = None) -> str:
 
 
 from dotenv import load_dotenv
+
 load_dotenv(ENV_FILE)
 
 
@@ -62,14 +64,15 @@ MAX_ROUNDS = 30
 # ============== Dataclass ==============
 @dataclass
 class ChatMessage:
-    role: str = "user"          # system / user / assistant
+    role: str = "user"  # system / user / assistant
     content: str = ""
     timestamp: str = ""
 
     @staticmethod
     def now(role: str, content: str) -> "ChatMessage":
         return ChatMessage(
-            role=role, content=content,
+            role=role,
+            content=content,
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         )
 
@@ -80,11 +83,13 @@ class ChatSession:
     stock_name: str = ""
     provider: str = "deepseek"
     model: str = "deepseek-chat"
-    api_key: str = ""           # 自定义 API Key（可选，覆盖 provider 默认配置）
-    custom_base_url: str = ""   # 自定义 OpenAI-compatible Base URL（仅当前会话内存）
-    custom_models: List[str] = field(default_factory=list)  # 当前会话拉取/添加的自定义模型
+    api_key: str = ""  # 自定义 API Key（可选，覆盖 provider 默认配置）
+    custom_base_url: str = ""  # 自定义 OpenAI-compatible Base URL（仅当前会话内存）
+    custom_models: List[str] = field(
+        default_factory=list
+    )  # 当前会话拉取/添加的自定义模型
     messages: List[ChatMessage] = field(default_factory=list)
-    context_snapshot: dict = field(default_factory=dict)   # 注入的上下文快照
+    context_snapshot: dict = field(default_factory=dict)  # 注入的上下文快照
     max_rounds: int = MAX_ROUNDS
     created_at: str = ""
 
@@ -120,8 +125,8 @@ def build_system_prompt(stock_symbol: str, stock_name: str, ctx: dict) -> str:
 
     archive_block = (
         f"【最近一份 Agent 深度研究摘要】\n{archive}\n"
-        if archive else
-        "【最近一份 Agent 深度研究摘要】\n暂无最新 Agent 报告,请基于价格/资金面回答。\n"
+        if archive
+        else "【最近一份 Agent 深度研究摘要】\n暂无最新 Agent 报告,请基于价格/资金面回答。\n"
     )
 
     return f"""你是一位资深金融分析师,正在与用户讨论 A 股标的【{stock_name}({stock_symbol})】。
@@ -145,8 +150,13 @@ def build_system_prompt(stock_symbol: str, stock_name: str, ctx: dict) -> str:
 
 
 # ============== 会话管理 ==============
-def new_session(stock_symbol: str, stock_name: str, ctx: Optional[dict] = None,
-                provider: Optional[str] = None, api_key: Optional[str] = None) -> ChatSession:
+def new_session(
+    stock_symbol: str,
+    stock_name: str,
+    ctx: Optional[dict] = None,
+    provider: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> ChatSession:
     """创建新会话:首条 system message 已拼接好,可直接调 send_message"""
     ctx = ctx or {}
     provider = provider or os.getenv("AI_CHAT_PROVIDER", "deepseek")
@@ -204,12 +214,24 @@ def fetch_model_list(base_url: str, api_key: str) -> List[str]:
     """从 OpenAI-compatible /models 接口拉取模型 ID 列表。"""
     client = _create_custom_client(base_url, api_key)
     models = client.models.list()
-    ids = sorted({getattr(m, "id", "") for m in getattr(models, "data", []) if getattr(m, "id", "")})
+    ids = sorted(
+        {
+            getattr(m, "id", "")
+            for m in getattr(models, "data", [])
+            if getattr(m, "id", "")
+        }
+    )
     return ids
 
 
-def call_llm_custom(base_url: str, api_key: str, model: str, messages: list,
-                    max_tokens: int = 900, temperature: float = 0.4) -> str:
+def call_llm_custom(
+    base_url: str,
+    api_key: str,
+    model: str,
+    messages: list,
+    max_tokens: int = 900,
+    temperature: float = 0.4,
+) -> str:
     """调用用户自定义 OpenAI-compatible 模型。"""
     if not (model or "").strip():
         raise RuntimeError("请先选择或填写自定义模型名称")
@@ -269,7 +291,9 @@ def send_message(session: ChatSession, user_msg: str) -> ChatSession:
             reply = _call_llm_compat(payload, api_key=key_override)
             if reply and reply.strip():
                 if (vd, md) != primary:
-                    reply = f"_(主厂商 {primary[0]} 不可用,已切换到 {vd}/{md})_\n\n" + reply
+                    reply = (
+                        f"_(主厂商 {primary[0]} 不可用,已切换到 {vd}/{md})_\n\n" + reply
+                    )
                 break
         except Exception as e:
             last_err = str(e)[:200]
@@ -311,7 +335,12 @@ def export_to_markdown(session: ChatSession) -> str:
         if m.role == "user":
             lines += [f"### 🙋 用户  `{m.timestamp}`", "", m.content, ""]
         elif m.role == "assistant":
-            lines += [f"### 🤖 助手 ({session.provider})  `{m.timestamp}`", "", m.content, ""]
+            lines += [
+                f"### 🤖 助手 ({session.provider})  `{m.timestamp}`",
+                "",
+                m.content,
+                "",
+            ]
         lines.append("---")
         lines.append("")
 
@@ -348,15 +377,17 @@ if __name__ == "__main__":
     # 2. truncate_history
     print("\n[2] 模拟 35 轮对话后截断...")
     for i in range(35):
-        sess.append("user", f"模拟问题 {i+1}")
-        sess.append("assistant", f"模拟回复 {i+1}")
+        sess.append("user", f"模拟问题 {i + 1}")
+        sess.append("assistant", f"模拟回复 {i + 1}")
     before = len(sess.messages)
     truncate_history(sess)
     after = len(sess.messages)
     chat_msgs = [m for m in sess.messages if m.role != "system"]
     print(f"    截断前 {before} 条,截断后 {after} 条 (chat={len(chat_msgs)})")
-    assert len(chat_msgs) == sess.max_rounds * 2, f"应保留 {sess.max_rounds*2} 条 chat msg"
-    print(f"    ✓ 截断逻辑正确")
+    assert len(chat_msgs) == sess.max_rounds * 2, (
+        f"应保留 {sess.max_rounds * 2} 条 chat msg"
+    )
+    print("    ✓ 截断逻辑正确")
 
     # 3. export_to_markdown
     print("\n[3] export_to_markdown...")

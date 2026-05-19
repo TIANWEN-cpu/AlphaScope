@@ -1,9 +1,6 @@
 """因子生成器测试"""
 
-import json
-import pytest
 from unittest.mock import patch, MagicMock
-from datetime import datetime
 
 
 class TestFactorReport:
@@ -11,6 +8,7 @@ class TestFactorReport:
 
     def test_default_values(self):
         from backend.factors.generator import FactorReport
+
         r = FactorReport(symbol="600519")
         assert r.symbol == "600519"
         assert r.news_sentiment == 0.0
@@ -23,6 +21,7 @@ class TestFactorReport:
 
     def test_to_dict(self):
         from backend.factors.generator import FactorReport
+
         r = FactorReport(symbol="000001", stock_name="平安银行", composite=0.5)
         d = r.to_dict()
         assert d["symbol"] == "000001"
@@ -32,6 +31,7 @@ class TestFactorReport:
 
     def test_computed_at_auto_set(self):
         from backend.factors.generator import FactorReport
+
         r = FactorReport(symbol="TEST")
         assert r.computed_at  # should be auto-populated
 
@@ -41,12 +41,14 @@ class TestRatingScores:
 
     def test_chinese_ratings(self):
         from backend.factors.generator import _RATING_SCORES
+
         assert _RATING_SCORES["买入"] == 1.0
         assert _RATING_SCORES["持有"] == 0.0
         assert _RATING_SCORES["卖出"] == -1.0
 
     def test_english_ratings(self):
         from backend.factors.generator import _RATING_SCORES
+
         assert _RATING_SCORES["buy"] == 1.0
         assert _RATING_SCORES["hold"] == 0.0
         assert _RATING_SCORES["sell"] == -1.0
@@ -57,23 +59,36 @@ class TestEventCategoryScores:
 
     def test_all_categories_covered(self):
         from backend.factors.generator import _EVENT_CATEGORY_SCORES
-        expected = {"earnings", "dividend", "mna", "financing",
-                    "litigation", "policy", "supply_chain", "insider"}
+
+        expected = {
+            "earnings",
+            "dividend",
+            "mna",
+            "financing",
+            "litigation",
+            "policy",
+            "supply_chain",
+            "insider",
+        }
         assert set(_EVENT_CATEGORY_SCORES.keys()) == expected
 
     def test_litigation_negative(self):
         from backend.factors.generator import _EVENT_CATEGORY_SCORES
+
         assert _EVENT_CATEGORY_SCORES["litigation"] < 0
 
     def test_dividend_positive(self):
         from backend.factors.generator import _EVENT_CATEGORY_SCORES
+
         assert _EVENT_CATEGORY_SCORES["dividend"] > 0
 
 
 class TestFactorGenerator:
     """FactorGenerator 计算逻辑测试"""
 
-    def _make_db_mock(self, news_rows=None, report_rows=None, announcement_rows=None, price_rows=None):
+    def _make_db_mock(
+        self, news_rows=None, report_rows=None, announcement_rows=None, price_rows=None
+    ):
         """创建 Database mock"""
         mock_conn = MagicMock()
 
@@ -99,6 +114,7 @@ class TestFactorGenerator:
 
     def test_empty_data_returns_zero_factors(self):
         from backend.factors.generator import FactorGenerator
+
         gen = FactorGenerator()
 
         mock_db = self._make_db_mock()
@@ -113,11 +129,24 @@ class TestFactorGenerator:
 
     def test_news_sentiment_positive(self):
         from backend.factors.generator import FactorGenerator
+
         gen = FactorGenerator()
 
         news_rows = [
-            {"title": "贵州茅台业绩大增", "sentiment": 0.8, "importance": 0.9, "confidence": 0.8, "published_at": "2026-05-10"},
-            {"title": "茅台超预期", "sentiment": 0.6, "importance": 0.7, "confidence": 0.7, "published_at": "2026-05-09"},
+            {
+                "title": "贵州茅台业绩大增",
+                "sentiment": 0.8,
+                "importance": 0.9,
+                "confidence": 0.8,
+                "published_at": "2026-05-10",
+            },
+            {
+                "title": "茅台超预期",
+                "sentiment": 0.6,
+                "importance": 0.7,
+                "confidence": 0.7,
+                "published_at": "2026-05-09",
+            },
         ]
 
         mock_db = self._make_db_mock(news_rows=news_rows)
@@ -129,10 +158,16 @@ class TestFactorGenerator:
 
     def test_event_signal_litigation_negative(self):
         from backend.factors.generator import FactorGenerator
+
         gen = FactorGenerator()
 
         ann_rows = [
-            {"title": "收到行政处罚", "category": "litigation", "importance": 0.9, "published_at": "2026-05-10"},
+            {
+                "title": "收到行政处罚",
+                "category": "litigation",
+                "importance": 0.9,
+                "published_at": "2026-05-10",
+            },
         ]
 
         mock_db = self._make_db_mock(announcement_rows=ann_rows)
@@ -144,11 +179,24 @@ class TestFactorGenerator:
 
     def test_analyst_rating_buy(self):
         from backend.factors.generator import FactorGenerator
+
         gen = FactorGenerator()
 
         report_rows = [
-            {"title": "茅台深度报告", "rating": "买入", "target_price": 2000, "institution": "中信证券", "published_at": "2026-05-10"},
-            {"title": "茅台点评", "rating": "推荐", "target_price": 1900, "institution": "国泰君安", "published_at": "2026-05-09"},
+            {
+                "title": "茅台深度报告",
+                "rating": "买入",
+                "target_price": 2000,
+                "institution": "中信证券",
+                "published_at": "2026-05-10",
+            },
+            {
+                "title": "茅台点评",
+                "rating": "推荐",
+                "target_price": 1900,
+                "institution": "国泰君安",
+                "published_at": "2026-05-09",
+            },
         ]
 
         mock_db = self._make_db_mock(report_rows=report_rows)
@@ -160,6 +208,7 @@ class TestFactorGenerator:
 
     def test_weighted_composite(self):
         from backend.factors.generator import FactorGenerator, FactorReport
+
         gen = FactorGenerator()
 
         report = FactorReport(
@@ -176,11 +225,14 @@ class TestFactorGenerator:
 
     def test_generate_batch(self):
         from backend.factors.generator import FactorGenerator
+
         gen = FactorGenerator()
 
         mock_db = self._make_db_mock()
         with patch("backend.storage.db.Database", return_value=mock_db):
-            reports = gen.generate_batch(["600519", "000001"], {"600519": "贵州茅台", "000001": "平安银行"})
+            reports = gen.generate_batch(
+                ["600519", "000001"], {"600519": "贵州茅台", "000001": "平安银行"}
+            )
 
         assert len(reports) == 2
         assert reports[0].symbol == "600519"
@@ -192,6 +244,7 @@ class TestFormatFactorSummary:
 
     def test_basic_format(self):
         from backend.factors.generator import FactorReport, format_factor_summary
+
         report = FactorReport(
             symbol="600519",
             stock_name="贵州茅台",
@@ -207,12 +260,18 @@ class TestFormatFactorSummary:
 
     def test_with_signals(self):
         from backend.factors.generator import FactorReport, format_factor_summary
+
         report = FactorReport(
             symbol="600519",
             signals=[
                 {"type": "news", "title": "茅台业绩大增", "sentiment": 0.8},
-                {"type": "event", "category": "earnings", "title": "年报发布", "score": 0.5},
-            ]
+                {
+                    "type": "event",
+                    "category": "earnings",
+                    "title": "年报发布",
+                    "score": 0.5,
+                },
+            ],
         )
         text = format_factor_summary(report)
         assert "茅台业绩大增" in text
@@ -225,6 +284,7 @@ class TestConvenienceFunctions:
     def test_get_factor_generator_singleton(self):
         from backend.factors.generator import get_factor_generator
         import backend.factors.generator as mod
+
         mod._generator = None  # reset
         gen1 = get_factor_generator()
         gen2 = get_factor_generator()
@@ -232,12 +292,14 @@ class TestConvenienceFunctions:
 
     def test_generate_factor_report(self):
         from backend.factors.generator import generate_factor_report, FactorReport
+
         mock_db = MagicMock()
         mock_conn = MagicMock()
         mock_conn.execute.return_value.fetchall.return_value = []
         mock_db.conn = mock_conn
 
         import backend.factors.generator as mod
+
         mod._generator = None  # reset singleton
 
         with patch("backend.storage.db.Database", return_value=mock_db):

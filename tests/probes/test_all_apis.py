@@ -1,26 +1,62 @@
 """探测所有 API 的连通性和可用模型"""
+
 import os
-import sys
 from dotenv import load_dotenv
 from project_paths import ENV_FILE
+
 load_dotenv(ENV_FILE)
 
 from openai import OpenAI
 
 # 候选 API + 候选模型（每家逐个试）
 CANDIDATES = [
-    ("DeepSeek", os.getenv("DEEPSEEK_API_KEY"), os.getenv("DEEPSEEK_BASE_URL"),
-     ["deepseek-chat", "deepseek-reasoner", "deepseek-coder"]),
-    ("Kimi", os.getenv("KIMI_API_KEY"), os.getenv("KIMI_BASE_URL"),
-     ["kimi-k2-0711-preview", "moonshot-v1-32k", "moonshot-v1-8k", "kimi-latest", "kimi-thinking-preview"]),
-    ("Claude", os.getenv("CLAUDE_API_KEY"), os.getenv("CLAUDE_BASE_URL"),
-     ["claude-3-5-sonnet-20241022", "claude-sonnet-4-20250514", "claude-3-5-sonnet", "claude-sonnet-4-5"]),
-    ("GPT", os.getenv("GPT_API_KEY"), os.getenv("GPT_BASE_URL"),
-     ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-5-mini"]),
-    ("Mimo", os.getenv("MIMO_API_KEY"), os.getenv("MIMO_BASE_URL") + "/v1",
-     ["deepseek-chat", "claude-sonnet-4-5", "gpt-4o-mini", "deepseek-reasoner"]),
-    ("SenseNova", os.getenv("SENSENOVA_API_KEY"), os.getenv("SENSENOVA_BASE_URL"),
-     ["SenseChat-5", "SenseChat-32K", "SenseChat-Turbo", "SenseChat"]),
+    (
+        "DeepSeek",
+        os.getenv("DEEPSEEK_API_KEY"),
+        os.getenv("DEEPSEEK_BASE_URL"),
+        ["deepseek-chat", "deepseek-reasoner", "deepseek-coder"],
+    ),
+    (
+        "Kimi",
+        os.getenv("KIMI_API_KEY"),
+        os.getenv("KIMI_BASE_URL"),
+        [
+            "kimi-k2-0711-preview",
+            "moonshot-v1-32k",
+            "moonshot-v1-8k",
+            "kimi-latest",
+            "kimi-thinking-preview",
+        ],
+    ),
+    (
+        "Claude",
+        os.getenv("CLAUDE_API_KEY"),
+        os.getenv("CLAUDE_BASE_URL"),
+        [
+            "claude-3-5-sonnet-20241022",
+            "claude-sonnet-4-20250514",
+            "claude-3-5-sonnet",
+            "claude-sonnet-4-5",
+        ],
+    ),
+    (
+        "GPT",
+        os.getenv("GPT_API_KEY"),
+        os.getenv("GPT_BASE_URL"),
+        ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-5-mini"],
+    ),
+    (
+        "Mimo",
+        os.getenv("MIMO_API_KEY"),
+        os.getenv("MIMO_BASE_URL") + "/v1",
+        ["deepseek-chat", "claude-sonnet-4-5", "gpt-4o-mini", "deepseek-reasoner"],
+    ),
+    (
+        "SenseNova",
+        os.getenv("SENSENOVA_API_KEY"),
+        os.getenv("SENSENOVA_BASE_URL"),
+        ["SenseChat-5", "SenseChat-32K", "SenseChat-Turbo", "SenseChat"],
+    ),
 ]
 
 

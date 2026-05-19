@@ -4,6 +4,7 @@ AI 咨询面板组件(v0.7)
 - 通过 ai_chat 后端模块完成会话状态/上下文注入/LLM 调用
 - session_state key 命名:`chat_session_{symbol}` 保存 ChatSession
 """
+
 import html
 import os
 import sys
@@ -15,8 +16,13 @@ import streamlit as st
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
 
 from ai_chat import (  # noqa: E402
-    ChatSession, new_session, send_message, export_to_markdown,
-    PROVIDER_DEFAULT_MODEL, MAX_ROUNDS, fetch_model_list,
+    ChatSession,
+    new_session,
+    send_message,
+    export_to_markdown,
+    PROVIDER_DEFAULT_MODEL,
+    MAX_ROUNDS,
+    fetch_model_list,
 )
 from project_paths import REPORTS_DIR  # noqa: E402
 
@@ -69,14 +75,24 @@ def _trend_class(value) -> str:
 
 
 def _message_count(sess: ChatSession) -> int:
-    return sum(1 for m in getattr(sess, "messages", []) if getattr(m, "role", "") != "system")
+    return sum(
+        1 for m in getattr(sess, "messages", []) if getattr(m, "role", "") != "system"
+    )
 
 
 def _round_count(sess: ChatSession) -> int:
-    return sum(1 for m in getattr(sess, "messages", []) if getattr(m, "role", "") == "user")
+    return sum(
+        1 for m in getattr(sess, "messages", []) if getattr(m, "role", "") == "user"
+    )
 
 
-def _ensure_session(symbol: str, stock_name: str, ctx: dict, provider: str | None = None, api_key: str | None = None) -> ChatSession:
+def _ensure_session(
+    symbol: str,
+    stock_name: str,
+    ctx: dict,
+    provider: str | None = None,
+    api_key: str | None = None,
+) -> ChatSession:
     sess = _get_session(symbol)
     if sess is None:
         # 不把 api_key 直接传给 new_session：Streamlit 热重载时可能缓存旧版 ai_chat.new_session，
@@ -312,15 +328,15 @@ def _render_context_card(ctx: dict):
     </div>
     <div class="ai-chat-context-item">
       <div class="ai-chat-context-label">当日涨跌</div>
-      <div class="ai-chat-context-value {_trend_class(ctx.get('day_change'))}">{_html(day_change)}</div>
+      <div class="ai-chat-context-value {_trend_class(ctx.get("day_change"))}">{_html(day_change)}</div>
     </div>
     <div class="ai-chat-context-item">
       <div class="ai-chat-context-label">区间涨跌</div>
-      <div class="ai-chat-context-value {_trend_class(ctx.get('period_change'))}">{_html(period_change)}</div>
+      <div class="ai-chat-context-value {_trend_class(ctx.get("period_change"))}">{_html(period_change)}</div>
     </div>
     <div class="ai-chat-context-item">
       <div class="ai-chat-context-label">均线 MA5/20/60</div>
-      <div class="ai-chat-context-value">{_html(ctx.get('ma5', 'N/A'))} / {_html(ctx.get('ma20', 'N/A'))} / {_html(ctx.get('ma60', 'N/A'))}</div>
+      <div class="ai-chat-context-value">{_html(ctx.get("ma5", "N/A"))} / {_html(ctx.get("ma20", "N/A"))} / {_html(ctx.get("ma60", "N/A"))}</div>
     </div>
   </div>
   <div class="ai-chat-note" style="margin-top:8px;">资金面：{_html(fund_dir)}</div>
@@ -330,11 +346,17 @@ def _render_context_card(ctx: dict):
     )
 
     with st.expander("查看完整上下文快照", expanded=False):
-        safe_ctx = {k: v for k, v in (ctx or {}).items() if "key" not in str(k).lower() and "token" not in str(k).lower()}
+        safe_ctx = {
+            k: v
+            for k, v in (ctx or {}).items()
+            if "key" not in str(k).lower() and "token" not in str(k).lower()
+        }
         st.json(safe_ctx)
 
 
-def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSession) -> ChatSession:
+def _render_model_settings(
+    symbol: str, stock_name: str, ctx: dict, sess: ChatSession
+) -> ChatSession:
     providers = list(PROVIDER_DEFAULT_MODEL.keys())
     custom_provider_label = "custom"
 
@@ -350,19 +372,29 @@ def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSe
     with st.expander("模型与连接设置", expanded=False):
         st.markdown("**内置厂商**")
         c1, c2 = st.columns([1, 1])
-        builtin_provider = sess.provider if sess.provider in providers else (providers[0] if providers else "deepseek")
+        builtin_provider = (
+            sess.provider
+            if sess.provider in providers
+            else (providers[0] if providers else "deepseek")
+        )
         with c1:
             selected_builtin_provider = st.selectbox(
                 "模型厂商",
                 providers,
-                index=providers.index(builtin_provider) if builtin_provider in providers else 0,
+                index=providers.index(builtin_provider)
+                if builtin_provider in providers
+                else 0,
                 key=f"chat_provider_select_{symbol}",
                 help="内置厂商使用项目预设 Base URL。下面可以单独启用自定义 OpenAI 兼容接口。",
             )
         with c2:
             builtin_model = st.text_input(
                 "模型名称",
-                value=sess.model if sess.provider != custom_provider_label else PROVIDER_DEFAULT_MODEL.get(selected_builtin_provider, "deepseek-chat"),
+                value=sess.model
+                if sess.provider != custom_provider_label
+                else PROVIDER_DEFAULT_MODEL.get(
+                    selected_builtin_provider, "deepseek-chat"
+                ),
                 key=f"chat_model_input_{symbol}",
                 help="默认使用项目内置模型映射；如需测试兼容模型，可在这里临时覆盖。",
             )
@@ -371,7 +403,10 @@ def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSe
         st.markdown("**自定义厂商（OpenAI 兼容 / CherryStudio 风格）**")
         enable_custom = st.checkbox(
             "启用自定义厂商 API 接口",
-            value=(sess.provider == custom_provider_label or bool(getattr(sess, "custom_base_url", ""))),
+            value=(
+                sess.provider == custom_provider_label
+                or bool(getattr(sess, "custom_base_url", ""))
+            ),
             key=f"chat_enable_custom_{symbol}",
             help="开启后会使用你填写的 Base URL + API Key 调用模型，并支持从 /models 获取模型列表。",
         )
@@ -391,8 +426,12 @@ def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSe
             help="仅保存在当前 Streamlit 会话内存中，不会保存、导出或写入上下文。",
         )
 
-        custom_model_options = list(dict.fromkeys([m for m in getattr(sess, "custom_models", []) if m]))
-        current_custom_model = sess.model if sess.provider == custom_provider_label else ""
+        custom_model_options = list(
+            dict.fromkeys([m for m in getattr(sess, "custom_models", []) if m])
+        )
+        current_custom_model = (
+            sess.model if sess.provider == custom_provider_label else ""
+        )
         if current_custom_model and current_custom_model not in custom_model_options:
             custom_model_options.insert(0, current_custom_model)
 
@@ -402,7 +441,9 @@ def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSe
                 custom_model = st.selectbox(
                     "自定义模型",
                     custom_model_options,
-                    index=custom_model_options.index(current_custom_model) if current_custom_model in custom_model_options else 0,
+                    index=custom_model_options.index(current_custom_model)
+                    if current_custom_model in custom_model_options
+                    else 0,
                     key=f"chat_custom_model_select_{symbol}",
                     help="模型列表来自你填写的 Base URL /models，也可以手动添加。",
                 )
@@ -423,7 +464,11 @@ def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSe
 
         bc1, bc2 = st.columns([1, 1])
         with bc1:
-            if st.button("获取模型列表", use_container_width=True, key=f"chat_fetch_models_{symbol}"):
+            if st.button(
+                "获取模型列表",
+                use_container_width=True,
+                key=f"chat_fetch_models_{symbol}",
+            ):
                 try:
                     models = fetch_model_list(custom_base_url, custom_key)
                     if models:
@@ -432,21 +477,29 @@ def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSe
                         sess.provider = custom_provider_label
                         sess.custom_base_url = custom_base_url
                         sess.api_key = custom_key
-                        st.session_state["chat_provider_override"] = custom_provider_label
+                        st.session_state["chat_provider_override"] = (
+                            custom_provider_label
+                        )
                         _set_session(symbol, sess)
                         st.success(f"已获取 {len(models)} 个模型。")
                         st.rerun()
                     else:
-                        st.warning("接口已连接，但没有返回可用模型。可以手动添加模型名称。")
+                        st.warning(
+                            "接口已连接，但没有返回可用模型。可以手动添加模型名称。"
+                        )
                 except Exception as e:
                     st.error(f"获取模型列表失败: {str(e)[:220]}")
         with bc2:
-            if st.button("添加模型", use_container_width=True, key=f"chat_add_model_{symbol}"):
+            if st.button(
+                "添加模型", use_container_width=True, key=f"chat_add_model_{symbol}"
+            ):
                 model_id = (manual_model or "").strip()
                 if not model_id:
                     st.warning("请先输入模型 ID。")
                 else:
-                    models = list(dict.fromkeys([*getattr(sess, "custom_models", []), model_id]))
+                    models = list(
+                        dict.fromkeys([*getattr(sess, "custom_models", []), model_id])
+                    )
                     sess.custom_models = models
                     sess.model = model_id
                     sess.provider = custom_provider_label
@@ -457,7 +510,9 @@ def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSe
                     st.success(f"已添加模型: {model_id}")
                     st.rerun()
 
-        st.caption("安全提示：Base URL、API Key 和自定义模型只保存在当前 Streamlit 会话内存中，不写入配置文件和 Markdown 导出。")
+        st.caption(
+            "安全提示：Base URL、API Key 和自定义模型只保存在当前 Streamlit 会话内存中，不写入配置文件和 Markdown 导出。"
+        )
 
         changed = False
         if enable_custom:
@@ -475,10 +530,15 @@ def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSe
                 sess.model = custom_model.strip()
                 changed = True
         else:
-            if sess.provider == custom_provider_label or selected_builtin_provider != sess.provider:
+            if (
+                sess.provider == custom_provider_label
+                or selected_builtin_provider != sess.provider
+            ):
                 sess.provider = selected_builtin_provider
                 sess.custom_base_url = ""
-                sess.model = PROVIDER_DEFAULT_MODEL.get(selected_builtin_provider, "deepseek-chat")
+                sess.model = PROVIDER_DEFAULT_MODEL.get(
+                    selected_builtin_provider, "deepseek-chat"
+                )
                 st.session_state["chat_provider_override"] = selected_builtin_provider
                 changed = True
             elif builtin_model.strip() and builtin_model.strip() != sess.model:
@@ -498,12 +558,21 @@ def _render_model_settings(symbol: str, stock_name: str, ctx: dict, sess: ChatSe
 def _render_actions(symbol: str, stock_name: str, ctx: dict, sess: ChatSession):
     c1, c2, c3, c4 = st.columns([1.2, 1.1, 1.1, 1.1])
     with c1:
-        st.caption(f"消息 {_message_count(sess)} 条 · 轮次 {_round_count(sess)}/{getattr(sess, 'max_rounds', MAX_ROUNDS)}")
+        st.caption(
+            f"消息 {_message_count(sess)} 条 · 轮次 {_round_count(sess)}/{getattr(sess, 'max_rounds', MAX_ROUNDS)}"
+        )
     with c2:
         if st.button("新会话", use_container_width=True, key=f"chat_new_{symbol}"):
-            new_sess = new_session(symbol, stock_name, ctx, provider=sess.provider if sess.provider != "custom" else "deepseek")
+            new_sess = new_session(
+                symbol,
+                stock_name,
+                ctx,
+                provider=sess.provider if sess.provider != "custom" else "deepseek",
+            )
             new_sess.provider = getattr(sess, "provider", "deepseek")
-            new_sess.model = getattr(sess, "model", "") or PROVIDER_DEFAULT_MODEL.get(new_sess.provider, "deepseek-chat")
+            new_sess.model = getattr(sess, "model", "") or PROVIDER_DEFAULT_MODEL.get(
+                new_sess.provider, "deepseek-chat"
+            )
             new_sess.api_key = getattr(sess, "api_key", "") or ""
             new_sess.custom_base_url = getattr(sess, "custom_base_url", "") or ""
             new_sess.custom_models = list(getattr(sess, "custom_models", []) or [])
@@ -533,7 +602,9 @@ def _prepare_input_state(symbol: str, input_key: str):
 
 
 def _render_quick_prompts(symbol: str, input_key: str):
-    st.markdown("<div class='ai-chat-section-title'>快捷问题</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='ai-chat-section-title'>快捷问题</div>", unsafe_allow_html=True
+    )
     cols = st.columns(3)
     for i, q in enumerate(GUIDE_QUESTIONS):
         with cols[i % 3]:
@@ -544,8 +615,12 @@ def _render_quick_prompts(symbol: str, input_key: str):
 
 
 def _render_messages(sess: ChatSession):
-    st.markdown("<div class='ai-chat-section-title'>对话历史</div>", unsafe_allow_html=True)
-    chat_msgs = [m for m in getattr(sess, "messages", []) if getattr(m, "role", "") != "system"]
+    st.markdown(
+        "<div class='ai-chat-section-title'>对话历史</div>", unsafe_allow_html=True
+    )
+    chat_msgs = [
+        m for m in getattr(sess, "messages", []) if getattr(m, "role", "") != "system"
+    ]
     if not chat_msgs:
         st.markdown(
             """
@@ -571,7 +646,9 @@ def _render_messages(sess: ChatSession):
                 st.markdown(content)
         else:
             with st.chat_message("assistant", avatar="🤖"):
-                st.caption(f"AI 分析师 · {getattr(sess, 'provider', 'provider')} · {timestamp}")
+                st.caption(
+                    f"AI 分析师 · {getattr(sess, 'provider', 'provider')} · {timestamp}"
+                )
                 st.markdown(content)
 
 
@@ -579,7 +656,9 @@ def _render_input_area(symbol: str, sess: ChatSession):
     input_key = f"chat_input_{symbol}"
     _prepare_input_state(symbol, input_key)
 
-    st.markdown("<div class='ai-chat-section-title'>继续提问</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='ai-chat-section-title'>继续提问</div>", unsafe_allow_html=True
+    )
     user_input = st.text_area(
         "向 AI 提问",
         key=input_key,
@@ -592,11 +671,15 @@ def _render_input_area(symbol: str, sess: ChatSession):
     with c1:
         st.caption("发送前可编辑快捷问题；空输入不会调用模型。")
     with c2:
-        if st.button("清空输入", use_container_width=True, key=f"chat_clear_input_btn_{symbol}"):
+        if st.button(
+            "清空输入", use_container_width=True, key=f"chat_clear_input_btn_{symbol}"
+        ):
             st.session_state[f"chat_clear_input_next_{symbol}"] = True
             st.rerun()
     with c3:
-        send_clicked = st.button("发送", use_container_width=True, type="primary", key=f"chat_send_{symbol}")
+        send_clicked = st.button(
+            "发送", use_container_width=True, type="primary", key=f"chat_send_{symbol}"
+        )
 
     if send_clicked:
         msg_to_send = (user_input or "").strip()
@@ -633,7 +716,9 @@ def render(symbol: str, stock_name: str, ctx: dict):
     default_provider = cur_override or os.getenv("AI_CHAT_PROVIDER", "deepseek")
     if default_provider not in PROVIDER_DEFAULT_MODEL and default_provider != "custom":
         default_provider = "deepseek"
-    session_provider = default_provider if default_provider in PROVIDER_DEFAULT_MODEL else "deepseek"
+    session_provider = (
+        default_provider if default_provider in PROVIDER_DEFAULT_MODEL else "deepseek"
+    )
 
     sess = _ensure_session(symbol, stock_name, ctx, provider=session_provider)
     global_ai_settings = st.session_state.get("ai_global_settings", {})
@@ -641,8 +726,12 @@ def render(symbol: str, stock_name: str, ctx: dict):
         provider = global_ai_settings.get("provider") or sess.provider
         sess.provider = provider if provider in PROVIDER_DEFAULT_MODEL else "custom"
         sess.model = global_ai_settings.get("model") or sess.model
-        sess.api_key = global_ai_settings.get("api_key", "") or getattr(sess, "api_key", "")
-        sess.custom_base_url = global_ai_settings.get("base_url", "") or getattr(sess, "custom_base_url", "")
+        sess.api_key = global_ai_settings.get("api_key", "") or getattr(
+            sess, "api_key", ""
+        )
+        sess.custom_base_url = global_ai_settings.get("base_url", "") or getattr(
+            sess, "custom_base_url", ""
+        )
         if global_ai_settings.get("custom_models"):
             sess.custom_models = list(global_ai_settings.get("custom_models") or [])
         _set_session(symbol, sess)

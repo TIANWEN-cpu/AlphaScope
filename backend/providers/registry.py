@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
 import yaml
 
-from .base import BaseProvider, ProviderStatus
+from .base import BaseProvider
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +96,9 @@ class ProviderRegistry:
         # 按优先级排序的候选 Provider
         candidates = self._get_candidates(data_type, market)
         if not candidates:
-            logger.warning("没有可用的 Provider: data_type=%s, market=%s", data_type, market)
+            logger.warning(
+                "没有可用的 Provider: data_type=%s, market=%s", data_type, market
+            )
             return []
 
         query = {"market": market, "symbol": symbol, **query_kwargs}
@@ -204,54 +205,63 @@ def _auto_register_providers(registry: ProviderRegistry) -> None:
     # 按依赖可用性动态导入
     try:
         from .akshare_provider import AkShareProvider
+
         provider_classes.append(AkShareProvider)
     except ImportError:
         logger.debug("AkShare Provider 未安装, 跳过")
 
     try:
         from .eastmoney_provider import EastMoneyProvider
+
         provider_classes.append(EastMoneyProvider)
     except ImportError:
         logger.debug("EastMoney Provider 未安装, 跳过")
 
     try:
         from .cls_provider import CLSProvider
+
         provider_classes.append(CLSProvider)
     except ImportError:
         logger.debug("CLS Provider 未安装, 跳过")
 
     try:
         from .cninfo_provider import CNInfoProvider
+
         provider_classes.append(CNInfoProvider)
     except ImportError:
         logger.debug("CNInfo Provider 未安装, 跳过")
 
     try:
         from .tushare_provider import TushareProvider
+
         provider_classes.append(TushareProvider)
     except ImportError:
         logger.debug("Tushare Provider 未安装, 跳过")
 
     try:
         from .baostock_provider import BaoStockProvider
+
         provider_classes.append(BaoStockProvider)
     except ImportError:
         logger.debug("BaoStock Provider 未安装, 跳过")
 
     try:
         from .openbb_provider import OpenBBProvider
+
         provider_classes.append(OpenBBProvider)
     except ImportError:
         logger.debug("OpenBB Provider 未安装, 跳过")
 
     try:
         from .sec_provider import SECProvider
+
         provider_classes.append(SECProvider)
     except ImportError:
         logger.debug("SEC Provider 未安装, 跳过")
 
     try:
         from .hkex_provider import HKEXProvider
+
         provider_classes.append(HKEXProvider)
     except ImportError:
         logger.debug("HKEX Provider 未安装, 跳过")

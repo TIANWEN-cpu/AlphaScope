@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from backend.providers.base import BaseProvider
 
@@ -36,8 +36,11 @@ class FinnhubProvider(BaseProvider):
 
     def _get(self, endpoint: str, params: Optional[Dict] = None) -> Any:
         import requests
+
         url = f"{self.BASE_URL}{endpoint}"
-        resp = requests.get(url, headers=self._headers(), params=params or {}, timeout=15)
+        resp = requests.get(
+            url, headers=self._headers(), params=params or {}, timeout=15
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -48,9 +51,12 @@ class FinnhubProvider(BaseProvider):
             return []
         try:
             from datetime import datetime, timedelta
+
             end = datetime.now().strftime("%Y-%m-%d")
             start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-            raw = self._get("/company-news", {"symbol": symbol, "from": start, "to": end})
+            raw = self._get(
+                "/company-news", {"symbol": symbol, "from": start, "to": end}
+            )
             if not isinstance(raw, list):
                 return []
             return [
@@ -63,7 +69,7 @@ class FinnhubProvider(BaseProvider):
                     "symbols": [symbol],
                     "sentiment": item.get("sentiment", 0),
                 }
-                for item in raw[:query.get("limit", 20)]
+                for item in raw[: query.get("limit", 20)]
             ]
         except Exception as e:
             logger.warning("Finnhub news failed: %s", e)
@@ -87,7 +93,7 @@ class FinnhubProvider(BaseProvider):
             return []
         try:
             raw = self._get("/stock/insider-transactions", {"symbol": symbol})
-            return raw.get("data", [])[:query.get("limit", 20)]
+            return raw.get("data", [])[: query.get("limit", 20)]
         except Exception as e:
             logger.warning("Finnhub insider failed: %s", e)
             return []
@@ -107,6 +113,7 @@ class FinnhubProvider(BaseProvider):
         """Get earnings calendar and economic events"""
         try:
             from datetime import datetime, timedelta
+
             start = datetime.now().strftime("%Y-%m-%d")
             end = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
             return self._get("/calendar/earnings", {"from": start, "to": end})

@@ -1,12 +1,19 @@
 """Tests for datetime normalization utility"""
-import pytest
+
 from datetime import datetime, timezone, timedelta
 
-import sys, os
+import sys
+import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from backend.utils.datetime_util import parse_dt, normalize_dt_str, to_utc, format_display
+from backend.utils.datetime_util import (
+    parse_dt,
+    normalize_dt_str,
+    to_utc,
+    format_display,
+)
 
 _CST = timezone(timedelta(hours=8))
 

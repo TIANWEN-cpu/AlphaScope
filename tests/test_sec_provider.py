@@ -1,12 +1,12 @@
 """SEC Provider 单元测试"""
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 
 class TestSECProvider:
     def test_form_to_category(self):
         from backend.providers.sec_provider import SECProvider
+
         assert SECProvider._form_to_category("10-K") == "earnings"
         assert SECProvider._form_to_category("10-Q") == "earnings"
         assert SECProvider._form_to_category("8-K") == "other"
@@ -16,6 +16,7 @@ class TestSECProvider:
 
     def test_init(self):
         from backend.providers.sec_provider import SECProvider
+
         p = SECProvider()
         assert p.name == "sec"
         assert "US" in p.markets
@@ -25,6 +26,7 @@ class TestSECProvider:
     @patch("backend.providers.sec_provider.requests.get")
     def test_symbol_to_cik_cached(self, mock_get):
         from backend.providers.sec_provider import SECProvider
+
         p = SECProvider()
         # 手动设置缓存
         p._ticker_cik_map = {"AAPL": "0000320193", "MSFT": "0000789019"}
@@ -38,6 +40,7 @@ class TestSECProvider:
     @patch("backend.providers.sec_provider.requests.get")
     def test_get_announcements_success(self, mock_get):
         from backend.providers.sec_provider import SECProvider
+
         p = SECProvider()
         p._ticker_cik_map = {"AAPL": "0000320193"}
         p._cik_loaded = True
@@ -54,7 +57,7 @@ class TestSECProvider:
                     "primaryDocument": ["10-k.htm", "8-k.htm"],
                     "primaryDocDescription": ["Annual Report", "Current Report"],
                 }
-            }
+            },
         }
         mock_resp.raise_for_status = MagicMock()
         mock_get.return_value = mock_resp
@@ -68,6 +71,7 @@ class TestSECProvider:
     @patch("backend.providers.sec_provider.requests.get")
     def test_get_announcements_no_cik(self, mock_get):
         from backend.providers.sec_provider import SECProvider
+
         p = SECProvider()
         p._ticker_cik_map = {}
         p._cik_loaded = True

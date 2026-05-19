@@ -35,14 +35,16 @@ class CNInfoProvider(BaseProvider):
                 return []
             results = []
             for _, row in df.head(query.get("limit", 50)).iterrows():
-                results.append({
-                    "source": "cninfo",
-                    "upstream": "cninfo",
-                    "symbol": symbol,
-                    "title": str(row.get("公告标题", "")).strip(),
-                    "datetime": str(row.get("公告时间", "")).strip(),
-                    "url": str(row.get("公告链接", "")).strip(),
-                })
+                results.append(
+                    {
+                        "source": "cninfo",
+                        "upstream": "cninfo",
+                        "symbol": symbol,
+                        "title": str(row.get("公告标题", "")).strip(),
+                        "datetime": str(row.get("公告时间", "")).strip(),
+                        "url": str(row.get("公告链接", "")).strip(),
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("CNInfo announcements failed: %s", e)

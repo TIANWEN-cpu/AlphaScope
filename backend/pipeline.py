@@ -16,7 +16,7 @@ from backend.quality.dedup import Deduplicator
 from backend.quality.source_rank import SourceRanker
 from backend.storage.db import Database
 from backend.rag.retriever import Retriever
-from backend.utils.tracer import traced, get_tracer
+from backend.utils.tracer import traced
 from backend.utils.datetime_util import normalize_dt_str
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class ResourceUnavailableError(Exception):
     """Raised when a required resource (e.g., RAG Retriever) is not available"""
+
     pass
 
 
@@ -70,7 +71,10 @@ class DataPipeline:
             except Exception as e:
                 self._retriever_failed = True
                 self._retriever_error = str(e)
-                logger.error("Retriever 初始化失败, 后续 RAG 调用将抛 ResourceUnavailableError: %s", e)
+                logger.error(
+                    "Retriever 初始化失败, 后续 RAG 调用将抛 ResourceUnavailableError: %s",
+                    e,
+                )
         if self._retriever is None:
             raise ResourceUnavailableError(f"RAG 不可用: {self._retriever_error}")
         return self._retriever
@@ -326,7 +330,9 @@ class DataPipeline:
                 symbol=symbol,
             )
             latency = (time.time() - start) * 1000
-            self._log_fetch("fund_flow", symbol, "success", latency, len(items) if items else 0)
+            self._log_fetch(
+                "fund_flow", symbol, "success", latency, len(items) if items else 0
+            )
             return items if items else []
         except Exception as e:
             latency = (time.time() - start) * 1000
@@ -400,16 +406,18 @@ class DataPipeline:
     ) -> None:
         """记录抓取日志"""
         try:
-            self._db.insert_fetch_log({
-                "source": source,
-                "endpoint": endpoint,
-                "status": status,
-                "latency_ms": round(latency_ms, 1),
-                "items_count": items_count,
-                "error_message": error,
-                "started_at": datetime.now().isoformat(),
-                "finished_at": datetime.now().isoformat(),
-            })
+            self._db.insert_fetch_log(
+                {
+                    "source": source,
+                    "endpoint": endpoint,
+                    "status": status,
+                    "latency_ms": round(latency_ms, 1),
+                    "items_count": items_count,
+                    "error_message": error,
+                    "started_at": datetime.now().isoformat(),
+                    "finished_at": datetime.now().isoformat(),
+                }
+            )
         except Exception as e:
             logger.debug("记录抓取日志失败: %s", e)
 
@@ -454,6 +462,7 @@ class DataPipeline:
         """用事件抽取器为新闻条目补充 event_type 和 sentiment"""
         try:
             from backend.events.extractor import EventExtractor
+
             extractor = EventExtractor()
             for item in items:
                 if item.get("event_type"):
@@ -463,7 +472,9 @@ class DataPipeline:
                     evt = events[0]
                     item["event_type"] = evt.event_type
                     item["sentiment"] = evt.sentiment
-                    item["importance"] = max(item.get("importance", 0.5), evt.importance)
+                    item["importance"] = max(
+                        item.get("importance", 0.5), evt.importance
+                    )
         except Exception as e:
             logger.debug("新闻事件抽取跳过: %s", e)
         return items
@@ -473,6 +484,7 @@ class DataPipeline:
         """用事件抽取器为公告条目补充 category"""
         try:
             from backend.events.extractor import EventExtractor
+
             extractor = EventExtractor()
             for item in items:
                 if item.get("category"):
@@ -489,7 +501,9 @@ class DataPipeline:
                         "litigation": "litigation",
                     }
                     item["category"] = type_to_cat.get(evt.event_type, "other")
-                    item["importance"] = max(item.get("importance", 0.5), evt.importance)
+                    item["importance"] = max(
+                        item.get("importance", 0.5), evt.importance
+                    )
         except Exception as e:
             logger.debug("公告事件抽取跳过: %s", e)
         return items
@@ -505,8 +519,11 @@ class DataPipeline:
             "source": item.get("source", ""),
             "upstream": item.get("upstream", ""),
             "source_url": item.get("source_url", item.get("url", "")),
-            "published_at": normalize_dt_str(item.get("datetime", item.get("published_at", ""))),
-            "fetched_at": normalize_dt_str(item.get("fetched_at", "")) or datetime.now().isoformat(),
+            "published_at": normalize_dt_str(
+                item.get("datetime", item.get("published_at", ""))
+            ),
+            "fetched_at": normalize_dt_str(item.get("fetched_at", ""))
+            or datetime.now().isoformat(),
             "symbols": item.get("symbols", []),
             "industries": item.get("industries", []),
             "event_type": item.get("event_type", ""),
@@ -531,8 +548,11 @@ class DataPipeline:
             "target_price": item.get("target_price"),
             "summary": item.get("summary", ""),
             "pdf_url": item.get("pdf_url", item.get("url", "")),
-            "published_at": normalize_dt_str(item.get("datetime", item.get("published_at", ""))),
-            "fetched_at": normalize_dt_str(item.get("fetched_at", "")) or datetime.now().isoformat(),
+            "published_at": normalize_dt_str(
+                item.get("datetime", item.get("published_at", ""))
+            ),
+            "fetched_at": normalize_dt_str(item.get("fetched_at", ""))
+            or datetime.now().isoformat(),
             "source": item.get("source", ""),
             "source_url": item.get("source_url", item.get("url", "")),
             "pdf_hash": item.get("pdf_hash", ""),
@@ -549,8 +569,11 @@ class DataPipeline:
             "company_name": item.get("company_name", ""),
             "title": item.get("title", ""),
             "category": item.get("category", ""),
-            "published_at": normalize_dt_str(item.get("datetime", item.get("published_at", ""))),
-            "fetched_at": normalize_dt_str(item.get("fetched_at", "")) or datetime.now().isoformat(),
+            "published_at": normalize_dt_str(
+                item.get("datetime", item.get("published_at", ""))
+            ),
+            "fetched_at": normalize_dt_str(item.get("fetched_at", ""))
+            or datetime.now().isoformat(),
             "source": item.get("source", ""),
             "source_url": item.get("source_url", item.get("url", "")),
             "pdf_url": item.get("pdf_url", item.get("url", "")),
@@ -583,10 +606,15 @@ def ingest_reports(symbol: str, market: str = "CN", limit: int = 20) -> list[dic
 
 
 def ingest_announcements(
-    symbol: str, market: str = "CN", limit: int = 30,
-    start_date: str = "", end_date: str = "",
+    symbol: str,
+    market: str = "CN",
+    limit: int = 30,
+    start_date: str = "",
+    end_date: str = "",
 ) -> list[dict]:
-    return get_pipeline().ingest_announcements(symbol, market, limit, start_date, end_date)
+    return get_pipeline().ingest_announcements(
+        symbol, market, limit, start_date, end_date
+    )
 
 
 def search_evidence(query: str, symbol: str = "", n_results: int = 10) -> list[dict]:

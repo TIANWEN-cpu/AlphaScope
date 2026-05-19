@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +22,7 @@ class SourceHealthMonitor:
         """获取所有数据源的健康报告"""
         try:
             from backend.providers.registry import get_registry
+
             registry = get_registry()
             providers = registry.get_all_health()
 
@@ -58,6 +58,8 @@ class SourceHealthMonitor:
             status_icon = {"healthy": "✓", "degraded": "⚠", "unhealthy": "✗"}.get(
                 p["status"], "?"
             )
-            latency = f"{p['avg_latency_ms']:.0f}ms" if p["avg_latency_ms"] > 0 else "N/A"
+            latency = (
+                f"{p['avg_latency_ms']:.0f}ms" if p["avg_latency_ms"] > 0 else "N/A"
+            )
             lines.append(f"  {status_icon} {p['name']}: {p['status']} ({latency})")
         return "\n".join(lines)

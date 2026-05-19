@@ -41,6 +41,7 @@ _CST = timezone(timedelta(hours=8))
 @dataclass
 class Span:
     """A single trace span recording timing and metadata."""
+
     name: str
     operation: str = ""
     start_time: float = 0.0
@@ -108,13 +109,20 @@ class Tracer:
         with self._lock:
             self._spans.append(span)
             if len(self._spans) > self.max_spans:
-                self._spans = self._spans[-self.max_spans:]
+                self._spans = self._spans[-self.max_spans :]
         if span.status == "error":
-            logger.warning("[Trace] %s failed (%.0fms): %s", span.name, span.duration_ms, span.error[:100])
+            logger.warning(
+                "[Trace] %s failed (%.0fms): %s",
+                span.name,
+                span.duration_ms,
+                span.error[:100],
+            )
         else:
             logger.debug("[Trace] %s ok (%.0fms)", span.name, span.duration_ms)
 
-    def get_traces(self, limit: int = 50, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_traces(
+        self, limit: int = 50, status: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         with self._lock:
             spans = list(self._spans)
         if status:
@@ -183,14 +191,19 @@ def traced_func(operation: str = "", tracer_name: str = "default") -> Callable:
         def fetch_data(source: str):
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         op_name = operation or func.__name__
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            with traced(op_name, tracer_name, **{k: str(v)[:50] for k, v in kwargs.items()}):
+            with traced(
+                op_name, tracer_name, **{k: str(v)[:50] for k, v in kwargs.items()}
+            ):
                 return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 

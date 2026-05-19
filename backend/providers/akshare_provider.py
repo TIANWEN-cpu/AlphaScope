@@ -10,10 +10,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import logging
-from typing import Any
 
 import akshare as ak
-import pandas as pd
 
 from .base import BaseProvider
 
@@ -30,7 +28,14 @@ def _safe(fn, *args, **kwargs):
 class AkShareProvider(BaseProvider):
     name = "akshare"
     markets = ["CN", "ALL"]
-    data_types = ["news", "reports", "announcements", "prices", "fundamentals", "fund_flow"]
+    data_types = [
+        "news",
+        "reports",
+        "announcements",
+        "prices",
+        "fundamentals",
+        "fund_flow",
+    ]
     priority = 60
     license_level = "research_only"
 
@@ -44,14 +49,16 @@ class AkShareProvider(BaseProvider):
             df = _safe(ak.stock_info_global_cls, symbol="全部")
             if df is not None and len(df) > 0:
                 for _, row in df.head(limit).iterrows():
-                    results.append({
-                        "source": "cls",
-                        "upstream": "cls",
-                        "title": str(row.get("标题", "")).strip(),
-                        "summary": str(row.get("内容", "")).strip()[:200],
-                        "datetime": f"{row.get('发布日期', '')} {row.get('发布时间', '')}".strip(),
-                        "url": "",
-                    })
+                    results.append(
+                        {
+                            "source": "cls",
+                            "upstream": "cls",
+                            "title": str(row.get("标题", "")).strip(),
+                            "summary": str(row.get("内容", "")).strip()[:200],
+                            "datetime": f"{row.get('发布日期', '')} {row.get('发布时间', '')}".strip(),
+                            "url": "",
+                        }
+                    )
         except Exception as e:
             logger.debug("AkShare CLS news failed: %s", e)
 
@@ -60,14 +67,16 @@ class AkShareProvider(BaseProvider):
             df = _safe(ak.stock_info_global_em)
             if df is not None and len(df) > 0:
                 for _, row in df.head(limit).iterrows():
-                    results.append({
-                        "source": "eastmoney",
-                        "upstream": "eastmoney",
-                        "title": str(row.get("标题", "")).strip(),
-                        "summary": str(row.get("摘要", "")).strip()[:200],
-                        "datetime": str(row.get("发布时间", "")).strip(),
-                        "url": str(row.get("链接", "")).strip(),
-                    })
+                    results.append(
+                        {
+                            "source": "eastmoney",
+                            "upstream": "eastmoney",
+                            "title": str(row.get("标题", "")).strip(),
+                            "summary": str(row.get("摘要", "")).strip()[:200],
+                            "datetime": str(row.get("发布时间", "")).strip(),
+                            "url": str(row.get("链接", "")).strip(),
+                        }
+                    )
         except Exception as e:
             logger.debug("AkShare EM news failed: %s", e)
 
@@ -82,14 +91,16 @@ class AkShareProvider(BaseProvider):
                         end = content.find("】")
                         if end > 0:
                             title = content[1:end]
-                    results.append({
-                        "source": "sina",
-                        "upstream": "sina",
-                        "title": title[:80],
-                        "summary": content[:200],
-                        "datetime": str(row.get("时间", "")).strip(),
-                        "url": "",
-                    })
+                    results.append(
+                        {
+                            "source": "sina",
+                            "upstream": "sina",
+                            "title": title[:80],
+                            "summary": content[:200],
+                            "datetime": str(row.get("时间", "")).strip(),
+                            "url": "",
+                        }
+                    )
         except Exception as e:
             logger.debug("AkShare Sina news failed: %s", e)
 
@@ -106,17 +117,19 @@ class AkShareProvider(BaseProvider):
                 return []
             results = []
             for _, row in df.head(query.get("limit", 30)).iterrows():
-                results.append({
-                    "source": "eastmoney",
-                    "upstream": "eastmoney",
-                    "title": str(row.get("报告名称", "")).strip(),
-                    "institution": str(row.get("机构", "")).strip(),
-                    "rating": str(row.get("最新评级", "")).strip(),
-                    "industry": str(row.get("行业", "")).strip(),
-                    "datetime": str(row.get("日期", "")).strip(),
-                    "pdf_url": str(row.get("报告链接", "")).strip(),
-                    "symbols": [symbol],
-                })
+                results.append(
+                    {
+                        "source": "eastmoney",
+                        "upstream": "eastmoney",
+                        "title": str(row.get("报告名称", "")).strip(),
+                        "institution": str(row.get("机构", "")).strip(),
+                        "rating": str(row.get("最新评级", "")).strip(),
+                        "industry": str(row.get("行业", "")).strip(),
+                        "datetime": str(row.get("日期", "")).strip(),
+                        "pdf_url": str(row.get("报告链接", "")).strip(),
+                        "symbols": [symbol],
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("AkShare reports failed: %s", e)
@@ -140,14 +153,16 @@ class AkShareProvider(BaseProvider):
             )
             if df is not None and len(df) > 0:
                 for _, row in df.head(query.get("limit", 30)).iterrows():
-                    results.append({
-                        "source": "cninfo",
-                        "upstream": "cninfo",
-                        "symbol": symbol,
-                        "title": str(row.get("公告标题", "")).strip(),
-                        "datetime": str(row.get("公告时间", "")).strip(),
-                        "url": str(row.get("公告链接", "")).strip(),
-                    })
+                    results.append(
+                        {
+                            "source": "cninfo",
+                            "upstream": "cninfo",
+                            "symbol": symbol,
+                            "title": str(row.get("公告标题", "")).strip(),
+                            "datetime": str(row.get("公告时间", "")).strip(),
+                            "url": str(row.get("公告链接", "")).strip(),
+                        }
+                    )
         except Exception as e:
             logger.debug("AkShare CNInfo announcements failed: %s", e)
 
@@ -159,14 +174,16 @@ class AkShareProvider(BaseProvider):
             )
             if df is not None and len(df) > 0:
                 for _, row in df.head(query.get("limit", 20)).iterrows():
-                    results.append({
-                        "source": "eastmoney",
-                        "upstream": "eastmoney",
-                        "symbol": symbol,
-                        "title": str(row.get("公告标题", "")).strip(),
-                        "datetime": str(row.get("公告日期", "")).strip(),
-                        "url": "",
-                    })
+                    results.append(
+                        {
+                            "source": "eastmoney",
+                            "upstream": "eastmoney",
+                            "symbol": symbol,
+                            "title": str(row.get("公告标题", "")).strip(),
+                            "datetime": str(row.get("公告日期", "")).strip(),
+                            "url": "",
+                        }
+                    )
         except Exception as e:
             logger.debug("AkShare EM announcements failed: %s", e)
 
@@ -195,21 +212,23 @@ class AkShareProvider(BaseProvider):
                 return []
             results = []
             for _, row in df.iterrows():
-                results.append({
-                    "symbol": symbol,
-                    "market": "CN",
-                    "date": str(row.get("日期", "")),
-                    "open": float(row.get("开盘", 0)),
-                    "high": float(row.get("最高", 0)),
-                    "low": float(row.get("最低", 0)),
-                    "close": float(row.get("收盘", 0)),
-                    "volume": float(row.get("成交量", 0)),
-                    "amount": float(row.get("成交额", 0)),
-                    "turnover": float(row.get("换手率", 0)),
-                    "amplitude": float(row.get("振幅", 0)),
-                    "change_pct": float(row.get("涨跌幅", 0)),
-                    "source": "akshare",
-                })
+                results.append(
+                    {
+                        "symbol": symbol,
+                        "market": "CN",
+                        "date": str(row.get("日期", "")),
+                        "open": float(row.get("开盘", 0)),
+                        "high": float(row.get("最高", 0)),
+                        "low": float(row.get("最低", 0)),
+                        "close": float(row.get("收盘", 0)),
+                        "volume": float(row.get("成交量", 0)),
+                        "amount": float(row.get("成交额", 0)),
+                        "turnover": float(row.get("换手率", 0)),
+                        "amplitude": float(row.get("振幅", 0)),
+                        "change_pct": float(row.get("涨跌幅", 0)),
+                        "source": "akshare",
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("AkShare prices failed: %s", e)
@@ -230,18 +249,22 @@ class AkShareProvider(BaseProvider):
             df = df.tail(query.get("days", 30))
             results = []
             for _, row in df.iterrows():
-                results.append({
-                    "symbol": symbol,
-                    "date": str(row.get("日期", "")),
-                    "main_net_inflow": float(row.get("主力净流入-净额", 0)),
-                    "super_large_net_inflow": float(row.get("超大单净流入-净额", 0)),
-                    "large_net_inflow": float(row.get("大单净流入-净额", 0)),
-                    "medium_net_inflow": float(row.get("中单净流入-净额", 0)),
-                    "small_net_inflow": float(row.get("小单净流入-净额", 0)),
-                    "close": float(row.get("收盘价", 0)),
-                    "change_pct": float(row.get("涨跌幅", 0)),
-                    "source": "eastmoney",
-                })
+                results.append(
+                    {
+                        "symbol": symbol,
+                        "date": str(row.get("日期", "")),
+                        "main_net_inflow": float(row.get("主力净流入-净额", 0)),
+                        "super_large_net_inflow": float(
+                            row.get("超大单净流入-净额", 0)
+                        ),
+                        "large_net_inflow": float(row.get("大单净流入-净额", 0)),
+                        "medium_net_inflow": float(row.get("中单净流入-净额", 0)),
+                        "small_net_inflow": float(row.get("小单净流入-净额", 0)),
+                        "close": float(row.get("收盘价", 0)),
+                        "change_pct": float(row.get("涨跌幅", 0)),
+                        "source": "eastmoney",
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("AkShare fund flow failed: %s", e)

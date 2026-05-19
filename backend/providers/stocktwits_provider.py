@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from backend.providers.base import BaseProvider
 
@@ -32,6 +32,7 @@ class StocktwitsProvider(BaseProvider):
 
     def _get(self, endpoint: str, params: Optional[Dict] = None) -> Any:
         import requests
+
         url = f"{self.BASE_URL}{endpoint}"
         resp = requests.get(url, params=params or {}, timeout=15)
         resp.raise_for_status()
@@ -43,7 +44,9 @@ class StocktwitsProvider(BaseProvider):
         if not symbol:
             return {}
         try:
-            raw = self._get(f"/streams/symbol/{symbol}.json", {"limit": query.get("limit", 30)})
+            raw = self._get(
+                f"/streams/symbol/{symbol}.json", {"limit": query.get("limit", 30)}
+            )
             messages = raw.get("messages", [])
             if not messages:
                 return {"symbol": symbol, "sentiment": 0.5, "message_count": 0}
@@ -83,21 +86,31 @@ class StocktwitsProvider(BaseProvider):
         if not symbol:
             return []
         try:
-            raw = self._get(f"/streams/symbol/{symbol}.json", {"limit": query.get("limit", 10)})
+            raw = self._get(
+                f"/streams/symbol/{symbol}.json", {"limit": query.get("limit", 10)}
+            )
             messages = raw.get("messages", [])
             result = []
             for msg in messages:
                 sentiment = msg.get("entities", {}).get("sentiment", {})
-                sentiment_val = 0.7 if sentiment.get("basic") == "Bullish" else 0.3 if sentiment.get("basic") == "Bearish" else 0.5
-                result.append({
-                    "title": msg.get("body", "")[:100],
-                    "summary": msg.get("body", ""),
-                    "source": "stocktwits",
-                    "datetime": msg.get("created_at", ""),
-                    "url": f"https://stocktwits.com/message/{msg.get('id', '')}",
-                    "symbols": [symbol],
-                    "sentiment": sentiment_val,
-                })
+                sentiment_val = (
+                    0.7
+                    if sentiment.get("basic") == "Bullish"
+                    else 0.3
+                    if sentiment.get("basic") == "Bearish"
+                    else 0.5
+                )
+                result.append(
+                    {
+                        "title": msg.get("body", "")[:100],
+                        "summary": msg.get("body", ""),
+                        "source": "stocktwits",
+                        "datetime": msg.get("created_at", ""),
+                        "url": f"https://stocktwits.com/message/{msg.get('id', '')}",
+                        "symbols": [symbol],
+                        "sentiment": sentiment_val,
+                    }
+                )
             return result
         except Exception as e:
             logger.warning("Stocktwits news failed: %s", e)

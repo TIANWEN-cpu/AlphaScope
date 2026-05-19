@@ -1,11 +1,10 @@
 """SourceRanker 可信度排序单元测试"""
 
-import pytest
-
 
 class TestSourceRanker:
     def test_trust_levels(self):
         from backend.quality.source_rank import SourceRanker
+
         r = SourceRanker()
         assert r.get_trust_level("cninfo") == "S"
         assert r.get_trust_level("sec") == "S"
@@ -16,6 +15,7 @@ class TestSourceRanker:
 
     def test_trust_score_range(self):
         from backend.quality.source_rank import SourceRanker
+
         r = SourceRanker()
         s_score = r.get_trust_score("cninfo")
         d_score = r.get_trust_score("unknown_source")
@@ -25,6 +25,7 @@ class TestSourceRanker:
 
     def test_rank_items(self):
         from backend.quality.source_rank import SourceRanker
+
         r = SourceRanker()
         items = [
             {"source": "unknown", "title": "论坛帖子"},
@@ -37,6 +38,7 @@ class TestSourceRanker:
 
     def test_merge_by_trust(self):
         from backend.quality.source_rank import SourceRanker
+
         r = SourceRanker()
         items = [
             {"source": "xueqiu", "title": "雪球讨论"},

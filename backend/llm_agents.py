@@ -15,14 +15,16 @@ v2.0 新增：
 - 支持细粒度 API Key（每个 agent 可单独配置）
 - 向后兼容旧的 VENDORS 配置
 """
+
 import os
 import json
+import logging
 import re
 import threading
 import ipaddress
 from urllib.parse import urlsplit
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Dict, Any, Tuple, Optional, List
 from pathlib import Path
 from dotenv import load_dotenv
@@ -33,16 +35,19 @@ from project_paths import CONFIG_DIR, ENV_FILE
 
 load_dotenv(ENV_FILE)
 
+logger = logging.getLogger(__name__)
+
 # v0.12: Agent mode system (Standard/Deep/Auto)
 try:
-    from backend.agent_modes import AnalysisMode, AgentModeConfig, get_mode_resolver, resolve_mode
+    from backend.agent_modes import AnalysisMode, AgentModeConfig, get_mode_resolver
 except ImportError:
-    from agent_modes import AnalysisMode, AgentModeConfig, get_mode_resolver, resolve_mode
+    from agent_modes import AnalysisMode, AgentModeConfig, get_mode_resolver
 
 # v0.8: 统一 schema 校验。若校验模块缺失,使用恒等函数兜底,保持向后兼容。
 try:
     from validators import validate_agent_output as _validate_agent_output  # type: ignore
 except Exception:  # pragma: no cover
+
     def _validate_agent_output(data):  # type: ignore[no-redef]
         if not isinstance(data, dict):
             return {}
@@ -55,10 +60,12 @@ def _resolve_env(value: str) -> str:
     if not value or not isinstance(value, str):
         return value
     import re
+
     def replacer(m):
         var_name = m.group(1)
         return os.getenv(var_name, "")
-    return re.sub(r'\$\{([^}]+)\}', replacer, value)
+
+    return re.sub(r"\$\{([^}]+)\}", replacer, value)
 
 
 def normalize_openai_base_url(base_url: str) -> str:
@@ -75,7 +82,12 @@ def normalize_openai_base_url(base_url: str) -> str:
 
 
 def _allow_local_base_url() -> bool:
-    return os.getenv("ALLOW_LOCAL_LLM_BASE_URL", "").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("ALLOW_LOCAL_LLM_BASE_URL", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def validate_custom_base_url(base_url: str) -> str:
@@ -88,7 +100,9 @@ def validate_custom_base_url(base_url: str) -> str:
     if not host:
         raise ValueError("自定义 Base URL 缺少有效主机名")
     if host == "localhost" or host.endswith(".localhost"):
-        raise ValueError("默认禁止连接 localhost 自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1")
+        raise ValueError(
+            "默认禁止连接 localhost 自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1"
+        )
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
@@ -101,7 +115,9 @@ def validate_custom_base_url(base_url: str) -> str:
         or ip.is_reserved
         or ip.is_unspecified
     ):
-        raise ValueError("默认禁止连接内网或本机自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1")
+        raise ValueError(
+            "默认禁止连接内网或本机自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1"
+        )
     return normalized
 
 
@@ -145,19 +161,25 @@ VENDORS = {
     },
     "claude": {
         "api_key": os.getenv("CLAUDE_API_KEY"),
-        "base_url": (os.getenv("CLAUDE_BASE_URL", "") + "/v1") if os.getenv("CLAUDE_BASE_URL") else None,
+        "base_url": (os.getenv("CLAUDE_BASE_URL", "") + "/v1")
+        if os.getenv("CLAUDE_BASE_URL")
+        else None,
         "supports_json_mode": False,  # 第三方代理不一定支持，统一走文本+正则解析更稳
         "label": "Claude",
     },
     "gpt": {
         "api_key": os.getenv("GPT_API_KEY"),
-        "base_url": (os.getenv("GPT_BASE_URL", "") + "/v1") if os.getenv("GPT_BASE_URL") else None,
+        "base_url": (os.getenv("GPT_BASE_URL", "") + "/v1")
+        if os.getenv("GPT_BASE_URL")
+        else None,
         "supports_json_mode": True,
         "label": "GPT",
     },
     "mimo": {
         "api_key": os.getenv("MIMO_API_KEY"),
-        "base_url": (os.getenv("MIMO_BASE_URL", "") + "/v1") if os.getenv("MIMO_BASE_URL") else None,
+        "base_url": (os.getenv("MIMO_BASE_URL", "") + "/v1")
+        if os.getenv("MIMO_BASE_URL")
+        else None,
         "supports_json_mode": False,
         "label": "Mimo",
     },
@@ -190,7 +212,9 @@ if _PROVIDER_CONFIG:
 
 
 # ============== 细粒度 API Key 支持 ==============
-def get_vendor_config(vendor: str, api_key: Optional[str] = None, base_url: Optional[str] = None) -> Dict[str, Any]:
+def get_vendor_config(
+    vendor: str, api_key: Optional[str] = None, base_url: Optional[str] = None
+) -> Dict[str, Any]:
     """
     获取供应商配置。
     如果提供了 api_key/base_url，则创建临时配置（细粒度 Key / 自定义 OpenAI-compatible Base URL）。
@@ -199,7 +223,9 @@ def get_vendor_config(vendor: str, api_key: Optional[str] = None, base_url: Opti
     if not base:
         return None
     if api_key or base_url:
-        normalized_base_url = normalize_openai_base_url(base_url or base.get("base_url") or "")
+        normalized_base_url = normalize_openai_base_url(
+            base_url or base.get("base_url") or ""
+        )
         if base_url:
             normalized_base_url = validate_custom_base_url(normalized_base_url)
         return {
@@ -210,7 +236,9 @@ def get_vendor_config(vendor: str, api_key: Optional[str] = None, base_url: Opti
     return base
 
 
-def create_client(vendor: str, api_key: Optional[str] = None, base_url: Optional[str] = None) -> OpenAI:
+def create_client(
+    vendor: str, api_key: Optional[str] = None, base_url: Optional[str] = None
+) -> OpenAI:
     """创建 OpenAI 兼容客户端，支持细粒度 API Key 与自定义 Base URL"""
     cfg = get_vendor_config(vendor, api_key, base_url)
     if not cfg or not cfg["api_key"] or not cfg["base_url"]:
@@ -227,14 +255,16 @@ _client_cache: Dict[str, OpenAI] = {}
 _client_cache_lock = threading.Lock()
 
 
-def get_client(vendor: str, api_key: Optional[str] = None, base_url: Optional[str] = None) -> OpenAI:
+def get_client(
+    vendor: str, api_key: Optional[str] = None, base_url: Optional[str] = None
+) -> OpenAI:
     """
     获取客户端。
     如果提供了 api_key/base_url，则创建独立客户端（不走缓存，避免 Key/URL 混淆）。
     """
     if api_key or base_url:
         return create_client(vendor, api_key, base_url)
-    
+
     cache_key = vendor
     with _client_cache_lock:
         if cache_key in _client_cache:
@@ -271,11 +301,11 @@ class AgentConfig:
 # (vendor, model)
 AGENT_MODEL_CONFIG = {
     "fundamental": ("claude", "claude-sonnet-4-5"),
-    "technical":   ("gpt", "gpt-5.2"),
-    "sentiment":   ("deepseek", "deepseek-chat"),
-    "risk":        ("sensenova", "deepseek-v4-flash"),
-    "retail":      ("mimo", "mimo-v2.5-pro"),
-    "chairman":    ("claude", "claude-opus-4-7"),
+    "technical": ("gpt", "gpt-5.2"),
+    "sentiment": ("deepseek", "deepseek-chat"),
+    "risk": ("sensenova", "deepseek-v4-flash"),
+    "retail": ("mimo", "mimo-v2.5-pro"),
+    "chairman": ("claude", "claude-opus-4-7"),
 }
 
 # 全局兜底（任一 Agent 失败时使用）
@@ -373,6 +403,7 @@ def fetch_evidence_context(symbol: str, stock_name: str = "", limit: int = 8) ->
     """从 RAG 检索相关证据, 格式化为简报上下文 (v0.12)"""
     try:
         from backend.pipeline import search_evidence
+
         query = f"{stock_name} {symbol} 投资分析"
         results = search_evidence(query, symbol=symbol, n_results=limit)
         if not results:
@@ -384,8 +415,12 @@ def fetch_evidence_context(symbol: str, stock_name: str = "", limit: int = 8) ->
             source = meta.get("source", "unknown")
             published = meta.get("published_at", "")
             text_preview = r.get("text", "")[:120]
-            type_icon = {"news": "📰", "report": "📊", "announcement": "📋"}.get(doc_type, "📄")
-            lines.append(f"  [{i}] {type_icon} [{source}] {published} — {text_preview}...")
+            type_icon = {"news": "📰", "report": "📊", "announcement": "📋"}.get(
+                doc_type, "📄"
+            )
+            lines.append(
+                f"  [{i}] {type_icon} [{source}] {published} — {text_preview}..."
+            )
         lines.append(f"\n共检索到 {len(results)} 条相关证据, 覆盖新闻/研报/公告。")
         return "\n".join(lines)
     except Exception as e:
@@ -398,9 +433,14 @@ def fetch_factor_context(symbol: str, stock_name: str = "", days: int = 30) -> s
     try:
         from backend.factors import get_factor_generator
         from backend.factors.generator import format_factor_summary
+
         gen = get_factor_generator()
         report = gen.generate(symbol, stock_name, days=days, include_signals=True)
-        if report.news_count == 0 and report.event_count == 0 and report.report_count == 0:
+        if (
+            report.news_count == 0
+            and report.event_count == 0
+            and report.report_count == 0
+        ):
             return ""
         return format_factor_summary(report)
     except Exception as e:
@@ -408,34 +448,36 @@ def fetch_factor_context(symbol: str, stock_name: str = "", days: int = 30) -> s
         return ""
 
 
-def build_market_brief(stock_data: Dict[str, Any], evidence_context: str = "", factor_context: str = "") -> str:
+def build_market_brief(
+    stock_data: Dict[str, Any], evidence_context: str = "", factor_context: str = ""
+) -> str:
     """把数据打包成一段简洁的市场简报"""
     base = f"""
-【标的】{stock_data['name']} ({stock_data['symbol']})
+【标的】{stock_data["name"]} ({stock_data["symbol"]})
 
 【价格信息】
-- 最新价: ¥{stock_data['close']:.2f}
-- 当日涨跌: {stock_data['day_change']:+.2f}%
-- 区间涨跌（{stock_data['days']}日）: {stock_data['period_change']:+.2f}%
-- 区间最高/最低: ¥{stock_data['period_high']:.2f} / ¥{stock_data['period_low']:.2f}
+- 最新价: ¥{stock_data["close"]:.2f}
+- 当日涨跌: {stock_data["day_change"]:+.2f}%
+- 区间涨跌（{stock_data["days"]}日）: {stock_data["period_change"]:+.2f}%
+- 区间最高/最低: ¥{stock_data["period_high"]:.2f} / ¥{stock_data["period_low"]:.2f}
 
 【技术指标】
-- MA5: {stock_data.get('ma5', 'N/A')}
-- MA20: {stock_data.get('ma20', 'N/A')}
-- MA60: {stock_data.get('ma60', 'N/A')}
-- MACD: {stock_data.get('macd', 'N/A')}
-- DIF/DEA: {stock_data.get('dif', 'N/A')} / {stock_data.get('dea', 'N/A')}
-- RSI(14): {stock_data.get('rsi', 'N/A')}
+- MA5: {stock_data.get("ma5", "N/A")}
+- MA20: {stock_data.get("ma20", "N/A")}
+- MA60: {stock_data.get("ma60", "N/A")}
+- MACD: {stock_data.get("macd", "N/A")}
+- DIF/DEA: {stock_data.get("dif", "N/A")} / {stock_data.get("dea", "N/A")}
+- RSI(14): {stock_data.get("rsi", "N/A")}
 
 【量价数据】
-- 当日成交量: {stock_data['volume']:,.0f} 手
-- 区间成交额: {stock_data['total_amount']:.1f} 亿元
-- 当日换手率: {stock_data.get('turnover', 0):.2f}%
-- 近5日量比: {stock_data.get('vol_ratio', 1):.2f}
-- 日波动率: {stock_data.get('volatility', 0):.2f}%
+- 当日成交量: {stock_data["volume"]:,.0f} 手
+- 区间成交额: {stock_data["total_amount"]:.1f} 亿元
+- 当日换手率: {stock_data.get("turnover", 0):.2f}%
+- 近5日量比: {stock_data.get("vol_ratio", 1):.2f}
+- 日波动率: {stock_data.get("volatility", 0):.2f}%
 
 【基本面摘要】
-{stock_data.get('fundamentals', '暂无')}
+{stock_data.get("fundamentals", "暂无")}
 """
     if stock_data.get("related_news_brief"):
         base += f"\n【个股相关资讯（最近）】\n{stock_data['related_news_brief']}\n"
@@ -495,13 +537,18 @@ def _extract_json(text: str) -> dict:
             elif ch == "}":
                 depth -= 1
                 if depth == 0 and start is not None:
-                    candidates.append(raw[start:i + 1])
+                    candidates.append(raw[start : i + 1])
                     start = None
         return candidates
 
     def _loads(candidate: str) -> dict:
         candidate = (candidate or "").strip()
-        candidate = candidate.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+        candidate = (
+            candidate.replace("“", '"')
+            .replace("”", '"')
+            .replace("‘", "'")
+            .replace("’", "'")
+        )
         candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
         return json.loads(candidate)
 
@@ -526,7 +573,16 @@ def _extract_json(text: str) -> dict:
     return {}
 
 
-def _call_with(vendor: str, model: str, messages: list, json_mode: bool = False, max_tokens: int = 400, temperature: float = 0.3, api_key: Optional[str] = None, base_url: Optional[str] = None) -> str:
+def _call_with(
+    vendor: str,
+    model: str,
+    messages: list,
+    json_mode: bool = False,
+    max_tokens: int = 400,
+    temperature: float = 0.3,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> str:
     """
     统一调用接口，支持细粒度 API Key 与 Base URL。
     自动处理 json_mode 不支持的情况。
@@ -555,38 +611,46 @@ def get_default_agent_configs(include_chairman: bool = False) -> List[dict]:
     for key in keys:
         if key == "chairman":
             vendor, model = AGENT_MODEL_CONFIG.get("chairman", FALLBACK_VENDOR_MODEL)
-            configs.append(asdict(AgentConfig(
-                key="chairman",
-                name="🎩 投资委员会主席",
-                avatar="🎩",
-                role="你是一位严谨克制的投资委员会主席，注重风控与可执行性。",
-                instruction="综合所有 Agent 观点，输出最终投资建议、支持论据、风险和操作计划。",
-                provider=vendor,
-                model=model,
-                inherit_global_key=True,
-                enabled=True,
-                card_style="value",
-            )))
+            configs.append(
+                asdict(
+                    AgentConfig(
+                        key="chairman",
+                        name="🎩 投资委员会主席",
+                        avatar="🎩",
+                        role="你是一位严谨克制的投资委员会主席，注重风控与可执行性。",
+                        instruction="综合所有 Agent 观点，输出最终投资建议、支持论据、风险和操作计划。",
+                        provider=vendor,
+                        model=model,
+                        inherit_global_key=True,
+                        enabled=True,
+                        card_style="value",
+                    )
+                )
+            )
             continue
         prompt = AGENT_PROMPTS[key]
         vendor, model = AGENT_MODEL_CONFIG.get(key, FALLBACK_VENDOR_MODEL)
-        configs.append(asdict(AgentConfig(
-            key=key,
-            name=prompt.get("name", key),
-            avatar=str(prompt.get("name", "🤖"))[:2].strip() or "🤖",
-            role=prompt.get("role", ""),
-            instruction=prompt.get("instruction", ""),
-            provider=vendor,
-            model=model,
-            enabled=True,
-            card_style={
-                "fundamental": "value",
-                "technical": "technical",
-                "sentiment": "growth",
-                "risk": "risk",
-                "retail": "macro",
-            }.get(key, "default"),
-        )))
+        configs.append(
+            asdict(
+                AgentConfig(
+                    key=key,
+                    name=prompt.get("name", key),
+                    avatar=str(prompt.get("name", "🤖"))[:2].strip() or "🤖",
+                    role=prompt.get("role", ""),
+                    instruction=prompt.get("instruction", ""),
+                    provider=vendor,
+                    model=model,
+                    enabled=True,
+                    card_style={
+                        "fundamental": "value",
+                        "technical": "technical",
+                        "sentiment": "growth",
+                        "risk": "risk",
+                        "retail": "macro",
+                    }.get(key, "default"),
+                )
+            )
+        )
     return configs
 
 
@@ -596,7 +660,9 @@ def _agent_config_from_dict(raw: dict) -> AgentConfig:
         name=raw.get("name", "自定义 Agent"),
         avatar=raw.get("avatar", "🤖"),
         role=raw.get("role", "你是一位专业投资分析 Agent。"),
-        instruction=raw.get("instruction", "请基于市场简报输出投资信号、置信度和理由。"),
+        instruction=raw.get(
+            "instruction", "请基于市场简报输出投资信号、置信度和理由。"
+        ),
         provider=raw.get("provider", "deepseek"),
         model=raw.get("model", "deepseek-chat"),
         api_key=raw.get("api_key", ""),
@@ -607,7 +673,9 @@ def _agent_config_from_dict(raw: dict) -> AgentConfig:
     )
 
 
-def _resolve_agent_ai_config(cfg: AgentConfig, global_ai_settings: Optional[dict] = None) -> Tuple[str, str, str, str]:
+def _resolve_agent_ai_config(
+    cfg: AgentConfig, global_ai_settings: Optional[dict] = None
+) -> Tuple[str, str, str, str]:
     global_ai_settings = global_ai_settings or {}
     if cfg.inherit_global_key and global_ai_settings.get("use_unified_key", True):
         return (
@@ -620,34 +688,46 @@ def _resolve_agent_ai_config(cfg: AgentConfig, global_ai_settings: Optional[dict
 
 
 def _strict_json_messages(messages: list) -> list:
-    return messages + [{
-        "role": "user",
-        "content": (
-            "重要：请只返回一个合法 JSON 对象，不要 Markdown，不要解释，不要代码块。"
-            "字段必须包含 signal、confidence、reason；可选包含 evidence(数组,每项 {type,claim,data_date})、"
-            "invalid_if(字符串,失效条件)、risks(字符串数组)。"
-        ),
-    }]
+    return messages + [
+        {
+            "role": "user",
+            "content": (
+                "重要：请只返回一个合法 JSON 对象，不要 Markdown，不要解释，不要代码块。"
+                "字段必须包含 signal、confidence、reason；可选包含 evidence(数组,每项 {type,claim,data_date})、"
+                "invalid_if(字符串,失效条件)、risks(字符串数组)。"
+            ),
+        }
+    ]
 
 
-def run_custom_agent(agent_raw: dict, market_brief: str, api_key: Optional[str] = None, global_ai_settings: Optional[dict] = None) -> Dict[str, Any]:
+def run_custom_agent(
+    agent_raw: dict,
+    market_brief: str,
+    api_key: Optional[str] = None,
+    global_ai_settings: Optional[dict] = None,
+) -> Dict[str, Any]:
     """运行单个页面自定义 Agent。"""
     cfg = _agent_config_from_dict(agent_raw)
-    resolved_provider, resolved_model, resolved_key, resolved_base_url = _resolve_agent_ai_config(cfg, global_ai_settings)
+    resolved_provider, resolved_model, resolved_key, resolved_base_url = (
+        _resolve_agent_ai_config(cfg, global_ai_settings)
+    )
     if api_key:
         resolved_key = api_key
     messages = [
         {"role": "system", "content": cfg.role},
-        {"role": "user", "content": (
-            f"{cfg.instruction}\n\n{market_brief}\n\n"
-            "【输出要求】请用 JSON 返回,字段:\n"
-            "- signal: 买入|卖出|观望\n"
-            "- confidence: 0-100 整数\n"
-            "- reason: 100 字内核心理由\n"
-            "- evidence: 数组,每条 {type, claim, data_date},type 取自 fund_flow/technical/fundamental/news/research/macro/sentiment/shareholder/other\n"
-            "- invalid_if: 简短的失效条件\n"
-            "- risks: 1-3 条主要风险(字符串数组)\n"
-        )},
+        {
+            "role": "user",
+            "content": (
+                f"{cfg.instruction}\n\n{market_brief}\n\n"
+                "【输出要求】请用 JSON 返回,字段:\n"
+                "- signal: 买入|卖出|观望\n"
+                "- confidence: 0-100 整数\n"
+                "- reason: 100 字内核心理由\n"
+                "- evidence: 数组,每条 {type, claim, data_date},type 取自 fund_flow/technical/fundamental/news/research/macro/sentiment/shareholder/other\n"
+                "- invalid_if: 简短的失效条件\n"
+                "- risks: 1-3 条主要风险(字符串数组)\n"
+            ),
+        },
     ]
     primary_vendor = resolved_provider
     last_err = None
@@ -657,17 +737,40 @@ def run_custom_agent(agent_raw: dict, market_brief: str, api_key: Optional[str] 
     ]:
         try:
             mtokens = 2048 if vd == "mimo" else 500
-            call_messages = _strict_json_messages(messages) if vd == "mimo" else messages
-            text = _call_with(vd, md, call_messages, json_mode=True, max_tokens=mtokens, temperature=0.3, api_key=key_override, base_url=bu)
+            call_messages = (
+                _strict_json_messages(messages) if vd == "mimo" else messages
+            )
+            text = _call_with(
+                vd,
+                md,
+                call_messages,
+                json_mode=True,
+                max_tokens=mtokens,
+                temperature=0.3,
+                api_key=key_override,
+                base_url=bu,
+            )
             data = _extract_json(text)
             if not data or not data.get("signal"):
                 retry_messages = messages + [
                     {"role": "assistant", "content": text or ""},
-                    {"role": "user", "content": "请只输出 JSON：{\"signal\": \"买入|卖出|观望\", \"confidence\": 75, \"reason\": \"理由\", \"evidence\": [], \"invalid_if\": \"\", \"risks\": []}"},
+                    {
+                        "role": "user",
+                        "content": '请只输出 JSON：{"signal": "买入|卖出|观望", "confidence": 75, "reason": "理由", "evidence": [], "invalid_if": "", "risks": []}',
+                    },
                 ]
                 if vd == "mimo":
                     retry_messages = _strict_json_messages(retry_messages)
-                text = _call_with(vd, md, retry_messages, json_mode=True, max_tokens=mtokens, temperature=0.1, api_key=key_override, base_url=bu)
+                text = _call_with(
+                    vd,
+                    md,
+                    retry_messages,
+                    json_mode=True,
+                    max_tokens=mtokens,
+                    temperature=0.1,
+                    api_key=key_override,
+                    base_url=bu,
+                )
                 data = _extract_json(text)
             if not data or not data.get("signal"):
                 last_err = f"{vd} 未返回有效 JSON"
@@ -684,7 +787,9 @@ def run_custom_agent(agent_raw: dict, market_brief: str, api_key: Optional[str] 
                 "risks": valid["risks"],
                 "vendor": VENDORS.get(vd, {}).get("label", vd),
                 "model": md,
-                "primary_vendor": VENDORS.get(primary_vendor, {}).get("label", primary_vendor),
+                "primary_vendor": VENDORS.get(primary_vendor, {}).get(
+                    "label", primary_vendor
+                ),
                 "fallback_used": vd != primary_vendor,
                 "ok": True,
                 "card_style": cfg.card_style,
@@ -725,18 +830,37 @@ def run_custom_agents(
     """
     brief = build_market_brief(stock_data)
     api_keys = api_keys or {}
-    active = [_agent_config_from_dict(a) for a in agent_configs if bool(a.get("enabled", True))]
+    active = [
+        _agent_config_from_dict(a)
+        for a in agent_configs
+        if bool(a.get("enabled", True))
+    ]
     if not active:
         return {
             "agents": {},
-            "summary": {"final": "建议观望", "buy": 0, "sell": 0, "hold": 0, "avg_confidence": 0},
+            "summary": {
+                "final": "建议观望",
+                "buy": 0,
+                "sell": 0,
+                "hold": 0,
+                "avg_confidence": 0,
+            },
             "brief": brief,
             "agent_order": [],
             "critic": None,
         }
     results = {}
     with ThreadPoolExecutor(max_workers=len(active)) as ex:
-        futures = {ex.submit(run_custom_agent, asdict(cfg), brief, api_keys.get(cfg.key), global_ai_settings): cfg.key for cfg in active}
+        futures = {
+            ex.submit(
+                run_custom_agent,
+                asdict(cfg),
+                brief,
+                api_keys.get(cfg.key),
+                global_ai_settings,
+            ): cfg.key
+            for cfg in active
+        }
         for fut in as_completed(futures):
             r = fut.result()
             results[r["key"]] = r
@@ -757,11 +881,14 @@ def run_custom_agents(
     if enable_critic and any(r.get("ok") for r in results.values()):
         try:
             from critic import run_batch_critic  # 延迟导入,避免循环依赖
+
             critic_settings = (global_ai_settings or {}).get("critic") or {}
-            inherit = bool(critic_settings.get(
-                "inherit_global_key",
-                (global_ai_settings or {}).get("use_unified_key", True),
-            ))
+            inherit = bool(
+                critic_settings.get(
+                    "inherit_global_key",
+                    (global_ai_settings or {}).get("use_unified_key", True),
+                )
+            )
             if inherit and (global_ai_settings or {}).get("api_key"):
                 critic_api_key = (global_ai_settings or {}).get("api_key", "")
                 critic_base_url = (global_ai_settings or {}).get("base_url", "")
@@ -794,7 +921,13 @@ def run_custom_agents(
 
     return {
         "agents": results,
-        "summary": {"final": final, "buy": buy, "sell": sell, "hold": hold, "avg_confidence": avg_conf},
+        "summary": {
+            "final": final,
+            "buy": buy,
+            "sell": sell,
+            "hold": hold,
+            "avg_confidence": avg_conf,
+        },
         "brief": brief,
         "agent_order": [cfg.key for cfg in active],
         "critic": critic_block,
@@ -807,7 +940,14 @@ def get_custom_agent_model_table(agent_configs: List[dict]) -> list:
         if not raw.get("enabled", True):
             continue
         cfg = _agent_config_from_dict(raw)
-        rows.append((cfg.key, cfg.name, VENDORS.get(cfg.provider, {}).get("label", cfg.provider), cfg.model))
+        rows.append(
+            (
+                cfg.key,
+                cfg.name,
+                VENDORS.get(cfg.provider, {}).get("label", cfg.provider),
+                cfg.model,
+            )
+        )
     return rows
 
 
@@ -815,7 +955,9 @@ def get_custom_agent_model_table(agent_configs: List[dict]) -> list:
 call_llm = _call_with
 
 
-def run_one_agent(agent_key: str, market_brief: str, api_key: Optional[str] = None) -> Dict[str, Any]:
+def run_one_agent(
+    agent_key: str, market_brief: str, api_key: Optional[str] = None
+) -> Dict[str, Any]:
     """
     运行单个 Agent,含 fallback 与稳健 JSON 解析。
     支持细粒度 API Key。
@@ -830,23 +972,49 @@ def run_one_agent(agent_key: str, market_brief: str, api_key: Optional[str] = No
     ]
 
     last_err = None
-    for vd, md, key_override in [(vendor, model, api_key), (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], None)]:
+    for vd, md, key_override in [
+        (vendor, model, api_key),
+        (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], None),
+    ]:
         try:
             # Mimo 模型需要更大的 max_tokens,避免输出被截断导致 JSON 解析失败
             mtokens = 2048 if vd == "mimo" else 600
-            text = _call_with(vd, md, messages, json_mode=True, max_tokens=mtokens, temperature=0.3, api_key=key_override)
+            text = _call_with(
+                vd,
+                md,
+                messages,
+                json_mode=True,
+                max_tokens=mtokens,
+                temperature=0.3,
+                api_key=key_override,
+            )
             data = _extract_json(text)
             if not data or not data.get("signal"):
                 # 同一供应商再补一次以纯 JSON 回复
                 retry_tokens = 2048 if vd == "mimo" else 400
-                text = _call_with(vd, md, messages + [
-                    {"role": "assistant", "content": text},
-                    {"role": "user", "content": "请只输出符合格式的 JSON 对象,不要任何前后说明。"},
-                ], json_mode=True, max_tokens=retry_tokens, temperature=0.1, api_key=key_override)
+                text = _call_with(
+                    vd,
+                    md,
+                    messages
+                    + [
+                        {"role": "assistant", "content": text},
+                        {
+                            "role": "user",
+                            "content": "请只输出符合格式的 JSON 对象,不要任何前后说明。",
+                        },
+                    ],
+                    json_mode=True,
+                    max_tokens=retry_tokens,
+                    temperature=0.1,
+                    api_key=key_override,
+                )
                 data = _extract_json(text)
 
             # 如果当前供应商两次都没拿到信号,且不是兜底供应商,尝试切换到兜底
-            if (not data or not data.get("signal")) and (vd, md) != FALLBACK_VENDOR_MODEL:
+            if (not data or not data.get("signal")) and (
+                vd,
+                md,
+            ) != FALLBACK_VENDOR_MODEL:
                 last_err = f"{VENDORS[vd]['label']} 未返回有效 JSON"
                 continue  # 下一个 vendor
 
@@ -887,7 +1055,11 @@ def run_one_agent(agent_key: str, market_brief: str, api_key: Optional[str] = No
     }
 
 
-def run_all_agents(stock_data: Dict[str, Any], include_retail: bool = True, api_keys: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def run_all_agents(
+    stock_data: Dict[str, Any],
+    include_retail: bool = True,
+    api_keys: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
     """
     并行调用全部 Agent（4 核心 + 可选散户行为）。
     api_keys: {agent_key: api_key} 细粒度 API Key 映射。
@@ -897,7 +1069,9 @@ def run_all_agents(stock_data: Dict[str, Any], include_retail: bool = True, api_
     stock_name = stock_data.get("name", "")
     evidence_ctx = fetch_evidence_context(symbol, stock_name)
     factor_ctx = fetch_factor_context(symbol, stock_name)
-    brief = build_market_brief(stock_data, evidence_context=evidence_ctx, factor_context=factor_ctx)
+    brief = build_market_brief(
+        stock_data, evidence_context=evidence_ctx, factor_context=factor_ctx
+    )
     api_keys = api_keys or {}
 
     keys = ["fundamental", "technical", "sentiment", "risk"]
@@ -940,6 +1114,7 @@ def run_all_agents(stock_data: Dict[str, Any], include_retail: bool = True, api_
 
 # ============== v0.12: Mode-Aware Agent Execution ==============
 
+
 def run_agents_with_mode(
     stock_data: Dict[str, Any],
     mode: AnalysisMode = AnalysisMode.DEEP,
@@ -981,15 +1156,27 @@ def run_agents_with_mode(
     if config.enable_factors:
         factor_ctx = fetch_factor_context(symbol, stock_name)
 
-    brief = build_market_brief(stock_data, evidence_context=evidence_ctx, factor_context=factor_ctx)
+    brief = build_market_brief(
+        stock_data, evidence_context=evidence_ctx, factor_context=factor_ctx
+    )
     api_keys = api_keys or {}
 
     # Run agents in parallel
-    active = [_agent_config_from_dict(a) for a in agent_configs if bool(a.get("enabled", True))]
+    active = [
+        _agent_config_from_dict(a)
+        for a in agent_configs
+        if bool(a.get("enabled", True))
+    ]
     if not active:
         return {
             "agents": {},
-            "summary": {"final": "建议观望", "buy": 0, "sell": 0, "hold": 0, "avg_confidence": 0},
+            "summary": {
+                "final": "建议观望",
+                "buy": 0,
+                "sell": 0,
+                "hold": 0,
+                "avg_confidence": 0,
+            },
             "brief": brief,
             "agent_order": [],
             "critic": None,
@@ -1032,6 +1219,7 @@ def run_agents_with_mode(
     if config.enable_critic and any(r.get("ok") for r in results.values()):
         try:
             from critic import run_batch_critic
+
             critic_block = run_batch_critic(
                 stock_name=stock_data.get("name", "未知标的"),
                 market_brief=brief,
@@ -1055,7 +1243,10 @@ def run_agents_with_mode(
     if config.enable_chairman:
         try:
             chairman_summary = summarize_with_chairman(
-                {"agents": results, "summary": {"buy": buy, "sell": sell, "hold": hold}},
+                {
+                    "agents": results,
+                    "summary": {"buy": buy, "sell": sell, "hold": hold},
+                },
                 stock_data.get("name", ""),
             )
         except Exception as e:
@@ -1063,7 +1254,13 @@ def run_agents_with_mode(
 
     return {
         "agents": results,
-        "summary": {"final": final, "buy": buy, "sell": sell, "hold": hold, "avg_confidence": avg_conf},
+        "summary": {
+            "final": final,
+            "buy": buy,
+            "sell": sell,
+            "hold": hold,
+            "avg_confidence": avg_conf,
+        },
         "brief": brief,
         "agent_order": [cfg.key for cfg in active],
         "critic": critic_block,
@@ -1085,17 +1282,23 @@ def _run_auto_mode(
     Stage 1: Single agent with cheap model (DeepSeek)
     Stage 2: If confidence is between 30-70, escalate to full DEEP analysis
     """
-    symbol = stock_data.get("symbol", "")
-    stock_name = stock_data.get("name", "")
+    stock_data.get("symbol", "")
+    stock_data.get("name", "")
     brief = build_market_brief(stock_data)
 
     # Stage 1: Pre-screen
     pre_screen_messages = [
-        {"role": "system", "content": "你是一位快速股票分析师。基于简报给出买入/卖出/观望信号和置信度。"},
-        {"role": "user", "content": (
-            f"{brief}\n\n"
-            "请用 JSON 返回: {\"signal\": \"买入|卖出|观望\", \"confidence\": 0-100, \"reason\": \"50字内理由\"}"
-        )},
+        {
+            "role": "system",
+            "content": "你是一位快速股票分析师。基于简报给出买入/卖出/观望信号和置信度。",
+        },
+        {
+            "role": "user",
+            "content": (
+                f"{brief}\n\n"
+                '请用 JSON 返回: {"signal": "买入|卖出|观望", "confidence": 0-100, "reason": "50字内理由"}'
+            ),
+        },
     ]
 
     try:
@@ -1149,7 +1352,11 @@ def _run_auto_mode(
             "mode": "auto",
             "mode_name": "自动模式 (预筛直接输出)",
             "auto_escalated": False,
-            "pre_screen_result": {"signal": pre_signal, "confidence": pre_confidence, "reason": pre_reason},
+            "pre_screen_result": {
+                "signal": pre_signal,
+                "confidence": pre_confidence,
+                "reason": pre_reason,
+            },
         }
 
     # Escalation needed: run full DEEP analysis
@@ -1164,7 +1371,11 @@ def _run_auto_mode(
     deep_result["mode"] = "auto"
     deep_result["mode_name"] = "自动模式 (已升级到深入分析)"
     deep_result["auto_escalated"] = True
-    deep_result["pre_screen_result"] = {"signal": pre_signal, "confidence": pre_confidence, "reason": pre_reason}
+    deep_result["pre_screen_result"] = {
+        "signal": pre_signal,
+        "confidence": pre_confidence,
+        "reason": pre_reason,
+    }
     return deep_result
 
 
@@ -1189,18 +1400,20 @@ def _mode_config_to_agent_dicts(config: AgentModeConfig) -> List[dict]:
     result = []
     for agent_entry in config.enabled_agents:
         prompt = prompt_map.get(agent_entry.key, {})
-        result.append({
-            "key": agent_entry.key,
-            "name": prompt.get("name", agent_entry.key),
-            "avatar": str(prompt.get("name", "🤖"))[:2].strip() or "🤖",
-            "role": prompt.get("role", ""),
-            "instruction": prompt.get("instruction", ""),
-            "provider": agent_entry.provider,
-            "model": agent_entry.model,
-            "enabled": agent_entry.enabled,
-            "inherit_global_key": True,
-            "card_style": card_style_map.get(agent_entry.key, "default"),
-        })
+        result.append(
+            {
+                "key": agent_entry.key,
+                "name": prompt.get("name", agent_entry.key),
+                "avatar": str(prompt.get("name", "🤖"))[:2].strip() or "🤖",
+                "role": prompt.get("role", ""),
+                "instruction": prompt.get("instruction", ""),
+                "provider": agent_entry.provider,
+                "model": agent_entry.model,
+                "enabled": agent_entry.enabled,
+                "inherit_global_key": True,
+                "card_style": card_style_map.get(agent_entry.key, "default"),
+            }
+        )
     return result
 
 
@@ -1215,27 +1428,49 @@ def get_mode_model_table(mode: AnalysisMode) -> list:
         rows.append((agent.key, name, vendor_label, agent.model))
 
     if config.enable_critic:
-        rows.append(("critic", "📝 Critic 审稿", VENDORS.get(config.critic_provider, {}).get("label", config.critic_provider), config.critic_model))
+        rows.append(
+            (
+                "critic",
+                "📝 Critic 审稿",
+                VENDORS.get(config.critic_provider, {}).get(
+                    "label", config.critic_provider
+                ),
+                config.critic_model,
+            )
+        )
     if config.enable_chairman:
-        rows.append(("chairman", "🎩 投资委员会主席", VENDORS.get(config.chairman_provider, {}).get("label", config.chairman_provider), config.chairman_model))
+        rows.append(
+            (
+                "chairman",
+                "🎩 投资委员会主席",
+                VENDORS.get(config.chairman_provider, {}).get(
+                    "label", config.chairman_provider
+                ),
+                config.chairman_model,
+            )
+        )
     return rows
 
 
-def summarize_with_chairman(results: Dict[str, Any], stock_name: str, api_key: Optional[str] = None) -> str:
+def summarize_with_chairman(
+    results: Dict[str, Any], stock_name: str, api_key: Optional[str] = None
+) -> str:
     """
     主席角色：综合所有 Agent 给出最终投资建议（用 Claude Opus 顶级模型）。
     支持细粒度 API Key。
     """
-    agents_text = "\n\n".join([
-        f"【{r['name']} · {r.get('vendor','?')}/{r.get('model','?')}】信号: {r['signal']} | 置信度: {r['confidence']}%\n理由: {r['reason']}"
-        for r in results["agents"].values()
-    ])
+    agents_text = "\n\n".join(
+        [
+            f"【{r['name']} · {r.get('vendor', '?')}/{r.get('model', '?')}】信号: {r['signal']} | 置信度: {r['confidence']}%\n理由: {r['reason']}"
+            for r in results["agents"].values()
+        ]
+    )
 
     prompt = f"""你是投资委员会主席。下面是分析师团队对 {stock_name} 的独立观点（每位使用不同模型，避免同质化偏见）：
 
 {agents_text}
 
-汇总投票: 买入 {results['summary']['buy']} / 卖出 {results['summary']['sell']} / 观望 {results['summary']['hold']}
+汇总投票: 买入 {results["summary"]["buy"]} / 卖出 {results["summary"]["sell"]} / 观望 {results["summary"]["hold"]}
 
 请综合所有观点，输出一份**专业、克制、可执行**的最终建议，包括：
 1. 一句话核心结论
@@ -1247,12 +1482,26 @@ def summarize_with_chairman(results: Dict[str, Any], stock_name: str, api_key: O
 
     vendor, model = AGENT_MODEL_CONFIG["chairman"]
     messages = [
-        {"role": "system", "content": "你是一位严谨克制的投资委员会主席，注重风控与可执行性。"},
+        {
+            "role": "system",
+            "content": "你是一位严谨克制的投资委员会主席，注重风控与可执行性。",
+        },
         {"role": "user", "content": prompt},
     ]
-    for vd, md, key_override in [(vendor, model, api_key), (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], None)]:
+    for vd, md, key_override in [
+        (vendor, model, api_key),
+        (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], None),
+    ]:
         try:
-            return _call_with(vd, md, messages, json_mode=False, max_tokens=700, temperature=0.4, api_key=key_override)
+            return _call_with(
+                vd,
+                md,
+                messages,
+                json_mode=False,
+                max_tokens=700,
+                temperature=0.4,
+                api_key=key_override,
+            )
         except Exception as e:
             last = f"主席总结生成失败 ({VENDORS[vd]['label']}/{md}): {e}"
             continue
@@ -1260,7 +1509,7 @@ def summarize_with_chairman(results: Dict[str, Any], stock_name: str, api_key: O
 
 
 def get_agent_model_table() -> list:
-    """供 UI 显示：返回 [(agent_name, vendor_label, model)] """
+    """供 UI 显示：返回 [(agent_name, vendor_label, model)]"""
     rows = []
     for key, (vendor, model) in AGENT_MODEL_CONFIG.items():
         if key == "chairman":
@@ -1291,7 +1540,11 @@ def get_provider_models(provider_id: str) -> list:
     if not prov:
         return []
     return [
-        {"id": m_id, "name": m.get("name", m_id), "contextWindow": m.get("contextWindow", "未知")}
+        {
+            "id": m_id,
+            "name": m.get("name", m_id),
+            "contextWindow": m.get("contextWindow", "未知"),
+        }
         for m_id, m in prov.get("models", {}).items()
     ]
 
@@ -1304,24 +1557,40 @@ if __name__ == "__main__":
     print("=" * 70)
 
     sample = {
-        "name": "贵州茅台", "symbol": "600519",
-        "close": 1680.50, "day_change": 1.25, "period_change": 8.6,
-        "period_high": 1750, "period_low": 1520, "days": 120,
-        "ma5": "1665.30", "ma20": "1640.20", "ma60": "1620.10",
-        "macd": "5.2", "dif": "12.3", "dea": "7.1", "rsi": "62.5",
-        "volume": 28500, "total_amount": 350.5, "turnover": 0.23,
-        "vol_ratio": 1.35, "volatility": 1.85,
+        "name": "贵州茅台",
+        "symbol": "600519",
+        "close": 1680.50,
+        "day_change": 1.25,
+        "period_change": 8.6,
+        "period_high": 1750,
+        "period_low": 1520,
+        "days": 120,
+        "ma5": "1665.30",
+        "ma20": "1640.20",
+        "ma60": "1620.10",
+        "macd": "5.2",
+        "dif": "12.3",
+        "dea": "7.1",
+        "rsi": "62.5",
+        "volume": 28500,
+        "total_amount": 350.5,
+        "turnover": 0.23,
+        "vol_ratio": 1.35,
+        "volatility": 1.85,
         "fundamentals": "白酒龙头, 高端市占第一, 毛利率 91%, ROE 30%",
     }
     import time
+
     t0 = time.time()
     res = run_all_agents(sample, include_retail=True)
-    print(f"\n[5 Agent 并行] 用时 {time.time()-t0:.1f}s\n")
+    print(f"\n[5 Agent 并行] 用时 {time.time() - t0:.1f}s\n")
     for r in res["agents"].values():
         flag = "OK" if r["ok"] else "FAIL"
         print(f"{r['name']:<24} [{r['vendor']}/{r['model']}] {flag}")
         print(f"  → {r['signal']} ({r['confidence']}%)  {r['reason'][:80]}")
     s = res["summary"]
-    print(f"\n[投票] 买{s['buy']}/卖{s['sell']}/观{s['hold']} → {s['final']} | 均值 {s['avg_confidence']:.0f}%")
+    print(
+        f"\n[投票] 买{s['buy']}/卖{s['sell']}/观{s['hold']} → {s['final']} | 均值 {s['avg_confidence']:.0f}%"
+    )
     print("\n[主席总结]")
     print(summarize_with_chairman(res, sample["name"]))

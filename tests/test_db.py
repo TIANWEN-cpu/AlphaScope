@@ -10,6 +10,7 @@ def tmp_db(monkeypatch):
     """创建临时数据库用于测试"""
     import backend.storage.db as db_mod
     from pathlib import Path
+
     tmpdir = tempfile.mkdtemp()
     tmp_path = Path(tmpdir) / "test.db"
     monkeypatch.setattr(db_mod, "DB_PATH", tmp_path)
@@ -38,51 +39,63 @@ class TestDatabase:
         assert "evidence_items" in tables
 
     def test_insert_news(self, tmp_db):
-        tmp_db.insert_news({
-            "id": "news_test_001",
-            "title": "测试新闻",
-            "source": "cls",
-            "summary": "摘要",
-        })
+        tmp_db.insert_news(
+            {
+                "id": "news_test_001",
+                "title": "测试新闻",
+                "source": "cls",
+                "summary": "摘要",
+            }
+        )
         cur = tmp_db.conn.cursor()
         cur.execute("SELECT title FROM news_items WHERE id = ?", ("news_test_001",))
         row = cur.fetchone()
         assert row[0] == "测试新闻"
 
     def test_insert_report(self, tmp_db):
-        tmp_db.insert_report({
-            "id": "report_test_001",
-            "title": "深度报告",
-            "source": "tushare",
-            "institution": "中信",
-        })
+        tmp_db.insert_report(
+            {
+                "id": "report_test_001",
+                "title": "深度报告",
+                "source": "tushare",
+                "institution": "中信",
+            }
+        )
         cur = tmp_db.conn.cursor()
-        cur.execute("SELECT title FROM research_reports WHERE id = ?", ("report_test_001",))
+        cur.execute(
+            "SELECT title FROM research_reports WHERE id = ?", ("report_test_001",)
+        )
         row = cur.fetchone()
         assert row[0] == "深度报告"
 
     def test_insert_announcement(self, tmp_db):
-        tmp_db.insert_announcement({
-            "id": "ann_test_001",
-            "symbol": "600519",
-            "title": "分红公告",
-            "source": "cninfo",
-        })
+        tmp_db.insert_announcement(
+            {
+                "id": "ann_test_001",
+                "symbol": "600519",
+                "title": "分红公告",
+                "source": "cninfo",
+            }
+        )
         cur = tmp_db.conn.cursor()
         cur.execute("SELECT symbol FROM announcements WHERE id = ?", ("ann_test_001",))
         row = cur.fetchone()
         assert row[0] == "600519"
 
     def test_insert_fetch_log(self, tmp_db):
-        tmp_db.insert_fetch_log({
-            "source": "news",
-            "endpoint": "CN",
-            "status": "success",
-            "latency_ms": 150.0,
-            "items_count": 10,
-        })
+        tmp_db.insert_fetch_log(
+            {
+                "source": "news",
+                "endpoint": "CN",
+                "status": "success",
+                "latency_ms": 150.0,
+                "items_count": 10,
+            }
+        )
         cur = tmp_db.conn.cursor()
-        cur.execute("SELECT source, items_count FROM source_fetch_logs ORDER BY id DESC LIMIT 1")
+        cur.execute(
+            "SELECT source, items_count FROM source_fetch_logs ORDER BY id DESC LIMIT 1"
+        )
         row = cur.fetchone()
         assert row[0] == "news"
         assert row[1] == 10
