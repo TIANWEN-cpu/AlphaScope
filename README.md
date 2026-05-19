@@ -249,7 +249,7 @@ tests/                  # 265 unit tests
 
 | Version | Date | Focus |
 |---------|------|-------|
-| v0.14 | 2026-05-19 | News optimization: datacenter API for concepts & industry, 1 request vs 50+ |
+| v0.14 | 2026-05-19 | News overhaul: datacenter API, concept relevance sorting, news tags |
 | v0.13.1 | 2026-05-19 | Dependency fixes, CI hardening, governance docs, README rewrite |
 | v0.13 | 2026-05-19 | Agent modes, 7 new providers, evidence aggregation, CI |
 | v0.12 | 2026-05-18 | Data pipeline, event extraction, quantitative factors |
