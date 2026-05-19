@@ -75,7 +75,7 @@ class TestPipelineStatus:
             )
             mock_db.return_value = MagicMock(
                 conn=MagicMock(
-                    execute=MagicMock(return_value=MagicMock(fetchone=MagicMock(return_value=(0, "test.db"))))
+                    execute=MagicMock(return_value=MagicMock(fetchone=MagicMock(return_value=(0, "main", "test.db"))))
                 )
             )
             from backend.pipeline import DataPipeline
