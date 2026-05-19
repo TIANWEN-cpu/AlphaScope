@@ -1,39 +1,39 @@
-# AI-Finance Python dependencies (v0.11)
-# 安装: python -m pip install -r requirements.txt
+# AI-Finance Python dependencies (v0.12)
+# Install: python -m pip install -r requirements.txt
 
-# 核心运行时
+# Core runtime
 streamlit>=1.30.0
 pandas>=2.0.0
 numpy>=1.24.0
 plotly>=5.18.0
 
-# 数据源
+# Data sources
 akshare>=1.13.0
 requests>=2.28.0
-curl_cffi>=0.7.0       # 东方财富搜索接口的 TLS 指纹兼容
+curl_cffi>=0.7.0
 
 # LLM SDK
 openai>=1.10.0
 python-dotenv>=1.0.0
 
-# v0.7 新增
-pyyaml>=6.0            # 解析 config/experts.yaml(5 位专家圆桌人设)
+# Config
+pyyaml>=6.0
 
-# v0.11 新增: Provider 插件体系
-pydantic>=2.0.0        # 标准化数据模型 (schemas/)
-tenacity>=8.2.0        # API 调用重试机制
-aiohttp>=3.9.0         # 异步 HTTP 请求
+# Provider / schemas
+pydantic>=2.0.0
+tenacity>=8.2.0
+aiohttp>=3.9.0
 
-# v0.11 新增: 存储层
-chromadb>=0.4.0        # 向量检索 (RAG)
+# Storage / RAG
+chromadb>=0.4.0
 
-# v0.11 新增: 数据采集调度
-apscheduler>=3.10.0    # 定时任务调度
+# Scheduler
+apscheduler>=3.10.0
 
-# v0.11 新增: 可选数据源 (按需安装)
-# tushare>=1.4.0       # Tushare Pro (需 TUSHARE_TOKEN)
-# baostock>=0.8.8      # BaoStock 免费A股数据
-# openbb>=4.0.0        # OpenBB 全球金融数据
+# Optional data sources (install as needed)
+# tushare>=1.4.0
+# baostock>=0.8.8
+# openbb>=4.0.0
 
-# 开发依赖(可选,仅在跑 pytest 时需要)
-pytest>=7.0            # backend/tests 目录下的纯函数单元测试
+# Dev / testing
+pytest>=7.0

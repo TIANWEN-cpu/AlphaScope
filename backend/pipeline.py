@@ -6,6 +6,7 @@ v0.12 核心模块, 将所有数据层串联为完整管道。
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from datetime import datetime
 from typing import Optional
@@ -19,18 +20,30 @@ from backend.rag.retriever import Retriever
 logger = logging.getLogger(__name__)
 
 
+class ResourceUnavailableError(Exception):
+    """Raised when a required resource (e.g., RAG Retriever) is not available"""
+    pass
+
+
 class DataPipeline:
     """数据采集与存储管道
 
     流程: Provider → Dedup → SourceRank → SQLite → ChromaDB
+    Thread-safe singleton with double-checked locking.
     """
 
     _instance: Optional["DataPipeline"] = None
+    _lock = threading.Lock()
 
     def __new__(cls) -> "DataPipeline":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
+        with cls._lock:
+            if cls._instance is None:
+                inst = super().__new__(cls)
+                inst._initialized = False
+                inst._retriever = None
+                inst._retriever_failed = False
+                inst._retriever_error = ""
+                cls._instance = inst
         return cls._instance
 
     def __init__(self) -> None:
@@ -41,16 +54,23 @@ class DataPipeline:
         self._dedup = Deduplicator()
         self._ranker = SourceRanker()
         self._db = Database()
-        self._retriever: Optional[Retriever] = None
 
     @property
     def retriever(self) -> Retriever:
-        """懒加载 Retriever (ChromaDB 初始化较重)"""
-        if self._retriever is None:
+        """懒加载 Retriever (ChromaDB 初始化较重)
+
+        Raises ResourceUnavailableError if initialization failed,
+        so callers can catch and degrade gracefully.
+        """
+        if self._retriever is None and not self._retriever_failed:
             try:
                 self._retriever = Retriever()
             except Exception as e:
-                logger.warning("RAG Retriever 初始化失败: %s", e)
+                self._retriever_failed = True
+                self._retriever_error = str(e)
+                logger.error("Retriever 初始化失败, 后续 RAG 调用将抛 ResourceUnavailableError: %s", e)
+        if self._retriever is None:
+            raise ResourceUnavailableError(f"RAG 不可用: {self._retriever_error}")
         return self._retriever
 
     @property

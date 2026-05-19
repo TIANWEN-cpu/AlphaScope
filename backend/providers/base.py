@@ -40,6 +40,13 @@ class BaseProvider(ABC):
         data_types: list[str] - 支持的数据类型 (news/report/announcement/price/fundamental)
         priority: int       - 默认优先级 (0-100, 越高越优先)
         license_level: str  - 数据许可级别
+
+    v0.12 enhanced fields:
+        data_class: str     - 数据类别 (price/fundamental/sentiment/macro/event/alternative)
+        freshness: str      - 数据时效 (realtime/intraday/daily/weekly/monthly)
+        cost_tier: str      - 成本层级 (free/freemium/paid)
+        rate_limit: dict    - 速率限制 {"per_minute": N, "per_day": N}
+        requires_key: bool  - 是否需要 API Key
     """
 
     name: str = "base"
@@ -47,6 +54,12 @@ class BaseProvider(ABC):
     data_types: list[str] = field(default_factory=list)
     priority: int = 50
     license_level: str = "research_only"
+    # v0.12: Enhanced provider metadata
+    data_class: str = "fundamental"  # price | fundamental | sentiment | macro | event | alternative
+    freshness: str = "daily"         # realtime | intraday | daily | weekly | monthly
+    cost_tier: str = "free"          # free | freemium | paid
+    rate_limit: dict = field(default_factory=lambda: {"per_minute": 60, "per_day": None})
+    requires_key: bool = False
 
     def __init__(self) -> None:
         self._health = ProviderHealth()

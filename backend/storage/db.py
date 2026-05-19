@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -21,14 +22,20 @@ DB_PATH = CACHE_DIR / "ai_finance.db"
 
 
 class Database:
-    """SQLite 数据库管理"""
+    """SQLite 数据库管理
+
+    Thread-safe singleton with double-checked locking.
+    """
 
     _instance: Optional["Database"] = None
+    _lock = threading.Lock()
 
     def __new__(cls) -> "Database":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
+        with cls._lock:
+            if cls._instance is None:
+                inst = super().__new__(cls)
+                inst._initialized = False
+                cls._instance = inst
         return cls._instance
 
     def __init__(self) -> None:

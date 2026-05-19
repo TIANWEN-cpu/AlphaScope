@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -14,14 +15,20 @@ CHROMA_DIR = CACHE_DIR / "chroma_db"
 
 
 class VectorStore:
-    """ChromaDB 向量存储管理"""
+    """ChromaDB 向量存储管理
+
+    Thread-safe singleton with double-checked locking.
+    """
 
     _instance: Optional["VectorStore"] = None
+    _lock = threading.Lock()
 
     def __new__(cls) -> "VectorStore":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
+        with cls._lock:
+            if cls._instance is None:
+                inst = super().__new__(cls)
+                inst._initialized = False
+                cls._instance = inst
         return cls._instance
 
     def __init__(self) -> None:
