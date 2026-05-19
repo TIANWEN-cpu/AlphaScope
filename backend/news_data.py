@@ -773,7 +773,7 @@ def _fetch_stock_boards_datacenter(
     url = "https://datacenter.eastmoney.com/securities/api/data/v1/get"
     params = {
         "reportName": "RPT_F10_CORETHEME_BOARDTYPE",
-        "columns": "BOARD_NAME,BOARD_CODE,BOARD_TYPE",
+        "columns": "BOARD_NAME,BOARD_CODE,BOARD_TYPE,IS_PRECISE,BOARD_RANK",
         "filter": f'(SECURITY_CODE="{code}")',
         "pageNumber": 1,
         "pageSize": 50,
@@ -795,59 +795,8 @@ def _fetch_stock_boards_datacenter(
     except Exception:
         return []
 
-    # 三级分类: 行业/具体概念 > 通用概念 > 指数/ETF/区域
-    _GENERIC_CONCEPTS = {
-        "机构重仓",
-        "证金持股",
-        "AH股",
-        "茅指数",
-        "超级品牌",
-        "行业龙头",
-        "央国企改革",
-        "周期股",
-        "转债标的",
-        "创业成份",
-        "创业板综",
-        "宁组合",
-        "蚂蚁概念",
-        "价值股",
-        "大盘价值",
-        "大盘成长",
-        "大盘股",
-    }
-    _LOW_VALUE_PATTERNS = (
-        "大盘",
-        "标准普尔",
-        "央视",
-        "HS300",
-        "上证50",
-        "上证180",
-        "深成",
-        "沪深",
-        "MSCI",
-        "富时",
-        "罗素",
-        "权重股",
-        "百元股",
-        "沪股通",
-        "深股通",
-        "融资融券",
-        "转融券",
-    )
-    _LOW_VALUE_SUFFIXES = ("板块", "特区", "通", "_")
-
-    def _classify(name: str) -> int:
-        """0=行业/具体概念, 1=通用概念, 2=低价值"""
-        if name in _GENERIC_CONCEPTS:
-            return 1
-        if any(p in name for p in _LOW_VALUE_PATTERNS):
-            return 2
-        if any(name.endswith(s) for s in _LOW_VALUE_SUFFIXES):
-            return 2
-        return 0
-
     items = (data.get("result") or {}).get("data") or []
-    buckets: Dict[int, List[Dict[str, Any]]] = {0: [], 1: [], 2: []}
+    raw: List[Dict[str, Any]] = []
     seen: set = set()
     for item in items:
         name = _clean_str(item.get("BOARD_NAME"))
@@ -856,17 +805,29 @@ def _fetch_stock_boards_datacenter(
         seen.add(name)
         board_code = _clean_str(item.get("BOARD_CODE"))
         board_type = _clean_str(item.get("BOARD_TYPE"))
-        entry = {
-            "name": name,
-            "code": board_code,
-            "board_type": board_type,
-            "pct_chg": None,
-            "lead_stock": "",
-        }
-        buckets[_classify(name)].append(entry)
+        rank = _to_float_or_none(item.get("BOARD_RANK"))
+        is_precise = item.get("IS_PRECISE") == 1 or item.get("IS_PRECISE") == "1"
+        raw.append(
+            {
+                "name": name,
+                "code": board_code,
+                "board_type": board_type,
+                "is_precise": is_precise,
+                "rank": rank,
+                "pct_chg": None,
+                "lead_stock": "",
+            }
+        )
 
-    out = buckets[0] + buckets[1] + buckets[2]
-    return out[:max_concepts]
+    # 排序: 精确匹配 > 行业 > 有 rank > 无 rank; 同级按 rank 升序
+    def _sort_key(e: Dict) -> tuple:
+        precise = 0 if e["is_precise"] else 1
+        is_industry = 0 if e.get("board_type") == "行业" else 1
+        r = e["rank"] if e["rank"] is not None else 999
+        return (precise, is_industry, r)
+
+    raw.sort(key=_sort_key)
+    return raw[:max_concepts]
 
 
 def _fetch_stock_boards_scan(
@@ -965,9 +926,11 @@ def get_concept_news(
         if not title or title in seen:
             continue
         text = (title + " " + n.get("summary", "")).lower()
-        if not any(kw.lower() in text for kw in keywords):
+        matched = [kw for kw in keywords if kw.lower() in text]
+        if not matched:
             continue
         seen.add(title)
+        n["matched_keywords"] = matched
         out.append(n)
         if len(out) >= limit:
             break
@@ -1631,9 +1594,11 @@ def get_industry_news(
         if not title or title in seen:
             continue
         text = (title + " " + n.get("summary", "")).lower()
-        if not any(k.lower() in text for k in keywords):
+        matched = [k for k in keywords if k.lower() in text]
+        if not matched:
             continue
         seen.add(title)
+        n["matched_keywords"] = matched
         out.append(n)
         if len(out) >= limit:
             break
