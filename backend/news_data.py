@@ -738,36 +738,6 @@ def _extract_concept_code(row) -> str:
     )
 
 
-def _check_board_for_stock(
-    board_row, code: str, stock_name: str
-) -> Optional[Dict[str, Any]]:
-    """检查单个概念板块是否包含目标股票,用于并发扫描。"""
-    name = _extract_concept_name(board_row)
-    if not name or name in _BROAD_CONCEPT_BLACKLIST:
-        return None
-    board_code = _extract_concept_code(board_row)
-    cons = _safe(ak.stock_board_concept_cons_em, symbol=board_code or name)
-    if cons is None or len(cons) == 0:
-        return None
-    try:
-        cons_codes = {
-            _normalize_stock_code(v)
-            for v in cons.get("代码", [])
-            if _normalize_stock_code(v)
-        }
-        names = {_clean_str(v) for v in cons.get("名称", [])}
-    except Exception:
-        return None
-    if code not in cons_codes and (stock_name and stock_name not in names):
-        return None
-    return {
-        "name": name,
-        "code": board_code,
-        "pct_chg": _to_float_or_none(board_row.get("涨跌幅")),
-        "lead_stock": _clean_str(board_row.get("领涨股票")),
-    }
-
-
 def fetch_stock_concepts(
     symbol: str,
     stock_name: str = "",
@@ -776,28 +746,119 @@ def fetch_stock_concepts(
 ) -> List[Dict[str, Any]]:
     """反查股票所属东财概念板块。
 
-    v0.14 优化: 降低扫描范围(50 板块) + 并发拉取成分股(5 线程),
-    大幅提速并降低超时风险。任一接口失败返回空列表。
+    v0.15: 改用东财 datacenter API 直接查询个股所属板块(1 次请求),
+    替代扫描板块列表+拉成分股的暴力方案(50+ 次请求)。
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
     code = _normalize_stock_code(symbol)
     if not code:
         return []
 
+    out = _fetch_stock_boards_datacenter(code, max_concepts=max_concepts)
+    if out:
+        return out
+
+    # 回退: 扫描板块列表(慢但兼容性好)
+    return _fetch_stock_boards_scan(code, stock_name, max_concepts, max_scan)
+
+
+def _fetch_stock_boards_datacenter(
+    code: str, max_concepts: int = 12
+) -> List[Dict[str, Any]]:
+    """通过东财 datacenter API 直接查个股所属板块(1 次 HTTP 请求)。"""
+    import requests as _req
+
+    url = "https://datacenter.eastmoney.com/securities/api/data/v1/get"
+    params = {
+        "reportName": "RPT_F10_CORETHEME_BOARDTYPE",
+        "columns": "BOARD_NAME,BOARD_CODE,BOARD_TYPE",
+        "filter": f'(SECURITY_CODE="{code}")',
+        "pageNumber": 1,
+        "pageSize": 50,
+        "sortTypes": "-1",
+        "sortColumns": "BOARD_TYPE",
+    }
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/142.0.0.0 Safari/537.36"
+        ),
+        "Referer": "https://emweb.securities.eastmoney.com/",
+    }
+    try:
+        r = _req.get(url, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+    except Exception:
+        return []
+
+    items = (data.get("result") or {}).get("data") or []
+    out: List[Dict[str, Any]] = []
+    seen: set = set()
+    for item in items:
+        name = _clean_str(item.get("BOARD_NAME"))
+        if not name or name in _BROAD_CONCEPT_BLACKLIST or name in seen:
+            continue
+        seen.add(name)
+        board_code = _clean_str(item.get("BOARD_CODE"))
+        out.append(
+            {
+                "name": name,
+                "code": board_code,
+                "pct_chg": None,
+                "lead_stock": "",
+            }
+        )
+        if len(out) >= max_concepts:
+            break
+    return out
+
+
+def _fetch_stock_boards_scan(
+    code: str,
+    stock_name: str,
+    max_concepts: int = 12,
+    max_scan: int = 50,
+) -> List[Dict[str, Any]]:
+    """回退方案: 扫描概念板块列表 + 拉成分股(慢,但不依赖 datacenter API)。"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     concept_df = _safe(ak.stock_board_concept_name_em)
     if concept_df is None or len(concept_df) == 0:
         return []
+
+    def _check_board(board_row) -> Optional[Dict[str, Any]]:
+        name = _extract_concept_name(board_row)
+        if not name or name in _BROAD_CONCEPT_BLACKLIST:
+            return None
+        board_code = _extract_concept_code(board_row)
+        cons = _safe(ak.stock_board_concept_cons_em, symbol=board_code or name)
+        if cons is None or len(cons) == 0:
+            return None
+        try:
+            cons_codes = {
+                _normalize_stock_code(v)
+                for v in cons.get("代码", [])
+                if _normalize_stock_code(v)
+            }
+            names = {_clean_str(v) for v in cons.get("名称", [])}
+        except Exception:
+            return None
+        if code not in cons_codes and (stock_name and stock_name not in names):
+            return None
+        return {
+            "name": name,
+            "code": board_code,
+            "pct_chg": _to_float_or_none(board_row.get("涨跌幅")),
+            "lead_stock": _clean_str(board_row.get("领涨股票")),
+        }
 
     scan_rows = list(concept_df.head(max_scan).iterrows())
     out: List[Dict[str, Any]] = []
     seen: set = set()
 
     with ThreadPoolExecutor(max_workers=5) as pool:
-        futures = {
-            pool.submit(_check_board_for_stock, row, code, stock_name): row
-            for _, row in scan_rows
-        }
+        futures = {pool.submit(_check_board, row): row for _, row in scan_rows}
         for fut in as_completed(futures):
             if len(out) >= max_concepts:
                 break
@@ -1348,14 +1409,30 @@ def _infer_industry_from_text(text: str) -> str:
 def fetch_industry_name(
     symbol: str, concepts: Optional[List[Dict[str, Any]]] = None
 ) -> str:
-    """从 stock_individual_info_em 拿行业名(申万一级);失败时尝试多个备用源。
+    """获取股票行业名;多级回退。
 
-    1. stock_individual_info_em(主路径,东财抽风时常挂);
-    2. stock_research_report_em 行业列(研报为空时也无效);
-    3. stock_zyjs_ths 主营业务文本启发式抽行业(网络条件最差时仍然能给个行业);
-    4. 从已获取的概念板块名中提取行业关键词(零网络请求)。
-    任何一路给出非空结果即返回;全部失败返回空字符串。
+    1. 东财 datacenter API 直接查板块(1 次请求,最快);
+    2. stock_individual_info_em(东财抽风时常挂);
+    3. stock_research_report_em 行业列(研报为空时也无效);
+    4. stock_zyjs_ths 主营业务文本启发式抽行业;
+    5. 从已获取的概念板块名中提取行业关键词(零网络请求)。
     """
+    code = _normalize_stock_code(symbol)
+
+    # 优先: datacenter API 直接查板块类型
+    if code:
+        boards = _fetch_stock_boards_datacenter(code, max_concepts=30)
+        for b in boards:
+            name = _clean_str(b.get("name"))
+            if not name:
+                continue
+            # 行业板块通常不是 "概念"、"指数" 等
+            is_concept = any(
+                name.endswith(s) for s in ("概念", "指数", "ETF", "LOF", "板块")
+            )
+            if not is_concept and len(name) >= 2:
+                return name
+
     df = _safe(ak.stock_individual_info_em, symbol=symbol)
     if df is not None and len(df):
         try:
