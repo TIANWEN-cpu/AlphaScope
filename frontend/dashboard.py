@@ -700,14 +700,14 @@ def cached_announcements_em_today():
     return fetch_announcements_em_today()
 
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=3600)
 def cached_main_business(symbol: str):
     if not NEWS_AVAILABLE:
         return {}
     return fetch_main_business(symbol)
 
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=3600)
 def cached_industry_name(symbol: str):
     if not NEWS_AVAILABLE:
         return ""
@@ -730,7 +730,7 @@ def cached_topic_news_em(keywords_tuple, limit_each: int = 8, total_limit: int =
     )
 
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=3600)
 def cached_stock_concepts(symbol: str, stock_name: str):
     if not NEWS_AVAILABLE:
         return []
@@ -2653,6 +2653,11 @@ with tab4:
 
             # ---------- 子区: 行业新闻 ----------
             with sub_industry:
+                # v0.14: 如果行业名为空,尝试从概念板块中提取
+                if not industry:
+                    concepts_for_industry = cached_stock_concepts(symbol, stock_name) or []
+                    if concepts_for_industry:
+                        industry = fetch_industry_name(symbol, concepts=concepts_for_industry)
                 if not industry:
                     st.info("未能识别该股票的行业,无法生成行业新闻。")
                 else:

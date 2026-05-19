@@ -180,18 +180,15 @@ def _parse_eastmoney_search_payload(text: str) -> Dict[str, Any]:
         return {}
 
 
-def _fetch_eastmoney_search_text(cf_requests, params: dict, headers: dict) -> str:
+def _fetch_eastmoney_search_text(cf_requests, params: dict, headers: dict, use_cffi: bool = True) -> str:
     """Try Eastmoney search without cookie first, then fall back to a minimal history cookie."""
     base_headers = {k: v for k, v in headers.items() if k.lower() != "cookie"}
     url = "https://search-api-web.eastmoney.com/search/jsonp"
     try:
-        r = cf_requests.get(
-            url,
-            params=params,
-            headers=base_headers,
-            impersonate="chrome",
-            timeout=10,
-        )
+        if use_cffi:
+            r = cf_requests.get(url, params=params, headers=base_headers, impersonate="chrome", timeout=10)
+        else:
+            r = cf_requests.get(url, params=params, headers=base_headers, timeout=10)
         text = r.text
         payload = _parse_eastmoney_search_payload(text)
         if (payload.get("result") or {}).get("cmsArticleWebOld"):
@@ -202,13 +199,10 @@ def _fetch_eastmoney_search_text(cf_requests, params: dict, headers: dict) -> st
         pass
 
     try:
-        r = cf_requests.get(
-            url,
-            params=params,
-            headers=headers,
-            impersonate="chrome",
-            timeout=10,
-        )
+        if use_cffi:
+            r = cf_requests.get(url, params=params, headers=headers, impersonate="chrome", timeout=10)
+        else:
+            r = cf_requests.get(url, params=params, headers=headers, timeout=10)
         return r.text
     except Exception:
         return ""
@@ -516,14 +510,23 @@ def fetch_keyword_news_em(keyword: str, limit: int = 20) -> List[Dict[str, Any]]
     这是 ``fetch_stock_news_em`` 的行业/概念版:股票代码能查到个股新闻,但小盘股
     的行业动态往往藏在"算力""存储芯片""信创"这类主题词下面。主动按主题词
     搜索,比只在大盘快讯池里做关键词过滤召回更高。
+
+    v0.14: curl_cffi 不可用时自动降级到 requests。
     """
     keyword = _clean_str(keyword)
     if not keyword:
         return []
+
+    use_cffi = True
     try:
-        from curl_cffi import requests as _cf_requests
+        from curl_cffi import requests as _http
     except Exception:
-        return []
+        use_cffi = False
+        try:
+            import requests as _http  # type: ignore[no-redef]
+        except Exception:
+            logger.warning("Neither curl_cffi nor requests available for East Money search")
+            return []
 
     page_size = max(1, min(int(limit), 50))
     inner = {
@@ -562,7 +565,7 @@ def fetch_keyword_news_em(keyword: str, limit: int = 20) -> List[Dict[str, Any]]
             "Chrome/142.0.0.0 Safari/537.36"
         ),
     }
-    text = _fetch_eastmoney_search_text(_cf_requests, params, headers)
+    text = _fetch_eastmoney_search_text(_http, params, headers, use_cffi=use_cffi)
     payload = _parse_eastmoney_search_payload(text)
     if not payload:
         return []
@@ -685,16 +688,9 @@ def aggregate_market_news(limit_each: int = 15) -> Dict[str, List[Dict]]:
 _BROAD_CONCEPT_BLACKLIST = {
     "融资融券",
     "转融券标的",
-    "沪股通",
-    "深股通",
-    "富时罗素",
-    "MSCI中国",
-    "标普道琼斯A股",
-    "证金持股",
     "昨日涨停",
     "昨日连板",
     "昨日触板",
-    "同花顺漂亮100",
 }
 
 
@@ -730,18 +726,47 @@ def _extract_concept_code(row) -> str:
     )
 
 
+def _check_board_for_stock(board_row, code: str, stock_name: str) -> Optional[Dict[str, Any]]:
+    """检查单个概念板块是否包含目标股票,用于并发扫描。"""
+    name = _extract_concept_name(board_row)
+    if not name or name in _BROAD_CONCEPT_BLACKLIST:
+        return None
+    board_code = _extract_concept_code(board_row)
+    cons = _safe(ak.stock_board_concept_cons_em, symbol=board_code or name)
+    if cons is None or len(cons) == 0:
+        return None
+    try:
+        cons_codes = {
+            _normalize_stock_code(v)
+            for v in cons.get("代码", [])
+            if _normalize_stock_code(v)
+        }
+        names = {_clean_str(v) for v in cons.get("名称", [])}
+    except Exception:
+        return None
+    if code not in cons_codes and (stock_name and stock_name not in names):
+        return None
+    return {
+        "name": name,
+        "code": board_code,
+        "pct_chg": _to_float_or_none(board_row.get("涨跌幅")),
+        "lead_stock": _clean_str(board_row.get("领涨股票")),
+    }
+
+
 def fetch_stock_concepts(
     symbol: str,
     stock_name: str = "",
     max_concepts: int = 12,
-    max_scan: int = 180,
+    max_scan: int = 50,
 ) -> List[Dict[str, Any]]:
     """反查股票所属东财概念板块。
 
-    akshare 当前没有稳定的"按股票直接取概念"接口,这里采用保守扫描:
-    先取概念板块列表,再逐个拉成分股,命中当前 ``symbol`` 后收集概念名。
-    任一接口失败都返回空列表,不影响主新闻链路。调用方应使用 Streamlit cache。
+    v0.14 优化: 降低扫描范围(50 板块) + 并发拉取成分股(5 线程),
+    大幅提速并降低超时风险。任一接口失败返回空列表。
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     code = _normalize_stock_code(symbol)
     if not code:
         return []
@@ -750,39 +775,23 @@ def fetch_stock_concepts(
     if concept_df is None or len(concept_df) == 0:
         return []
 
+    scan_rows = list(concept_df.head(max_scan).iterrows())
     out: List[Dict[str, Any]] = []
     seen: set = set()
-    scan_df = concept_df.head(max_scan).copy()
-    for _, row in scan_df.iterrows():
-        name = _extract_concept_name(row)
-        if not name or name in _BROAD_CONCEPT_BLACKLIST or name in seen:
-            continue
-        board_code = _extract_concept_code(row)
-        cons = _safe(ak.stock_board_concept_cons_em, symbol=board_code or name)
-        if cons is None or len(cons) == 0:
-            continue
-        try:
-            cons_codes = {
-                _normalize_stock_code(v)
-                for v in cons.get("代码", [])
-                if _normalize_stock_code(v)
-            }
-            names = {_clean_str(v) for v in cons.get("名称", [])}
-        except Exception:
-            continue
-        if code not in cons_codes and (stock_name and stock_name not in names):
-            continue
-        seen.add(name)
-        out.append(
-            {
-                "name": name,
-                "code": board_code,
-                "pct_chg": _to_float_or_none(row.get("涨跌幅")),
-                "lead_stock": _clean_str(row.get("领涨股票")),
-            }
-        )
-        if len(out) >= max_concepts:
-            break
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {
+            pool.submit(_check_board_for_stock, row, code, stock_name): row
+            for _, row in scan_rows
+        }
+        for fut in as_completed(futures):
+            if len(out) >= max_concepts:
+                break
+            result = fut.result()
+            if result and result["name"] not in seen:
+                seen.add(result["name"])
+                out.append(result)
+
     return out
 
 
@@ -1322,12 +1331,13 @@ def _infer_industry_from_text(text: str) -> str:
     return ""
 
 
-def fetch_industry_name(symbol: str) -> str:
+def fetch_industry_name(symbol: str, concepts: Optional[List[Dict[str, Any]]] = None) -> str:
     """从 stock_individual_info_em 拿行业名(申万一级);失败时尝试多个备用源。
 
     1. stock_individual_info_em(主路径,东财抽风时常挂);
     2. stock_research_report_em 行业列(研报为空时也无效);
-    3. stock_zyjs_ths 主营业务文本启发式抽行业(网络条件最差时仍然能给个行业)。
+    3. stock_zyjs_ths 主营业务文本启发式抽行业(网络条件最差时仍然能给个行业);
+    4. 从已获取的概念板块名中提取行业关键词(零网络请求)。
     任何一路给出非空结果即返回;全部失败返回空字符串。
     """
     df = _safe(ak.stock_individual_info_em, symbol=symbol)
@@ -1359,6 +1369,18 @@ def fetch_industry_name(symbol: str) -> str:
         ind = _infer_industry_from_text(text)
         if ind:
             return ind
+
+    # 概念板块兜底:从已获取的概念名中提取行业
+    if concepts:
+        for c in concepts:
+            name = _clean_str(c.get("name") if isinstance(c, dict) else c)
+            if not name:
+                continue
+            for suffix in ("概念", "板块", "指数"):
+                if name.endswith(suffix) and len(name) > len(suffix) + 1:
+                    name = name[: -len(suffix)].strip()
+            if len(name) >= 2:
+                return name
 
     return ""
 
