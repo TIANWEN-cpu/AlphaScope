@@ -21,7 +21,7 @@ try:
     from llm_agents import (
         run_all_agents, summarize_with_chairman, get_agent_model_table, AGENT_MODEL_CONFIG,
         VENDORS, build_market_brief, get_default_agent_configs, run_custom_agents,
-        get_custom_agent_model_table,
+        get_custom_agent_model_table, run_agents_with_mode, get_mode_model_table,
     )
     LLM_AVAILABLE = True
 except Exception as e:
@@ -708,6 +708,31 @@ with st.sidebar:
     use_llm = st.checkbox("使用 LLM 深度分析（5 模型异构）", value=False, disabled=not LLM_AVAILABLE,
                          help="勾选后调用 5 厂商异构 LLM（Claude / GPT / DeepSeek / Mimo / SenseNova）真实推理" if LLM_AVAILABLE else f"LLM 模块不可用: {LLM_ERROR}")
 
+    # v0.12: Analysis mode selector
+    if LLM_AVAILABLE:
+        try:
+            from backend.agent_modes import get_mode_resolver, AnalysisMode
+            _resolver = get_mode_resolver()
+            _mode_choices = _resolver.list_modes()
+            _mode_labels = [f"{m['name']}" for m in _mode_choices]
+            _mode_values = [m['value'] for m in _mode_choices]
+            _mode_descs = [m['description'] for m in _mode_choices]
+
+            selected_mode_idx = st.radio(
+                "分析模式",
+                options=range(len(_mode_labels)),
+                format_func=lambda i: _mode_labels[i],
+                index=2,  # Default to AUTO
+                help="标准: 3 Agent 快速分析 | 深入: 5 Agent 全面分析 | 自动: 先预筛再决定",
+                key="analysis_mode_radio",
+            )
+            analysis_mode = AnalysisMode(_mode_values[selected_mode_idx])
+            st.caption(f"💡 {_mode_descs[selected_mode_idx]}")
+        except Exception:
+            analysis_mode = AnalysisMode.DEEP
+    else:
+        analysis_mode = AnalysisMode.DEEP
+
     st.markdown("---")
     st.markdown("### 🤖 AI 咨询")
     if st.button(
@@ -1206,7 +1231,16 @@ with tab2:
                         "market_fund_brief": market_fund_brief,
                     }
                     try:
-                        llm_result = run_custom_agents(stock_payload, agent_configs, global_ai_settings=global_ai_settings)
+                        # v0.12: Use mode-based agent execution if available
+                        if 'analysis_mode' in dir():
+                            llm_result = run_agents_with_mode(
+                                stock_payload,
+                                mode=analysis_mode,
+                                agent_configs=agent_configs,
+                                global_ai_settings=global_ai_settings,
+                            )
+                        else:
+                            llm_result = run_custom_agents(stock_payload, agent_configs, global_ai_settings=global_ai_settings)
                         st.session_state[cache_key] = llm_result
                         st.session_state[cache_key + "_payload"] = stock_payload
                     except Exception as e:
@@ -1217,6 +1251,26 @@ with tab2:
             if cache_key in st.session_state:
                 llm_result = st.session_state[cache_key]
                 payload = st.session_state.get(cache_key + "_payload", {})
+
+                # v0.12: Show mode indicator
+                result_mode = llm_result.get("mode", "")
+                mode_name = llm_result.get("mode_name", "")
+                auto_escalated = llm_result.get("auto_escalated", False)
+                if result_mode:
+                    mode_colors = {"standard": "#10b981", "deep": "#8b5cf6", "auto": "#f59e0b"}
+                    mode_color = mode_colors.get(result_mode, "#6b7280")
+                    escalation_badge = ""
+                    if result_mode == "auto" and auto_escalated:
+                        escalation_badge = " <span style='font-size:0.75em; color:#f59e0b;'>(已升级到深入分析)</span>"
+                    elif result_mode == "auto" and not auto_escalated:
+                        escalation_badge = " <span style='font-size:0.75em; color:#10b981;'>(预筛直接输出)</span>"
+                    st.markdown(
+                        f"<div style='text-align:center; margin-bottom:12px;'>"
+                        f"<span style='background:{mode_color}22; color:{mode_color}; "
+                        f"padding:4px 12px; border-radius:12px; font-size:0.85em; font-weight:600;'>"
+                        f"🔍 {mode_name}</span>{escalation_badge}</div>",
+                        unsafe_allow_html=True,
+                    )
 
                 cls_map = {"买入": "buy", "卖出": "sell", "观望": "hold"}
                 agent_keys_order = llm_result.get("agent_order") or list(llm_result.get("agents", {}).keys())

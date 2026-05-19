@@ -1,0 +1,146 @@
+# AI-Finance Agent Mode Configuration (v0.12)
+# Declarative model/agent configuration for Standard/Deep/Auto modes
+# Replaces hardcoded AGENT_MODEL_CONFIG in llm_agents.py
+
+version: "1.0"
+
+# ============== Analysis Modes ==============
+modes:
+  # Standard mode: fast, cheap, 3 agents
+  # Use case: quick checks, high-frequency screening, cost-sensitive
+  standard:
+    name: "标准模式"
+    description: "快速分析，3个核心Agent，低成本模型"
+    agents:
+      - key: fundamental
+        provider: deepseek
+        model: deepseek-chat
+        enabled: true
+      - key: technical
+        provider: deepseek
+        model: deepseek-chat
+        enabled: true
+      - key: sentiment
+        provider: deepseek
+        model: deepseek-chat
+        enabled: true
+    # Standard mode features
+    enable_evidence: false      # No RAG evidence injection
+    enable_factors: false       # No quantitative factor injection
+    enable_critic: false        # No critic review
+    enable_chairman: false      # No chairman synthesis
+    max_tokens: 400             # Compact output
+    temperature: 0.3
+    # Decision threshold: simple majority
+    threshold_mode: "majority"
+
+  # Deep mode: full analysis, 5 agents + critic + chairman
+  # Use case: important decisions, detailed research, performance over cost
+  deep:
+    name: "深入模式"
+    description: "全面分析，5个Agent+主席+Critic，高性能模型"
+    agents:
+      - key: fundamental
+        provider: claude
+        model: claude-sonnet-4-5
+        enabled: true
+      - key: technical
+        provider: gpt
+        model: gpt-5.2
+        enabled: true
+      - key: sentiment
+        provider: deepseek
+        model: deepseek-chat
+        enabled: true
+      - key: risk
+        provider: sensenova
+        model: deepseek-v4-flash
+        enabled: true
+      - key: retail
+        provider: mimo
+        model: mimo-v2.5-pro
+        enabled: true
+    # Deep mode features - all enabled
+    enable_evidence: true
+    enable_factors: true
+    enable_critic: true
+    enable_chairman: true
+    critic:
+      provider: claude
+      model: claude-opus-4-7
+    chairman:
+      provider: claude
+      model: claude-opus-4-7
+    max_tokens: 600
+    temperature: 0.3
+    threshold_mode: "strict"  # Need >=3 votes with 5 agents
+
+  # Auto mode: quick pre-screen, escalate if ambiguous
+  # Use case: balanced cost/quality, automated decisions
+  auto:
+    name: "自动模式"
+    description: "先用低成本模型预筛，信号不明确时自动升级到深入分析"
+    # Stage 1: quick pre-screen
+    pre_screen:
+      provider: deepseek
+      model: deepseek-chat
+      max_tokens: 300
+      temperature: 0.3
+    # Confidence thresholds for escalation
+    escalate_below: 30        # Below 30: clear signal, use pre-screen result
+    escalate_above: 70        # Above 70: clear signal, use pre-screen result
+    # Between 30-70: ambiguous, escalate to deep mode
+    escalate_mode: "deep"
+    # Stage 2 config (same as deep mode)
+    deep:
+      agents:
+        - key: fundamental
+          provider: claude
+          model: claude-sonnet-4-5
+          enabled: true
+        - key: technical
+          provider: gpt
+          model: gpt-5.2
+          enabled: true
+        - key: sentiment
+          provider: deepseek
+          model: deepseek-chat
+          enabled: true
+        - key: risk
+          provider: sensenova
+          model: deepseek-v4-flash
+          enabled: true
+        - key: retail
+          provider: mimo
+          model: mimo-v2.5-pro
+          enabled: true
+      enable_evidence: true
+      enable_factors: true
+      enable_critic: true
+      enable_chairman: true
+      critic:
+        provider: claude
+        model: claude-opus-4-7
+      chairman:
+        provider: claude
+        model: claude-opus-4-7
+      max_tokens: 600
+      temperature: 0.3
+
+# ============== Fallback Configuration ==============
+fallback:
+  provider: deepseek
+  model: deepseek-chat
+
+# ============== Prompt Caching ==============
+# Anthropic prompt caching: cache system prompts and role definitions
+# Cached prompt parts cost 10% of normal input price, last 5 minutes
+prompt_caching:
+  enabled: true
+  cache_control:
+    type: "ephemeral"
+  # Parts to cache (shared across agents)
+  cacheable_parts:
+    - "system_prompt"      # Agent role definition
+    - "market_brief"       # Market data brief (shared context)
+    - "output_schema"      # JSON output format instructions

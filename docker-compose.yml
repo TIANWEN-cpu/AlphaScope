@@ -1,10 +1,10 @@
 # AI-Finance Docker Compose (v0.12)
-# 支持: 主应用 + Redis缓存 + 可选ChromaDB
+# Supports: App + Redis cache + optional ChromaDB
 
 version: "3.8"
 
 services:
-  # 主应用 - Streamlit Dashboard
+  # Main app - Streamlit Dashboard
   app:
     build:
       context: .
@@ -25,10 +25,25 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - ai-finance-net
 
-  # Redis 缓存层
+  # Redis cache layer
   redis:
     image: redis:7-alpine
     container_name: ai-finance-redis
@@ -42,6 +57,14 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
     networks:
       - ai-finance-net
 

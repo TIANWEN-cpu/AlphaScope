@@ -215,6 +215,98 @@ def validate_expert_output(data: Any) -> Dict[str, Any]:
     }
 
 
+# ---------------- Prompt Injection Protection (v0.12) ----------------
+
+import re as _re
+
+# Stock code whitelist: 6-digit A-share codes
+_STOCK_CODE_PATTERN = _re.compile(r'^[036]\d{5}$')
+
+# Characters that might indicate prompt injection attempts
+_INJECTION_PATTERNS = [
+    _re.compile(r'(?i)ignore\s+(all\s+)?previous\s+instructions'),
+    _re.compile(r'(?i)ignore\s+(all\s+)?above'),
+    _re.compile(r'(?i)you\s+are\s+now\s+'),
+    _re.compile(r'(?i)new\s+instructions?\s*:'),
+    _re.compile(r'(?i)system\s*prompt\s*:'),
+    _re.compile(r'(?i)\[INST\]|\[/INST\]'),
+    _re.compile(r'(?i)<\|im_start\|>|<\|im_end\|>'),
+    _re.compile(r'(?i)jailbreak'),
+    _re.compile(r'(?i)DAN\s*mode'),
+]
+
+
+def validate_stock_code(code: str) -> str:
+    """
+    Validate and sanitize a stock code.
+
+    Args:
+        code: Raw stock code input
+
+    Returns:
+        Cleaned 6-digit code, or empty string if invalid
+    """
+    if not code:
+        return ""
+    cleaned = str(code).strip().replace(".SH", "").replace(".SZ", "").replace(".BJ", "")
+    # Remove any non-digit characters
+    cleaned = _re.sub(r'\D', '', cleaned)
+    if _STOCK_CODE_PATTERN.match(cleaned):
+        return cleaned
+    return ""
+
+
+def sanitize_prompt_input(text: str, max_len: int = 500) -> str:
+    """
+    Sanitize user input before inserting into LLM prompts.
+
+    Removes potential prompt injection patterns and limits length.
+
+    Args:
+        text: Raw user input
+        max_len: Maximum allowed length
+
+    Returns:
+        Sanitized text safe for prompt insertion
+    """
+    if not text:
+        return ""
+    cleaned = str(text).strip()[:max_len]
+
+    # Remove zero-width characters (can be used to hide injection)
+    cleaned = _re.sub(r'[​-‏ - ⁠-⁩﻿]', '', cleaned)
+
+    # Remove common injection patterns
+    for pattern in _INJECTION_PATTERNS:
+        cleaned = pattern.sub('[FILTERED]', cleaned)
+
+    return cleaned
+
+
+def sanitize_stock_data_for_prompt(stock_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sanitize stock data dict before using in LLM prompts.
+
+    Validates stock code and sanitizes text fields.
+    """
+    sanitized = dict(stock_data)
+
+    # Validate stock code
+    if "symbol" in sanitized:
+        clean_code = validate_stock_code(sanitized["symbol"])
+        if clean_code:
+            sanitized["symbol"] = clean_code
+
+    # Sanitize text fields that might be user-provided
+    text_fields = ["name", "fundamentals", "related_news_brief", "announcements_brief",
+                   "industry_news_brief", "concepts_brief", "market_news_brief", "research_brief"]
+    for field in text_fields:
+        if field in sanitized and isinstance(sanitized[field], str):
+            sanitized[field] = sanitize_prompt_input(sanitized[field], max_len=2000)
+
+    return sanitized
+
+
 if __name__ == "__main__":
     # 自测
     samples = [

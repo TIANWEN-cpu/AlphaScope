@@ -5,11 +5,18 @@
 > Python 环境：建议使用本地虚拟环境 `.venv` 或 `venvs/finance-agent-engineering`
 > 当前版本：**v0.12.0（数据管道 + 证据驱动 Agent）**
 
-## v0.12.0 新特性（数据管道 + 证据驱动 Agent）
+## v0.12.0 新特性（数据管道 + Agent 模式系统 + 新数据源）
 
 | 模块 | 主要能力 |
 |---|---|
 | **🔗 数据管道** | `backend/pipeline.py`：DataPipeline 串联 Provider → 去重 → 可信度排序 → 事件抽取 → SQLite 存储 → ChromaDB 索引，一条命令完成全流程采集 |
+| **🤖 Agent 模式系统** | `backend/agent_modes.py`：三种分析模式（标准/深入/自动），标准模式用 3 个 DeepSeek Agent 快速分析，深入模式用 5 个异构 Agent + Critic + 主席全面分析，自动模式先预筛再决定是否升级 |
+| **⚙️ 模型配置化** | `config/models.yaml`：声明式模型配置，替代硬编码的 `AGENT_MODEL_CONFIG`，支持热重载，模型变更无需改代码 |
+| **📊 7 个新数据源** | Finnhub（美股另类数据）、FRED（宏观经济）、北向资金（沪深港通）、Reddit（散户情绪）、Google Trends（搜索关注度）、Stocktwits（美股零售情绪）、Wikipedia Views（页面浏览量） |
+| **🔍 证据聚合器** | `backend/quality/evidence_aggregator.py`：多源交叉验证，同一事件被多源报道则置信度提升，解决"找到一个能用的就停"的质量问题 |
+| **🛡️ 异常检测器** | `backend/quality/anomaly_detector.py`：检测零/负价格、涨跌停异常、乱码标题、重复时间戳等数据质量问题 |
+| **🔐 Prompt 注入防护** | `validators.py` 新增 `validate_stock_code()` + `sanitize_prompt_input()`，股票代码白名单 + 注入模式过滤 |
+| **🔒 线程安全单例** | DataPipeline/Database/VectorStore 全部改为 double-checked locking，解决 Streamlit 多线程竞态问题 |
 | **⏱️ 采集任务** | `backend/ingestion/jobs.py`：6 个预定义采集任务（CN 新闻/研报/公告/行情/大盘 + US SEC），`create_default_scheduler()` 一键启动 |
 | **🔧 Provider 修复** | HKEX 实现 HTML 解析；SEC 实现 ticker→CIK 映射（使用 SEC 官方 `company_tickers.json`） |
 | **📋 事件抽取** | `backend/events/extractor.py`：规则引擎从新闻/公告抽取 8 类结构化事件（业绩/分红/并购/融资/诉讼/政策/供应链/股东），附带情绪分和重要度 |
@@ -18,8 +25,9 @@
 | **📊 数据源健康度** | 新增 Tab 10：Provider 状态表、采集日志统计、RAG 索引状态、数据库记录数一览 |
 | **🧪 测试覆盖** | 新增 9 个测试文件覆盖 Pipeline/去重/可信度/数据库/调度器/Schema/SEC/HKEX/因子 |
 | **📰 三级回退** | `news_data.py` 的 `fetch_*_via_provider()` 现在优先走 Pipeline（v0.12）→ Registry（v0.11）→ 原有函数（兜底） |
+| **🏗️ 工程加固** | GitHub Actions CI（ruff + pytest）、Docker 资源限制 + 健康检查、.env.example + Makefile、生产代码与测试脚本分离 |
 
-> v0.12 核心理念：**从"数据源平台"升级为"端到端数据管道 + 事件抽取 + 量化因子 + 证据驱动研究系统"**。所有数据自动采集、去重、排序、事件抽取、持久化、索引；Agent 分析时自动检索证据和量化因子，结论必须可追溯且可量化。
+> v0.12 核心理念：**从"数据源平台"升级为"端到端数据管道 + 多模式 Agent 分析 + 多源交叉验证 + 全球化另类数据源"**。标准模式 3 Agent 快速低成本，深入模式 5 Agent + Critic + 主席全面分析，自动模式智能路由。
 
 ## v0.11.0 新特性（Provider 插件架构 + 数据中台）
 
@@ -341,11 +349,11 @@ python backend/test_all_apis_v4.py
 
 | 版本 | 日期 | 关键变更 |
 |------|------|------|
-| **v0.12.0** | **2026-05-18** | **端到端数据管道 + 事件抽取 + 量化因子 + 证据驱动 Agent + 数据源健康度 + HKEX/SEC Provider 修复 + 9 个测试文件** |
+| **v0.12.0** | **2026-05-19** | **Agent 模式系统（标准/深入/自动）+ 模型配置化 + 7 个新数据源 + 证据聚合器 + 异常检测 + Prompt 注入防护 + 线程安全单例 + GitHub Actions CI + Docker 加固** |
 | **v0.11.0** | **2026-05-18** | **Provider 插件架构（9 个数据源）+ 标准化数据模型 + 质量层 + 存储层 + RAG 检索 + 采集调度 + 可观测性 + Docker 支持** |
 | **v0.10.6** | **2026-05-18** | **LLM 兜底 Key 隔离、自定义 Base URL 防护、归档路径/索引加固、东财搜索与 URL 校验、JSON 提取与基本面并行加载优化** |
 | **v0.10.5** | **2026-05-17** | **行业/概念主题新闻主动搜索；快讯池 + 主题搜索合并去重；Agent/专家圆桌纳入关联概念动态** |
-| v0.10.4 | 2026-05-17 | 反查股票所属概念板块，新增“关联概念”资讯区与 LLM 概念简报 |
+| v0.10.4 | 2026-05-17 | 反查股票所属概念板块，新增”关联概念”资讯区与 LLM 概念简报 |
 | v0.10.3 | 2026-05-17 | 从经营范围抽取行业级关键词，提升宽泛行业小盘股新闻召回 |
 | v0.10.2 | 2026-05-17 | 接入东财个股搜索 API，优先拉取按股票代码检索的专属新闻 |
 | v0.10.1 | 2026-05-17 | 行业识别回退与主营产品关键词收窄，降低误匹配 |

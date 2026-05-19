@@ -1,6 +1,50 @@
 # Changelog
 
-## v0.12.0 - 2026-05-18
+## v0.12.0 - 2026-05-19
+
+### Agent Mode System (Highest Priority)
+- Added `backend/agent_modes.py` — three-tier analysis mode system: Standard (3 agents, DeepSeek, fast/cheap), Deep (5 agents + critic + chairman, Claude/GPT, full analysis), Auto (pre-screen then escalate if ambiguous).
+- Added `config/models.yaml` — declarative model configuration replacing hardcoded `AGENT_MODEL_CONFIG`, supports hot-reload.
+- Added `run_agents_with_mode()` in `llm_agents.py` — mode-aware agent execution with automatic evidence/factor injection based on mode.
+- Added `_run_auto_mode()` — quick pre-screen with cheap model, escalates to full DEEP analysis if confidence is between 30-70.
+- Dashboard sidebar now has mode selector radio button (标准/深入/自动).
+- Analysis results show mode indicator badge with escalation status.
+
+### New Data Sources (7 Providers)
+- Added `backend/providers/finnhub_provider.py` — US stock sentiment, insider trading, ESG data (free tier: 60 req/min).
+- Added `backend/providers/fred_provider.py` — Federal Reserve Economic Data, 800,000+ economic time series (completely free).
+- Added `backend/providers/northbound_provider.py` — 沪深港通北向资金 flow data (free via AkShare).
+- Added `backend/providers/reddit_provider.py` — r/wallstreetbets sentiment via PRAW (free, 60 req/min).
+- Added `backend/providers/google_trends_provider.py` — retail attention via search volume (free, 50 req/day).
+- Added `backend/providers/stocktwits_provider.py` — US retail sentiment with bullish/bearish voting (free REST API).
+- Added `backend/providers/wikipedia_views_provider.py` — company page views as attention indicator (free REST API).
+
+### Evidence Aggregator
+- Added `backend/quality/evidence_aggregator.py` — cross-source data validation, multi-source confidence boost, contradiction detection.
+- Replaces simple "first one wins" fallback with "collect and cross-validate from N sources".
+
+### Anomaly Detector
+- Added `backend/quality/anomaly_detector.py` — detects zero/negative prices, limit-up/down violations, garbled titles, duplicate timestamps.
+
+### Prompt Injection Protection
+- Added `validate_stock_code()` in `validators.py` — whitelist validation for 6-digit A-share codes.
+- Added `sanitize_prompt_input()` — removes injection patterns (ignore instructions, system prompt, jailbreak attempts).
+- Added `sanitize_stock_data_for_prompt()` — validates stock code and sanitizes text fields before LLM prompts.
+
+### Thread-Safe Singletons
+- Fixed `DataPipeline`, `Database`, `VectorStore` singletons with double-checked locking via `threading.Lock()`.
+- Fixed Retriever error propagation: now raises `ResourceUnavailableError` instead of returning `None`.
+
+### BaseProvider Enhancement
+- Added new fields to `BaseProvider`: `data_class`, `freshness`, `cost_tier`, `rate_limit`, `requires_key`.
+- Enables intelligent routing based on data category, freshness requirements, and cost constraints.
+
+### Engineering Hardening
+- Added `.github/workflows/ci.yml` — GitHub Actions CI with ruff lint + pytest on Python 3.10/3.11/3.12.
+- Added `.env.example` — complete environment variable template with all required API keys.
+- Added `Makefile` — unified commands: `make test`, `make lint`, `make run`, `make docker-build`.
+- Updated `docker-compose.yml` — added resource limits (CPU/memory) and health checks.
+- Moved 9 stray test files from `backend/` to `tests/probes/`.
 
 ### Data Pipeline Integration
 - Added `backend/pipeline.py` — `DataPipeline` class wiring Provider → Dedup → SourceRank → SQLite → ChromaDB into a unified ingestion flow.
