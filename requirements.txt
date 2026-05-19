@@ -25,7 +25,7 @@ tenacity==9.1.2
 aiohttp==3.12.4
 
 # Storage / RAG
-chromadb==0.6.5
+chromadb==0.6.3
 
 # Scheduler
 apscheduler==3.11.0
