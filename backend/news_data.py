@@ -180,13 +180,21 @@ def _parse_eastmoney_search_payload(text: str) -> Dict[str, Any]:
         return {}
 
 
-def _fetch_eastmoney_search_text(cf_requests, params: dict, headers: dict, use_cffi: bool = True) -> str:
+def _fetch_eastmoney_search_text(
+    cf_requests, params: dict, headers: dict, use_cffi: bool = True
+) -> str:
     """Try Eastmoney search without cookie first, then fall back to a minimal history cookie."""
     base_headers = {k: v for k, v in headers.items() if k.lower() != "cookie"}
     url = "https://search-api-web.eastmoney.com/search/jsonp"
     try:
         if use_cffi:
-            r = cf_requests.get(url, params=params, headers=base_headers, impersonate="chrome", timeout=10)
+            r = cf_requests.get(
+                url,
+                params=params,
+                headers=base_headers,
+                impersonate="chrome",
+                timeout=10,
+            )
         else:
             r = cf_requests.get(url, params=params, headers=base_headers, timeout=10)
         text = r.text
@@ -200,7 +208,9 @@ def _fetch_eastmoney_search_text(cf_requests, params: dict, headers: dict, use_c
 
     try:
         if use_cffi:
-            r = cf_requests.get(url, params=params, headers=headers, impersonate="chrome", timeout=10)
+            r = cf_requests.get(
+                url, params=params, headers=headers, impersonate="chrome", timeout=10
+            )
         else:
             r = cf_requests.get(url, params=params, headers=headers, timeout=10)
         return r.text
@@ -525,7 +535,9 @@ def fetch_keyword_news_em(keyword: str, limit: int = 20) -> List[Dict[str, Any]]
         try:
             import requests as _http  # type: ignore[no-redef]
         except Exception:
-            logger.warning("Neither curl_cffi nor requests available for East Money search")
+            logger.warning(
+                "Neither curl_cffi nor requests available for East Money search"
+            )
             return []
 
     page_size = max(1, min(int(limit), 50))
@@ -726,7 +738,9 @@ def _extract_concept_code(row) -> str:
     )
 
 
-def _check_board_for_stock(board_row, code: str, stock_name: str) -> Optional[Dict[str, Any]]:
+def _check_board_for_stock(
+    board_row, code: str, stock_name: str
+) -> Optional[Dict[str, Any]]:
     """检查单个概念板块是否包含目标股票,用于并发扫描。"""
     name = _extract_concept_name(board_row)
     if not name or name in _BROAD_CONCEPT_BLACKLIST:
@@ -1331,7 +1345,9 @@ def _infer_industry_from_text(text: str) -> str:
     return ""
 
 
-def fetch_industry_name(symbol: str, concepts: Optional[List[Dict[str, Any]]] = None) -> str:
+def fetch_industry_name(
+    symbol: str, concepts: Optional[List[Dict[str, Any]]] = None
+) -> str:
     """从 stock_individual_info_em 拿行业名(申万一级);失败时尝试多个备用源。
 
     1. stock_individual_info_em(主路径,东财抽风时常挂);
