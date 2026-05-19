@@ -795,8 +795,59 @@ def _fetch_stock_boards_datacenter(
     except Exception:
         return []
 
+    # 三级分类: 行业/具体概念 > 通用概念 > 指数/ETF/区域
+    _GENERIC_CONCEPTS = {
+        "机构重仓",
+        "证金持股",
+        "AH股",
+        "茅指数",
+        "超级品牌",
+        "行业龙头",
+        "央国企改革",
+        "周期股",
+        "转债标的",
+        "创业成份",
+        "创业板综",
+        "宁组合",
+        "蚂蚁概念",
+        "价值股",
+        "大盘价值",
+        "大盘成长",
+        "大盘股",
+    }
+    _LOW_VALUE_PATTERNS = (
+        "大盘",
+        "标准普尔",
+        "央视",
+        "HS300",
+        "上证50",
+        "上证180",
+        "深成",
+        "沪深",
+        "MSCI",
+        "富时",
+        "罗素",
+        "权重股",
+        "百元股",
+        "沪股通",
+        "深股通",
+        "融资融券",
+        "转融券",
+    )
+    _LOW_VALUE_SUFFIXES = ("板块", "特区", "通", "_")
+
+    def _classify(name: str) -> int:
+        """0=行业/具体概念, 1=通用概念, 2=低价值"""
+        if name in _GENERIC_CONCEPTS:
+            return 1
+        if any(p in name for p in _LOW_VALUE_PATTERNS):
+            return 2
+        if any(name.endswith(s) for s in _LOW_VALUE_SUFFIXES):
+            return 2
+        return 0
+
     items = (data.get("result") or {}).get("data") or []
-    out: List[Dict[str, Any]] = []
+    buckets: Dict[int, List[Dict[str, Any]]] = {0: [], 1: [], 2: []}
     seen: set = set()
     for item in items:
         name = _clean_str(item.get("BOARD_NAME"))
@@ -805,18 +856,17 @@ def _fetch_stock_boards_datacenter(
         seen.add(name)
         board_code = _clean_str(item.get("BOARD_CODE"))
         board_type = _clean_str(item.get("BOARD_TYPE"))
-        out.append(
-            {
-                "name": name,
-                "code": board_code,
-                "board_type": board_type,
-                "pct_chg": None,
-                "lead_stock": "",
-            }
-        )
-        if len(out) >= max_concepts:
-            break
-    return out
+        entry = {
+            "name": name,
+            "code": board_code,
+            "board_type": board_type,
+            "pct_chg": None,
+            "lead_stock": "",
+        }
+        buckets[_classify(name)].append(entry)
+
+    out = buckets[0] + buckets[1] + buckets[2]
+    return out[:max_concepts]
 
 
 def _fetch_stock_boards_scan(
@@ -1433,26 +1483,41 @@ def fetch_industry_name(
                 name = _clean_str(b.get("name"))
                 if name and len(name) >= 2:
                     return name
-        # 回退: 排除明显的指数/ETF/区域板块,取第一个行业风格的名称
-        _NON_INDUSTRY_SUFFIXES = (
+        # 回退: 排除明显的指数/ETF/区域/市场概念板块
+        _NOT_INDUSTRY = {
+            "大盘股",
+            "大盘价值",
+            "大盘成长",
+            "权重股",
+            "百元股",
+            "行业龙头",
+            "超级品牌",
+            "机构重仓",
+            "证金持股",
+            "MSCI中国",
+            "标准普尔",
+        }
+        _NOT_INDUSTRY_SUFFIXES = (
             "概念",
             "指数",
             "ETF",
             "LOF",
             "板块",
             "通",
-            "50",
-            "180",
-            "300",
+            "50_",
+            "180_",
+            "300_",
+            "500_",
         )
         for b in boards:
             name = _clean_str(b.get("name"))
             if not name or len(name) < 2:
                 continue
-            if any(name.endswith(s) for s in _NON_INDUSTRY_SUFFIXES):
+            if name in _NOT_INDUSTRY:
                 continue
-            # 排除纯区域名
-            if name.endswith(("省", "市", "区")):
+            if any(name.endswith(s) for s in _NOT_INDUSTRY_SUFFIXES):
+                continue
+            if name.endswith(("省", "市", "区", "特区")):
                 continue
             return name
 
