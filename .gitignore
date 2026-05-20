@@ -35,7 +35,9 @@ reports/chat_history/
 *.log
 
 # External study repos (separate git projects, not part of this repo)
-apps/
+# apps/  # Now used for React frontend - only ignore node_modules
+apps/web/node_modules/
+apps/web/.next/
 
 # IDE
 .vscode/
