@@ -27,7 +27,7 @@ _backend_dir = os.path.join(os.path.dirname(__file__), "..")
 if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
-from .compliance import wrap_with_disclaimer
+from .compliance import check_forbidden_words, wrap_with_disclaimer
 from .conversation_store import ConversationStore
 from .report_generator import generate_report
 
@@ -490,8 +490,11 @@ class ChatOrchestrator:
                 "error": True,
             }
 
-        # 追加合规提示
+        # 合规检查：禁用词替换 + 风险提示
         content = result.get("content", "")
+        content, forbidden = check_forbidden_words(content)
+        if forbidden:
+            result["forbidden_words_found"] = forbidden
         result["compliance_note"] = wrap_with_disclaimer("", mode_str)
         result["content"] = wrap_with_disclaimer(content, mode_str)
 

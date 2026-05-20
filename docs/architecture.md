@@ -1,11 +1,31 @@
-# Architecture
+# Architecture (v0.40)
 
 This document describes the system architecture and data flow of AI-Finance.
 
 ## System Overview
 
 ```
-Data Sources → Providers → Quality Gates → Storage → Analysis → Presentation → Archive
+┌─────────────────────────────────────────────────────────┐
+│                 Presentation Layer                        │
+│  Streamlit Dashboard · FastAPI (27 endpoints) · Next.js  │
+└───────────────────────────┬─────────────────────────────┘
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│                  Analysis Layer                           │
+│  5 Agents → Critic → Chairman · Expert Panel (10 experts)│
+│  Intent Router · Vision Pipeline · Compliance Checker    │
+└───────────────────────────┬─────────────────────────────┘
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│                   Quality Layer                           │
+│  Dedup · SourceRank · Evidence Aggregator · Anomaly Det  │
+└───────────────────────────┬─────────────────────────────┘
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│              Data & Storage Layer                         │
+│  20+ Providers · SQLite (20+ tables) · ChromaDB (opt.)  │
+│  Pipeline · Context Builder · Model Registry · Task Queue│
+└─────────────────────────────────────────────────────────┘
 ```
 
 Each layer is independently testable and replaceable.
@@ -14,7 +34,7 @@ Each layer is independently testable and replaceable.
 
 ### 1. Provider Layer (`backend/providers/`)
 
-9 data source plugins behind a unified `BaseProvider` interface:
+20+ data source plugins behind a unified `BaseProvider` interface:
 
 | Provider | Market | Data Type | Trust Level |
 |----------|--------|-----------|-------------|
@@ -27,8 +47,15 @@ Each layer is independently testable and replaceable.
 | EastMoney | CN | News, reports | B |
 | AkShare | CN | All-round | B |
 | BaoStock | CN | Price fallback | C |
+| Finnhub | US | News, prices | B |
+| FRED | Global | Macro data | A |
+| Northbound | CN | Fund flow | B |
+| Reddit | US | Sentiment | C |
+| Google Trends | Global | Sentiment | C |
 
 `ProviderRegistry` handles auto-discovery, priority routing, and failover. Configuration lives in `config/data_sources.yaml`.
+
+Each provider tracks health status (HEALTHY/DEGRADED/UNHEALTHY) via `_record_success()`/`_record_failure()`. Health status available at `GET /api/providers/health`.
 
 ### 2. Quality Layer (`backend/quality/`)
 
@@ -79,7 +106,18 @@ Three analysis modes:
 
 All agents have automatic DeepSeek fallback on provider failure.
 
-### 6. Evidence & Factor Injection
+### 6. Vision Pipeline (`backend/vision/`)
+
+Image/K-line chart analysis with real data cross-validation:
+
+1. `detect_chart()` — LLM-based chart type detection (kline/line/bar/table)
+2. `interpret_kline()` — LLM extracts trend, support/resistance, patterns
+3. `_fetch_real_price_data()` — fetches actual OHLCV from providers
+4. `_compare_vision_with_real_data()` — cross-validates vision vs reality
+
+User can provide ticker to skip detection follow-up. Results include `KlineAnalysisData` and `RealDataComparison` schemas.
+
+### 7. Evidence & Factor Injection
 
 Before agents analyze, the system automatically:
 
@@ -89,7 +127,7 @@ Before agents analyze, the system automatically:
 
 This grounds agent reasoning in actual data, not just the model's training knowledge.
 
-### 7. Critic Layer (`backend/critic.py`)
+### 8. Critic Layer (`backend/critic.py`)
 
 The Critic evaluates each agent's output on 7 dimensions:
 
