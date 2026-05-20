@@ -1,0 +1,61 @@
+# Safety & Compliance 配置
+# 投资分析合规边界与安全策略
+
+compliance:
+  # 禁止表达列表
+  banned_phrases:
+    - "必涨"
+    - "保证收益"
+    - "无风险"
+    - "满仓买入"
+    - "直接荐股"
+    - "稳赚"
+    - "零风险"
+    - "包赚"
+
+  # 替代表达
+  replacements:
+    "必涨": "存在上涨可能，但需验证"
+    "保证收益": "历史表现不代表未来结果"
+    "无风险": "主要风险包括……"
+    "满仓买入": "可结合风险承受能力考虑仓位"
+    "直接荐股": "提供研究辅助，不构成投资建议"
+
+  # 必须包含的合规要素
+  required_elements:
+    - risk_factors        # 风险因素
+    - data_timestamp      # 数据时间
+    - disclaimer          # 免责声明
+    - confidence_range    # 置信度范围
+
+  # 免责声明模板
+  disclaimer_template: |
+    ⚠️ 免责声明：以上分析基于公开数据和 AI 模型推断，仅供参考，
+    不构成任何投资建议。投资有风险，入市需谨慎。请根据自身风险承受能力做出决策。
+
+security:
+  # API Key 安全
+  api_key:
+    encrypt_at_rest: true    # 是否加密存储
+    mask_in_logs: true       # 日志中脱敏
+    max_key_length: 256      # 最大 Key 长度
+
+  # 用户输入安全
+  input:
+    max_prompt_length: 5000  # 最大 prompt 长度
+    sanitize_injection: true # 是否过滤 prompt injection
+    max_file_size_mb: 20     # 最大上传文件大小
+
+  # Rate Limiting
+  rate_limit:
+    requests_per_minute: 30
+    requests_per_hour: 200
+    max_concurrent_agents: 5
+
+  # 内网访问控制
+  network:
+    allow_local_llm: false   # 是否允许连接本地 LLM
+    blocked_hosts:           # 默认屏蔽的主机
+      - "localhost"
+      - "127.0.0.1"
+      - "0.0.0.0"

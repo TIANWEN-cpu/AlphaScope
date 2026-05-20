@@ -1,0 +1,78 @@
+# Tools 配置
+# 定义 Agent 可调用的工具和数据源
+
+tools:
+  # 行情数据工具
+  - id: market_data
+    name: 行情数据
+    description: 获取实时/历史行情数据
+    type: data_source
+    provider: akshare
+    enabled: true
+    rate_limit: 60  # 每分钟最大调用次数
+
+  # 新闻搜索工具
+  - id: news_search
+    name: 新闻搜索
+    description: 搜索财经新闻和公告
+    type: data_source
+    provider: cls
+    enabled: true
+    rate_limit: 30
+
+  # 资金流工具
+  - id: fund_flow
+    name: 资金流向
+    description: 获取主力/散户资金流向数据
+    type: data_source
+    provider: eastmoney
+    enabled: true
+    rate_limit: 30
+
+  # 基本面数据工具
+  - id: fundamentals
+    name: 基本面数据
+    description: 获取财务报表、估值指标
+    type: data_source
+    provider: akshare
+    enabled: true
+    rate_limit: 30
+
+  # RAG 检索工具
+  - id: evidence_search
+    name: 证据检索
+    description: 从知识库检索相关证据
+    type: rag
+    enabled: true
+    max_results: 8
+
+  # 网页搜索工具（Phase 3）
+  - id: web_search
+    name: 网页搜索
+    description: 搜索互联网获取最新信息
+    type: search
+    enabled: false  # Phase 3 启用
+    provider: tavily
+
+  # 网页抓取工具（Phase 3）
+  - id: web_crawl
+    name: 网页抓取
+    description: 抓取指定网页内容
+    type: crawler
+    enabled: false  # Phase 3 启用
+    provider: crawl4ai
+
+# 工具权限配置
+permissions:
+  # 默认权限
+  default:
+    - market_data
+    - news_search
+    - fund_flow
+    - fundamentals
+    - evidence_search
+
+  # 高级权限（需要用户确认）
+  advanced:
+    - web_search
+    - web_crawl

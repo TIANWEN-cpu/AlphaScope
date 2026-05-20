@@ -1,0 +1,46 @@
+# Agent Teams 配置
+# 定义可复用的专家团模板
+
+teams:
+  - id: financial-default
+    name: 金融投资专家团
+    description: 包含宏观、基本面、技术面、资金面、风控、反方的完整分析团队
+    workflow: parallel_then_debate
+    max_rounds: 2
+    require_citations: true
+    require_risk_review: true
+    agents:
+      - macro_analyst
+      - fundamental_analyst
+      - technical_analyst
+      - sentiment_analyst
+      - risk_manager
+    enable_critic: true
+    enable_chairman: true
+
+  - id: quick-scan
+    name: 快速扫描团
+    description: 轻量级分析，仅基本面+技术面
+    workflow: parallel
+    max_rounds: 1
+    require_citations: false
+    require_risk_review: false
+    agents:
+      - fundamental_analyst
+      - technical_analyst
+    enable_critic: false
+    enable_chairman: false
+
+  - id: risk-focus
+    name: 风险评估团
+    description: 以风控为核心的分析团队
+    workflow: parallel_then_debate
+    max_rounds: 2
+    require_citations: true
+    require_risk_review: true
+    agents:
+      - risk_manager
+      - technical_analyst
+      - sentiment_analyst
+    enable_critic: true
+    enable_chairman: false
