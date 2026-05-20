@@ -27,6 +27,15 @@ import yaml
 
 from project_paths import CONFIG_DIR, ENV_FILE
 
+# 成本追踪（可选依赖，导入失败不影响核心功能）
+try:
+    from backend.observability.cost_tracker import get_cost_tracker
+except ImportError:
+    try:
+        from observability.cost_tracker import get_cost_tracker
+    except ImportError:
+        get_cost_tracker = None  # type: ignore[assignment]
+
 load_dotenv(ENV_FILE)
 
 logger = logging.getLogger(__name__)
@@ -263,6 +272,40 @@ def clear_client_cache():
 # ============== LLM 统一调用 ==============
 
 
+def _record_cost(
+    resp: Any,
+    vendor: str,
+    model: str,
+    agent_key: str,
+    mode: str,
+    conversation_id: str,
+):
+    """从响应中提取 token 用量并记录到 CostTracker。"""
+    if get_cost_tracker is None:
+        return
+    try:
+        usage = getattr(resp, "usage", None)
+        if usage is None:
+            return
+        input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+        output_tokens = getattr(usage, "completion_tokens", 0) or 0
+        if input_tokens == 0 and output_tokens == 0:
+            return
+        tracker = get_cost_tracker()
+        tracker.record_call(
+            agent_key=agent_key,
+            model=model,
+            vendor=vendor,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            mode=mode,
+            conversation_id=conversation_id,
+        )
+    except Exception:
+        # 成本记录不应阻断正常调用
+        pass
+
+
 def _call_with(
     vendor: str,
     model: str,
@@ -272,10 +315,14 @@ def _call_with(
     temperature: float = 0.3,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    agent_key: str = "unknown",
+    mode: str = "",
+    conversation_id: str = "",
 ) -> str:
     """
     统一调用接口，支持细粒度 API Key 与 Base URL。
     自动处理 json_mode 不支持的情况。
+    调用完成后自动记录 token 用量到 CostTracker。
     """
     client = get_client(vendor, api_key, base_url)
     kwargs = dict(
@@ -288,6 +335,8 @@ def _call_with(
     if json_mode and cfg and cfg.get("supports_json_mode"):
         kwargs["response_format"] = {"type": "json_object"}
     resp = client.chat.completions.create(**kwargs)
+    # 记录成本（透明，不影响返回值）
+    _record_cost(resp, vendor, model, agent_key, mode, conversation_id)
     return resp.choices[0].message.content or ""
 
 

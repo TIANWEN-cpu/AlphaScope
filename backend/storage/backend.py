@@ -1,5 +1,5 @@
 """
-Storage Backend Abstraction (v0.26)
+Storage Backend Abstraction (v0.28)
 
 统一存储接口，支持 SQLite（当前）和 PostgreSQL（未来）。
 当前实现委托给现有 Database 单例。
@@ -10,6 +10,8 @@ Storage Backend Abstraction (v0.26)
     backend.save_message(...)
 """
 
+import json
+import time
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 
@@ -19,7 +21,7 @@ class StorageBackend(ABC):
 
     @abstractmethod
     def save_conversation(self, conv_id: str, data: Dict[str, Any]) -> None:
-        """保存对话"""
+        """保存/更新对话"""
         ...
 
     @abstractmethod
@@ -61,9 +63,20 @@ class StorageBackend(ABC):
         """搜索消息"""
         ...
 
+    @abstractmethod
+    def save_audit_log(
+        self,
+        action: str,
+        target_type: str,
+        target_id: str,
+        metadata: Optional[Dict] = None,
+    ) -> None:
+        """保存审计日志"""
+        ...
+
 
 class SQLiteBackend(StorageBackend):
-    """SQLite 存储后端（委托给现有 ConversationStore）"""
+    """SQLite 存储后端（委托给现有 ConversationStore 和 Database）"""
 
     def __init__(self):
         from backend.storage.db import Database
@@ -71,10 +84,35 @@ class SQLiteBackend(StorageBackend):
 
         self._db = Database()
         self._store = ConversationStore(db=self._db)
+        self._ensure_audit_table()
+
+    def _ensure_audit_table(self):
+        """确保审计日志表存在"""
+        try:
+            conn = self._db.get_connection()
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    action TEXT NOT NULL,
+                    target_type TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    metadata TEXT,
+                    created_at REAL NOT NULL
+                )"""
+            )
+            conn.commit()
+        except Exception:
+            pass
 
     def save_conversation(self, conv_id: str, data: Dict[str, Any]) -> None:
-        # ConversationStore 使用 create_conversation，这里适配接口
-        pass
+        """保存/更新对话元数据"""
+        # ConversationStore 的 create_conversation 已处理创建
+        # 这里处理更新场景
+        try:
+            if data.get("title"):
+                self._store.update_title(conv_id, data["title"])
+        except Exception:
+            pass
 
     def get_conversation(self, conv_id: str) -> Optional[Dict[str, Any]]:
         return self._store.get_conversation(conv_id)
@@ -96,11 +134,54 @@ class SQLiteBackend(StorageBackend):
         return self._store.get_messages(conv_id)
 
     def save_evidence(self, evidence_id: str, data: Dict[str, Any]) -> None:
-        # 委托给 Database 的 evidence_items 表
-        pass
+        """保存证据到 evidence_items 表"""
+        try:
+            conn = self._db.get_connection()
+            conn.execute(
+                """INSERT OR REPLACE INTO evidence_items
+                   (id, source_id, source_name, evidence_type, claim, data_date, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    evidence_id,
+                    data.get("source_id", ""),
+                    data.get("source_name", ""),
+                    data.get("evidence_type", "other"),
+                    data.get("claim", ""),
+                    data.get("data_date", ""),
+                    time.time(),
+                ),
+            )
+            conn.commit()
+        except Exception:
+            pass
 
     def search_messages(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         return self._store.search_messages(query)
+
+    def save_audit_log(
+        self,
+        action: str,
+        target_type: str,
+        target_id: str,
+        metadata: Optional[Dict] = None,
+    ) -> None:
+        """保存审计日志"""
+        try:
+            conn = self._db.get_connection()
+            conn.execute(
+                """INSERT INTO audit_logs (action, target_type, target_id, metadata, created_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    action,
+                    target_type,
+                    target_id,
+                    json.dumps(metadata or {}),
+                    time.time(),
+                ),
+            )
+            conn.commit()
+        except Exception:
+            pass
 
 
 # ============== 工厂函数 ==============

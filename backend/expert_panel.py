@@ -15,6 +15,7 @@
 - llm_agents._extract_json
 """
 
+import enum
 import os
 import sys
 import time
@@ -124,6 +125,17 @@ class ExpertOpinion:
     error_msg: str = ""
     role: str = "member"  # v2.0 新增:角色标识
     card_style: str = "default"  # v2.0 新增:前端卡片样式
+
+
+# ============== 团队运行模式 ==============
+class TeamRunMode(enum.Enum):
+    """专家团运行模式（对应架构 5 种模式）"""
+
+    QUICK_VOTE = "quick_vote"  # 1. 快速投票：并行调用，无辩论（默认/现有行为）
+    ROUNDTABLE = "roundtable"  # 2. 圆桌讨论：专家互相阅读观点后修订
+    DEVILS_ADVOCATE = "devils_advocate"  # 3. 魔鬼辩护：指定一位专家专门找漏洞
+    CHAIRMAN_RULING = "chairman_ruling"  # 4. 主席裁决：主席综合所有观点做最终判断
+    HUMAN_INTERVENTION = "human_intervention"  # 5. 人工介入：用户可指定特定专家回答
 
 
 # ============== Prompt 文件加载 ==============
@@ -527,23 +539,68 @@ def editable_dict_to_team(data: dict) -> ExpertTeamConfig:
     )
 
 
-# ============== 团队并行调用 ==============
+# ============== 团队并行调用（v2 增强: 支持 5 种模式） ==============
 def run_team_roundtable(
     team: ExpertTeamConfig,
     stock_brief: str,
     stock_name: str,
     global_ai_settings: Optional[dict] = None,
+    run_mode: TeamRunMode = TeamRunMode.QUICK_VOTE,
+    advocate_cfg: Optional[ExpertMemberConfig] = None,
 ) -> dict:
     """
-    v2.0 团队并行调用。返回:
-    {
-        "opinions": {expert_key: ExpertOpinion, ...},
-        "summary": {buy, hold, reduce, sell, avg_position, ...},
-        "elapsed": float,
-        "team_id": str,
-        "team_name": str,
-    }
+    v2.0 团队调用统一入口，支持 5 种运行模式。
+
+    参数:
+        team:               专家团队配置
+        stock_brief:        市场简报
+        stock_name:         股票名称
+        global_ai_settings: 全局 AI 配置（可选）
+        run_mode:           运行模式，默认 QUICK_VOTE（兼容原有行为）
+        advocate_cfg:       DEVILS_ADVOCATE / CHAIRMAN_RULING 模式下可指定
+                            魔鬼辩护人/主席的专家配置（可选）
+
+    返回: 根据 run_mode 不同，返回结构略有差异，但都包含 opinions/summary/elapsed 等基础字段。
     """
+    if run_mode == TeamRunMode.ROUNDTABLE:
+        return run_debate_round(team, stock_brief, stock_name, global_ai_settings)
+
+    if run_mode == TeamRunMode.DEVILS_ADVOCATE:
+        return run_devils_advocate(
+            team, stock_brief, stock_name, global_ai_settings, advocate_cfg
+        )
+
+    if run_mode == TeamRunMode.CHAIRMAN_RULING:
+        # 先做快速投票，再由主席裁决
+        base_result = run_team_roundtable(
+            team, stock_brief, stock_name, global_ai_settings, TeamRunMode.QUICK_VOTE
+        )
+        t0 = time.time()  # 重新计时（包含主席裁决）
+        chairman_op = _run_chairman_ruling(
+            team,
+            base_result["opinions"],
+            stock_brief,
+            stock_name,
+            global_ai_settings,
+            advocate_cfg,  # 复用 advocate_cfg 作为 chairman_cfg
+        )
+        # 主席裁决结果追加到 opinions 中
+        base_result["opinions"][chairman_op.expert_key] = chairman_op
+        base_result["chairman_ruling"] = chairman_op
+        base_result["run_mode"] = TeamRunMode.CHAIRMAN_RULING.value
+        base_result["elapsed"] = round(base_result["elapsed"] + (time.time() - t0), 2)
+        return base_result
+
+    if run_mode == TeamRunMode.HUMAN_INTERVENTION:
+        # 人工介入模式: 仅做快速投票，前端负责展示并允许用户追加提问
+        result = run_team_roundtable(
+            team, stock_brief, stock_name, global_ai_settings, TeamRunMode.QUICK_VOTE
+        )
+        result["run_mode"] = TeamRunMode.HUMAN_INTERVENTION.value
+        result["awaiting_human_input"] = True
+        return result
+
+    # ---- 默认: QUICK_VOTE（完全兼容原有行为） ----
     t0 = time.time()
     if not team.members:
         return {
@@ -552,6 +609,7 @@ def run_team_roundtable(
             "elapsed": 0.0,
             "team_id": team.id,
             "team_name": team.display_name,
+            "run_mode": TeamRunMode.QUICK_VOTE.value,
         }
 
     opinions: Dict[str, ExpertOpinion] = {}
@@ -564,6 +622,7 @@ def run_team_roundtable(
             "team_id": team.id,
             "team_name": team.display_name,
             "member_order": [],
+            "run_mode": TeamRunMode.QUICK_VOTE.value,
         }
 
     with ThreadPoolExecutor(max_workers=len(active_members)) as ex:
@@ -600,6 +659,7 @@ def run_team_roundtable(
         "team_id": team.id,
         "team_name": team.display_name,
         "member_order": [m.id for m in active_members],
+        "run_mode": TeamRunMode.QUICK_VOTE.value,
     }
 
 
@@ -684,6 +744,841 @@ def summarize(opinions: Dict[str, ExpertOpinion]) -> dict:
         "valid_count": n_valid,
         "total_count": len(opinions),
     }
+
+
+# ============== 辩论辅助：构建意见摘要 ==============
+def _build_opinions_summary(opinions: Dict[str, ExpertOpinion]) -> str:
+    """将多位专家的意见打包为一段纯文本摘要，供辩论轮使用。"""
+    lines = []
+    for key, op in opinions.items():
+        if not op.ok:
+            continue
+        lines.append(
+            f"- {op.expert_name}({op.style}): "
+            f'观点="{op.view}" | 操作={op.action} | 仓位={op.position}% | '
+            f"止损=¥{op.stop_loss:.2f}"
+        )
+        if op.evidence:
+            ev_texts = []
+            for ev in op.evidence[:3]:
+                if isinstance(ev, dict):
+                    ev_texts.append(str(ev.get("claim", "")))
+                else:
+                    ev_texts.append(str(ev))
+            if ev_texts:
+                lines.append(f"  依据: {'; '.join(ev_texts)}")
+        if op.risks:
+            lines.append(f"  风险: {'; '.join(op.risks[:3])}")
+    return "\n".join(lines) if lines else "(暂无有效意见)"
+
+
+def _build_debate_user_message(
+    cfg, stock_brief: str, stock_name: str, opinions_summary: str
+) -> str:
+    """为辩论轮构建 user message：附带其他专家意见摘要，要求该专家审阅后决定是否修订。"""
+    focus_dims = getattr(cfg, "focus_dims", []) or []
+    style = getattr(cfg, "style", "") or getattr(cfg, "stop_loss_style", "中等")
+    focus_line = "、".join(focus_dims) if focus_dims else "综合判断"
+
+    schema_text = (
+        _OUTPUT_SCHEMA
+        or """必须严格按 JSON 返回:
+{"view": "...", "evidence": ["...", "..."], "action": "买入|观望|减持|卖出", "position": 30, "stop_loss": 1500.0}"""
+    )
+
+    return f"""以下是其他专家对 {stock_name} 的分析意见摘要：
+
+{opinions_summary}
+
+请认真阅读以上观点,结合你自己的【{style}】视角和关注维度【{focus_line}】,重新审视 {stock_name} 的投资价值。
+- 如果你认为其他专家的观点有道理,可以修正自己的判断。
+- 如果你坚持己见,请给出更有力的理由。
+- 请特别关注是否存在与你判断相反的论据。
+
+原始市场简报:
+{stock_brief}
+
+{schema_text}
+"""
+
+
+def _run_expert_debate_round(
+    cfg,
+    stock_brief: str,
+    stock_name: str,
+    opinions_summary: str,
+    global_ai_settings: Optional[dict] = None,
+) -> ExpertOpinion:
+    """单专家辩论轮调用：在看到其他专家意见后重新给出判断。"""
+    user_msg = _build_debate_user_message(
+        cfg, stock_brief, stock_name, opinions_summary
+    )
+    system_prompt = getattr(cfg, "system_prompt", "") or load_prompt_file(
+        getattr(cfg, "prompt_file", "")
+    )
+    preferred_vendor, preferred_model, api_key, base_url = _resolve_expert_ai_config(
+        cfg, global_ai_settings
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_msg},
+    ]
+
+    primary = (preferred_vendor, preferred_model)
+    fallback = FALLBACK_VENDOR_MODEL
+    last_err = ""
+
+    for vd, md, bu, key_override in [
+        (preferred_vendor, preferred_model, base_url, api_key or None),
+        (fallback[0], fallback[1], "", None),
+    ]:
+        cfg_v = VENDORS.get(vd) or {}
+        if (
+            not bu
+            and (not cfg_v.get("api_key") or not cfg_v.get("base_url"))
+            and not key_override
+        ):
+            last_err = f"{vd} 未配置完整"
+            continue
+
+        try:
+            mtokens = 1500 if vd == "mimo" else 700
+            text = call_llm(
+                vendor=vd,
+                model=md,
+                messages=messages,
+                json_mode=True,
+                max_tokens=mtokens,
+                temperature=0.4,
+                api_key=key_override,
+                base_url=bu or None,
+            )
+            data = _extract_json(text)
+            if not data or not data.get("view"):
+                text2 = call_llm(
+                    vendor=vd,
+                    model=md,
+                    messages=messages
+                    + [
+                        {"role": "assistant", "content": text or ""},
+                        {
+                            "role": "user",
+                            "content": "请只输出符合格式的 JSON 对象,不要任何前后说明。",
+                        },
+                    ],
+                    json_mode=True,
+                    max_tokens=mtokens,
+                    temperature=0.2,
+                    api_key=key_override,
+                    base_url=bu or None,
+                )
+                data = _extract_json(text2)
+
+            if not data or not data.get("view"):
+                last_err = f"{vd} 未返回有效 JSON"
+                continue
+
+            valid = _validate_opinion(data, cfg)
+            return ExpertOpinion(
+                expert_key=getattr(cfg, "key", "") or getattr(cfg, "id", ""),
+                expert_name=getattr(cfg, "name", "")
+                or getattr(cfg, "display_name", ""),
+                style=getattr(cfg, "style", "") or getattr(cfg, "profession", ""),
+                icon=getattr(cfg, "icon", "") or getattr(cfg, "avatar", ""),
+                view=valid["view"],
+                evidence=valid["evidence"],
+                action=valid["action"],
+                position=valid["position"],
+                stop_loss=valid["stop_loss"],
+                invalid_if=valid.get("invalid_if", ""),
+                risks=valid.get("risks", []),
+                vendor=VENDORS[vd]["label"],
+                model=md,
+                fallback_used=(vd != primary[0]),
+                ok=True,
+                role=getattr(cfg, "role", "member"),
+                card_style=getattr(cfg, "card_style", "default"),
+            )
+        except Exception as e:
+            last_err = str(e)[:200]
+            continue
+
+    return ExpertOpinion(
+        expert_key=getattr(cfg, "key", "") or getattr(cfg, "id", ""),
+        expert_name=getattr(cfg, "name", "") or getattr(cfg, "display_name", ""),
+        style=getattr(cfg, "style", "") or getattr(cfg, "profession", ""),
+        icon=getattr(cfg, "icon", "") or getattr(cfg, "avatar", ""),
+        view="(该专家暂不可用)",
+        evidence=[],
+        action="观望",
+        position=0,
+        stop_loss=0.0,
+        vendor="?",
+        model="?",
+        fallback_used=True,
+        ok=False,
+        error_msg=last_err or "未知错误",
+        role=getattr(cfg, "role", "member"),
+    )
+
+
+# ============== 模式 2: 圆桌讨论（辩论） ==============
+def run_debate_round(
+    team: ExpertTeamConfig,
+    stock_brief: str,
+    stock_name: str,
+    global_ai_settings: Optional[dict] = None,
+) -> dict:
+    """
+    圆桌讨论模式:
+      第一轮: 所有专家并行独立分析
+      第二轮: 汇总第一轮意见,每位专家在看到他人观点后可修订自己的判断
+    返回:
+      {
+        "round1_opinions": {key: ExpertOpinion, ...},   # 第一轮原始意见
+        "round2_opinions": {key: ExpertOpinion, ...},   # 第二轮修订意见
+        "opinions":        {key: ExpertOpinion, ...},   # 最终意见（= round2）
+        "summary":         {...},
+        "round1_summary":  {...},
+        "elapsed":         float,
+        "team_id":         str,
+        "team_name":       str,
+        "run_mode":        str,
+      }
+    """
+    t0 = time.time()
+    active_members = [m for m in team.members if getattr(m, "enabled", True)]
+    if not active_members:
+        return {
+            "opinions": {},
+            "round1_opinions": {},
+            "round2_opinions": {},
+            "summary": {},
+            "round1_summary": {},
+            "elapsed": 0.0,
+            "team_id": team.id,
+            "team_name": team.display_name,
+            "member_order": [],
+            "run_mode": TeamRunMode.ROUNDTABLE.value,
+        }
+
+    # ---- 第一轮: 并行独立分析 ----
+    round1_opinions: Dict[str, ExpertOpinion] = {}
+    with ThreadPoolExecutor(max_workers=len(active_members)) as ex:
+        futs = {
+            ex.submit(
+                run_expert, member, stock_brief, stock_name, global_ai_settings
+            ): member.id
+            for member in active_members
+        }
+        for fut in as_completed(futs):
+            try:
+                op = fut.result(timeout=30)
+            except Exception as e:
+                ek = futs[fut]
+                member_match = next((m for m in active_members if m.id == ek), None)
+                op = ExpertOpinion(
+                    expert_key=ek,
+                    expert_name=member_match.display_name if member_match else ek,
+                    style=member_match.profession if member_match else "",
+                    icon=member_match.avatar if member_match else "",
+                    view="(执行异常)",
+                    action="观望",
+                    ok=False,
+                    error_msg=str(e)[:200],
+                    role=member_match.role if member_match else "member",
+                )
+            round1_opinions[op.expert_key] = op
+
+    round1_summary = summarize(round1_opinions)
+
+    # ---- 构建意见摘要 ----
+    opinions_summary = _build_opinions_summary(round1_opinions)
+
+    # ---- 第二轮: 专家互相阅读后修订 ----
+    round2_opinions: Dict[str, ExpertOpinion] = {}
+    with ThreadPoolExecutor(max_workers=len(active_members)) as ex:
+        futs = {
+            ex.submit(
+                _run_expert_debate_round,
+                member,
+                stock_brief,
+                stock_name,
+                opinions_summary,
+                global_ai_settings,
+            ): member.id
+            for member in active_members
+        }
+        for fut in as_completed(futs):
+            try:
+                op = fut.result(timeout=30)
+            except Exception as e:
+                ek = futs[fut]
+                member_match = next((m for m in active_members if m.id == ek), None)
+                op = ExpertOpinion(
+                    expert_key=ek,
+                    expert_name=member_match.display_name if member_match else ek,
+                    style=member_match.profession if member_match else "",
+                    icon=member_match.avatar if member_match else "",
+                    view="(辩论轮执行异常)",
+                    action="观望",
+                    ok=False,
+                    error_msg=str(e)[:200],
+                    role=member_match.role if member_match else "member",
+                )
+            round2_opinions[op.expert_key] = op
+
+    summary = summarize(round2_opinions)
+
+    return {
+        "opinions": round2_opinions,
+        "round1_opinions": round1_opinions,
+        "round2_opinions": round2_opinions,
+        "summary": summary,
+        "round1_summary": round1_summary,
+        "elapsed": round(time.time() - t0, 2),
+        "team_id": team.id,
+        "team_name": team.display_name,
+        "member_order": [m.id for m in active_members],
+        "run_mode": TeamRunMode.ROUNDTABLE.value,
+    }
+
+
+# ============== 模式 3: 魔鬼辩护 ==============
+# 内置魔鬼辩护人角色设定
+_DEVILS_ADVOCATE_SYSTEM_PROMPT = """你是一位专业的"魔鬼辩护人"(Devil's Advocate)。你的职责是：
+1. 仔细审查其他分析师的观点和论据
+2. 专门寻找他们分析中的漏洞、逻辑矛盾和被忽略的风险
+3. 提出反对意见和反面论据
+4. 你不需要给出自己的买卖建议，而是对现有分析进行批判性审查
+
+请从以下角度审查：
+- 论据是否可靠？数据来源是否可信？
+- 逻辑推理是否有跳跃或矛盾？
+- 是否忽略了重要的风险因素？
+- 是否存在确认偏误（只看支持自己观点的证据）？
+- 市场定价是否已经反映了这些预期？
+
+请以 JSON 格式返回你的审查意见。"""
+
+
+def run_devils_advocate(
+    team: ExpertTeamConfig,
+    stock_brief: str,
+    stock_name: str,
+    global_ai_settings: Optional[dict] = None,
+    advocate_cfg: Optional[ExpertMemberConfig] = None,
+) -> dict:
+    """
+    魔鬼辩护模式:
+      第一轮: 所有专家并行独立分析
+      第二轮: 指定一位魔鬼辩护人（使用 lead 成员或 advocate_cfg），对所有意见进行批判性审查
+    返回:
+      {
+        "opinions":       {key: ExpertOpinion, ...},  # 原始意见
+        "critique":       ExpertOpinion,              # 魔鬼辩护人的审查意见
+        "summary":        {...},
+        "elapsed":        float,
+        "team_id":        str,
+        "team_name":      str,
+        "run_mode":       str,
+      }
+    """
+    t0 = time.time()
+    active_members = [m for m in team.members if getattr(m, "enabled", True)]
+    if not active_members:
+        return {
+            "opinions": {},
+            "critique": None,
+            "summary": {},
+            "elapsed": 0.0,
+            "team_id": team.id,
+            "team_name": team.display_name,
+            "member_order": [],
+            "run_mode": TeamRunMode.DEVILS_ADVOCATE.value,
+        }
+
+    # ---- 第一轮: 并行独立分析 ----
+    opinions: Dict[str, ExpertOpinion] = {}
+    with ThreadPoolExecutor(max_workers=len(active_members)) as ex:
+        futs = {
+            ex.submit(
+                run_expert, member, stock_brief, stock_name, global_ai_settings
+            ): member.id
+            for member in active_members
+        }
+        for fut in as_completed(futs):
+            try:
+                op = fut.result(timeout=30)
+            except Exception as e:
+                ek = futs[fut]
+                member_match = next((m for m in active_members if m.id == ek), None)
+                op = ExpertOpinion(
+                    expert_key=ek,
+                    expert_name=member_match.display_name if member_match else ek,
+                    style=member_match.profession if member_match else "",
+                    icon=member_match.avatar if member_match else "",
+                    view="(执行异常)",
+                    action="观望",
+                    ok=False,
+                    error_msg=str(e)[:200],
+                    role=member_match.role if member_match else "member",
+                )
+            opinions[op.expert_key] = op
+
+    # ---- 构建意见摘要 ----
+    opinions_summary = _build_opinions_summary(opinions)
+
+    # ---- 第二轮: 魔鬼辩护人审查 ----
+    # 确定魔鬼辩护人配置：优先使用 advocate_cfg，否则选 lead 成员，否则用第一个成员
+    if advocate_cfg is None:
+        lead_member = next((m for m in active_members if m.role == "lead"), None)
+        advocate_cfg = lead_member or active_members[0]
+
+    # 创建临时的魔鬼辩护人配置（覆盖 system_prompt）
+    advocate_prompt = (
+        _DEVILS_ADVOCATE_SYSTEM_PROMPT
+        + f"\n\n你正在审查的专家团队对 {stock_name} 的分析意见如下：\n\n"
+        + opinions_summary
+    )
+
+    adv_member = ExpertMemberConfig(
+        id=f"devils_advocate_{advocate_cfg.id}",
+        display_name=f"魔鬼辩护人({advocate_cfg.display_name})",
+        display_name_en=f"Devil's Advocate ({advocate_cfg.display_name_en})",
+        profession="批判性审查",
+        profession_en="Critical Review",
+        avatar="😈",
+        prompt_file="",
+        role="lead",
+        provider=advocate_cfg.provider,
+        model=advocate_cfg.model,
+        api_key=advocate_cfg.api_key,
+        base_url=advocate_cfg.base_url,
+        inherit_global_key=advocate_cfg.inherit_global_key,
+        enabled=True,
+        system_prompt=advocate_prompt,
+        focus_dims=[],
+        stop_loss_style="严格",
+    )
+
+    # 魔鬼辩护人使用特殊的 user message
+    critique_user_msg = f"""请对以上 {stock_name} 的专家分析意见进行批判性审查。
+
+原始市场简报：
+{stock_brief}
+
+请以 JSON 格式返回审查意见：
+{{"view": "你对整体分析的批判性审查意见", "evidence": ["发现的漏洞1", "发现的漏洞2"], "action": "买入|观望|减持|卖出", "position": 0, "stop_loss": 0.0, "risks": ["被忽略的风险1", "被忽略的风险2"]}}
+注意：action/position/stop_loss 填写你认为在考虑了所有风险后更审慎的建议。"""
+
+    try:
+        system_prompt = adv_member.system_prompt
+        preferred_vendor, preferred_model, api_key, base_url = (
+            _resolve_expert_ai_config(adv_member, global_ai_settings)
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": critique_user_msg},
+        ]
+
+        primary = (preferred_vendor, preferred_model)
+        fallback = FALLBACK_VENDOR_MODEL
+        last_err = ""
+        critique_op = None
+
+        for vd, md, bu, key_override in [
+            (preferred_vendor, preferred_model, base_url, api_key or None),
+            (fallback[0], fallback[1], "", None),
+        ]:
+            cfg_v = VENDORS.get(vd) or {}
+            if (
+                not bu
+                and (not cfg_v.get("api_key") or not cfg_v.get("base_url"))
+                and not key_override
+            ):
+                last_err = f"{vd} 未配置完整"
+                continue
+            try:
+                mtokens = 1500 if vd == "mimo" else 700
+                text = call_llm(
+                    vendor=vd,
+                    model=md,
+                    messages=messages,
+                    json_mode=True,
+                    max_tokens=mtokens,
+                    temperature=0.5,
+                    api_key=key_override,
+                    base_url=bu or None,
+                )
+                data = _extract_json(text)
+                if not data or not data.get("view"):
+                    text2 = call_llm(
+                        vendor=vd,
+                        model=md,
+                        messages=messages
+                        + [
+                            {"role": "assistant", "content": text or ""},
+                            {
+                                "role": "user",
+                                "content": "请只输出符合格式的 JSON 对象,不要任何前后说明。",
+                            },
+                        ],
+                        json_mode=True,
+                        max_tokens=mtokens,
+                        temperature=0.3,
+                        api_key=key_override,
+                        base_url=bu or None,
+                    )
+                    data = _extract_json(text2)
+
+                if data and data.get("view"):
+                    valid = _validate_opinion(data, adv_member)
+                    critique_op = ExpertOpinion(
+                        expert_key=adv_member.id,
+                        expert_name=adv_member.display_name,
+                        style="批判性审查",
+                        icon=adv_member.avatar,
+                        view=valid["view"],
+                        evidence=valid["evidence"],
+                        action=valid.get("action", "观望"),
+                        position=valid.get("position", 0),
+                        stop_loss=valid.get("stop_loss", 0.0),
+                        invalid_if=valid.get("invalid_if", ""),
+                        risks=valid.get("risks", []),
+                        vendor=VENDORS[vd]["label"],
+                        model=md,
+                        fallback_used=(vd != primary[0]),
+                        ok=True,
+                        role="lead",
+                        card_style="critique",
+                    )
+                    break
+                last_err = f"{vd} 未返回有效 JSON"
+            except Exception as e:
+                last_err = str(e)[:200]
+                continue
+
+        if critique_op is None:
+            critique_op = ExpertOpinion(
+                expert_key=adv_member.id,
+                expert_name=adv_member.display_name,
+                style="批判性审查",
+                icon=adv_member.avatar,
+                view="(魔鬼辩护人暂不可用)",
+                evidence=[],
+                action="观望",
+                position=0,
+                stop_loss=0.0,
+                vendor="?",
+                model="?",
+                fallback_used=True,
+                ok=False,
+                error_msg=last_err or "未知错误",
+                role="lead",
+            )
+    except Exception as e:
+        critique_op = ExpertOpinion(
+            expert_key="devils_advocate",
+            expert_name="魔鬼辩护人",
+            style="批判性审查",
+            icon="😈",
+            view="(执行异常)",
+            evidence=[],
+            action="观望",
+            ok=False,
+            error_msg=str(e)[:200],
+            role="lead",
+        )
+
+    summary = summarize(opinions)
+
+    return {
+        "opinions": opinions,
+        "critique": critique_op,
+        "summary": summary,
+        "elapsed": round(time.time() - t0, 2),
+        "team_id": team.id,
+        "team_name": team.display_name,
+        "member_order": [m.id for m in active_members],
+        "run_mode": TeamRunMode.DEVILS_ADVOCATE.value,
+    }
+
+
+# ============== 模式 4: 主席裁决 ==============
+_CHAIRMAN_SYSTEM_PROMPT = """你是一位投资分析会议的主席。你已经听取了所有专家的分析意见。
+你的职责是：
+1. 综合所有专家的观点，找出共识和分歧
+2. 权衡不同观点的说服力
+3. 给出一个经过深思熟虑的最终裁决
+4. 明确指出哪些风险最值得关注
+
+请以 JSON 格式返回你的裁决：
+{"view": "你的综合裁决意见", "evidence": ["关键依据1", "关键依据2"], "action": "买入|观望|减持|卖出", "position": 30, "stop_loss": 1500.0, "risks": ["最重要的风险1", "最重要的风险2"]}
+"""
+
+
+def _run_chairman_ruling(
+    team: ExpertTeamConfig,
+    opinions: Dict[str, ExpertOpinion],
+    stock_brief: str,
+    stock_name: str,
+    global_ai_settings: Optional[dict] = None,
+    chairman_cfg: Optional[ExpertMemberConfig] = None,
+) -> ExpertOpinion:
+    """主席裁决：综合所有专家意见，给出最终判断。"""
+    opinions_summary = _build_opinions_summary(opinions)
+
+    # 确定主席配置
+    if chairman_cfg is None:
+        lead_member = next(
+            (
+                m
+                for m in team.members
+                if m.role == "lead" and getattr(m, "enabled", True)
+            ),
+            None,
+        )
+        chairman_cfg = lead_member or (team.members[0] if team.members else None)
+    if chairman_cfg is None:
+        return ExpertOpinion(
+            expert_key="chairman",
+            expert_name="主席",
+            view="(无可用主席)",
+            action="观望",
+            ok=False,
+            role="lead",
+        )
+
+    chairman_prompt = _CHAIRMAN_SYSTEM_PROMPT + (
+        f"\n\n以下是各位专家对 {stock_name} 的分析意见：\n\n" + opinions_summary
+    )
+
+    chairman_member = ExpertMemberConfig(
+        id=f"chairman_{chairman_cfg.id}",
+        display_name=f"主席裁决({chairman_cfg.display_name})",
+        display_name_en=f"Chairman Ruling ({chairman_cfg.display_name_en})",
+        profession="综合裁决",
+        profession_en="Chairman Ruling",
+        avatar="👔",
+        prompt_file="",
+        role="lead",
+        provider=chairman_cfg.provider,
+        model=chairman_cfg.model,
+        api_key=chairman_cfg.api_key,
+        base_url=chairman_cfg.base_url,
+        inherit_global_key=chairman_cfg.inherit_global_key,
+        enabled=True,
+        system_prompt=chairman_prompt,
+        focus_dims=[],
+        stop_loss_style="稳健",
+    )
+
+    user_msg = f"""请综合以上所有专家意见，对 {stock_name} 做出最终裁决。
+
+原始市场简报：
+{stock_brief}
+
+请特别注意：
+- 如果专家之间存在重大分歧，请说明你倾向哪一方以及原因
+- 如果专家意见一致，请确认并补充你认为还需要关注的方面
+- 给出一个具体的、可操作的最终建议
+
+{{"view": "你的综合裁决", "evidence": ["关键依据"], "action": "买入|观望|减持|卖出", "position": 30, "stop_loss": 1500.0, "risks": ["风险"]}}"""
+
+    preferred_vendor, preferred_model, api_key, base_url = _resolve_expert_ai_config(
+        chairman_member, global_ai_settings
+    )
+    messages = [
+        {"role": "system", "content": chairman_prompt},
+        {"role": "user", "content": user_msg},
+    ]
+
+    primary = (preferred_vendor, preferred_model)
+    fallback = FALLBACK_VENDOR_MODEL
+    last_err = ""
+
+    for vd, md, bu, key_override in [
+        (preferred_vendor, preferred_model, base_url, api_key or None),
+        (fallback[0], fallback[1], "", None),
+    ]:
+        cfg_v = VENDORS.get(vd) or {}
+        if (
+            not bu
+            and (not cfg_v.get("api_key") or not cfg_v.get("base_url"))
+            and not key_override
+        ):
+            last_err = f"{vd} 未配置完整"
+            continue
+        try:
+            mtokens = 1500 if vd == "mimo" else 700
+            text = call_llm(
+                vendor=vd,
+                model=md,
+                messages=messages,
+                json_mode=True,
+                max_tokens=mtokens,
+                temperature=0.3,
+                api_key=key_override,
+                base_url=bu or None,
+            )
+            data = _extract_json(text)
+            if not data or not data.get("view"):
+                text2 = call_llm(
+                    vendor=vd,
+                    model=md,
+                    messages=messages
+                    + [
+                        {"role": "assistant", "content": text or ""},
+                        {
+                            "role": "user",
+                            "content": "请只输出符合格式的 JSON 对象,不要任何前后说明。",
+                        },
+                    ],
+                    json_mode=True,
+                    max_tokens=mtokens,
+                    temperature=0.2,
+                    api_key=key_override,
+                    base_url=bu or None,
+                )
+                data = _extract_json(text2)
+
+            if data and data.get("view"):
+                valid = _validate_opinion(data, chairman_member)
+                return ExpertOpinion(
+                    expert_key=chairman_member.id,
+                    expert_name=chairman_member.display_name,
+                    style="综合裁决",
+                    icon=chairman_member.avatar,
+                    view=valid["view"],
+                    evidence=valid["evidence"],
+                    action=valid.get("action", "观望"),
+                    position=valid.get("position", 0),
+                    stop_loss=valid.get("stop_loss", 0.0),
+                    invalid_if=valid.get("invalid_if", ""),
+                    risks=valid.get("risks", []),
+                    vendor=VENDORS[vd]["label"],
+                    model=md,
+                    fallback_used=(vd != primary[0]),
+                    ok=True,
+                    role="lead",
+                    card_style="chairman",
+                )
+            last_err = f"{vd} 未返回有效 JSON"
+        except Exception as e:
+            last_err = str(e)[:200]
+            continue
+
+    return ExpertOpinion(
+        expert_key=chairman_member.id,
+        expert_name=chairman_member.display_name,
+        style="综合裁决",
+        icon=chairman_member.avatar,
+        view="(主席裁决暂不可用)",
+        evidence=[],
+        action="观望",
+        position=0,
+        stop_loss=0.0,
+        vendor="?",
+        model="?",
+        fallback_used=True,
+        ok=False,
+        error_msg=last_err or "未知错误",
+        role="lead",
+    )
+
+
+# ============== 辩论变化摘要 ==============
+def summarize_debate(
+    round1_opinions: Dict[str, ExpertOpinion],
+    round2_opinions: Dict[str, ExpertOpinion],
+) -> dict:
+    """
+    对比辩论前后专家意见的变化，返回变化摘要。
+    返回:
+      {
+        "changes": [
+          {
+            "expert_key":   str,
+            "expert_name":  str,
+            "action_before": str,
+            "action_after":  str,
+            "action_changed": bool,
+            "position_before": float,
+            "position_after":  float,
+            "position_delta":  float,
+            "view_before":   str,
+            "view_after":    str,
+            "view_changed":  bool,
+          },
+          ...
+        ],
+        "action_change_count": int,  # 改变操作建议的专家数
+        "position_avg_before": float,
+        "position_avg_after":  float,
+        "position_avg_delta":  float,
+        "summary_before": {...},
+        "summary_after":  {...},
+      }
+    """
+    changes = []
+    action_change_count = 0
+    total_pos_before = 0.0
+    total_pos_after = 0.0
+    n_valid = 0
+
+    for key in round1_opinions:
+        op1 = round1_opinions.get(key)
+        op2 = round2_opinions.get(key)
+        if not op1 or not op2:
+            continue
+
+        action_changed = op1.action != op2.action
+        view_changed = op1.view.strip() != op2.view.strip()
+        position_delta = op2.position - op1.position
+
+        if op1.ok:
+            n_valid += 1
+            total_pos_before += op1.position
+            total_pos_after += op2.position
+
+        if action_changed:
+            action_change_count += 1
+
+        changes.append(
+            {
+                "expert_key": key,
+                "expert_name": op1.expert_name,
+                "action_before": op1.action,
+                "action_after": op2.action,
+                "action_changed": action_changed,
+                "position_before": op1.position,
+                "position_after": op2.position,
+                "position_delta": round(position_delta, 1),
+                "view_before": op1.view,
+                "view_after": op2.view,
+                "view_changed": view_changed,
+            }
+        )
+
+    pos_avg_before = round(total_pos_before / n_valid, 1) if n_valid else 0.0
+    pos_avg_after = round(total_pos_after / n_valid, 1) if n_valid else 0.0
+
+    return {
+        "changes": changes,
+        "action_change_count": action_change_count,
+        "position_avg_before": pos_avg_before,
+        "position_avg_after": pos_avg_after,
+        "position_avg_delta": round(pos_avg_after - pos_avg_before, 1),
+        "summary_before": summarize(round1_opinions),
+        "summary_after": summarize(round2_opinions),
+    }
+
+
+# ============== 统一入口: run_team_roundtable (v2 增强) ==============
+# 以下保留原有 run_team_roundtable 签名并向外兼容，
+# 同时新增 run_mode 参数支持 5 种模式调度。
 
 
 # ============== Markdown 导出 ==============
