@@ -109,9 +109,22 @@ class EvidenceAggregator:
         source_names = []
         errors = []
 
+        # Map data_type to provider method
+        method_map = {
+            "news": "get_news",
+            "reports": "get_reports",
+            "announcements": "get_announcements",
+            "prices": "get_prices",
+            "fund_flow": "get_fund_flow",
+        }
+        method_name = method_map.get(data_type, "get_news")
+
         for provider in providers:
             try:
-                items = provider.fetch(query, data_type=data_type, market=market)
+                method = getattr(provider, method_name, None)
+                if method is None:
+                    continue
+                items = method({"symbol": query, "limit": 20})
                 if items:
                     all_items.extend(items)
                     source_names.append(provider.name)

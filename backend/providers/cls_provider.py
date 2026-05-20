@@ -17,11 +17,15 @@ class CLSProvider(BaseProvider):
     license_level = "research_only"
 
     def get_news(self, query: dict, **kwargs) -> list[dict]:
+        import time as _time
+
+        _t0 = _time.time()
         try:
             import akshare as ak
 
             df = ak.stock_info_global_cls(symbol="全部")
             if df is None or len(df) == 0:
+                self._record_failure("empty result")
                 return []
             results = []
             for _, row in df.head(query.get("limit", 30)).iterrows():
@@ -35,7 +39,9 @@ class CLSProvider(BaseProvider):
                         "url": "",
                     }
                 )
+            self._record_success((_time.time() - _t0) * 1000)
             return results
         except Exception as e:
             logger.debug("CLS news failed: %s", e)
+            self._record_failure(str(e))
             return []

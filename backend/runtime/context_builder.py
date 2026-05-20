@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 def fetch_evidence_context(symbol: str, stock_name: str = "", limit: int = 8) -> str:
-    """从 RAG 检索相关证据, 格式化为简报上下文 (v0.12)"""
+    """从 RAG 检索相关证据, 格式化为简报上下文 (v0.40)
+
+    每条证据包含编号、来源、时间、URL，供 Agent 引用。
+    """
     try:
         from backend.pipeline import search_evidence
 
@@ -25,17 +28,20 @@ def fetch_evidence_context(symbol: str, stock_name: str = "", limit: int = 8) ->
         if not results:
             return ""
         lines = ["【可用证据 (来自数据源平台)】"]
+        lines.append("请在分析中引用证据编号 [1] [2] ...，以支撑你的观点。")
         for i, r in enumerate(results, 1):
             meta = r.get("metadata", {})
             doc_type = meta.get("doc_type", "unknown")
             source = meta.get("source", "unknown")
+            source_url = meta.get("source_url", "")
             published = meta.get("published_at", "")
             text_preview = r.get("text", "")[:120]
             type_icon = {"news": "📰", "report": "📊", "announcement": "📋"}.get(
                 doc_type, "📄"
             )
+            url_part = f" | 来源: {source_url}" if source_url else ""
             lines.append(
-                f"  [{i}] {type_icon} [{source}] {published} — {text_preview}..."
+                f"  [{i}] {type_icon} [{source}] {published}{url_part} — {text_preview}..."
             )
         lines.append(f"\n共检索到 {len(results)} 条相关证据, 覆盖新闻/研报/公告。")
         return "\n".join(lines)
