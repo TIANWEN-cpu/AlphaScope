@@ -1,0 +1,6 @@
+# AI-Finance FastAPI Backend Dependencies
+# Install: pip install -r requirements-core.txt -r requirements-api.txt
+
+-r requirements-core.txt
+fastapi>=0.115.0,<1.0
+uvicorn>=0.34.0,<1.0

@@ -1,0 +1,6 @@
+# AI-Finance Development Dependencies
+# Install: pip install -r requirements-core.txt -r requirements-dev.txt
+
+-r requirements-core.txt
+pytest==8.4.0
+ruff==0.11.10

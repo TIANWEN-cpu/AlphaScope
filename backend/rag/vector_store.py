@@ -40,8 +40,13 @@ class VectorStore:
 
     def _get_client(self):
         if self._client is None:
-            import chromadb
-
+            try:
+                import chromadb
+            except ImportError:
+                logger.warning(
+                    "chromadb 未安装，RAG 向量检索功能不可用。安装命令: pip install chromadb==0.6.3"
+                )
+                return None
             self._client = chromadb.PersistentClient(path=str(CHROMA_DIR))
         return self._client
 
@@ -49,6 +54,8 @@ class VectorStore:
         """获取或创建 collection"""
         if name not in self._collections:
             client = self._get_client()
+            if client is None:
+                raise RuntimeError("chromadb 未安装，无法创建向量集合")
             self._collections[name] = client.get_or_create_collection(
                 name=name,
                 metadata={"hnsw:space": "cosine"},
@@ -112,6 +119,8 @@ class VectorStore:
     def get_collection_stats(self) -> dict:
         """获取所有 collection 统计"""
         client = self._get_client()
+        if client is None:
+            return {}
         stats = {}
         for col in client.list_collections():
             stats[col.name] = col.count()

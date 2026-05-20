@@ -1,14 +1,16 @@
-.PHONY: help install dev test lint run clean
+.PHONY: help install install-all dev test test-cov lint format run api clean docker-build docker-up docker-down check web-install web-build web-dev all
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install production dependencies
+install: ## Install core + API + dev dependencies
 	pip install -r requirements.txt
+
+install-all: ## Install all dependencies including RAG
+	pip install -r requirements.txt -r requirements-rag.txt
 
 dev: ## Install dev dependencies
-	pip install -r requirements.txt
-	pip install ruff black mypy pytest-cov
+	pip install -r requirements-dev.txt
 
 test: ## Run all tests
 	python -m pytest tests/ -v
@@ -23,8 +25,20 @@ lint: ## Run linter
 format: ## Format code
 	ruff format backend/ frontend/ tests/
 
-run: ## Run dashboard
+run: ## Run Streamlit dashboard
 	streamlit run frontend/dashboard.py
+
+api: ## Run FastAPI backend
+	uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+web-install: ## Install Next.js frontend dependencies
+	cd apps/web && npm install
+
+web-build: ## Build Next.js frontend
+	cd apps/web && npm run build
+
+web-dev: ## Run Next.js dev server
+	cd apps/web && npm run dev
 
 clean: ## Clean cache and temp files
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -41,3 +55,5 @@ docker-down: ## Stop services
 	docker-compose down
 
 check: lint test ## Run lint + test
+
+all: install check ## Install + lint + test

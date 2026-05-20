@@ -1,51 +1,22 @@
-# AI-Finance Python dependencies (v0.36)
-# Install: python -m pip install -r requirements.txt
+# AI-Finance Dependencies (v0.40)
+# Full install:  pip install -r requirements.txt
+# Core only:     pip install -r requirements-core.txt
+# API server:    pip install -r requirements-api.txt
+# RAG/Vector:    pip install -r requirements-rag.txt
+# Development:   pip install -r requirements-dev.txt
 
-# Core runtime
-streamlit==1.57.0
-pandas==3.0.3
-numpy==2.4.5
-plotly==6.7.0
+-r requirements-core.txt
+-r requirements-api.txt
+-r requirements-dev.txt
 
-# Data sources
-akshare==1.18.60
-requests==2.32.3
-curl_cffi==0.13.0
-
-# LLM SDK
-openai==2.3.0
-python-dotenv==1.1.0
-
-# Config
-pyyaml==6.0.2
-
-# Provider / schemas
-pydantic==2.11.3
-tenacity==9.1.2
-aiohttp==3.12.4
-
-# API server (optional, for FastAPI backend)
-# Note: fastapi pulls starlette; pin compatible with streamlit 1.57
-fastapi>=0.115.0,<1.0
-uvicorn>=0.34.0,<1.0
-
-# Storage / RAG (optional — requires C++ Build Tools on Windows)
-# If chromadb fails to install, the RAG features will be disabled gracefully.
-# Windows users: install Microsoft C++ Build Tools first, or use WSL.
-# chromadb==0.6.3
-
-# Scheduler
-apscheduler==3.11.0
-
-# Observability (optional)
-# opentelemetry-api==1.33.0
-# opentelemetry-sdk==1.33.0
+# Optional: uncomment to enable RAG/vector search
+# -r requirements-rag.txt
 
 # Optional data sources (install as needed)
 # tushare>=1.4.0
 # baostock>=0.8.8
 # openbb>=4.0.0
 
-# Dev / testing
-pytest==8.4.0
-ruff==0.11.10
+# Optional observability
+# opentelemetry-api==1.33.0
+# opentelemetry-sdk==1.33.0
