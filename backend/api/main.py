@@ -99,6 +99,45 @@ if HAS_FASTAPI:
             data=HealthData(status="healthy", version="0.40.0"),
         )
 
+    @app.get("/api/providers/health", response_model=ApiResponse[dict[str, Any]])
+    async def providers_health():
+        """数据源健康状态"""
+        from backend.providers.registry import get_registry
+
+        registry = get_registry()
+        providers = []
+        healthy = degraded = unhealthy = 0
+        for name, provider in registry._providers.items():
+            h = provider.health
+            status = h.status.value if hasattr(h.status, "value") else str(h.status)
+            if status == "healthy":
+                healthy += 1
+            elif status == "degraded":
+                degraded += 1
+            else:
+                unhealthy += 1
+            providers.append(
+                {
+                    "name": name,
+                    "status": status,
+                    "consecutive_failures": h.consecutive_failures,
+                    "avg_latency_ms": round(h.avg_latency_ms, 1),
+                    "last_error": h.error_message,
+                    "data_types": provider.data_types,
+                    "markets": provider.markets,
+                }
+            )
+        return ApiResponse(
+            success=True,
+            data={
+                "total": len(providers),
+                "healthy": healthy,
+                "degraded": degraded,
+                "unhealthy": unhealthy,
+                "providers": providers,
+            },
+        )
+
     # ============== 对话 API ==============
 
     @app.post("/api/conversations", response_model=ApiResponse[ConversationData])

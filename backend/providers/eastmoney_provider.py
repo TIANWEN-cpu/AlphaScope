@@ -64,9 +64,12 @@ class EastMoneyProvider(BaseProvider):
                         "url": item.get("url", ""),
                     }
                 )
+            if results:
+                self._record_success(0)
             return results
         except Exception as e:
             logger.debug("EastMoney search failed: %s", e)
+            self._record_failure(str(e))
             return []
 
     def get_reports(self, query: dict, **kwargs) -> list[dict]:

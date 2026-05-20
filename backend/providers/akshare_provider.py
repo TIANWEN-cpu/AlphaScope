@@ -41,6 +41,9 @@ class AkShareProvider(BaseProvider):
 
     # ---- 新闻 ----
     def get_news(self, query: dict, **kwargs) -> list[dict]:
+        import time as _time
+
+        _t0 = _time.time()
         results = []
         limit = query.get("limit", 30)
 
@@ -61,6 +64,7 @@ class AkShareProvider(BaseProvider):
                     )
         except Exception as e:
             logger.debug("AkShare CLS news failed: %s", e)
+            self._record_failure(f"cls news: {e}")
 
         # 东财快讯
         try:
@@ -104,6 +108,10 @@ class AkShareProvider(BaseProvider):
         except Exception as e:
             logger.debug("AkShare Sina news failed: %s", e)
 
+        if results:
+            self._record_success((_time.time() - _t0) * 1000)
+        elif not results:
+            self._record_failure("all news sub-sources returned empty")
         return results
 
     # ---- 研报 ----
@@ -133,6 +141,7 @@ class AkShareProvider(BaseProvider):
             return results
         except Exception as e:
             logger.debug("AkShare reports failed: %s", e)
+            self._record_failure(f"reports: {e}")
             return []
 
     # ---- 公告 ----

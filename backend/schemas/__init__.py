@@ -20,6 +20,9 @@ from .agents import (
     WorkflowMode,
 )
 
+# 数据源模型
+from .data_source import DataSourceResult, DataSourceStatus, ProviderHealthStatus
+
 # API 请求/响应模型
 from .api import (
     AgentData,
@@ -68,6 +71,10 @@ __all__ = [
     "TeamConfig",
     "ToolPermission",
     "WorkflowMode",
+    # 数据源模型
+    "DataSourceResult",
+    "DataSourceStatus",
+    "ProviderHealthStatus",
     # API 模型
     "ApiResponse",
     "PaginatedData",
