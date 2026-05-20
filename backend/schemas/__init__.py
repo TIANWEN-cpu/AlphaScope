@@ -1,10 +1,24 @@
-"""标准化数据模型 - AI-Finance v0.11"""
+"""标准化数据模型 - AI-Finance v0.40"""
 
 from .announcement import Announcement
 from .evidence import AgentReport, EvidenceBundle, EvidenceItem
 from .market import FundFlow, PriceBar
 from .news import NewsItem
 from .report import ResearchReport
+
+# Agent/专家团配置模型
+from .agents import (
+    AgentConfig,
+    AgentOutput,
+    AnalysisSummary,
+    ExpertMemberConfig,
+    ExpertOutput,
+    FallbackConfig,
+    ModelConfig,
+    TeamConfig,
+    ToolPermission,
+    WorkflowMode,
+)
 
 # API 请求/响应模型
 from .api import (
@@ -43,6 +57,17 @@ __all__ = [
     "EvidenceItem",
     "EvidenceBundle",
     "AgentReport",
+    # Agent/专家团模型
+    "AgentConfig",
+    "AgentOutput",
+    "AnalysisSummary",
+    "ExpertMemberConfig",
+    "ExpertOutput",
+    "FallbackConfig",
+    "ModelConfig",
+    "TeamConfig",
+    "ToolPermission",
+    "WorkflowMode",
     # API 模型
     "ApiResponse",
     "PaginatedData",

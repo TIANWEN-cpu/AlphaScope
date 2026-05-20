@@ -21,6 +21,13 @@ except ImportError:
 EXPERTS_YAML_PATH = CONFIG_DIR / "experts.yaml"
 
 
+def _get_localized(value: Any, fallback: str = "") -> str:
+    """从可能的多语言 dict 中提取中文值"""
+    if isinstance(value, dict):
+        return value.get("zh", value.get("en", fallback))
+    return str(value) if value else fallback
+
+
 @dataclass
 class ExpertMember:
     """单个专家成员配置"""
@@ -28,6 +35,8 @@ class ExpertMember:
     id: str
     name: str
     name_en: str = ""
+    profession: str = ""
+    profession_en: str = ""
     role: str = "member"
     provider: str = "deepseek"
     model: str = "deepseek-chat"
@@ -46,6 +55,9 @@ class ExpertTeam:
     name: str
     name_en: str = ""
     description: str = ""
+    avatar: str = ""
+    prompt_file: str = ""
+    output_schema: str = ""
     members: List[ExpertMember] = field(default_factory=list)
     workflow: str = "parallel_then_debate"
     max_rounds: int = 2
@@ -54,7 +66,7 @@ class ExpertTeam:
 
 
 def load_teams(config_path: Optional[str] = None) -> Dict[str, ExpertTeam]:
-    """从 experts.yaml 加载所有专家团配置"""
+    """从 experts.yaml 的 teams 段加载所有专家团配置"""
     p = Path(config_path) if config_path else EXPERTS_YAML_PATH
     if not p.exists():
         return {}
@@ -65,16 +77,23 @@ def load_teams(config_path: Optional[str] = None) -> Dict[str, ExpertTeam]:
 
     teams = {}
     for team_raw in raw.get("teams", []):
-        if team_raw.get("expertType") != "team":
-            continue
         team_id = team_raw.get("id", "")
+        if not team_id:
+            continue
+
         members = []
         for m in team_raw.get("members", []):
             members.append(
                 ExpertMember(
                     id=m.get("id", ""),
-                    name=m.get("name", ""),
-                    name_en=m.get("nameEn", ""),
+                    name=_get_localized(m.get("displayName", ""), m.get("id", "")),
+                    name_en=m.get("displayName", {}).get("en", "")
+                    if isinstance(m.get("displayName"), dict)
+                    else "",
+                    profession=_get_localized(m.get("profession", "")),
+                    profession_en=m.get("profession", {}).get("en", "")
+                    if isinstance(m.get("profession"), dict)
+                    else "",
                     role=m.get("role", "member"),
                     provider=m.get("provider", "deepseek"),
                     model=m.get("model", "deepseek-chat"),
@@ -84,11 +103,20 @@ def load_teams(config_path: Optional[str] = None) -> Dict[str, ExpertTeam]:
                     enabled=m.get("enabled", True),
                 )
             )
+
+        desc_raw = team_raw.get("description", "")
+        desc = _get_localized(desc_raw)
+
         teams[team_id] = ExpertTeam(
             id=team_id,
-            name=team_raw.get("name", team_id),
-            name_en=team_raw.get("nameEn", ""),
-            description=team_raw.get("description", ""),
+            name=_get_localized(team_raw.get("displayName", ""), team_id),
+            name_en=team_raw.get("displayName", {}).get("en", "")
+            if isinstance(team_raw.get("displayName"), dict)
+            else "",
+            description=desc,
+            avatar=team_raw.get("avatar", ""),
+            prompt_file=team_raw.get("promptFile", ""),
+            output_schema=team_raw.get("outputSchema", ""),
             members=members,
         )
     return teams
