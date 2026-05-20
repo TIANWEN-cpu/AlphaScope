@@ -157,6 +157,15 @@ except Exception as e:
     AI_SETTINGS_AVAILABLE = False
     AI_SETTINGS_ERROR = str(e)
 
+# v0.16: AI 智能助手页面
+try:
+    from components import ai_assistant_page
+
+    AI_ASSISTANT_AVAILABLE = True
+except Exception as e:
+    AI_ASSISTANT_AVAILABLE = False
+    AI_ASSISTANT_ERROR = str(e)
+
 # ============== Agent 自定义配置 UI ==============
 AGENT_CARD_STYLES = ["default", "value", "growth", "technical", "risk", "macro"]
 
@@ -1118,7 +1127,7 @@ if st.session_state.get("show_ai_chat", False):
             st.rerun()
 
 # ============== 图表 ==============
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(
     [
         "📈 K 线 & 技术指标",
         "🤖 Agent 协作分析",
@@ -1130,6 +1139,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
         "📚 研究存档",
         "🎓 专家团圆桌",
         "📊 数据源健康",
+        "🧠 AI 智能助手",
     ]
 )
 
@@ -4369,6 +4379,59 @@ with tab10:
     except Exception as _health_e:
         st.error(f"数据源健康度面板加载失败: {_health_e}")
         st.info("请确认 backend/ 模块可正常导入")
+
+# ============== Tab 11: AI 智能助手 ==============
+with tab11:
+    if AI_ASSISTANT_AVAILABLE:
+        try:
+            # 构建 stock_data 供 AI 助手使用
+            _ai_ma5 = df["MA5"].iloc[-1] if "MA5" in df.columns else last["close"]
+            _ai_ma20 = df["MA20"].iloc[-1] if "MA20" in df.columns else last["close"]
+            _ai_ma60 = df["MA60"].iloc[-1] if "MA60" in df.columns else last["close"]
+            _ai_macd = df["MACD"].iloc[-1] if "MACD" in df.columns else 0
+            _ai_dif = df["DIF"].iloc[-1] if "DIF" in df.columns else 0
+            _ai_dea = df["DEA"].iloc[-1] if "DEA" in df.columns else 0
+            _ai_rsi = df["RSI"].iloc[-1] if "RSI" in df.columns else 50
+            _ai_vol_ratio = (
+                df["volume"].tail(5).mean() / df["volume"].head(20).mean()
+                if df["volume"].head(20).mean() > 0
+                else 1
+            )
+            _ai_volatility = df["close"].pct_change().std() * 100
+
+            ai_stock_data = {
+                "name": stock_name,
+                "symbol": symbol,
+                "close": float(last["close"]),
+                "day_change": float(day_chg),
+                "period_change": float(period_change),
+                "period_high": float(period_high),
+                "period_low": float(period_low),
+                "days": days,
+                "ma5": f"{_ai_ma5:.2f}",
+                "ma20": f"{_ai_ma20:.2f}",
+                "ma60": f"{_ai_ma60:.2f}",
+                "macd": f"{_ai_macd:.3f}",
+                "dif": f"{_ai_dif:.3f}",
+                "dea": f"{_ai_dea:.3f}",
+                "rsi": f"{_ai_rsi:.2f}",
+                "volume": float(last["volume"]),
+                "total_amount": float(total_amount),
+                "turnover": float(last.get("turnover", 0)),
+                "vol_ratio": float(_ai_vol_ratio),
+                "volatility": float(_ai_volatility),
+                "fundamentals": "; ".join(
+                    f"{k}: {v}"
+                    for k, v in (info or {}).items()
+                    if k in ("行业", "总市值", "市盈率", "市净率")
+                ),
+            }
+            ai_assistant_page.render(stock_data=ai_stock_data)
+        except Exception as _ai_e:
+            st.error(f"AI 智能助手加载失败: {_ai_e}")
+    else:
+        st.error(f"AI 智能助手模块不可用: {AI_ASSISTANT_ERROR}")
+        st.info("请检查 backend/ai_assistant/ 目录是否完整")
 
 # ============== 底部 ==============
 st.markdown('<hr class="fancy">', unsafe_allow_html=True)
