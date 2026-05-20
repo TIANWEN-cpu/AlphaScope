@@ -75,6 +75,9 @@ class VisionRequest(BaseModel):
     user_context: str = Field(default="", description="用户上下文说明")
     vendor: str = Field(default="deepseek", description="视觉模型供应商")
     model: str = Field(default="deepseek-chat", description="视觉模型名称")
+    ticker: str = Field(
+        default="", description="用户提供的股票代码（可选，跳过识别追问）"
+    )
 
 
 class ConversationCreate(BaseModel):
@@ -148,6 +151,27 @@ class AnalysisResultData(BaseModel):
     task_id: Optional[str] = Field(default=None, description="任务ID（异步）")
 
 
+class KlineAnalysisData(BaseModel):
+    """K线分析结构化数据"""
+
+    trend: str = Field(default="", description="趋势: bullish/bearish/sideways")
+    support_levels: list[float] = Field(default_factory=list, description="支撑位")
+    resistance_levels: list[float] = Field(default_factory=list, description="阻力位")
+    patterns: list[str] = Field(default_factory=list, description="K线形态")
+    summary: str = Field(default="", description="技术分析摘要")
+
+
+class RealDataComparison(BaseModel):
+    """真实行情交叉验证结果"""
+
+    real_trend: str = Field(default="", description="真实趋势")
+    trend_consistent: bool = Field(
+        default=False, description="视觉趋势与真实趋势是否一致"
+    )
+    latest_close: float = Field(default=0.0, description="最新收盘价")
+    conflicts: list[str] = Field(default_factory=list, description="冲突点")
+
+
 class VisionResultData(BaseModel):
     """视觉分析结果数据"""
 
@@ -156,6 +180,12 @@ class VisionResultData(BaseModel):
     analysis: str = Field(description="分析内容")
     needs_followup: bool = Field(default=False, description="是否需要追问")
     followup_question: Optional[str] = Field(default=None, description="追问内容")
+    kline_analysis: Optional[KlineAnalysisData] = Field(
+        default=None, description="K线分析结构化数据"
+    )
+    real_data: Optional[RealDataComparison] = Field(
+        default=None, description="真实行情交叉验证"
+    )
 
 
 class AgentData(BaseModel):
