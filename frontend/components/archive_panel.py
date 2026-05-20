@@ -36,6 +36,7 @@ except Exception:
 
 # ============== 辅助函数 ==============
 
+
 def _safe_list_reports(type_filter=None, **kwargs) -> list:
     """兼容旧版 archive.list_reports：若不支持 type_filter，回退后在前端本地过滤。"""
     try:
@@ -50,6 +51,7 @@ def _safe_list_reports(type_filter=None, **kwargs) -> list:
 
 
 # ============== 渲染函数 ==============
+
 
 def render():
     """
@@ -231,13 +233,11 @@ def _render_decision_and_activity(stats: dict):
 
         today = datetime.now().date()
         dates = [
-            (today - timedelta(days=i)).strftime("%Y-%m-%d")
-            for i in range(13, -1, -1)
+            (today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(13, -1, -1)
         ]
         counts = [date_counter.get(d, 0) for d in dates]
         date_labels = [
-            (today - timedelta(days=i)).strftime("%m-%d")
-            for i in range(13, -1, -1)
+            (today - timedelta(days=i)).strftime("%m-%d") for i in range(13, -1, -1)
         ]
 
         act_fig = go.Figure()
@@ -245,9 +245,7 @@ def _render_decision_and_activity(stats: dict):
             go.Bar(
                 x=date_labels,
                 y=counts,
-                marker=dict(
-                    color=["#3b82f6" if c > 0 else "#e5e7eb" for c in counts]
-                ),
+                marker=dict(color=["#3b82f6" if c > 0 else "#e5e7eb" for c in counts]),
                 text=[c if c > 0 else "" for c in counts],
                 textposition="outside",
             )
@@ -373,9 +371,7 @@ def _render_combo_stats():
                 ]
             )
             sig_fig.update_layout(
-                title=dict(
-                    text="信号分布（全组合汇总）", x=0.5, font=dict(size=13)
-                ),
+                title=dict(text="信号分布（全组合汇总）", x=0.5, font=dict(size=13)),
                 height=300,
                 margin=dict(l=20, r=20, t=40, b=20),
                 showlegend=False,
@@ -416,9 +412,7 @@ def _render_combo_performance():
 
         perf_df = pd.DataFrame(combo_perf)
         perf_df["combo_display"] = perf_df["combo"].apply(
-            lambda x: (
-                x[:50] + "..." if isinstance(x, str) and len(x) > 50 else x
-            )
+            lambda x: x[:50] + "..." if isinstance(x, str) and len(x) > 50 else x
         )
         show_cols = [
             "combo_display",
@@ -438,9 +432,7 @@ def _render_combo_performance():
             column_config={
                 "combo_display": st.column_config.TextColumn("组合签名"),
                 "count": st.column_config.NumberColumn("总样本"),
-                "samples_with_label": st.column_config.NumberColumn(
-                    "已回填(5日)"
-                ),
+                "samples_with_label": st.column_config.NumberColumn("已回填(5日)"),
                 "avg_5d_return": st.column_config.NumberColumn(
                     "5日均收益", format="%.2f%%"
                 ),
@@ -473,9 +465,7 @@ def _render_combo_performance():
                 "「🏷️ 历史归档自动标签」中点击「刷新行情标签」重新计算。"
             )
         else:
-            top_perf = [
-                c for c in combo_perf if c.get("avg_5d_return") is not None
-            ][:5]
+            top_perf = [c for c in combo_perf if c.get("avg_5d_return") is not None][:5]
             if top_perf:
                 ret_fig = go.Figure(
                     go.Bar(
@@ -489,15 +479,11 @@ def _render_combo_performance():
                         orientation="h",
                         marker=dict(
                             color=[
-                                "#ef5350"
-                                if c["avg_5d_return"] > 0
-                                else "#26a69a"
+                                "#ef5350" if c["avg_5d_return"] > 0 else "#26a69a"
                                 for c in top_perf
                             ][::-1]
                         ),
-                        text=[f"{c['avg_5d_return']:+.2f}%" for c in top_perf][
-                            ::-1
-                        ],
+                        text=[f"{c['avg_5d_return']:+.2f}%" for c in top_perf][::-1],
                         textposition="outside",
                     )
                 )
@@ -598,13 +584,7 @@ def _render_report_list(reports: list, view_key: str):
         ]:
             dval = r.get(dkey)
             if dval is not None:
-                dcolor = (
-                    "#ef5350"
-                    if dval > 0
-                    else "#26a69a"
-                    if dval < 0
-                    else "#6b7280"
-                )
+                dcolor = "#ef5350" if dval > 0 else "#26a69a" if dval < 0 else "#6b7280"
                 demoji = "🔴" if dval > 0 else "🟢" if dval < 0 else "⚪"
                 ret_html += f"<span style='color:{dcolor}; margin-left:10px;'>{demoji} {dlabel} {dval:+.2f}%</span>"
 
@@ -630,11 +610,7 @@ def _render_report_list(reports: list, view_key: str):
 
         day_chg = r.get("day_change", 0) or 0
         chg_color = (
-            "#ef5350"
-            if day_chg > 0
-            else "#26a69a"
-            if day_chg < 0
-            else "#6b7280"
+            "#ef5350" if day_chg > 0 else "#26a69a" if day_chg < 0 else "#6b7280"
         )
 
         # v0.9: 审稿质量徽标
@@ -703,12 +679,8 @@ def _render_report_list(reports: list, view_key: str):
             </div>
             """)
         with col_btn:
-            st.markdown(
-                "<div style='height:14px;'></div>", unsafe_allow_html=True
-            )
-            if st.button(
-                "查看", key=f"view_{r['path']}", use_container_width=True
-            ):
+            st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
+            if st.button("查看", key=f"view_{r['path']}", use_container_width=True):
                 st.session_state[view_key] = r["path"]
                 st.rerun()
             if st.button(

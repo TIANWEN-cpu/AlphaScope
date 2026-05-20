@@ -45,6 +45,7 @@ except Exception:
 # 但因为 @st.cache_data 按函数对象做 key，所以会有独立缓存。
 # 后续可统一抽取到 data_access.py 共享模块中。
 
+
 @st.cache_data(ttl=180)
 def _cached_telegraph_em(limit: int = 200):
     if not _NEWS_AVAILABLE:
@@ -126,6 +127,7 @@ def _cached_stock_concepts(symbol: str, stock_name: str):
 
 # ============== 渲染函数 ==============
 
+
 def render(stock_name: str, symbol: str):
     """
     渲染「资讯 & 研报」面板（tab4 全部内容）。
@@ -155,9 +157,7 @@ def render(stock_name: str, symbol: str):
             index=1,
         )
     with col_info:
-        st.caption(
-            "时间轴模式合并三源最近 10 条按时间倒序；分类模式展示原有子 Tab。"
-        )
+        st.caption("时间轴模式合并三源最近 10 条按时间倒序；分类模式展示原有子 Tab。")
 
     # ---------- v0.7 时间轴模式 ----------
     if "时间轴" in view_mode:
@@ -302,9 +302,7 @@ def render(stock_name: str, symbol: str):
             with st.spinner("正在加载公告..."):
                 cninfo_ann = _cached_announcements_cninfo(symbol, days=30)
                 em_ann_today = _cached_announcements_em_today() or []
-                em_ann_for_stock = [
-                    a for a in em_ann_today if a.get("code") == symbol
-                ]
+                em_ann_for_stock = [a for a in em_ann_today if a.get("code") == symbol]
                 ann_list = merge_announcements(cninfo_ann, em_ann_for_stock)
 
             if not ann_list:
@@ -317,6 +315,7 @@ def render(stock_name: str, symbol: str):
                     cat_counts[a.get("category", "其他")] = (
                         cat_counts.get(a.get("category", "其他"), 0) + 1
                     )
+
                 def _ann_chip(c, n):
                     cc = ANN_COLORS.get(c, "#6b7280")
                     return f"<span style='color:{cc};'>{c} {n}</span>"
@@ -414,9 +413,7 @@ def render(stock_name: str, symbol: str):
         with sub_industry:
             # v0.14: 如果行业名为空，尝试从概念板块中提取
             if not industry:
-                concepts_for_industry = (
-                    _cached_stock_concepts(symbol, stock_name) or []
-                )
+                concepts_for_industry = _cached_stock_concepts(symbol, stock_name) or []
                 if concepts_for_industry:
                     industry = fetch_industry_name(
                         symbol, concepts=concepts_for_industry
@@ -453,13 +450,9 @@ def render(stock_name: str, symbol: str):
                         for n in topic_ind_news
                         if n.get("title", "").strip() not in excluded
                     ]
-                    ind_news = merge_news_items(
-                        pool_ind_news, topic_ind_news, limit=30
-                    )
+                    ind_news = merge_news_items(pool_ind_news, topic_ind_news, limit=30)
                 if not ind_news:
-                    st.caption(
-                        f"近期未发现「{industry}」行业的快讯或主题搜索新闻。"
-                    )
+                    st.caption(f"近期未发现「{industry}」行业的快讯或主题搜索新闻。")
                 else:
                     kw_chips = " · ".join(topic_kws or [industry] + list(extra_kws))
                     st.markdown(
@@ -671,10 +664,7 @@ def _render_research_reports(reports: list):
     col_pie, col_table = st.columns([1, 2])
     with col_pie:
         st.markdown("##### 评级分布")
-        pie_colors = [
-            rating_colors_map.get(k, "#bdbdbd")
-            for k in rating_dist.keys()
-        ]
+        pie_colors = [rating_colors_map.get(k, "#bdbdbd") for k in rating_dist.keys()]
         fig_rating = go.Figure(
             data=[
                 go.Pie(
@@ -702,9 +692,7 @@ def _render_research_reports(reports: list):
         rdf = pd.DataFrame(reports)
         if "pdf" in rdf.columns:
             rdf["报告"] = rdf.apply(
-                lambda r: (
-                    f"📄 {r['title']}" if r.get("pdf") else r["title"]
-                ),
+                lambda r: f"📄 {r['title']}" if r.get("pdf") else r["title"],
                 axis=1,
             )
         show_cols = ["date", "institution", "rating", "title"]
