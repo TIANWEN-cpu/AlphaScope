@@ -1,4 +1,4 @@
-# AI-Finance Python dependencies (v0.13)
+# AI-Finance Python dependencies (v0.36)
 # Install: python -m pip install -r requirements.txt
 
 # Core runtime
@@ -24,8 +24,15 @@ pydantic==2.11.3
 tenacity==9.1.2
 aiohttp==3.12.4
 
-# Storage / RAG
-chromadb==0.6.3
+# API server (optional, for FastAPI backend)
+# Note: fastapi pulls starlette; pin compatible with streamlit 1.57
+fastapi>=0.115.0,<1.0
+uvicorn>=0.34.0,<1.0
+
+# Storage / RAG (optional — requires C++ Build Tools on Windows)
+# If chromadb fails to install, the RAG features will be disabled gracefully.
+# Windows users: install Microsoft C++ Build Tools first, or use WSL.
+# chromadb==0.6.3
 
 # Scheduler
 apscheduler==3.11.0

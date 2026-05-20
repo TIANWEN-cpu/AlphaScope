@@ -20,7 +20,10 @@ from pathlib import Path
 
 import yaml
 
-from project_paths import CONFIG_DIR
+try:
+    from backend.project_paths import CONFIG_DIR
+except ImportError:
+    from project_paths import CONFIG_DIR
 
 
 class AnalysisMode(str, Enum):
