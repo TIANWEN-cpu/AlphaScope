@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-282%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v0.15-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.15)
+[![Tests](https://img.shields.io/badge/tests-312%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
+[![Release](https://img.shields.io/badge/release-v0.16-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.16)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -271,6 +271,7 @@ tests/                  # 265 unit tests
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v0.16 | 2026-05-20 | AI assistant page: multi-mode chat, conversation persistence, evidence chain, report export |
 | v0.15 | 2026-05-20 | Extensible provider plugin: dynamic discovery, custom_providers/, CLI generator |
 | v0.14 | 2026-05-19 | News overhaul: datacenter API, concept relevance sorting, news tags |
 | v0.13.1 | 2026-05-19 | Dependency fixes, CI hardening, governance docs, README rewrite |
