@@ -1,5 +1,5 @@
 """
-FastAPI 主入口 (v0.40)
+FastAPI 主入口 (v0.40.7)
 
 提供完整的 REST API 和 SSE 流式输出：
 - /api/chat/stream — 对话流式输出 (SSE)

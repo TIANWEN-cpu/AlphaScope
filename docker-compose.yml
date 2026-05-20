@@ -1,11 +1,12 @@
-# AI-Finance Docker Compose (v0.40)
-# Services: Streamlit Dashboard + FastAPI API + Redis cache
+# AI-Finance Docker Compose (v0.40.7)
+# Services: Streamlit Dashboard + FastAPI API + Next.js Frontend + Redis cache
 #
 # Usage:
 #   docker-compose up -d              # Start all services
 #   docker-compose up -d app          # Streamlit only (port 8501)
 #   docker-compose up -d api          # FastAPI only (port 8000)
-#   docker-compose up -d app api      # Both frontends
+#   docker-compose up -d web          # Next.js only (port 3000)
+#   docker-compose up -d app api web  # All frontends
 
 version: "3.8"
 
@@ -84,6 +85,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    networks:
+      - ai-finance-net
+
+  # Next.js Frontend (port 3000)
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: ai-finance-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
     networks:
       - ai-finance-net
 

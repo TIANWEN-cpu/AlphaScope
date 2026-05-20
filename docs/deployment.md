@@ -32,7 +32,7 @@ cd apps/web && npm install && npm run dev
 cp .env.example .env
 # 编辑 .env，至少配置 DEEPSEEK_API_KEY
 
-# 启动全部服务 (Streamlit + FastAPI + Redis)
+# 启动全部服务 (Streamlit + FastAPI + Next.js + Redis)
 docker-compose up -d
 
 # 仅启动 Streamlit (port 8501)
@@ -41,8 +41,11 @@ docker-compose up -d app
 # 仅启动 FastAPI API (port 8000)
 docker-compose up -d api
 
-# 启动 Streamlit + FastAPI
-docker-compose up -d app api
+# 仅启动 Next.js 前端 (port 3000)
+docker-compose up -d web
+
+# 启动 Streamlit + FastAPI + Next.js
+docker-compose up -d app api web
 ```
 
 服务说明：
@@ -51,6 +54,7 @@ docker-compose up -d app api
 |------|------|------|
 | `app` | 8501 | Streamlit 界面（传统 UI） |
 | `api` | 8000 | FastAPI REST API（27 端点） |
+| `web` | 3000 | Next.js 前端（standalone 构建） |
 | `redis` | 6379 | Redis 缓存 |
 
 健康检查：
@@ -58,6 +62,7 @@ docker-compose up -d app api
 docker-compose ps                    # 查看服务状态
 curl http://localhost:8501/_stcore/health  # Streamlit
 curl http://localhost:8000/health          # FastAPI
+curl http://localhost:3000/                # Next.js
 ```
 
 ### 方式三：Windows .exe
@@ -104,7 +109,7 @@ GitHub Actions 自动运行 3 个 job：
 jobs:
   lint-and-test:    # Python 3.11 + 3.12
     - ruff check + format check
-    - pytest tests/ -v (355 tests)
+    - pytest tests/ -v (376 tests)
 
   web-build:        # Node.js 20
     - npm ci

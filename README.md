@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-355%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v0.40.5-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.40.5)
+[![Tests](https://img.shields.io/badge/tests-376%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
+[![Release](https://img.shields.io/badge/release-v0.40.8-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.40.8)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -101,7 +101,9 @@ cd AI--FINANCE
 cp .env.example .env
 # Edit .env with your API keys
 docker-compose up -d
-# Open http://localhost:8501
+# Streamlit: http://localhost:8501
+# FastAPI:   http://localhost:8000
+# Next.js:   http://localhost:3000
 ```
 
 ### FastAPI Backend (optional)
@@ -207,7 +209,7 @@ Without a critic, agents produce confident-sounding but occasionally hallucinate
 ## Testing
 
 ```bash
-# Run all tests (312 tests, ~4s)
+# Run all tests (376 tests, ~6s)
 python -m pytest tests/ -v
 
 # Lint
@@ -260,7 +262,7 @@ frontend/
 ├── dashboard.py        # Streamlit dashboard (10 tabs)
 └── components/         # UI panels
 
-apps/web/               # Next.js frontend (skeleton)
+apps/web/               # Next.js frontend (standalone Docker build)
 config/                 # YAML configs (models, experts, data sources)
 prompts/                # Expert/team/vision prompts
 tests/                  # 312 unit tests
@@ -270,6 +272,9 @@ tests/                  # 312 unit tests
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v0.40.8 | 2026-05-20 | Smoke/SSE contract/degradation tests, contract docs, 376 tests |
+| v0.40.7 | 2026-05-20 | M8 Acceptance hardening: Docker Compose web service, docs update, 359 tests |
+| v0.40.6 | 2026-05-20 | M7 Integration testing: 359 tests, upload endpoint verification |
 | v0.40.5 | 2026-05-20 | M6 Next.js frontend: component decomposition, SSE streaming, useChat hook |
 | v0.40.4 | 2026-05-20 | M5 Vision: orchestrator integration, KlineAnalysisData, ticker parameter |
 | v0.40.3 | 2026-05-20 | M4 Data sources: DataSourceResult, provider health tracking, evidence context |
@@ -302,6 +307,7 @@ tests/                  # 312 unit tests
 
 - [Architecture](docs/architecture.md) — 系统架构与数据流
 - [API Reference](docs/api.md) — 27 个 REST 端点文档
+- [API Contract](docs/contract.md) — 前后端契约（ApiResponse/SSE/Upload 格式）
 - [Deployment](docs/deployment.md) — 部署指南（本地/Docker/Windows）
 - [Agent Design](docs/agent-design.md) — Agent 与专家团设计
 - [Security](docs/security.md) — 安全措施与合规
