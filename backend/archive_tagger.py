@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from price_fetcher import get_price_after, get_price_range
+
 try:
     from backend.project_paths import REPORTS_DIR
 except ImportError:

@@ -24,6 +24,7 @@ from openai import OpenAI
 # 复用 llm_agents 的客户端层
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import llm_agents as _llm_agents  # noqa: E402
+
 try:
     from backend.project_paths import ENV_FILE  # noqa: E402
 except ImportError:

@@ -29,6 +29,7 @@ import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import llm_agents as _llm_agents  # noqa: E402
+
 try:
     from backend.project_paths import CONFIG_DIR, PROJECT_ROOT  # noqa: E402
 except ImportError:
