@@ -280,7 +280,7 @@ def _record_cost(
     mode: str,
     conversation_id: str,
 ):
-    """从响应中提取 token 用量并记录到 CostTracker。"""
+    """从响应中提取 token 用量并记录到 CostTracker 和 ModelRegistry。"""
     if get_cost_tracker is None:
         return
     try:
@@ -301,6 +301,17 @@ def _record_cost(
             mode=mode,
             conversation_id=conversation_id,
         )
+
+        # 同步到 ModelRegistry（预算追踪）
+        try:
+            from backend.models.model_registry import get_model_registry
+
+            cost_est = tracker._estimate_cost(model, input_tokens, output_tokens)
+            get_model_registry().record_usage(
+                model, input_tokens, output_tokens, cost_est
+            )
+        except Exception:
+            pass
     except Exception:
         # 成本记录不应阻断正常调用
         pass
@@ -322,8 +333,27 @@ def _call_with(
     """
     统一调用接口，支持细粒度 API Key 与 Base URL。
     自动处理 json_mode 不支持的情况。
+    调用前检查 Token 预算。
     调用完成后自动记录 token 用量到 CostTracker。
     """
+    # 预算检查（可选依赖）
+    try:
+        from backend.models.model_registry import get_model_registry
+
+        registry = get_model_registry()
+        budget_check = registry.check_budget()
+        if not budget_check.get("ok", True):
+            raise RuntimeError(budget_check.get("message", "预算不足"))
+
+        # 能力检查：如果请求 json_mode 但模型不支持，降级
+        if json_mode and not registry.supports_tool_call(model):
+            # 检查是否支持 json_mode
+            cap = registry.get_capability(model)
+            if not cap.json_mode:
+                json_mode = False
+    except ImportError:
+        pass
+
     client = get_client(vendor, api_key, base_url)
     kwargs = dict(
         model=model,
