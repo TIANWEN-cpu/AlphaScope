@@ -1,10 +1,11 @@
-"""AI 智能助手页面组件 (v0.16)
+"""AI 智能助手页面组件 (v0.22)
 
 全功能 AI 分析对话页面，支持：
-- 自由问答 / 标准分析 / 深度分析 / 专家团圆桌 四种模式
+- 自由问答 / 标准分析 / 深度分析 / 专家团圆桌 / K线图分析 五种模式
 - 对话持久化（SQLite）
 - 证据链展示
 - 报告导出
+- 图片/K线图上传分析 (v0.22)
 - 与现有数据源和知识库共享
 """
 
@@ -49,6 +50,7 @@ MODE_OPTIONS = {
     "标准分析": "standard",
     "深度分析": "deep",
     "专家团圆桌": "expert",
+    "K线图分析": "vision",
 }
 
 MODE_ICONS = {
@@ -56,6 +58,7 @@ MODE_ICONS = {
     "standard": "⚡",
     "deep": "🔬",
     "expert": "🎓",
+    "vision": "📊",
 }
 
 MODE_DESCRIPTIONS = {
@@ -63,6 +66,7 @@ MODE_DESCRIPTIONS = {
     "standard": "3 Agent 快速分析，低成本",
     "deep": "5 Agent + Critic + Chairman，全面深度",
     "expert": "多专家圆桌讨论，多视角",
+    "vision": "上传K线图，AI识别形态并结合行情分析",
 }
 
 
@@ -160,6 +164,7 @@ def _render_message(msg: dict):
             "standard": "标准分析",
             "deep": "深度分析",
             "expert": "专家团",
+            "vision": "K线图分析",
         }.get(mode, mode)
 
         with st.chat_message("assistant"):
@@ -224,6 +229,7 @@ def _render_analysis_panel(orchestrator, conversation_id: str):
         "standard": "标准分析",
         "deep": "深度分析",
         "expert": "专家团圆桌",
+        "vision": "K线图分析",
     }.get(mode, mode)
 
     st.markdown("### 📊 分析面板")
@@ -366,15 +372,14 @@ def render(stock_data=None):
         # 输入区
         st.divider()
 
-        # 图片上传占位（Phase 1.5）
+        # 图片上传（v0.22 视觉管线）
         col_input, col_upload = st.columns([4, 1])
         with col_upload:
-            st.file_uploader(
+            uploaded_image = st.file_uploader(
                 "📎",
-                type=["png", "jpg", "jpeg"],
+                type=["png", "jpg", "jpeg", "webp", "gif"],
                 key="ai_image_upload",
-                disabled=True,
-                help="图片分析功能即将推出 (Phase 1.5)",
+                help="上传K线图/行情截图进行视觉分析",
             )
 
         with col_input:
@@ -382,6 +387,118 @@ def render(stock_data=None):
                 "输入你的问题...",
                 key="ai_chat_input",
             )
+
+        # 图片上传触发视觉分析（v0.22）
+        if uploaded_image and current_mode == "vision":
+            if not conversation_id:
+                conversation_id = orchestrator.new_conversation(
+                    stock_symbol=stock_symbol,
+                    stock_name=stock_name,
+                    mode=AnalysisMode("vision"),
+                    provider="deepseek",
+                    model="deepseek-chat",
+                )
+                st.session_state["ai_assistant_conversation_id"] = conversation_id
+
+            # 显示用户上传的图片
+            with st.chat_message("user"):
+                st.image(
+                    uploaded_image, caption="上传的K线图", use_container_width=True
+                )
+                if user_input:
+                    st.markdown(user_input)
+
+            # 视觉分析
+            with st.spinner("正在分析K线图..."):
+                try:
+                    from backend.vision.vision_agent import analyze_image
+
+                    img_bytes = uploaded_image.read()
+                    import base64
+
+                    img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                    mime = uploaded_image.type or "image/png"
+
+                    vision_result = analyze_image(
+                        img_b64,
+                        mime,
+                        user_context=user_input or "",
+                        vendor="deepseek",
+                        model="deepseek-chat",
+                    )
+
+                    if vision_result.ok:
+                        response_parts = []
+                        if vision_result.detection:
+                            d = vision_result.detection
+                            if d.ticker:
+                                response_parts.append(
+                                    f"**识别标的**: {d.ticker_name} ({d.ticker})"
+                                )
+                            if d.period:
+                                response_parts.append(f"**识别周期**: {d.period}")
+                            response_parts.append(f"**图表类型**: {d.chart_type}")
+
+                        if vision_result.kline_analysis:
+                            k = vision_result.kline_analysis
+                            if k.trend:
+                                response_parts.append(f"**趋势判断**: {k.trend}")
+                            if k.support_levels:
+                                response_parts.append(
+                                    f"**支撑位**: {', '.join(str(s) for s in k.support_levels)}"
+                                )
+                            if k.resistance_levels:
+                                response_parts.append(
+                                    f"**压力位**: {', '.join(str(r) for r in k.resistance_levels)}"
+                                )
+                            if k.patterns:
+                                response_parts.append(
+                                    f"**识别形态**: {', '.join(k.patterns)}"
+                                )
+                            if k.summary:
+                                response_parts.append(f"\n**综合判断**: {k.summary}")
+
+                        if vision_result.needs_more_info:
+                            response_parts.append(
+                                f"\n**需要补充**: {', '.join(vision_result.missing_info)}"
+                            )
+
+                        if vision_result.disclaimer:
+                            response_parts.append(f"\n⚠️ {vision_result.disclaimer}")
+
+                        response_content = (
+                            "\n\n".join(response_parts)
+                            if response_parts
+                            else "图片分析完成，但未提取到有效信息。"
+                        )
+                    else:
+                        response_content = (
+                            vision_result.summary
+                            or "图片分析失败，请确保上传的是K线图或金融图表。"
+                        )
+
+                    # 保存到对话
+                    orchestrator.store.add_message(
+                        conversation_id,
+                        "user",
+                        user_input or "[上传K线图]",
+                        metadata={"mode": "vision", "has_image": True},
+                    )
+                    orchestrator.store.add_message(
+                        conversation_id,
+                        "assistant",
+                        response_content,
+                        metadata={"mode": "vision", "vision_analysis": True},
+                    )
+
+                except Exception as e:
+                    response_content = f"视觉分析失败: {str(e)[:300]}"
+
+            # 显示助手回复
+            with st.chat_message("assistant"):
+                st.markdown(response_content)
+
+            st.rerun()
 
         if user_input:
             # 如果没有活跃对话，创建新对话
@@ -449,6 +566,7 @@ except Exception:
         STANDARD = "standard"
         DEEP = "deep"
         EXPERT = "expert"
+        VISION = "vision"
 
         def __init__(self, value):
             self.value = value
