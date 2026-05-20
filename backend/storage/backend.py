@@ -89,7 +89,7 @@ class SQLiteBackend(StorageBackend):
     def _ensure_audit_table(self):
         """确保审计日志表存在"""
         try:
-            conn = self._db.get_connection()
+            conn = self._db.conn
             conn.execute(
                 """CREATE TABLE IF NOT EXISTS audit_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,7 +136,7 @@ class SQLiteBackend(StorageBackend):
     def save_evidence(self, evidence_id: str, data: Dict[str, Any]) -> None:
         """保存证据到 evidence_items 表"""
         try:
-            conn = self._db.get_connection()
+            conn = self._db.conn
             conn.execute(
                 """INSERT OR REPLACE INTO evidence_items
                    (id, source_id, source_name, evidence_type, claim, data_date, created_at)
@@ -167,7 +167,7 @@ class SQLiteBackend(StorageBackend):
     ) -> None:
         """保存审计日志"""
         try:
-            conn = self._db.get_connection()
+            conn = self._db.conn
             conn.execute(
                 """INSERT INTO audit_logs (action, target_type, target_id, metadata, created_at)
                    VALUES (?, ?, ?, ?, ?)""",
