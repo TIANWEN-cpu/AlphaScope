@@ -5,7 +5,7 @@
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
 [![Tests](https://img.shields.io/badge/tests-312%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v0.16-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.16)
+[![Release](https://img.shields.io/badge/release-v0.18-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.18)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -241,36 +241,68 @@ ruff format --check backend/ frontend/ tests/
 
 ```
 backend/
-├── providers/          # 9 data source plugins (AkShare, SEC, HKEX, ...)
-├── schemas/            # Pydantic data models (NewsItem, Announcement, ...)
-├── quality/            # Dedup, source ranking, evidence aggregation, anomaly detection
+├── agents/             # Agent layer (v0.18)
+│   ├── base.py         # Agent config, prompts, model mapping
+│   ├── financial_agents.py  # Agent execution (run_one/all/custom)
+│   ├── chairman.py     # Chairman synthesis agent
+│   └── validators.py   # Output schema validation
+├── models/             # Model layer (v0.18)
+│   └── provider_gateway.py  # LLM provider config, client mgmt, unified call
+├── runtime/            # Runtime layer (v0.18)
+│   ├── context_builder.py   # Market brief, evidence/factor context
+│   └── orchestrator.py      # Mode-aware agent orchestration
+├── teams/              # Teams layer (v0.18)
+│   └── team_loader.py  # Expert team YAML config loader
+├── vision/             # Vision layer (v0.18)
+│   ├── image_loader.py      # Image loading & base64 encoding
+│   ├── chart_detector.py    # Chart type detection via vision model
+│   ├── kline_interpreter.py # K-line technical analysis
+│   └── vision_agent.py      # Vision pipeline orchestration
+├── api/                # API layer (v0.18, Phase 4 stubs)
+│   └── main.py         # FastAPI routes
+├── security/           # Security layer (v0.18)
+│   └── key_vault.py    # API key encryption/masking
+├── ai_assistant/       # AI assistant (v0.16)
+│   ├── orchestrator.py # Chat orchestrator (4 analysis modes)
+│   ├── conversation_store.py  # SQLite conversation persistence
+│   ├── compliance.py   # Risk disclaimer wrapper
+│   └── report_generator.py    # Markdown report export
+├── providers/          # 17+ data source plugins
+├── quality/            # Dedup, source ranking, evidence aggregation
 ├── storage/            # SQLite database (thread-safe)
-├── ingestion/          # Scheduled data collection jobs
 ├── rag/                # ChromaDB vector store + retriever
-├── events/             # Rule-based event extractor (8 event types)
-├── factors/            # Quantitative factor generator (5 dimensions)
-├── utils/              # Datetime parsing, tracing
-├── llm_agents.py       # 5-agent orchestration + mode system
+├── factors/            # Quantitative factor generator
+├── llm_agents.py       # Backward-compatible facade (v0.18)
 ├── critic.py           # Quality scoring + divergence detection
-├── expert_panel.py     # 5-persona roundtable discussion
+├── expert_panel.py     # Expert roundtable discussion
 └── pipeline.py         # End-to-end data pipeline
 
 frontend/
-├── dashboard.py        # Streamlit dashboard (10 tabs)
+├── dashboard.py        # Streamlit dashboard (11 tabs)
 └── components/         # UI panels (fundamentals, chat, factors, ...)
 
 config/
 ├── models.yaml         # LLM model configuration (hot-reload)
 ├── experts.yaml        # Expert persona definitions
-└── data_sources.yaml   # Provider priority/timeout/retry config
+├── data_sources.yaml   # Provider priority/timeout/retry config
+├── agent_teams.yaml    # Reusable expert team templates (v0.18)
+├── tools.yaml          # Agent tool/data source definitions (v0.18)
+└── safety.yaml         # Compliance rules & security policies (v0.18)
 
-tests/                  # 265 unit tests
+prompts/
+├── experts/            # Expert persona prompts
+├── teams/              # Team orchestration prompts
+├── vision/             # Vision analysis prompts (v0.18)
+└── compliance/         # Investment compliance guidelines (v0.18)
+
+tests/                  # 312 unit tests
 ```
 
 ## Version History
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v0.18 | 2026-05-20 | Architecture restructure: modular backend decomposition (agents/models/runtime/teams/vision/api/security), config files, vision pipeline, FastAPI stubs |
 | v0.16 | 2026-05-20 | AI assistant page: multi-mode chat, conversation persistence, evidence chain, report export |
 | v0.15 | 2026-05-20 | Extensible provider plugin: dynamic discovery, custom_providers/, CLI generator |
 | v0.14 | 2026-05-19 | News overhaul: datacenter API, concept relevance sorting, news tags |
