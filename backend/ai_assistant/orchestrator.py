@@ -385,6 +385,8 @@ class ChatOrchestrator:
         expert_team_id: Optional[str] = None,
         global_ai_settings: Optional[dict] = None,
         mode_override: Optional[str] = None,
+        image_base64: Optional[str] = None,
+        image_mime_type: str = "image/png",
     ) -> dict:
         """处理用户消息，返回响应。
 
@@ -475,10 +477,9 @@ class ChatOrchestrator:
                     conversation_id, user_input, stock_data, expert_team_id, conv
                 )
             elif mode == AnalysisMode.VISION:
-                result = {
-                    "mode": "vision",
-                    "content": "图表分析模式即将上线，敬请期待。当前请使用其他分析模式。",
-                }
+                result = self._handle_vision_mode(
+                    user_input, stock_data, image_base64, image_mime_type
+                )
             else:
                 result = {"mode": mode_str, "content": "不支持的分析模式"}
         except Exception as e:
@@ -644,6 +645,76 @@ class ChatOrchestrator:
             "evidence": evidence,
             "summary": summary,
         }
+
+    def _handle_vision_mode(
+        self,
+        user_input: str,
+        stock_data: Optional[dict],
+        image_base64: Optional[str],
+        image_mime_type: str,
+    ) -> dict:
+        """图表分析模式：上传图片 → 识别 → 反查行情 → 分析"""
+        from backend.vision.vision_agent import analyze_image
+
+        # 如果没有图片数据，返回提示
+        if not image_base64:
+            return {
+                "mode": "vision",
+                "content": "请上传一张K线图或股票截图，我将为您进行图表分析。",
+                "needs_more_info": True,
+                "missing_info": ["image"],
+            }
+
+        # 如果用户提供了 ticker 信息，注入到 user_context
+        user_context = user_input or ""
+        if stock_data and stock_data.get("symbol"):
+            user_context += f"\n股票代码: {stock_data['symbol']}"
+            if stock_data.get("name"):
+                user_context += f" ({stock_data['name']})"
+
+        result = analyze_image(
+            image_base64=image_base64,
+            mime_type=image_mime_type,
+            user_context=user_context,
+        )
+
+        # 构建响应
+        content_parts = []
+        if result.summary:
+            content_parts.append(result.summary)
+        if result.disclaimer:
+            content_parts.append(f"\n{result.disclaimer}")
+
+        response = {
+            "mode": "vision",
+            "content": "\n".join(content_parts)
+            if content_parts
+            else "无法分析此图片。",
+            "needs_more_info": result.needs_more_info,
+            "missing_info": result.missing_info or [],
+        }
+
+        # 附加结构化数据
+        if result.detection:
+            response["chart_type"] = result.detection.chart_type
+            response["ticker"] = result.detection.ticker
+        if result.kline_analysis:
+            response["kline_analysis"] = {
+                "trend": result.kline_analysis.trend,
+                "support_levels": result.kline_analysis.support_levels,
+                "resistance_levels": result.kline_analysis.resistance_levels,
+                "patterns": result.kline_analysis.patterns,
+                "summary": result.kline_analysis.summary,
+            }
+        if result.real_data and result.real_data.data_available:
+            response["real_data"] = {
+                "real_trend": result.real_data.real_trend,
+                "trend_consistent": result.real_data.trend_consistent,
+                "latest_close": result.real_data.latest_close,
+                "conflicts": result.real_data.conflicts,
+            }
+
+        return response
 
     def _handle_expert_mode(
         self,

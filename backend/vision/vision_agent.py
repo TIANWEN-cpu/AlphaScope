@@ -390,6 +390,7 @@ def analyze_image(
     user_context: str = "",
     vendor: str = "deepseek",
     model: str = "deepseek-chat",
+    ticker: str = "",
 ) -> VisionAnalysisResult:
     """
     完整的图片分析流程，包含真实行情数据交叉验证。
@@ -421,9 +422,11 @@ def analyze_image(
             ok=False,
         )
 
-    # Step 2: 检查缺失信息
+    # Step 2: 检查缺失信息（用户提供 ticker 时跳过追问）
+    if ticker and not detection.ticker:
+        detection.ticker = ticker
     missing = []
-    if not detection.ticker and "ticker" not in user_context.lower():
+    if not detection.ticker and "ticker" not in user_context.lower() and not ticker:
         missing.append(REQUIRED_INFO["ticker"])
     if not detection.period:
         missing.append(REQUIRED_INFO["period"])
