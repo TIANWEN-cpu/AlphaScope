@@ -72,7 +72,9 @@ def render_source_health_panel():
             st.info("暂无 Provider 注册")
 
         # ---- 重新加载按钮 ----
-        if st.button("🔄 重新加载 Provider", help="重新扫描 providers/ 和 custom_providers/ 目录"):
+        if st.button(
+            "🔄 重新加载 Provider", help="重新扫描 providers/ 和 custom_providers/ 目录"
+        ):
             registry.reload()
             st.success(f"Provider 已重新加载, 共 {len(registry.list_providers())} 个")
             st.rerun()

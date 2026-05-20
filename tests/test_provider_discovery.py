@@ -26,13 +26,13 @@ class TestScanDirectory:
 
         provider_module = pkg / "my_provider.py"
         provider_module.write_text(
-            'from backend.providers.base import BaseProvider\n'
-            '\n'
-            'class MyTestProvider(BaseProvider):\n'
+            "from backend.providers.base import BaseProvider\n"
+            "\n"
+            "class MyTestProvider(BaseProvider):\n"
             '    name = "test_discovery"\n'
             '    markets = ["CN"]\n'
             '    data_types = ["news"]\n'
-            '    priority = 50\n'
+            "    priority = 50\n"
         )
 
         # We need to make the temp dir importable
@@ -52,8 +52,8 @@ class TestScanDirectory:
 
         # This should be skipped (starts with _)
         (pkg / "_template.py").write_text(
-            'from backend.providers.base import BaseProvider\n'
-            'class TemplateProvider(BaseProvider):\n'
+            "from backend.providers.base import BaseProvider\n"
+            "class TemplateProvider(BaseProvider):\n"
             '    name = "template"\n'
             '    markets = ["CN"]\n'
             '    data_types = ["news"]\n'
@@ -93,8 +93,7 @@ class TestScanDirectory:
         (pkg / "__init__.py").write_text("")
 
         (pkg / "not_a_provider.py").write_text(
-            'class JustAClass:\n'
-            '    name = "not_a_provider"\n'
+            'class JustAClass:\n    name = "not_a_provider"\n'
         )
 
         sys.path.insert(0, str(tmp_path))
@@ -143,7 +142,9 @@ class TestDiscoverAndRegister:
         providers = registry.list_providers()
 
         for p in providers:
-            assert p["origin"] in ("builtin", "custom"), f"Invalid origin for {p['name']}: {p['origin']}"
+            assert p["origin"] in ("builtin", "custom"), (
+                f"Invalid origin for {p['name']}: {p['origin']}"
+            )
 
         # All current providers should be builtin
         builtins = [p for p in providers if p["origin"] == "builtin"]

@@ -302,9 +302,7 @@ def _discover_and_register(registry: ProviderRegistry) -> None:
         # 检查依赖是否满足
         try:
             if not cls.is_available():
-                logger.debug(
-                    "Provider %s 不可用 (依赖未满足), 跳过", cls.__name__
-                )
+                logger.debug("Provider %s 不可用 (依赖未满足), 跳过", cls.__name__)
                 continue
         except Exception as e:
             logger.debug("检查 %s.is_available() 失败: %s", cls.__name__, e)

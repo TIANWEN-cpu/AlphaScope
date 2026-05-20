@@ -45,17 +45,17 @@ class TestIsAvailable:
         pkg.mkdir()
         (pkg / "__init__.py").write_text("")
         (pkg / "unavailable.py").write_text(
-            'from backend.providers.base import BaseProvider\n'
-            '\n'
-            'class UnavailableProvider(BaseProvider):\n'
+            "from backend.providers.base import BaseProvider\n"
+            "\n"
+            "class UnavailableProvider(BaseProvider):\n"
             '    name = "unavailable_test"\n'
             '    markets = ["CN"]\n'
             '    data_types = ["news"]\n'
-            '    priority = 50\n'
-            '\n'
-            '    @classmethod\n'
-            '    def is_available(cls) -> bool:\n'
-            '        return False\n'
+            "    priority = 50\n"
+            "\n"
+            "    @classmethod\n"
+            "    def is_available(cls) -> bool:\n"
+            "        return False\n"
         )
 
         sys.path.insert(0, str(tmp_path))
@@ -82,36 +82,36 @@ class TestProviderGenerator:
 
         template = textwrap.dedent(
             '"""TestProvider - Test provider"""\n'
-            '\n'
-            'from __future__ import annotations\n'
-            '\n'
-            'import logging\n'
-            '\n'
-            'from backend.providers.base import BaseProvider\n'
-            '\n'
-            'logger = logging.getLogger(__name__)\n'
-            '\n'
-            '\n'
-            'class TestProvider(BaseProvider):\n'
+            "\n"
+            "from __future__ import annotations\n"
+            "\n"
+            "import logging\n"
+            "\n"
+            "from backend.providers.base import BaseProvider\n"
+            "\n"
+            "logger = logging.getLogger(__name__)\n"
+            "\n"
+            "\n"
+            "class TestProvider(BaseProvider):\n"
             '    """Test provider"""\n'
-            '\n'
+            "\n"
             '    name = "test_gen"\n'
             '    markets = ["CN"]\n'
             '    data_types = ["news"]\n'
-            '    priority = 50\n'
+            "    priority = 50\n"
             '    license_level = "research_only"\n'
             '    data_class = "fundamental"\n'
             '    freshness = "daily"\n'
             '    cost_tier = "free"\n'
             '    rate_limit = {"per_minute": 60, "per_day": None}\n'
-            '    requires_key = False\n'
-            '\n'
-            '    @classmethod\n'
-            '    def is_available(cls) -> bool:\n'
-            '        return True\n'
-            '\n'
-            '    def get_news(self, query: dict, **kwargs) -> list[dict]:\n'
-            '        raise NotImplementedError\n'
+            "    requires_key = False\n"
+            "\n"
+            "    @classmethod\n"
+            "    def is_available(cls) -> bool:\n"
+            "        return True\n"
+            "\n"
+            "    def get_news(self, query: dict, **kwargs) -> list[dict]:\n"
+            "        raise NotImplementedError\n"
         )
 
         target = tmp_path / "test_gen_provider.py"
