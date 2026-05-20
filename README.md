@@ -5,7 +5,7 @@
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
 [![Tests](https://img.shields.io/badge/tests-312%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v0.34-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.34)
+[![Release](https://img.shields.io/badge/release-v0.36-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.36)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -302,6 +302,7 @@ tests/                  # 312 unit tests
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v0.36 | 2026-05-21 | Async task queue, React/Next.js frontend skeleton (3-column chat UI, API client, 5 modes) |
 | v0.34 | 2026-05-21 | Database schema upgrade (20+ tables), model registry (multi-key, token budget, capability tags) |
 | v0.32 | 2026-05-21 | Observability tracing, document pipeline (PDF/DOCX/XLSX), plugin system |
 | v0.30 | 2026-05-21 | Agent tool calling framework, hybrid RAG (BM25+vector+time decay), scheduled monitoring/alerts |
