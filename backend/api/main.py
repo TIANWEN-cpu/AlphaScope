@@ -23,7 +23,7 @@ from typing import AsyncGenerator, Any, Optional
 logger = logging.getLogger(__name__)
 
 try:
-    from fastapi import FastAPI, HTTPException, Request
+    from fastapi import FastAPI, File, HTTPException, Request, UploadFile
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -490,11 +490,12 @@ if HAS_FASTAPI:
     # ============== 文件上传 API ==============
 
     @app.post("/api/files/upload", response_model=ApiResponse[FileUploadData])
-    async def upload_file(file: bytes, filename: str = "upload.png"):
-        """上传文件（图片/文档）"""
+    async def upload_file(file: UploadFile = File(...)):
+        """上传文件（图片/文档）— 支持 multipart/form-data"""
         import hashlib
         from pathlib import Path
 
+        filename = file.filename or "upload.png"
         suffix = Path(filename).suffix.lower()
         supported = {
             ".png",
@@ -510,21 +511,22 @@ if HAS_FASTAPI:
         if suffix not in supported:
             raise HTTPException(status_code=400, detail=f"不支持的文件格式: {suffix}")
 
-        if len(file) > 20 * 1024 * 1024:
+        content = await file.read()
+        if len(content) > 20 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="文件大小超过 20MB 限制")
 
-        file_hash = hashlib.md5(file).hexdigest()
+        file_hash = hashlib.md5(content).hexdigest()
 
         upload_dir = Path("uploads")
         upload_dir.mkdir(exist_ok=True)
         save_path = upload_dir / f"{file_hash}_{filename}"
-        save_path.write_bytes(file)
+        save_path.write_bytes(content)
 
         return ApiResponse(
             success=True,
             data=FileUploadData(
                 filename=filename,
-                size=len(file),
+                size=len(content),
                 path=str(save_path),
                 message="上传成功",
             ),

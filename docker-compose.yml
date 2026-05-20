@@ -1,10 +1,16 @@
-# AI-Finance Docker Compose (v0.12)
-# Supports: App + Redis cache + optional ChromaDB
+# AI-Finance Docker Compose (v0.40)
+# Services: Streamlit Dashboard + FastAPI API + Redis cache
+#
+# Usage:
+#   docker-compose up -d              # Start all services
+#   docker-compose up -d app          # Streamlit only (port 8501)
+#   docker-compose up -d api          # FastAPI only (port 8000)
+#   docker-compose up -d app api      # Both frontends
 
 version: "3.8"
 
 services:
-  # Main app - Streamlit Dashboard
+  # Streamlit Dashboard (legacy UI, port 8501)
   app:
     build:
       context: .
@@ -25,7 +31,6 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    # Resource limits
     deploy:
       resources:
         limits:
@@ -40,6 +45,45 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - ai-finance-net
+
+  # FastAPI API Backend (port 8000)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-finance-api
+    command: ["python", "-m", "uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./cache:/app/cache
+      - ./reports:/app/reports
+      - ./.env:/app/.env:ro
+      - ./config:/app/config:ro
+    environment:
+      - PYTHONPATH=/app
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - ai-finance-net
 

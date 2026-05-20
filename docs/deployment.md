@@ -30,10 +30,34 @@ cd apps/web && npm install && npm run dev
 
 ```bash
 cp .env.example .env
-# 编辑 .env
+# 编辑 .env，至少配置 DEEPSEEK_API_KEY
 
+# 启动全部服务 (Streamlit + FastAPI + Redis)
 docker-compose up -d
-# Streamlit: http://localhost:8501
+
+# 仅启动 Streamlit (port 8501)
+docker-compose up -d app
+
+# 仅启动 FastAPI API (port 8000)
+docker-compose up -d api
+
+# 启动 Streamlit + FastAPI
+docker-compose up -d app api
+```
+
+服务说明：
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| `app` | 8501 | Streamlit 界面（传统 UI） |
+| `api` | 8000 | FastAPI REST API（27 端点） |
+| `redis` | 6379 | Redis 缓存 |
+
+健康检查：
+```bash
+docker-compose ps                    # 查看服务状态
+curl http://localhost:8501/_stcore/health  # Streamlit
+curl http://localhost:8000/health          # FastAPI
 ```
 
 ### 方式三：Windows .exe
@@ -74,20 +98,22 @@ pip install -r requirements-rag.txt       # 添加 RAG 支持
 
 ## CI/CD
 
-GitHub Actions 自动运行：
+GitHub Actions 自动运行 3 个 job：
 
 ```yaml
-# .github/workflows/ci.yml
-on:
-  push: [main, develop]
-  pull_request: [main]
-
 jobs:
-  lint-and-test:
+  lint-and-test:    # Python 3.11 + 3.12
     - ruff check + format check
-    - pytest tests/ -v
-  docker-build:
+    - pytest tests/ -v (355 tests)
+
+  web-build:        # Node.js 20
+    - npm ci
+    - npm run build
+    - npm run lint
+
+  docker-build:     # 依赖 lint-and-test + web-build
     - docker build -t ai-finance:test .
+    - docker run --rm ai-finance:test python -c "import backend"
 ```
 
 ## Makefile 命令

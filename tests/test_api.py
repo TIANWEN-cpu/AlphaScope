@@ -146,3 +146,67 @@ async def test_report_not_found(client):
     assert resp.status_code == 404
     data = resp.json()
     assert data["success"] is False
+
+
+@pytest.mark.anyio
+async def test_upload_png(client):
+    """POST /api/files/upload 上传 PNG 图片"""
+    # 最小有效 PNG (1x1 像素)
+    png_bytes = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+        b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
+        b"\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00"
+        b"\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    resp = await client.post(
+        "/api/files/upload",
+        files={"file": ("test.png", png_bytes, "image/png")},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["filename"] == "test.png"
+    assert data["data"]["size"] > 0
+    assert data["data"]["message"] == "上传成功"
+
+
+@pytest.mark.anyio
+async def test_upload_rejects_unsupported_format(client):
+    """POST /api/files/upload 拒绝不支持的格式"""
+    resp = await client.post(
+        "/api/files/upload",
+        files={"file": ("test.exe", b"MZ\x90\x00", "application/octet-stream")},
+    )
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["success"] is False
+    assert "不支持" in data["error"]
+
+
+@pytest.mark.anyio
+async def test_upload_rejects_oversized(client):
+    """POST /api/files/upload 拒绝超过 20MB 的文件"""
+    # 创建一个超过 20MB 的文件
+    big_content = b"x" * (20 * 1024 * 1024 + 1)
+    resp = await client.post(
+        "/api/files/upload",
+        files={"file": ("big.png", big_content, "image/png")},
+    )
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["success"] is False
+    assert "20MB" in data["error"]
+
+
+@pytest.mark.anyio
+async def test_upload_csv(client):
+    """POST /api/files/upload 上传 CSV 文件"""
+    csv_content = b"symbol,close\n600519,1800.00\n"
+    resp = await client.post(
+        "/api/files/upload",
+        files={"file": ("data.csv", csv_content, "text/csv")},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["filename"] == "data.csv"
