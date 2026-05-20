@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-312%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v0.40-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.40)
+[![Tests](https://img.shields.io/badge/tests-355%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
+[![Release](https://img.shields.io/badge/release-v0.40.5-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.40.5)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -270,7 +270,12 @@ tests/                  # 312 unit tests
 
 | Version | Date | Focus |
 |---------|------|-------|
-| v0.40 | 2026-05-22 | Engineering stabilization: split requirements, pyproject.toml, ChromaDB optional, Makefile, README |
+| v0.40.5 | 2026-05-20 | M6 Next.js frontend: component decomposition, SSE streaming, useChat hook |
+| v0.40.4 | 2026-05-20 | M5 Vision: orchestrator integration, KlineAnalysisData, ticker parameter |
+| v0.40.3 | 2026-05-20 | M4 Data sources: DataSourceResult, provider health tracking, evidence context |
+| v0.40.2 | 2026-05-20 | M3 Agent standardization: Pydantic schemas, team_loader fix, 10-expert team |
+| v0.40.1 | 2026-05-20 | M2 FastAPI: ApiResponse wrapper, 25+ schemas, global error handling |
+| v0.40 | 2026-05-20 | M1 Engineering: split requirements, pyproject.toml, ChromaDB optional |
 | v0.38 | 2026-05-21 | Windows .exe packaging (PyInstaller + Inno Setup) |
 | v0.36 | 2026-05-21 | Async task queue, React/Next.js frontend skeleton |
 | v0.34 | 2026-05-21 | Database schema upgrade (20+ tables), model registry |
@@ -292,6 +297,14 @@ tests/                  # 312 unit tests
 | v0.9 | 2026-05-17 | Critic agent, test scaffolding |
 | v0.5 | 2026-05-16 | 5-model heterogeneous architecture |
 | v0.1 | 2026-05-16 | Initial release |
+
+## Documentation
+
+- [Architecture](docs/architecture.md) — 系统架构与数据流
+- [API Reference](docs/api.md) — 27 个 REST 端点文档
+- [Deployment](docs/deployment.md) — 部署指南（本地/Docker/Windows）
+- [Agent Design](docs/agent-design.md) — Agent 与专家团设计
+- [Security](docs/security.md) — 安全措施与合规
 
 ## License
 

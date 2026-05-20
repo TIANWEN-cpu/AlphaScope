@@ -1,0 +1,112 @@
+# API 文档
+
+AI-Finance FastAPI 后端提供 27 个 REST 端点。
+
+启动方式：
+```bash
+uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+# API 文档: http://localhost:8000/docs
+```
+
+## 通用响应格式
+
+所有端点返回统一的 `ApiResponse` 结构：
+
+```json
+{
+  "success": true,
+  "data": { ... },
+  "error": null,
+  "message": null
+}
+```
+
+错误时：
+```json
+{
+  "success": false,
+  "data": null,
+  "error": "错误信息"
+}
+```
+
+## 端点列表
+
+### 健康检查
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/` | 服务信息 |
+| GET | `/health` | 健康检查 |
+| GET | `/api/providers/health` | 数据源健康状态 |
+
+### 对话管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/conversations` | 创建会话 |
+| GET | `/api/conversations` | 列出会话 |
+| GET | `/api/conversations/{id}` | 获取会话详情 |
+| DELETE | `/api/conversations/{id}` | 删除会话 |
+
+### 聊天与分析
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/chat/stream` | SSE 流式聊天 |
+| POST | `/api/analysis/run` | 运行 Agent 分析 |
+| POST | `/api/vision/analyze` | 图片/K线分析 |
+
+### 配置查询
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/agents` | Agent 配置列表 |
+| GET | `/api/agents/models` | Agent 模型分配表 |
+| GET | `/api/teams` | 专家团列表 |
+| GET | `/api/teams/{id}` | 专家团详情 |
+| GET | `/api/models/providers` | 模型供应商列表 |
+| GET | `/api/models/providers/{id}/models` | 供应商模型列表 |
+| GET | `/api/modes` | 分析模式列表 |
+| GET | `/api/templates` | 研究模板列表 |
+| GET | `/api/templates/{id}` | 模板详情 |
+
+### 报告与数据
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/reports/{id}` | 获取分析报告 |
+| GET | `/api/search` | 联网搜索 |
+| GET | `/api/costs` | LLM 成本统计 |
+| GET | `/api/backtest/stats` | 回测统计 |
+| GET | `/api/backtest/agent-accuracy` | Agent 准确率 |
+| GET | `/api/backtest/pending` | 待评估决策 |
+| GET | `/api/audit` | 审计日志 |
+| POST | `/api/files/upload` | 文件上传 |
+
+## SSE 流式聊天
+
+`POST /api/chat/stream` 返回 `text/event-stream`：
+
+```
+data: {"type": "status", "mode": "deep"}
+
+data: {"type": "content", "chunk": "根据"}
+
+data: {"type": "content", "chunk": "分析..."}
+
+data: {"type": "evidence", "data": [...]}
+
+data: {"type": "agents", "data": {...}}
+
+data: {"type": "done"}
+```
+
+## Pydantic Schema
+
+所有请求/响应使用 Pydantic 模型验证，定义在 `backend/schemas/`：
+
+- `backend/schemas/api.py` — API 请求/响应模型
+- `backend/schemas/agents.py` — Agent/Team 配置模型
+- `backend/schemas/data_source.py` — 数据源模型
+- `backend/schemas/evidence.py` — 证据链模型
