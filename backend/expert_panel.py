@@ -29,7 +29,10 @@ import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import llm_agents as _llm_agents  # noqa: E402
-from project_paths import CONFIG_DIR, PROJECT_ROOT  # noqa: E402
+try:
+    from backend.project_paths import CONFIG_DIR, PROJECT_ROOT  # noqa: E402
+except ImportError:
+    from project_paths import CONFIG_DIR, PROJECT_ROOT  # noqa: E402
 
 # Streamlit 热重载时 sys.modules 里可能残留旧版 llm_agents(无 call_llm 别名)。
 # 这里做运行时兜底,避免专家团组件因导入别名失败而不加载。

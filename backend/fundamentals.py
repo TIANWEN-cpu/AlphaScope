@@ -25,7 +25,10 @@ from typing import List, Optional, Tuple
 import akshare as ak
 import pandas as pd
 
-from project_paths import CACHE_DIR
+try:
+    from backend.project_paths import CACHE_DIR
+except ImportError:
+    from project_paths import CACHE_DIR
 
 
 # ============== 路径与常量 ==============

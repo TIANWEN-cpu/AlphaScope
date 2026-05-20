@@ -25,7 +25,10 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import yaml
 
-from project_paths import CONFIG_DIR, ENV_FILE
+try:
+    from backend.project_paths import CONFIG_DIR, ENV_FILE
+except ImportError:
+    from project_paths import CONFIG_DIR, ENV_FILE
 
 # 成本追踪（可选依赖，导入失败不影响核心功能）
 try:

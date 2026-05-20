@@ -12,7 +12,10 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from project_paths import REPORTS_DIR
+try:
+    from backend.project_paths import REPORTS_DIR
+except ImportError:
+    from project_paths import REPORTS_DIR
 
 ARCHIVE_ROOT = REPORTS_DIR / "archive"
 INDEX_FILE = ARCHIVE_ROOT / "index.json"

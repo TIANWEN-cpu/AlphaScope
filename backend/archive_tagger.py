@@ -12,7 +12,10 @@ import json
 from pathlib import Path
 
 from price_fetcher import get_price_after, get_price_range
-from project_paths import REPORTS_DIR
+try:
+    from backend.project_paths import REPORTS_DIR
+except ImportError:
+    from project_paths import REPORTS_DIR
 
 
 ARCHIVE_ROOT = REPORTS_DIR / "archive"
