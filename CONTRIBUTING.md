@@ -35,10 +35,22 @@ python -m pytest tests/ -v
 
 ## Adding a Data Provider
 
-1. Create `backend/providers/your_provider.py` extending `BaseProvider`
-2. Implement `get_news()`, `get_reports()`, `get_announcements()` as applicable
-3. Add config entry in `config/data_sources.yaml`
-4. Add tests in `tests/test_your_provider.py`
+The provider system uses dynamic discovery -- no need to edit registry.py.
+
+**Quick start:**
+
+```bash
+python scripts/create_provider.py --name your_source --markets CN --types news,reports --custom
+```
+
+**Manual steps:**
+
+1. Create `custom_providers/your_provider.py` (or `backend/providers/your_provider.py` for built-in)
+2. Extend `BaseProvider`, set class attributes (`name`, `markets`, `data_types`, `priority`)
+3. Implement `get_news()`, `get_reports()`, `get_announcements()` as applicable
+4. Add config entry in `config/data_sources.yaml` under the relevant `{data_type}_providers` section
+5. Add tests in `tests/test_your_provider.py`
+6. Restart the application -- your provider is auto-discovered
 
 ## Adding an Agent
 

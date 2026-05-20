@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
+import inspect
 import logging
+import pkgutil
 from pathlib import Path
 from typing import Optional
 
@@ -25,10 +28,12 @@ class ProviderRegistry:
     - 按 data_type + market 自动选择最优 Provider
     - 故障降级: 主源失败自动尝试下一优先级
     - 从 config/data_sources.yaml 读取配置
+    - 动态发现: 自动扫描 providers/ 和 custom_providers/ 目录
     """
 
     def __init__(self) -> None:
         self._providers: dict[str, BaseProvider] = {}
+        self._source_origin: dict[str, str] = {}  # name -> "builtin" | "custom"
         self._config: dict = {}
         self._load_config()
 
@@ -43,20 +48,30 @@ class ProviderRegistry:
                 logger.warning("加载数据源配置失败: %s", e)
                 self._config = {}
 
-    def register(self, provider: BaseProvider) -> None:
+    def register(self, provider: BaseProvider, origin: str = "builtin") -> None:
         """注册一个 Provider"""
+        if provider.name in self._providers:
+            logger.warning(
+                "Provider '%s' 已存在, 将被覆盖 (原: %s, 新: %s)",
+                provider.name,
+                type(self._providers[provider.name]).__name__,
+                type(provider).__name__,
+            )
         self._providers[provider.name] = provider
+        self._source_origin[provider.name] = origin
         logger.info(
-            "已注册 Provider: %s (markets=%s, types=%s, priority=%d)",
+            "已注册 Provider: %s (markets=%s, types=%s, priority=%d, origin=%s)",
             provider.name,
             provider.markets,
             provider.data_types,
             provider.priority,
+            origin,
         )
 
     def unregister(self, name: str) -> None:
         """注销一个 Provider"""
         self._providers.pop(name, None)
+        self._source_origin.pop(name, None)
 
     def get_provider(self, name: str) -> Optional[BaseProvider]:
         """按名称获取 Provider"""
@@ -71,9 +86,20 @@ class ProviderRegistry:
                 "data_types": p.data_types,
                 "priority": p.priority,
                 "status": p.health.status.value,
+                "origin": self._source_origin.get(p.name, "unknown"),
+                "cost_tier": getattr(p, "cost_tier", "free"),
+                "freshness": getattr(p, "freshness", "daily"),
+                "requires_key": getattr(p, "requires_key", False),
             }
             for p in self._providers.values()
         ]
+
+    def reload(self) -> None:
+        """重新发现和注册所有 Provider (用于开发/调试)"""
+        self._providers.clear()
+        self._source_origin.clear()
+        self._load_config()
+        _discover_and_register(self)
 
     def get(
         self,
@@ -194,82 +220,101 @@ def get_registry() -> ProviderRegistry:
     global _registry
     if _registry is None:
         _registry = ProviderRegistry()
-        _auto_register_providers(_registry)
+        _discover_and_register(_registry)
     return _registry
 
 
-def _auto_register_providers(registry: ProviderRegistry) -> None:
-    """自动发现并注册所有已安装的 Provider"""
-    provider_classes = []
+def _scan_directory(directory: Path, package_prefix: str) -> list[type]:
+    """扫描目录中的 Python 模块, 找出所有 BaseProvider 子类
 
-    # 按依赖可用性动态导入
-    try:
-        from .akshare_provider import AkShareProvider
+    Args:
+        directory: 要扫描的目录路径
+        package_prefix: 模块的包前缀 (如 "backend.providers")
 
-        provider_classes.append(AkShareProvider)
-    except ImportError:
-        logger.debug("AkShare Provider 未安装, 跳过")
+    Returns:
+        找到的 Provider 类列表
+    """
+    classes = []
+    if not directory.is_dir():
+        return classes
 
-    try:
-        from .eastmoney_provider import EastMoneyProvider
+    for module_info in pkgutil.iter_modules([str(directory)]):
+        # 跳过私有模块 (以 _ 开头)
+        if module_info.name.startswith("_"):
+            continue
 
-        provider_classes.append(EastMoneyProvider)
-    except ImportError:
-        logger.debug("EastMoney Provider 未安装, 跳过")
-
-    try:
-        from .cls_provider import CLSProvider
-
-        provider_classes.append(CLSProvider)
-    except ImportError:
-        logger.debug("CLS Provider 未安装, 跳过")
-
-    try:
-        from .cninfo_provider import CNInfoProvider
-
-        provider_classes.append(CNInfoProvider)
-    except ImportError:
-        logger.debug("CNInfo Provider 未安装, 跳过")
-
-    try:
-        from .tushare_provider import TushareProvider
-
-        provider_classes.append(TushareProvider)
-    except ImportError:
-        logger.debug("Tushare Provider 未安装, 跳过")
-
-    try:
-        from .baostock_provider import BaoStockProvider
-
-        provider_classes.append(BaoStockProvider)
-    except ImportError:
-        logger.debug("BaoStock Provider 未安装, 跳过")
-
-    try:
-        from .openbb_provider import OpenBBProvider
-
-        provider_classes.append(OpenBBProvider)
-    except ImportError:
-        logger.debug("OpenBB Provider 未安装, 跳过")
-
-    try:
-        from .sec_provider import SECProvider
-
-        provider_classes.append(SECProvider)
-    except ImportError:
-        logger.debug("SEC Provider 未安装, 跳过")
-
-    try:
-        from .hkex_provider import HKEXProvider
-
-        provider_classes.append(HKEXProvider)
-    except ImportError:
-        logger.debug("HKEX Provider 未安装, 跳过")
-
-    for cls in provider_classes:
+        full_name = f"{package_prefix}.{module_info.name}"
         try:
-            registry.register(cls())
+            module = importlib.import_module(full_name)
+        except ImportError as e:
+            logger.debug("跳过模块 %s (ImportError): %s", full_name, e)
+            continue
+        except Exception as e:
+            logger.warning("导入模块 %s 时出错: %s", full_name, e)
+            continue
+
+        # 在模块中查找 BaseProvider 子类
+        for attr_name in dir(module):
+            try:
+                attr = getattr(module, attr_name)
+            except Exception:
+                continue
+            if (
+                isinstance(attr, type)
+                and issubclass(attr, BaseProvider)
+                and attr is not BaseProvider
+                and not inspect.isabstract(attr)
+            ):
+                classes.append(attr)
+
+    return classes
+
+
+def _discover_and_register(registry: ProviderRegistry) -> None:
+    """动态发现并注册所有 Provider
+
+    扫描三个目录:
+    1. backend/providers/ (内置 Provider)
+    2. backend/providers/commercial/ (商业 Provider)
+    3. custom_providers/ (用户自定义 Provider)
+    """
+    providers_dir = Path(__file__).parent
+    commercial_dir = providers_dir / "commercial"
+    custom_dir = _PROJECT_ROOT / "custom_providers"
+
+    all_classes: list[tuple[type, str]] = []
+
+    # 扫描内置 Provider
+    for cls in _scan_directory(providers_dir, "backend.providers"):
+        all_classes.append((cls, "builtin"))
+
+    # 扫描商业 Provider
+    for cls in _scan_directory(commercial_dir, "backend.providers.commercial"):
+        all_classes.append((cls, "builtin"))
+
+    # 扫描用户自定义 Provider
+    for cls in _scan_directory(custom_dir, "custom_providers"):
+        all_classes.append((cls, "custom"))
+
+    # 实例化并注册
+    registered = 0
+    for cls, origin in all_classes:
+        # 检查依赖是否满足
+        try:
+            if not cls.is_available():
+                logger.debug(
+                    "Provider %s 不可用 (依赖未满足), 跳过", cls.__name__
+                )
+                continue
+        except Exception as e:
+            logger.debug("检查 %s.is_available() 失败: %s", cls.__name__, e)
+            continue
+
+        try:
+            instance = cls()
+            registry.register(instance, origin=origin)
+            registered += 1
         except Exception as e:
             logger.warning("注册 Provider %s 失败: %s", cls.__name__, e)
 
-    logger.info("自动注册完成, 共 %d 个 Provider", len(registry.list_providers()))
+    logger.info("动态发现完成, 共注册 %d 个 Provider", registered)

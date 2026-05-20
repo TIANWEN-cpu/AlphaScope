@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.15 - 2026-05-20
+
+### Provider Plugin Architecture
+
+- Refactored `_auto_register_providers()` to use dynamic module scanning (`importlib` + `pkgutil`). All 20 providers are now auto-discovered -- no more hardcoded imports in registry.py.
+- Added `custom_providers/` directory for user-created data sources. Drop a file, configure in YAML, done.
+- Added `scripts/create_provider.py` -- CLI generator for provider skeletons.
+- Added `BaseProvider.is_available()` classmethod for dependency checking before instantiation.
+- Added `ProviderRegistry.reload()` for hot-reload during development.
+- Dashboard source health panel now shows built-in vs custom provider distinction with reload button.
+- All 11 previously unregistered providers (finnhub, fred, northbound, google_trends, reddit, stocktwits, wikipedia_views, choice, ifind, jy, wind) are now auto-discovered.
+
 ## v0.14 - 2026-05-19
 
 ### News Section Overhaul

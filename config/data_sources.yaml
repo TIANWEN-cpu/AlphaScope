@@ -205,3 +205,21 @@ announcement_priority:
   CN: "cninfo > tushare > eastmoney > akshare"
   US: "sec > openbb > fmp"
   HK: "hkex > openbb > third_party"
+
+# ============== 自定义数据源 ==============
+# 用户可在 custom_providers/ 目录下添加自定义 Provider
+# 文件放入后自动发现, 无需修改代码
+# 在上方对应的 {data_type}_providers 中配置启用和优先级
+#
+# 示例:
+#   假设你在 custom_providers/my_source.py 中创建了一个新闻 Provider
+#   在 news_providers 下添加:
+#     my_source:
+#       enabled: true
+#       priority: 50
+#       timeout: 10
+#       retry: 2
+#       description: "我的自定义新闻源"
+#
+# 使用脚本生成 Provider 骨架:
+#   python scripts/create_provider.py --name my_source --markets CN --types news --custom

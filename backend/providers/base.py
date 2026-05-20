@@ -64,6 +64,15 @@ class BaseProvider(ABC):
     )
     requires_key: bool = False
 
+    @classmethod
+    def is_available(cls) -> bool:
+        """检查此 Provider 的依赖是否满足
+
+        子类可覆盖, 检查 API Key 或可选包是否可用。
+        默认返回 True (始终可用)。
+        """
+        return True
+
     def __init__(self) -> None:
         self._health = ProviderHealth()
         self._logger = logging.getLogger(f"provider.{self.name}")

@@ -23,8 +23,9 @@ This project tackles all three through architectural choices: heterogeneous mode
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Data Layer                               │
-│  Provider Plugins (9 sources, auto-priority, failover)      │
+│  Provider Plugins (20+ sources, auto-discovery, failover)   │
 │  CNInfo · SEC · HKEX · Tushare · CLS · OpenBB · AkShare    │
+│  + Finnhub · FRED · Reddit · Custom (user-extensible)       │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -70,6 +71,26 @@ Financial data sources are unreliable. APIs change, rate limits hit, services go
 - **Uniform interface** — every source returns `NewsItem`, `ResearchReport`, `Announcement`, etc. via Pydantic models. Downstream code never cares which source the data came from.
 - **Priority-based routing** — CNInfo (official) beats AkShare (scraped) for announcements. Configured in `data_sources.yaml`, not hardcoded.
 - **Graceful degradation** — when Tushare's API is down, the system falls back to AkShare automatically. No manual intervention.
+- **Extensible** — drop a Python file in `custom_providers/` and it's auto-discovered. No need to edit core code.
+
+### Adding Custom Data Sources
+
+Create your own provider in 3 steps:
+
+```bash
+# 1. Generate a provider skeleton
+python scripts/create_provider.py --name my_source --markets CN --types news --custom
+
+# 2. Implement data fetching in custom_providers/my_source.py
+
+# 3. Configure in config/data_sources.yaml
+# news_providers:
+#   my_source:
+#     enabled: true
+#     priority: 50
+```
+
+The provider is auto-discovered on startup. See `custom_providers/README.md` for details.
 
 ### Why a Critic agent?
 

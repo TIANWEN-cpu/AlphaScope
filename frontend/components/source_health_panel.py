@@ -1,7 +1,7 @@
-"""数据源健康度面板 (v0.12)
+"""数据源健康度面板 (v0.15)
 
 在 Dashboard 中展示:
-- Provider 健康状态表
+- Provider 健康状态表 (区分内置/自定义)
 - 采集日志统计
 - RAG 索引状态
 """
@@ -24,15 +24,24 @@ def render_source_health_panel():
     st.markdown("### 🔌 Provider 状态")
     try:
         from backend.observability.source_health import SourceHealthMonitor
+        from backend.providers.registry import get_registry
 
         monitor = SourceHealthMonitor()
         report = monitor.get_health_report()
 
-        col1, col2, col3, col4 = st.columns(4)
+        # 获取 provider 列表 (含 origin 信息)
+        registry = get_registry()
+        providers_info = registry.list_providers()
+        origin_map = {p["name"]: p["origin"] for p in providers_info}
+
+        custom_count = sum(1 for p in providers_info if p["origin"] == "custom")
+
+        col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("总计", report["total"])
         col2.metric("健康", report["healthy"])
         col3.metric("降级", report["degraded"])
         col4.metric("不可用", report["unhealthy"])
+        col5.metric("自定义", custom_count)
 
         if report.get("providers"):
             rows = []
@@ -45,9 +54,12 @@ def render_source_health_panel():
                 latency = (
                     f"{p['avg_latency_ms']:.0f}ms" if p["avg_latency_ms"] > 0 else "N/A"
                 )
+                origin = origin_map.get(p["name"], "unknown")
+                origin_icon = "📦" if origin == "builtin" else "🔧"
                 rows.append(
                     {
                         "状态": status_icon,
+                        "来源": origin_icon,
                         "Provider": p["name"],
                         "延迟": latency,
                         "连续失败": p["consecutive_failures"],
@@ -58,6 +70,12 @@ def render_source_health_panel():
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.info("暂无 Provider 注册")
+
+        # ---- 重新加载按钮 ----
+        if st.button("🔄 重新加载 Provider", help="重新扫描 providers/ 和 custom_providers/ 目录"):
+            registry.reload()
+            st.success(f"Provider 已重新加载, 共 {len(registry.list_providers())} 个")
+            st.rerun()
 
     except Exception as e:
         st.error(f"获取 Provider 状态失败: {e}")
