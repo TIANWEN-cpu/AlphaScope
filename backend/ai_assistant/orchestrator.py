@@ -5,14 +5,17 @@
 - STANDARD: llm_agents.run_agents_with_mode(STANDARD) (3 Agent)
 - DEEP: llm_agents.run_agents_with_mode(DEEP) (5 Agent + Critic + Chairman)
 - EXPERT: expert_panel.run_team_roundtable (专家团圆桌)
+- VISION: 图表/截图分析 (预留)
 
-不重复实现分析逻辑，只做路由和上下文拼接。
+编排器内置 NLU Intent Router，通过关键词匹配自动检测用户意图，
+在用户未明确选择模式时自动推荐最合适的分析模式。
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -34,6 +37,7 @@ class AnalysisMode(Enum):
     STANDARD = "standard"
     DEEP = "deep"
     EXPERT = "expert"
+    VISION = "vision"
 
 
 # 模式标签映射
@@ -42,7 +46,268 @@ MODE_LABELS = {
     AnalysisMode.STANDARD: "标准分析",
     AnalysisMode.DEEP: "深度分析",
     AnalysisMode.EXPERT: "专家团圆桌",
+    AnalysisMode.VISION: "图表分析",
 }
+
+
+# ---------------------------------------------------------------------------
+# NLU Intent Router - 基于关键词的意图检测（零 LLM 成本）
+# ---------------------------------------------------------------------------
+
+
+class IntentType(Enum):
+    """用户意图类型"""
+
+    STOCK_ANALYSIS = "stock_analysis"  # 股票分析（基本面、估值等）
+    GENERAL_QUESTION = "general_question"  # 通用问答
+    KLINE_ANALYSIS = "kline_analysis"  # K线/技术面分析
+    NEWS_QUERY = "news_query"  # 新闻/公告查询
+    COMPARISON = "comparison"  # 多股票对比
+    PORTFOLIO_REVIEW = "portfolio_review"  # 持仓/组合分析
+
+
+# 意图关键词表（按优先级排列，先匹配先命中）
+_INTENT_KEYWORDS: Dict[IntentType, List[str]] = {
+    IntentType.KLINE_ANALYSIS: [
+        "K线",
+        "k线",
+        "K线图",
+        "走势图",
+        "技术面",
+        "技术分析",
+        "均线",
+        "MACD",
+        "macd",
+        "KDJ",
+        "kdj",
+        "RSI",
+        "rsi",
+        "布林",
+        "支撑位",
+        "压力位",
+        "突破",
+        "金叉",
+        "死叉",
+        "成交量",
+        "量价",
+        "分时",
+        "蜡烛图",
+        "趋势线",
+        "波浪",
+        "头肩",
+        "双底",
+        "双顶",
+        "底部放量",
+        "缩量",
+    ],
+    IntentType.COMPARISON: [
+        "对比",
+        "比较",
+        "vs",
+        "VS",
+        "哪个好",
+        "哪个强",
+        "选哪个",
+        "优劣",
+        "谁更好",
+        "哪个更",
+        "还是",
+        "相比",
+        "比一比",
+        "哪个值得",
+    ],
+    IntentType.NEWS_QUERY: [
+        "新闻",
+        "公告",
+        "最新消息",
+        "近期消息",
+        "快讯",
+        "媒体报道",
+        "舆情",
+        "利好",
+        "利空",
+        "消息面",
+        "最新动态",
+        "最新进展",
+        "事件",
+    ],
+    IntentType.PORTFOLIO_REVIEW: [
+        "持仓",
+        "组合",
+        "仓位",
+        "调仓",
+        "资产配置",
+        "我的股票",
+        "自选股",
+        "持仓分析",
+        "组合分析",
+        "风险敞口",
+        "分散",
+        "集中度",
+    ],
+    IntentType.STOCK_ANALYSIS: [
+        "分析",
+        "估值",
+        "基本面",
+        "财报",
+        "业绩",
+        "市盈率",
+        "PE",
+        "pe",
+        "市净率",
+        "PB",
+        "pb",
+        "ROE",
+        "roe",
+        "营收",
+        "净利润",
+        "毛利率",
+        "买入",
+        "卖出",
+        "目标价",
+        "评级",
+        "研报",
+        "怎么样",
+        "值得买",
+        "能不能买",
+        "怎么看",
+        "前景",
+        "走势",
+        "涨跌",
+        "推荐",
+    ],
+}
+
+# 股票代码模式：6位纯数字（沪深），或 sh/sz/bj + 6位
+_STOCK_CODE_PATTERN = re.compile(r"(?:sh|sz|bj|SH|SZ|BJ)?\d{6}(?:\.SH|\.SZ|\.BJ)?")
+
+# 常见股票名称（按需扩展）
+_STOCK_NAMES: List[str] = [
+    "贵州茅台",
+    "中国平安",
+    "招商银行",
+    "宁德时代",
+    "比亚迪",
+    "隆基绿能",
+    "五粮液",
+    "美的集团",
+    "格力电器",
+    "中信证券",
+    "恒瑞医药",
+    "海天味业",
+    "迈瑞医疗",
+    "东方财富",
+    "长江电力",
+    "工商银行",
+    "建设银行",
+    "农业银行",
+    "中国银行",
+    "交通银行",
+    "中国中免",
+    "药明康德",
+    "阳光电源",
+    "万华化学",
+    "紫金矿业",
+    "三一重工",
+    "海螺水泥",
+    "中国神华",
+    "中国石油",
+    "中国石化",
+    "腾讯",
+    "阿里巴巴",
+    "美团",
+    "京东",
+    "拼多多",
+]
+
+
+def detect_intent(
+    user_input: str, stock_data: Optional[Dict[str, Any]] = None
+) -> IntentType:
+    """检测用户意图（基于关键词匹配，零 LLM 成本）。
+
+    Args:
+        user_input: 用户输入文本
+        stock_data: 当前股票上下文（可选，用于辅助判断）
+
+    Returns:
+        IntentType 枚举值
+    """
+    if not user_input or not user_input.strip():
+        return IntentType.GENERAL_QUESTION
+
+    text = user_input.strip()
+
+    # 1. 检查是否涉及多股票（对比意图优先，因为对比通常包含其他关键词）
+    has_comparison = any(kw in text for kw in _INTENT_KEYWORDS[IntentType.COMPARISON])
+    stock_mentions = _count_stock_mentions(text)
+    if has_comparison and stock_mentions >= 2:
+        return IntentType.COMPARISON
+
+    # 2. 按意图关键词表逐项匹配
+    # 优先级：KLINE > COMPARISON(单关键词) > NEWS > PORTFOLIO > STOCK_ANALYSIS
+    for intent_type in [
+        IntentType.KLINE_ANALYSIS,
+        IntentType.COMPARISON,
+        IntentType.NEWS_QUERY,
+        IntentType.PORTFOLIO_REVIEW,
+        IntentType.STOCK_ANALYSIS,
+    ]:
+        keywords = _INTENT_KEYWORDS[intent_type]
+        for kw in keywords:
+            if kw in text:
+                logger.debug("意图检测: 关键词 '%s' -> %s", kw, intent_type.value)
+                return intent_type
+
+    # 3. 如果提到了股票代码或名称，但没有匹配到具体意图，默认为股票分析
+    if stock_mentions > 0:
+        return IntentType.STOCK_ANALYSIS
+
+    # 4. 如果当前已有股票上下文，用户可能在追问
+    if stock_data:
+        return IntentType.STOCK_ANALYSIS
+
+    # 5. 回退到通用问答
+    return IntentType.GENERAL_QUESTION
+
+
+def _count_stock_mentions(text: str) -> int:
+    """统计文本中提到的股票数量（代码 + 名称去重）。"""
+    mentions: set = set()
+
+    # 匹配股票代码
+    for m in _STOCK_CODE_PATTERN.finditer(text):
+        mentions.add(m.group())
+
+    # 匹配股票名称
+    for name in _STOCK_NAMES:
+        if name in text:
+            mentions.add(name)
+
+    return len(mentions)
+
+
+def suggest_mode(
+    intent: IntentType, stock_data: Optional[Dict[str, Any]] = None
+) -> AnalysisMode:
+    """根据意图推荐最合适的分析模式。
+
+    Args:
+        intent: 检测到的用户意图
+        stock_data: 当前股票上下文
+
+    Returns:
+        推荐的 AnalysisMode
+    """
+    _INTENT_TO_MODE: Dict[IntentType, AnalysisMode] = {
+        IntentType.STOCK_ANALYSIS: AnalysisMode.STANDARD,
+        IntentType.KLINE_ANALYSIS: AnalysisMode.DEEP,
+        IntentType.COMPARISON: AnalysisMode.DEEP,
+        IntentType.NEWS_QUERY: AnalysisMode.STANDARD,
+        IntentType.PORTFOLIO_REVIEW: AnalysisMode.EXPERT,
+        IntentType.GENERAL_QUESTION: AnalysisMode.FREE,
+    }
+    return _INTENT_TO_MODE.get(intent, AnalysisMode.FREE)
 
 
 def _import_ai_chat():
@@ -119,8 +384,14 @@ class ChatOrchestrator:
         stock_data: Optional[Dict[str, Any]] = None,
         expert_team_id: Optional[str] = None,
         global_ai_settings: Optional[dict] = None,
+        mode_override: Optional[str] = None,
     ) -> dict:
         """处理用户消息，返回响应。
+
+        路由逻辑：
+        1. 检测用户意图 (detect_intent)
+        2. 如果用户未显式指定模式，使用 suggest_mode 推荐
+        3. 路由到对应的处理函数
 
         Args:
             conversation_id: 对话 ID
@@ -128,6 +399,7 @@ class ChatOrchestrator:
             stock_data: 股票数据字典 (来自 dashboard 的 stock_data)
             expert_team_id: 专家团 ID (仅 EXPERT 模式)
             global_ai_settings: 全局 AI 设置
+            mode_override: 外部显式指定的模式（跳过意图推荐）
 
         Returns:
             {
@@ -137,6 +409,8 @@ class ChatOrchestrator:
                 "evidence": list,     # evidence chain
                 "summary": dict,      # voting summary
                 "compliance_note": str,
+                "detected_intent": str,  # 检测到的意图
+                "auto_routed": bool,     # 是否为自动路由
             }
         """
         # 存储用户消息
@@ -147,11 +421,44 @@ class ChatOrchestrator:
         if not conv:
             return {"mode": "error", "content": "对话不存在"}
 
-        mode_str = conv.get("mode", "free")
-        try:
-            mode = AnalysisMode(mode_str)
-        except ValueError:
-            mode = AnalysisMode.FREE
+        # --- NLU 意图检测 ---
+        intent = detect_intent(user_input, stock_data)
+        suggested_mode = suggest_mode(intent, stock_data)
+        logger.info(
+            "意图路由: input='%s' -> intent=%s, suggested_mode=%s",
+            user_input[:50],
+            intent.value,
+            suggested_mode.value,
+        )
+
+        # 确定最终使用的模式
+        auto_routed = False
+        if mode_override:
+            # 外部显式指定模式
+            try:
+                mode = AnalysisMode(mode_override)
+            except ValueError:
+                mode = suggested_mode
+                auto_routed = True
+        else:
+            # 使用对话创建时指定的模式
+            mode_str = conv.get("mode", "free")
+            try:
+                mode = AnalysisMode(mode_str)
+            except ValueError:
+                mode = AnalysisMode.FREE
+
+            # 如果对话模式为 FREE（默认），且意图建议更具体的模式，则自动升级
+            if mode == AnalysisMode.FREE and suggested_mode != AnalysisMode.FREE:
+                # 只在有股票上下文时自动升级（FREE 模式下无股票时保持 FREE）
+                if stock_data or suggested_mode in (AnalysisMode.FREE,):
+                    mode = suggested_mode
+                    auto_routed = True
+                    logger.info(
+                        "自动路由: FREE -> %s (intent=%s)", mode.value, intent.value
+                    )
+
+        mode_str = mode.value
 
         # 路由到对应的处理函数
         try:
@@ -167,6 +474,11 @@ class ChatOrchestrator:
                 result = self._handle_expert_mode(
                     conversation_id, user_input, stock_data, expert_team_id, conv
                 )
+            elif mode == AnalysisMode.VISION:
+                result = {
+                    "mode": "vision",
+                    "content": "图表分析模式即将上线，敬请期待。当前请使用其他分析模式。",
+                }
             else:
                 result = {"mode": mode_str, "content": "不支持的分析模式"}
         except Exception as e:
@@ -182,6 +494,10 @@ class ChatOrchestrator:
         result["compliance_note"] = wrap_with_disclaimer("", mode_str)
         result["content"] = wrap_with_disclaimer(content, mode_str)
 
+        # 注入意图元数据
+        result["detected_intent"] = intent.value
+        result["auto_routed"] = auto_routed
+
         # 存储助手回复
         self._store.add_message(
             conversation_id,
@@ -192,6 +508,8 @@ class ChatOrchestrator:
                 "agents": result.get("agents", {}),
                 "evidence": result.get("evidence", []),
                 "summary": result.get("summary", {}),
+                "detected_intent": intent.value,
+                "auto_routed": auto_routed,
             },
         )
 
