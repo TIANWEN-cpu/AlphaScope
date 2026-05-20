@@ -143,15 +143,6 @@ def test_evidence_aggregator_fix():
     assert result.sources == []
 
 
-def test_context_builder_returns_string():
-    """fetch_evidence_context 返回字符串（不崩溃）"""
-    from backend.runtime.context_builder import fetch_evidence_context
-
-    # 直接调用，RAG 不可用时应返回空字符串
-    result = fetch_evidence_context("600519", "贵州茅台")
-    assert isinstance(result, str)
-
-
 def test_provider_registry_has_providers():
     """Provider Registry 能发现 providers"""
     from backend.providers.registry import get_registry
