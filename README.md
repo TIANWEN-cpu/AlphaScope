@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-376%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v0.40.8-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.40.8)
+[![Tests](https://img.shields.io/badge/tests-387%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
+[![Release](https://img.shields.io/badge/release-v0.41-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.41)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -79,6 +79,11 @@ cd AI--FINANCE
 pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your API keys (at minimum DEEPSEEK_API_KEY)
+
+# 一键启动（推荐）
+scripts\start_local.bat
+
+# 或手动启动
 python -m streamlit run frontend/dashboard.py --server.port 8501
 ```
 
@@ -209,7 +214,7 @@ Without a critic, agents produce confident-sounding but occasionally hallucinate
 ## Testing
 
 ```bash
-# Run all tests (376 tests, ~6s)
+# Run all tests (387 tests, ~6s)
 python -m pytest tests/ -v
 
 # Lint
@@ -272,6 +277,7 @@ tests/                  # 312 unit tests
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v0.41 | 2026-05-20 | Local Launcher: check_env, start/stop scripts, 387 tests |
 | v0.40.8 | 2026-05-20 | Smoke/SSE contract/degradation tests, contract docs, 376 tests |
 | v0.40.7 | 2026-05-20 | M8 Acceptance hardening: Docker Compose web service, docs update, 359 tests |
 | v0.40.6 | 2026-05-20 | M7 Integration testing: 359 tests, upload endpoint verification |
@@ -305,6 +311,7 @@ tests/                  # 312 unit tests
 
 ## Documentation
 
+- [Quick Start](docs/local-quickstart.md) — 本地快速启动指南
 - [Architecture](docs/architecture.md) — 系统架构与数据流
 - [API Reference](docs/api.md) — 27 个 REST 端点文档
 - [API Contract](docs/contract.md) — 前后端契约（ApiResponse/SSE/Upload 格式）

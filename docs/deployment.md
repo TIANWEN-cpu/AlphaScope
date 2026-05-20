@@ -109,7 +109,7 @@ GitHub Actions 自动运行 3 个 job：
 jobs:
   lint-and-test:    # Python 3.11 + 3.12
     - ruff check + format check
-    - pytest tests/ -v (376 tests)
+    - pytest tests/ -v (387 tests)
 
   web-build:        # Node.js 20
     - npm ci

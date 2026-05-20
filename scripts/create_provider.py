@@ -58,16 +58,35 @@ METHOD_TEMPLATE = '''\
         raise NotImplementedError
 '''
 
-ALL_METHODS = ["news", "reports", "announcements", "prices", "fundamentals", "fund_flow"]
+ALL_METHODS = [
+    "news",
+    "reports",
+    "announcements",
+    "prices",
+    "fundamentals",
+    "fund_flow",
+]
 
 
 def main():
     parser = argparse.ArgumentParser(description="Generate a new AI-Finance provider")
     parser.add_argument("--name", required=True, help="Provider name (snake_case)")
-    parser.add_argument("--markets", default="CN", help="Comma-separated markets (CN,HK,US,ALL)")
-    parser.add_argument("--types", default="news", help="Comma-separated data types (news,reports,announcements,prices,fundamentals,fund_flow)")
-    parser.add_argument("--priority", type=int, default=50, help="Default priority (0-100)")
-    parser.add_argument("--custom", action="store_true", help="Place in custom_providers/ instead of backend/providers/")
+    parser.add_argument(
+        "--markets", default="CN", help="Comma-separated markets (CN,HK,US,ALL)"
+    )
+    parser.add_argument(
+        "--types",
+        default="news",
+        help="Comma-separated data types (news,reports,announcements,prices,fundamentals,fund_flow)",
+    )
+    parser.add_argument(
+        "--priority", type=int, default=50, help="Default priority (0-100)"
+    )
+    parser.add_argument(
+        "--custom",
+        action="store_true",
+        help="Place in custom_providers/ instead of backend/providers/",
+    )
     args = parser.parse_args()
 
     name = args.name.lower().strip()
@@ -79,7 +98,10 @@ def main():
     valid_types = set(ALL_METHODS)
     for dt in data_types:
         if dt not in valid_types:
-            print(f"Error: invalid data type '{dt}'. Valid: {', '.join(sorted(valid_types))}", file=sys.stderr)
+            print(
+                f"Error: invalid data type '{dt}'. Valid: {', '.join(sorted(valid_types))}",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
     methods = "\n".join(METHOD_TEMPLATE.format(method=dt) for dt in data_types)
