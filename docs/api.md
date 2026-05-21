@@ -96,6 +96,16 @@ uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 | GET | `/api/settings/export` | 导出设置（脱敏） |
 | POST | `/api/settings/import` | 导入设置 |
 
+### 报告中心
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/archive` | 报告列表（支持 stock/decision/date/type 筛选） |
+| GET | `/api/archive/stats` | 全局统计（总数、买/卖/持分布） |
+| GET | `/api/archive/combo-stats` | 模型组合统计 |
+| GET | `/api/archive/{path}` | 读取报告 Markdown 全文 |
+| DELETE | `/api/archive/{path}` | 删除报告 |
+
 ## SSE 流式聊天
 
 `POST /api/chat/stream` 返回 `text/event-stream`：

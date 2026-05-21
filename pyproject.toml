@@ -1,6 +1,6 @@
 [project]
 name = "ai-finance"
-version = "0.43"
+version = "0.44"
 description = "Multi-Agent Financial Analysis Workbench"
 readme = "README.md"
 license = "MIT"
