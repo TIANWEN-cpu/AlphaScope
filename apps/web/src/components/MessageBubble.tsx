@@ -2,6 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import { MODES } from "./Sidebar";
+import { TrendingUp, TrendingDown, Minus, Link, Shield, Clock } from "lucide-react";
 
 interface MessageBubbleProps {
   role: "user" | "assistant";
@@ -11,6 +12,15 @@ interface MessageBubbleProps {
   evidence?: Array<{ type: string; claim: string }>;
   compliance_note?: string;
   timestamp: string;
+}
+
+function SignalIcon({ signal }: { signal: string }) {
+  const s = signal.toLowerCase();
+  if (s.includes("买") || s.includes("buy"))
+    return <TrendingUp className="w-3 h-3 text-green-600 inline" />;
+  if (s.includes("卖") || s.includes("sell"))
+    return <TrendingDown className="w-3 h-3 text-red-600 inline" />;
+  return <Minus className="w-3 h-3 text-yellow-600 inline" />;
 }
 
 export function MessageBubble({
@@ -28,14 +38,13 @@ export function MessageBubble({
     <div className={`flex ${role === "user" ? "justify-end" : "justify-start"}`}>
       <div
         className={`max-w-3xl rounded-2xl px-4 py-3 ${
-          role === "user"
-            ? "bg-blue-600 text-white"
-            : "bg-white border shadow-sm"
+          role === "user" ? "bg-blue-600 text-white" : "bg-white border shadow-sm"
         }`}
       >
         {role === "assistant" && modeInfo && (
-          <div className="text-xs text-gray-400 mb-1">
-            {modeInfo.icon} {modeInfo.name}
+          <div className="flex items-center gap-1 text-xs text-gray-400 mb-1">
+            {modeInfo.icon && <modeInfo.icon className="w-3 h-3" />}
+            {modeInfo.name}
           </div>
         )}
 
@@ -46,14 +55,15 @@ export function MessageBubble({
         {/* Agent Voting */}
         {agents && Object.keys(agents).length > 0 && (
           <details className="mt-2 text-xs">
-            <summary className="cursor-pointer text-gray-500">
-              🗳️ Agent 投票详情
+            <summary className="cursor-pointer text-gray-500 flex items-center gap-1">
+              <Shield className="w-3 h-3" /> Agent 投票详情
             </summary>
             <div className="mt-1 space-y-1">
               {Object.entries(agents).map(([key, agent]) => (
                 <div key={key} className="flex justify-between gap-2">
                   <span className="font-medium">{key}</span>
                   <span>
+                    <SignalIcon signal={agent.signal} />{" "}
                     <span
                       className={
                         agent.signal === "买入"
@@ -76,8 +86,8 @@ export function MessageBubble({
         {/* Evidence Chain */}
         {evidence && evidence.length > 0 && (
           <details className="mt-2 text-xs">
-            <summary className="cursor-pointer text-gray-500">
-              📎 证据链 ({evidence.length} 条)
+            <summary className="cursor-pointer text-gray-500 flex items-center gap-1">
+              <Link className="w-3 h-3" /> 证据链 ({evidence.length} 条)
             </summary>
             <div className="mt-1 space-y-1">
               {evidence.map((ev, j) => (
@@ -96,7 +106,12 @@ export function MessageBubble({
           </div>
         )}
 
-        <div className="text-xs text-gray-400 mt-1">{timestamp}</div>
+        {timestamp && (
+          <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+            <Clock className="w-3 h-3" />
+            {timestamp}
+          </div>
+        )}
       </div>
     </div>
   );

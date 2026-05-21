@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import {
   streamChat,
   createConversation,
-  type ChatResult,
+  getConversation,
   type SseEvent,
 } from "@/lib/api";
 
@@ -20,32 +20,40 @@ export interface Message {
   timestamp: string;
 }
 
-export interface ChatState {
-  messages: Message[];
-  loading: boolean;
-  conversationId: string | null;
-  streamingContent: string;
-}
-
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+  const streamingRef = useRef("");
+
+  const loadConversation = useCallback(async (convId: string) => {
+    try {
+      const resp = await getConversation(convId);
+      if (resp && resp.messages) {
+        const loaded: Message[] = resp.messages.map(
+          (m: { role: string; content: string }, i: number) => ({
+            id: `loaded-${i}`,
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            timestamp: "",
+          })
+        );
+        setMessages(loaded);
+        setConversationId(convId);
+      }
+    } catch {
+      // Failed to load conversation
+    }
+  }, []);
 
   const sendMessage = useCallback(
-    async (
-      content: string,
-      mode: string,
-      stockSymbol: string,
-      stockName: string
-    ) => {
+    async (content: string, mode: string, stockSymbol: string, stockName: string) => {
       if (!content.trim() || loading) return;
 
-      // Add user message
       const userMsg: Message = {
-        id: `user-${Date.now()}`,
+        id: `user-${crypto.randomUUID()}`,
         role: "user",
         content,
         timestamp: new Date().toLocaleTimeString(),
@@ -53,8 +61,8 @@ export function useChat() {
       setMessages((prev) => [...prev, userMsg]);
       setLoading(true);
       setStreamingContent("");
+      streamingRef.current = "";
 
-      // Ensure conversation exists
       let convId = conversationId;
       if (!convId) {
         try {
@@ -71,7 +79,6 @@ export function useChat() {
         }
       }
 
-      // Stream response
       abortRef.current = streamChat(
         {
           conversation_id: convId || undefined,
@@ -80,51 +87,53 @@ export function useChat() {
           stock_symbol: stockSymbol || undefined,
           stock_name: stockName || undefined,
         },
-        // onEvent
         (event: SseEvent) => {
           if (event.type === "content" && event.chunk) {
-            setStreamingContent((prev) => prev + event.chunk);
+            streamingRef.current += event.chunk;
+            setStreamingContent(streamingRef.current);
           }
         },
-        // onDone
         (fullContent: string) => {
           const assistantMsg: Message = {
-            id: `assistant-${Date.now()}`,
+            id: `assistant-${crypto.randomUUID()}`,
             role: "assistant",
-            content: fullContent || streamingContent || "未获取到回复",
+            content: fullContent || streamingRef.current || "未获取到回复",
             timestamp: new Date().toLocaleTimeString(),
           };
           setMessages((prev) => [...prev, assistantMsg]);
           setStreamingContent("");
+          streamingRef.current = "";
           setLoading(false);
         },
-        // onError
         (error: string) => {
           const errorMsg: Message = {
-            id: `error-${Date.now()}`,
+            id: `error-${crypto.randomUUID()}`,
             role: "assistant",
             content: `请求失败: ${error}`,
             timestamp: new Date().toLocaleTimeString(),
           };
           setMessages((prev) => [...prev, errorMsg]);
           setStreamingContent("");
+          streamingRef.current = "";
           setLoading(false);
         }
       );
     },
-    [loading, conversationId, streamingContent]
+    [loading, conversationId]
   );
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
     setLoading(false);
     setStreamingContent("");
+    streamingRef.current = "";
   }, []);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
     setConversationId(null);
     setStreamingContent("");
+    streamingRef.current = "";
   }, []);
 
   return {
@@ -135,5 +144,6 @@ export function useChat() {
     sendMessage,
     cancel,
     clearMessages,
+    loadConversation,
   };
 }
