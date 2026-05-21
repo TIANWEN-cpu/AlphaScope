@@ -74,6 +74,7 @@ if HAS_FASTAPI:
     from backend.api.fundamentals import router as fundamentals_router
     from backend.api.news import router as news_router
     from backend.api.vision import router as vision_router
+    from backend.api.diagnostics import router as diagnostics_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -86,6 +87,7 @@ if HAS_FASTAPI:
     app.include_router(fundamentals_router)
     app.include_router(news_router)
     app.include_router(vision_router)
+    app.include_router(diagnostics_router)
 
     # ============== 全局错误处理 ==============
 
