@@ -89,9 +89,14 @@ async def list_provider_models(provider_id: str):
     try:
         from openai import OpenAI
 
-        client = OpenAI(api_key=provider["api_key"], base_url=provider["base_url"], timeout=15.0)
+        client = OpenAI(
+            api_key=provider["api_key"], base_url=provider["base_url"], timeout=15.0
+        )
         models = client.models.list()
-        model_list = [{"id": m.id, "owned_by": getattr(m, "owned_by", "")} for m in (models.data or [])]
+        model_list = [
+            {"id": m.id, "owned_by": getattr(m, "owned_by", "")}
+            for m in (models.data or [])
+        ]
         return ApiResponse(success=True, data={"models": model_list})
     except Exception as e:
         return ApiResponse(success=False, error=f"获取模型列表失败: {e}")
