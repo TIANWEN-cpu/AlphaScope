@@ -67,10 +67,12 @@ if HAS_FASTAPI:
     from backend.api.settings import router as settings_router
     from backend.api.reports import router as reports_router
     from backend.api.tasks import router as tasks_router
+    from backend.api.agents import router as agents_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
     app.include_router(tasks_router)
+    app.include_router(agents_router)
 
     # ============== 全局错误处理 ==============
 

@@ -115,6 +115,17 @@ uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 | POST | `/api/tasks/{id}/cancel` | 取消任务 |
 | POST | `/api/analysis/async` | 异步运行分析（返回 task_id） |
 
+### Agent/专家团管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/manage/agents` | Agent 列表 |
+| POST | `/api/manage/agents` | 创建/更新 Agent |
+| DELETE | `/api/manage/agents/{id}` | 删除 Agent |
+| GET | `/api/manage/teams` | 专家团列表 |
+| POST | `/api/manage/teams` | 创建/更新专家团 |
+| DELETE | `/api/manage/teams/{id}` | 删除专家团 |
+
 ## SSE 流式聊天
 
 `POST /api/chat/stream` 返回 `text/event-stream`：
