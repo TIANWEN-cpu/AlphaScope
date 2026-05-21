@@ -99,21 +99,91 @@ def generate_report(
         lines.append("---")
         lines.append("")
 
-    # 证据链
+    # 证据链（结构化）
     if all_evidence:
-        lines.append("## 证据链")
-        lines.append("")
-        for i, ev in enumerate(all_evidence, 1):
-            claim = ev.get("claim", ev.get("title", ""))
-            source = ev.get("source", ev.get("source_name", ""))
-            ev_type = ev.get("type", ev.get("evidence_type", ""))
-            conf = ev.get("confidence", "")
-            lines.append(f"{i}. **[{ev_type}]** {claim}")
-            if source:
-                lines.append(f"   - 来源: {source}")
-            if conf:
-                lines.append(f"   - 置信度: {conf}")
+        try:
+            from backend.quality.evidence_chain import build_evidence_chain
+
+            chain = build_evidence_chain(all_evidence)
+            bundles = chain.get("bundles", [])
+
+            if bundles:
+                lines.append("## 证据链")
+                lines.append("")
+
+                for i, bundle in enumerate(bundles, 1):
+                    claim = bundle["claim"]
+                    conf = bundle["confidence"]
+                    src_count = bundle["source_count"]
+                    trust = bundle["trust_score"]
+                    decay = bundle["decay_factor"]
+
+                    lines.append(f"### {i}. {claim}")
+                    lines.append(
+                        f"> 置信度: {conf:.0%} | 来源数: {src_count} | "
+                        f"可信度: {trust:.0%} | 时效性: {decay:.0%}"
+                    )
+                    lines.append("")
+
+                    for ev in bundle.get("evidence", []):
+                        ev_type = ev.get("type", ev.get("evidence_type", ""))
+                        source = ev.get("source", "")
+                        data_date = ev.get("data_date", "")
+                        lines.append(
+                            f"- [{ev_type}] {ev.get('claim', ev.get('title', ''))}"
+                        )
+                        if source:
+                            lines.append(f"  来源: {source}")
+                        if data_date:
+                            lines.append(f"  日期: {data_date}")
+
+                    # 矛盾标记
+                    for c in bundle.get("contradictions", []):
+                        lines.append(f"  > ⚠️ {c}")
+
+                    lines.append("")
+
+            # 全局矛盾
+            contradictions = chain.get("contradictions", [])
+            if contradictions:
+                lines.append("### 证据矛盾")
+                lines.append("")
+                for c in contradictions:
+                    lines.append(f"- ⚠️ {c}")
+                lines.append("")
+
+            # 证据缺失
+            missing = chain.get("missing_evidence", [])
+            if missing:
+                lines.append("### 证据缺失警告")
+                lines.append("")
+                for m in missing:
+                    lines.append(f"- ❗ {m}")
+                lines.append("")
+
+            # 覆盖率
+            coverage = chain.get("coverage", 1.0)
+            overall_conf = chain.get("overall_confidence", 0.0)
+            lines.append(
+                f"> 证据覆盖率: {coverage:.0%} | 综合置信度: {overall_conf:.0%}"
+            )
             lines.append("")
+
+        except Exception:
+            # 降级：扁平渲染
+            lines.append("## 证据链")
+            lines.append("")
+            for i, ev in enumerate(all_evidence, 1):
+                claim = ev.get("claim", ev.get("title", ""))
+                source = ev.get("source", ev.get("source_name", ""))
+                ev_type = ev.get("type", ev.get("evidence_type", ""))
+                conf = ev.get("confidence", "")
+                lines.append(f"{i}. **[{ev_type}]** {claim}")
+                if source:
+                    lines.append(f"   - 来源: {source}")
+                if conf:
+                    lines.append(f"   - 置信度: {conf}")
+                lines.append("")
 
     # 免责声明
     mode_val = conversation.get("mode", "free")

@@ -136,22 +136,19 @@ class SQLiteBackend(StorageBackend):
     def save_evidence(self, evidence_id: str, data: Dict[str, Any]) -> None:
         """保存证据到 evidence_items 表"""
         try:
-            conn = self._db.conn
-            conn.execute(
-                """INSERT OR REPLACE INTO evidence_items
-                   (id, source_id, source_name, evidence_type, claim, data_date, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    evidence_id,
-                    data.get("source_id", ""),
-                    data.get("source_name", ""),
-                    data.get("evidence_type", "other"),
-                    data.get("claim", ""),
-                    data.get("data_date", ""),
-                    time.time(),
-                ),
+            from backend.evidence_store import save_evidence as _save
+
+            _save(
+                evidence_type=data.get("evidence_type", "other"),
+                title=data.get("title", data.get("claim", "")),
+                source=data.get("source", data.get("source_name", "")),
+                claim=data.get("claim", ""),
+                content_summary=data.get("content_summary", ""),
+                symbols=data.get("symbols", []),
+                confidence=data.get("confidence", 0.7),
+                source_url=data.get("source_url", ""),
+                data_date=data.get("data_date", ""),
             )
-            conn.commit()
         except Exception:
             pass
 

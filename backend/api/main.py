@@ -70,12 +70,14 @@ if HAS_FASTAPI:
     from backend.api.tasks import router as tasks_router
     from backend.api.agents import router as agents_router
     from backend.api.knowledge import router as knowledge_router
+    from backend.api.evidence import router as evidence_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
     app.include_router(tasks_router)
     app.include_router(agents_router)
     app.include_router(knowledge_router)
+    app.include_router(evidence_router)
 
     # ============== 全局错误处理 ==============
 
