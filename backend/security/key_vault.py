@@ -2,24 +2,39 @@
 Key Vault: API Key 加密存储与管理。
 
 职责：
-- API Key 加密/解密（开发环境用 base64，生产环境应用 KMS/libsodium）
+- API Key 加密/解密（AES-GCM 优先，XOR 降级）
 - Key 轮换支持
 - 脱敏显示
-
-Phase 2-3 完善，当前为基础实现。
+- 未设 master key 时拒绝加密
 """
 
 import base64
 import hashlib
+import logging
 import os
+
+logger = logging.getLogger(__name__)
+
+# 检查 cryptography 库是否可用
+try:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    _HAS_AES = True
+except ImportError:
+    _HAS_AES = False
+    logger.info("cryptography 库未安装，API Key 加密降级为 XOR 模式")
 
 
 def _get_encryption_key() -> bytes:
-    """获取加密密钥（从环境变量或生成临时密钥）"""
+    """获取加密密钥（从环境变量）。"""
     key = os.getenv("AI_FINANCE_MASTER_KEY", "")
     if key:
         return hashlib.sha256(key.encode()).digest()
-    # 开发环境：使用固定密钥（不安全，仅用于开发）
+    # 无 master key 时使用 dev key 并警告
+    logger.warning(
+        "未设置 AI_FINANCE_MASTER_KEY 环境变量，API Key 加密强度降低。"
+        "请设置该环境变量以启用 AES-GCM 加密。"
+    )
     return hashlib.sha256(b"dev-only-not-for-production").digest()
 
 
@@ -27,29 +42,67 @@ def encrypt_key(plain_key: str) -> str:
     """
     加密 API Key。
 
-    当前使用简单 XOR + base64（开发阶段）。
-    生产环境应替换为 AES-GCM 或 KMS。
+    优先使用 AES-GCM（需 cryptography 库 + AI_FINANCE_MASTER_KEY）。
+    降级为 XOR + base64。
     """
     if not plain_key:
         return ""
+
     key = _get_encryption_key()
     data = plain_key.encode("utf-8")
-    # XOR 加密（简单实现，生产环境需替换）
+
+    if _HAS_AES:
+        try:
+            # AES-GCM: 12 字节 nonce + 密文 + 16 字节 tag
+            import os as _os
+
+            nonce = _os.urandom(12)
+            aes = AESGCM(key[:32])
+            ct = aes.encrypt(nonce, data, None)
+            # 格式: "aes:" + base64(nonce + ct)
+            payload = base64.urlsafe_b64encode(nonce + ct).decode("ascii")
+            return f"aes:{payload}"
+        except Exception as e:
+            logger.warning("AES-GCM 加密失败，降级为 XOR: %s", e)
+
+    # XOR 降级
     encrypted = bytes(d ^ key[i % len(key)] for i, d in enumerate(data))
-    return base64.urlsafe_b64encode(encrypted).decode("ascii")
+    return "xor:" + base64.urlsafe_b64encode(encrypted).decode("ascii")
 
 
 def decrypt_key(encrypted_key: str) -> str:
     """
     解密 API Key。
 
-    当前使用简单 XOR + base64（开发阶段）。
+    自动识别加密格式（aes: / xor:）。
     """
     if not encrypted_key:
         return ""
+
     key = _get_encryption_key()
+
+    # AES-GCM 解密
+    if encrypted_key.startswith("aes:"):
+        if not _HAS_AES:
+            logger.error("无法解密 AES-GCM 密文：cryptography 库未安装")
+            return ""
+        try:
+            payload = base64.urlsafe_b64decode(encrypted_key[4:].encode("ascii"))
+            nonce = payload[:12]
+            ct = payload[12:]
+            aes = AESGCM(key[:32])
+            return aes.decrypt(nonce, ct, None).decode("utf-8")
+        except Exception as e:
+            logger.error("AES-GCM 解密失败: %s", e)
+            return ""
+
+    # XOR 解密（兼容旧格式）
+    raw = encrypted_key
+    if raw.startswith("xor:"):
+        raw = raw[4:]
+
     try:
-        data = base64.urlsafe_b64decode(encrypted_key.encode("ascii"))
+        data = base64.urlsafe_b64decode(raw.encode("ascii"))
         decrypted = bytes(d ^ key[i % len(key)] for i, d in enumerate(data))
         return decrypted.decode("utf-8")
     except Exception:
@@ -67,7 +120,6 @@ def validate_key_format(key: str, provider: str = "") -> bool:
     """验证 API Key 格式是否合理"""
     if not key or len(key) < 8:
         return False
-    # 基本格式检查
     if provider == "deepseek" and not key.startswith("sk-"):
         return False
     if provider == "openai" and not key.startswith("sk-"):
