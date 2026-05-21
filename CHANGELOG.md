@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.90 - 2026-05-21
+
+### Release Candidate
+
+- 功能冻结，进入稳定化阶段
+- 全面测试验证（697 tests passed）
+- Lint 和格式化检查通过
+- Next.js 构建验证通过
+- CI 全绿
+- 整理 release notes
+- 更新用户手册
+
 ## v0.85 - 2026-05-21
 
 ### Windows 一键包
