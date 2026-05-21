@@ -1,5 +1,5 @@
 """
-FastAPI 主入口 (v0.48)
+FastAPI 主入口 (v0.50)
 
 提供完整的 REST API 和 SSE 流式输出：
 - /api/chat/stream — 对话流式输出 (SSE)
@@ -52,7 +52,7 @@ if HAS_FASTAPI:
     app = FastAPI(
         title="AI-Finance API",
         description="金融 AI 分析工作台 API — 多 Agent 异构分析、专家团、K线图视觉分析",
-        version="0.40.0",
+        version="0.50.0",
     )
 
     app.add_middleware(
@@ -105,7 +105,7 @@ if HAS_FASTAPI:
             data={
                 "status": "ok",
                 "service": "AI-Finance API",
-                "version": "0.40.0",
+                "version": "0.50.0",
             },
         )
 
@@ -113,7 +113,7 @@ if HAS_FASTAPI:
     async def health():
         return ApiResponse(
             success=True,
-            data=HealthData(status="healthy", version="0.40.0"),
+            data=HealthData(status="healthy", version="0.50.0"),
         )
 
     @app.get("/api/providers/health", response_model=ApiResponse[dict[str, Any]])
