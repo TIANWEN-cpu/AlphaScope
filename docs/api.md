@@ -84,6 +84,18 @@ uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 | GET | `/api/audit` | 审计日志 |
 | POST | `/api/files/upload` | 文件上传 |
 
+### 设置管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/settings/providers` | 列出所有 Provider |
+| POST | `/api/settings/providers` | 添加/更新 Provider |
+| DELETE | `/api/settings/providers/{id}` | 删除 Provider |
+| POST | `/api/settings/providers/{id}/test` | 测试连接 |
+| GET | `/api/settings/providers/{id}/models` | 列出 Provider 模型 |
+| GET | `/api/settings/export` | 导出设置（脱敏） |
+| POST | `/api/settings/import` | 导入设置 |
+
 ## SSE 流式聊天
 
 `POST /api/chat/stream` 返回 `text/event-stream`：
