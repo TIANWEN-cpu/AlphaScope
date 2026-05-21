@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-644%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v0.67-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.67)
+[![Tests](https://img.shields.io/badge/tests-656%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
+[![Release](https://img.shields.io/badge/release-v0.68-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.68)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -279,6 +279,7 @@ data/                   # 运行时数据 (gitignore)
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v0.68 | 2026-05-21 | 日志与诊断: diagnostics_store/诊断API 6端点/汇总统计, 656 tests |
 | v0.67 | 2026-05-21 | 合规输出: 禁用词扩展30+/风险级别免责声明/高风险标记, 644 tests |
 | v0.66 | 2026-05-21 | 本地安全加固: AES-GCM加密/日志脱敏, 644 tests |
 | v0.55 | 2026-05-21 | K线图视觉正式版: 结构化报告/市场推断/置信度门控/Vision API, 613 tests |
