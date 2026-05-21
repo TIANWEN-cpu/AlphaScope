@@ -22,16 +22,18 @@ ENV/
 
 # Data caches
 data/cache/
+data/db/
+data/uploads/
+data/logs/
 data/raw/
 *.parquet.tmp
-cache/
 
 # Reports / logs
-reports/*.log
-reports/streamlit-*.err
-reports/archive/
-reports/roundtables/
-reports/chat_history/
+data/reports/*.log
+data/reports/streamlit-*.err
+data/reports/archive/
+data/reports/roundtables/
+data/reports/chat_history/
 *.log
 
 # External study repos (separate git projects, not part of this repo)

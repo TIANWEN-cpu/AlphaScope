@@ -47,11 +47,14 @@ def ensure_directories(root: Path):
     """确保运行时目录存在"""
     dirs = [
         root / "cache",
-        root / "cache" / "fundamentals",
-        root / "cache" / "chroma_db",
-        root / "reports",
-        root / "reports" / "archive",
-        root / "uploads",
+        root / "data" / "db",
+        root / "data" / "cache",
+        root / "data" / "cache" / "fundamentals",
+        root / "data" / "cache" / "chroma_db",
+        root / "data" / "reports",
+        root / "data" / "reports" / "archive",
+        root / "data" / "uploads",
+        root / "data" / "logs",
     ]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)

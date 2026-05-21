@@ -87,15 +87,18 @@ def copy_runtime_files():
 
     # 创建运行时目录
     for d in [
-        "cache",
-        "cache/fundamentals",
-        "cache/chroma_db",
-        "reports",
-        "reports/archive",
-        "uploads",
+        "data",
+        "data/db",
+        "data/cache",
+        "data/cache/fundamentals",
+        "data/cache/chroma_db",
+        "data/reports",
+        "data/reports/archive",
+        "data/uploads",
+        "data/logs",
     ]:
         (DIST_DIR / d).mkdir(parents=True, exist_ok=True)
-    print("[创建] 运行时目录 (cache/, reports/, uploads/)")
+    print("[创建] 运行时目录 (data/db, data/cache, data/reports, data/uploads, data/logs)")
 
     # 创建 README
     readme = DIST_DIR / "使用说明.txt"
@@ -115,9 +118,10 @@ def copy_runtime_files():
         "访问地址:\n"
         "  http://localhost:8501\n\n"
         "数据目录:\n"
-        "  cache/    — 缓存数据\n"
-        "  reports/  — 分析报告\n"
-        "  uploads/  — 上传文件\n",
+        "  data/db/       — SQLite 数据库\n"
+        "  data/cache/    — 缓存数据\n"
+        "  data/reports/  — 分析报告\n"
+        "  data/uploads/  — 上传文件\n",
         encoding="utf-8",
     )
     print("[创建] 使用说明.txt")

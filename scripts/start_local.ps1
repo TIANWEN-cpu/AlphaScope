@@ -22,11 +22,11 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ""
 
 # 2. 创建必要目录
-$dirs = @("cache", "reports", "uploads")
+$dirs = @("data", "data/db", "data/cache", "data/reports", "data/uploads", "data/logs")
 foreach ($d in $dirs) {
     $path = Join-Path $ProjectRoot $d
     if (-not (Test-Path $path)) {
-        New-Item -ItemType Directory -Path $path | Out-Null
+        New-Item -ItemType Directory -Path $path -Force | Out-Null
         Write-Host "  创建目录: $d" -ForegroundColor Gray
     }
 }

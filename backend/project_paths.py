@@ -21,6 +21,12 @@ else:
 
 BACKEND_DIR = PROJECT_ROOT / "backend"
 CONFIG_DIR = PROJECT_ROOT / "config"
-REPORTS_DIR = PROJECT_ROOT / "reports"
-CACHE_DIR = PROJECT_ROOT / "cache"
 ENV_FILE = PROJECT_ROOT / ".env"
+
+# 运行时数据目录（统一在 data/ 下）
+DATA_DIR = PROJECT_ROOT / "data"
+DB_DIR = DATA_DIR / "db"
+CACHE_DIR = DATA_DIR / "cache"
+REPORTS_DIR = DATA_DIR / "reports"
+UPLOADS_DIR = DATA_DIR / "uploads"
+LOGS_DIR = DATA_DIR / "logs"

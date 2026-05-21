@@ -90,15 +90,18 @@ python scripts/check_env.py
 
 ```
 AI--FINANCE/
-├── cache/          # SQLite 数据库、缓存
-├── reports/        # 分析报告
-├── uploads/        # 上传文件
-├── apps/web/       # Next.js 前端
-├── backend/        # FastAPI 后端
-├── frontend/       # Streamlit 调试台
-├── config/         # YAML 配置
-├── scripts/        # 启动/停止脚本
-└── .env            # 环境变量（从 .env.example 复制）
+├── data/               # 运行时数据（gitignore）
+│   ├── db/             # SQLite 数据库
+│   ├── cache/          # 缓存、ChromaDB
+│   ├── reports/        # 分析报告
+│   ├── uploads/        # 上传文件
+│   └── logs/           # 日志
+├── apps/web/           # Next.js 前端
+├── backend/            # FastAPI 后端
+├── frontend/           # Streamlit 调试台
+├── config/             # YAML 配置
+├── scripts/            # 启动/停止/迁移脚本
+└── .env                # 环境变量（从 .env.example 复制）
 ```
 
 ## 常见问题

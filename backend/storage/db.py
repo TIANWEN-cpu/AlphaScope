@@ -14,9 +14,9 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-from backend.project_paths import CACHE_DIR
+from backend.project_paths import DB_DIR
 
-DB_PATH = CACHE_DIR / "ai_finance.db"
+DB_PATH = DB_DIR / "ai_finance.db"
 
 
 class Database:

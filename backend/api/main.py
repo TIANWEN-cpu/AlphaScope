@@ -523,8 +523,10 @@ if HAS_FASTAPI:
 
         file_hash = hashlib.md5(content).hexdigest()
 
-        upload_dir = Path("uploads")
-        upload_dir.mkdir(exist_ok=True)
+        from backend.project_paths import UPLOADS_DIR
+
+        upload_dir = UPLOADS_DIR
+        upload_dir.mkdir(parents=True, exist_ok=True)
         save_path = upload_dir / f"{file_hash}_{filename}"
         save_path.write_bytes(content)
 

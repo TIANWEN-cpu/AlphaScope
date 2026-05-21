@@ -111,7 +111,7 @@ def check_ports() -> bool:
 
 
 def check_dirs() -> bool:
-    required = ["cache", "reports", "uploads"]
+    required = ["data/db", "data/cache", "data/reports", "data/uploads"]
     missing = [d for d in required if not (PROJECT_ROOT / d).is_dir()]
     ok = len(missing) == 0
     detail = f"缺少: {', '.join(missing)}" if missing else "齐全"

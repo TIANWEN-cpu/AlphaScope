@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-396%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v0.42-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.42)
+[![Tests](https://img.shields.io/badge/tests-406%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
+[![Release](https://img.shields.io/badge/release-v0.43-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.43)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -219,7 +219,7 @@ Without a critic, agents produce confident-sounding but occasionally hallucinate
 ## Testing
 
 ```bash
-# Run all tests (396 tests, ~6s)
+# Run all tests (406 tests, ~6s)
 python -m pytest tests/ -v
 
 # Lint
@@ -235,53 +235,39 @@ make check    # lint + test
 ## Project Structure
 
 ```
-backend/
-├── agents/             # Agent layer
-│   ├── base.py         # Agent config, prompts, model mapping
-│   ├── financial_agents.py  # Agent execution
-│   ├── chairman.py     # Chairman synthesis agent
-│   └── validators.py   # Output schema validation
-├── models/             # Model layer
-│   └── provider_gateway.py  # LLM provider config, unified call
-├── runtime/            # Runtime layer
-│   ├── context_builder.py   # Market brief, evidence context
-│   └── orchestrator.py      # Mode-aware orchestration
-├── teams/              # Teams layer
-│   └── team_loader.py  # Expert team YAML config loader
-├── vision/             # Vision layer
-│   ├── image_loader.py      # Image loading
-│   ├── chart_detector.py    # Chart type detection
-│   ├── kline_interpreter.py # K-line analysis
-│   └── vision_agent.py      # Vision pipeline
-├── api/                # FastAPI backend
-│   └── main.py         # 25+ REST endpoints
-├── security/           # Key vault, masking
-├── ai_assistant/       # Chat orchestrator, compliance, reports
-├── providers/          # 17+ data source plugins
-├── quality/            # Dedup, source ranking
-├── storage/            # SQLite database (20+ tables)
-├── rag/                # ChromaDB vector store (optional)
-├── factors/            # Quantitative factor generator
-├── observability/      # Tracing, cost tracking
-├── llm_agents.py       # Backward-compatible facade
-├── critic.py           # Quality scoring
-├── expert_panel.py     # Expert roundtable
-└── pipeline.py         # End-to-end data pipeline
+backend/                # FastAPI 后端
+├── api/                # REST 端点 (34+)
+├── agents/             # Agent 配置与执行
+├── teams/              # 专家团
+├── runtime/            # 工作流编排
+├── providers/          # 20+ 数据源插件
+├── vision/             # 图片/K线分析
+├── storage/            # SQLite 数据库
+├── rag/                # ChromaDB (可选)
+├── security/           # Key vault, 脱敏
+├── schemas/            # Pydantic 模型
+└── settings_store.py   # 设置存储层
 
-frontend/
-├── dashboard.py        # Streamlit dashboard (10 tabs)
-└── components/         # UI panels
+frontend/               # Streamlit 调试台
+apps/web/               # Next.js 主前端
+config/                 # YAML 配置
+prompts/                # 提示词模板
+scripts/                # 启动/迁移/检查脚本
+tests/                  # 406 单元测试
 
-apps/web/               # Next.js frontend (standalone Docker build)
-config/                 # YAML configs (models, experts, data sources)
-prompts/                # Expert/team/vision prompts
-tests/                  # 312 unit tests
+data/                   # 运行时数据 (gitignore)
+├── db/                 # SQLite 数据库
+├── cache/              # ChromaDB, 缓存
+├── reports/            # 分析报告
+├── uploads/            # 上传文件
+└── logs/               # 日志
 ```
 
 ## Version History
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v0.43 | 2026-05-21 | 数据目录标准化：统一 data/ 目录、迁移脚本、406 tests |
 | v0.42 | 2026-05-21 | Settings Center: provider CRUD, connection test, export/import, 396 tests |
 | v0.41 | 2026-05-20 | Local Launcher: check_env, start/stop scripts, 387 tests |
 | v0.40.8 | 2026-05-20 | Smoke/SSE contract/degradation tests, contract docs, 376 tests |

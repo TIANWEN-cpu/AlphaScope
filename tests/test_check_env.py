@@ -71,8 +71,8 @@ def test_check_dirs_missing(tmp_path):
 
 def test_check_dirs_complete(tmp_path):
     """所有目录齐全应通过"""
-    for d in ("cache", "reports", "uploads"):
-        (tmp_path / d).mkdir()
+    for d in ("data/db", "data/cache", "data/reports", "data/uploads"):
+        (tmp_path / d).mkdir(parents=True)
     with patch.object(check_env, "PROJECT_ROOT", tmp_path):
         assert check_env.check_dirs() is True
 
