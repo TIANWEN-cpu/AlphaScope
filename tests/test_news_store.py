@@ -1,0 +1,282 @@
+"""Tests for News Store + Event Impact — 新闻存储层 + 事件影响分析 + API"""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("httpx")
+
+from httpx import ASGITransport, AsyncClient
+
+from backend.api.main import app
+
+
+# ============== news_store 测试 ==============
+
+
+class TestNewsStore:
+    """测试 news_store CRUD"""
+
+    def test_list_news(self):
+        from backend.news_store import list_news
+
+        with patch("backend.news_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchall.return_value = []
+            result = list_news()
+            assert isinstance(result, list)
+
+    def test_list_news_with_symbol(self):
+        from backend.news_store import list_news
+
+        with patch("backend.news_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchall.return_value = []
+            list_news(symbol="600519")
+
+    def test_list_news_with_event_type(self):
+        from backend.news_store import list_news
+
+        with patch("backend.news_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchall.return_value = []
+            list_news(event_type="earnings")
+
+    def test_get_news_not_found(self):
+        from backend.news_store import get_news
+
+        with patch("backend.news_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchone.return_value = None
+            assert get_news("nonexistent") is None
+
+    def test_search_news(self):
+        from backend.news_store import search_news
+
+        with patch("backend.news_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchall.return_value = []
+            result = search_news("茅台")
+            assert isinstance(result, list)
+
+    def test_list_announcements(self):
+        from backend.news_store import list_announcements
+
+        with patch("backend.news_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchall.return_value = []
+            result = list_announcements()
+            assert isinstance(result, list)
+
+    def test_list_announcements_with_symbol(self):
+        from backend.news_store import list_announcements
+
+        with patch("backend.news_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchall.return_value = []
+            list_announcements(symbol="600519")
+
+    def test_get_announcement_not_found(self):
+        from backend.news_store import get_announcement
+
+        with patch("backend.news_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchone.return_value = None
+            assert get_announcement("nonexistent") is None
+
+    def test_get_event_summary(self):
+        from backend.news_store import get_event_summary
+
+        with patch("backend.news_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchall.return_value = []
+            conn.execute.return_value.fetchone.return_value = {
+                "total": 0,
+                "avg_sent": 0,
+            }
+            result = get_event_summary("600519")
+            assert result["symbol"] == "600519"
+
+
+# ============== event_impact 测试 ==============
+
+
+class TestEventImpact:
+    """测试事件影响分析"""
+
+    def test_analyze_event_impact_empty(self):
+        from backend.event_impact import analyze_event_impact
+
+        result = analyze_event_impact([], [])
+        assert result == []
+
+    def test_analyze_event_impact_with_data(self):
+        from backend.event_impact import analyze_event_impact
+
+        events = [
+            {
+                "published_at": "2025-01-10",
+                "event_type": "earnings",
+                "sentiment": 0.5,
+                "title": "test",
+            },
+        ]
+        prices = [
+            {"date": f"2025-01-{i:02d}", "close": 100 + i, "change_pct": 0.5}
+            for i in range(5, 20)
+        ]
+        result = analyze_event_impact(events, prices, window_days=3)
+        assert len(result) == 1
+        assert "impact" in result[0]
+        assert result[0]["impact"]["impact_level"] in (
+            "强正面",
+            "正面",
+            "中性",
+            "负面",
+            "强负面",
+            "未知",
+        )
+
+    def test_sentiment_trend_empty(self):
+        from backend.event_impact import get_sentiment_trend
+
+        result = get_sentiment_trend([])
+        assert result == []
+
+    def test_sentiment_trend_with_data(self):
+        from backend.event_impact import get_sentiment_trend
+
+        events = [
+            {"published_at": "2025-01-10", "sentiment": 0.5},
+            {"published_at": "2025-01-10", "sentiment": -0.3},
+            {"published_at": "2025-01-11", "sentiment": 0.8},
+        ]
+        result = get_sentiment_trend(events)
+        assert len(result) == 2
+        assert result[0]["date"] == "2025-01-10"
+        assert result[0]["count"] == 2
+
+    def test_correlate_empty(self):
+        from backend.event_impact import correlate_events_prices
+
+        result = correlate_events_prices([], [])
+        assert result["correlation"] == 0
+
+    def test_correlate_with_data(self):
+        from backend.event_impact import correlate_events_prices
+
+        events = [
+            {
+                "published_at": "2025-01-10",
+                "sentiment": 0.8,
+                "event_type": "earnings",
+                "title": "good",
+            },
+            {
+                "published_at": "2025-01-15",
+                "sentiment": -0.5,
+                "event_type": "litigation",
+                "title": "bad",
+            },
+        ]
+        prices = [
+            {"date": f"2025-01-{i:02d}", "close": 100 + i, "change_pct": 0.5}
+            for i in range(5, 25)
+        ]
+        result = correlate_events_prices(events, prices)
+        assert "correlation" in result
+        assert result["event_count"] == 2
+
+    def test_classify_impact(self):
+        from backend.event_impact import _classify_impact
+
+        assert _classify_impact(5) == "强正面"
+        assert _classify_impact(2) == "正面"
+        assert _classify_impact(0) == "中性"
+        assert _classify_impact(-2) == "负面"
+        assert _classify_impact(-5) == "强负面"
+
+
+# ============== API 测试 ==============
+
+
+@pytest.fixture
+def client():
+    transport = ASGITransport(app=app)
+    return AsyncClient(transport=transport, base_url="http://test")
+
+
+@pytest.mark.anyio
+async def test_list_news(client):
+    """GET /api/news"""
+    with patch("backend.news_store.list_news", return_value=[]):
+        resp = await client.get("/api/news")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+    assert "news" in resp.json()["data"]
+
+
+@pytest.mark.anyio
+async def test_list_announcements(client):
+    """GET /api/news/announcements"""
+    with patch("backend.news_store.list_announcements", return_value=[]):
+        resp = await client.get("/api/news/announcements")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+
+
+@pytest.mark.anyio
+async def test_get_news_not_found(client):
+    """GET /api/news/{id} 不存在"""
+    with patch("backend.news_store.get_news", return_value=None):
+        resp = await client.get("/api/news/nonexistent")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is False
+
+
+@pytest.mark.anyio
+async def test_search_news(client):
+    """POST /api/news/search"""
+    with patch("backend.news_store.search_news", return_value=[]):
+        resp = await client.post("/api/news/search", json={"query": "test"})
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+
+
+@pytest.mark.anyio
+async def test_get_event_summary(client):
+    """GET /api/news/events/{symbol}"""
+    with patch(
+        "backend.news_store.get_event_summary",
+        return_value={
+            "symbol": "600519",
+            "days": 30,
+            "total_news": 0,
+            "avg_sentiment": 0,
+            "type_distribution": {},
+        },
+    ):
+        resp = await client.get("/api/news/events/600519")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["symbol"] == "600519"
+
+
+@pytest.mark.anyio
+async def test_get_event_impact_no_events(client):
+    """GET /api/news/impact/{symbol} 无事件"""
+    with patch("backend.news_store.list_news", return_value=[]):
+        resp = await client.get("/api/news/impact/600519")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is False
