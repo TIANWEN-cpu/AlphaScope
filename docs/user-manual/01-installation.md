@@ -38,13 +38,21 @@ npm --version
 
 ## 安装 AI-FINANCE
 
-### 方式一：下载发布包
+### 方式一：一键安装（推荐）
+
+1. 下载项目并解压
+2. 双击 `AI-Finance-Setup.bat`
+3. 按提示完成安装
+4. 桌面会出现 "AI-Finance" 快捷方式
+5. 以后双击快捷方式即可启动
+
+### 方式二：下载发布包
 
 1. 前往 [GitHub Releases](https://github.com/TIANWEN-cpu/AI--FINANCE/releases)
 2. 下载最新版本的压缩包
 3. 解压到任意目录
 
-### 方式二：Git 克隆
+### 方式三：Git 克隆
 
 ```bash
 git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git

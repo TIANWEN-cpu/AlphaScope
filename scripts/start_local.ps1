@@ -1,18 +1,36 @@
 # AI-Finance 本地启动脚本
-# 用法: powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1 [-WithStreamlit]
+# 用法: powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1 [-WithStreamlit] [-FirstRun]
 
 param(
-    [switch]$WithStreamlit
+    [switch]$WithStreamlit,
+    [switch]$FirstRun
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $PidsFile = Join-Path $ProjectRoot ".local_pids.json"
+$FirstRunFile = Join-Path $ProjectRoot ".first_run_complete"
 
 Write-Host "AI-Finance 本地启动" -ForegroundColor Cyan
 Write-Host "==================`n"
 
-# 1. 环境检查
+# 首次运行检测
+if (-not (Test-Path $FirstRunFile) -or $FirstRun) {
+    Write-Host "检测到首次运行，正在初始化环境..." -ForegroundColor Yellow
+
+    # 运行环境检查和自动修复
+    python (Join-Path $ProjectRoot "scripts/check_env.py") --fix
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "`n环境初始化失败，请查看上方错误信息。" -ForegroundColor Red
+        exit 1
+    }
+
+    # 创建首次运行标记文件
+    "First run completed at $(Get-Date)" | Set-Content $FirstRunFile
+    Write-Host ""
+}
+
+# 1. 环境检查（非首次运行时只检查不修复）
 Write-Host "正在检查环境..." -ForegroundColor Yellow
 python (Join-Path $ProjectRoot "scripts/check_env.py")
 if ($LASTEXITCODE -ne 0) {

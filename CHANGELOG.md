@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.85 - 2026-05-21
+
+### Windows 一键包
+
+- 新增 `AI-Finance-Setup.bat` 一键安装启动器
+- 新增 `scripts/install_deps.ps1` 自动依赖安装
+- 新增 `scripts/create_shortcut.ps1` 桌面快捷方式创建
+- 增强 `scripts/check_env.py` 支持 `--fix` 自动修复
+- 增强 `scripts/start_local.ps1` 支持首次运行检测
+- 更新 `scripts/start_local.bat` 集成首次运行安装
+
 ## v0.81 - 2026-05-21
 
 ### User Manual

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
 import socket
 import subprocess
 import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-REQUIRED_PYTHON = (3, 11)
+REQUIRED_PYTHON = (3, 10)
 REQUIRED_NODE = 18
 
 # Windows 终端 ANSI 颜色支持
@@ -80,23 +81,68 @@ def check_npm() -> bool:
     return _check("npm", ok, ver or "未安装")
 
 
-def check_deps() -> bool:
+def check_deps(auto_fix: bool = False) -> bool:
     missing = []
     for mod in ("fastapi", "streamlit", "openai", "uvicorn"):
         try:
             __import__(mod)
         except ImportError:
             missing.append(mod)
-    ok = len(missing) == 0
-    detail = f"缺少: {', '.join(missing)}" if missing else "已安装"
-    return _check("Python 依赖", ok, detail)
+
+    if not missing:
+        return _check("Python 依赖", True, "已安装")
+
+    if auto_fix:
+        print(f"  正在安装缺失依赖: {', '.join(missing)}")
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-e", "."],
+                cwd=PROJECT_ROOT,
+                check=True,
+                capture_output=True,
+            )
+            return _check("Python 依赖", True, "已自动安装")
+        except subprocess.CalledProcessError as e:
+            print(f"  安装失败: {e}")
+            return _check("Python 依赖", False, f"安装失败，缺少: {', '.join(missing)}")
+    else:
+        return _check("Python 依赖", False, f"缺少: {', '.join(missing)}")
 
 
-def check_env_file() -> bool:
+def check_frontend_deps(auto_fix: bool = False) -> bool:
+    node_modules = PROJECT_ROOT / "apps" / "web" / "node_modules"
+    if node_modules.exists():
+        return _check("前端依赖", True, "已安装")
+
+    if auto_fix:
+        print("  正在安装前端依赖...")
+        try:
+            subprocess.run(
+                ["npm", "install"],
+                cwd=PROJECT_ROOT / "apps" / "web",
+                check=True,
+                capture_output=True,
+                shell=sys.platform == "win32",
+            )
+            return _check("前端依赖", True, "已自动安装")
+        except subprocess.CalledProcessError:
+            return _check("前端依赖", False, "安装失败")
+    else:
+        return _check("前端依赖", False, "未安装")
+
+
+def check_env_file(auto_create: bool = False) -> bool:
     env = PROJECT_ROOT / ".env"
     example = PROJECT_ROOT / ".env.example"
     if env.exists():
         return _check(".env 文件", True, "存在")
+
+    if auto_create and example.exists():
+        import shutil
+
+        shutil.copy(example, env)
+        return _check(".env 文件", True, "已从 .env.example 创建")
+
     if example.exists():
         return _check(".env 文件", False, "不存在，请执行: copy .env.example .env")
     return _check(".env 文件", False, "不存在且无 .env.example 模板")
@@ -110,24 +156,36 @@ def check_ports() -> bool:
     return _check("端口", ok, detail)
 
 
-def check_dirs() -> bool:
-    required = ["data/db", "data/cache", "data/reports", "data/uploads"]
+def check_dirs(auto_create: bool = False) -> bool:
+    required = ["data/db", "data/cache", "data/reports", "data/uploads", "data/logs"]
     missing = [d for d in required if not (PROJECT_ROOT / d).is_dir()]
-    ok = len(missing) == 0
-    detail = f"缺少: {', '.join(missing)}" if missing else "齐全"
-    return _check("数据目录", ok, detail)
+
+    if not missing:
+        return _check("数据目录", True, "齐全")
+
+    if auto_create:
+        for d in missing:
+            (PROJECT_ROOT / d).mkdir(parents=True, exist_ok=True)
+        return _check("数据目录", True, f"已创建: {', '.join(missing)}")
+    else:
+        return _check("数据目录", False, f"缺少: {', '.join(missing)}")
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="AI-Finance 环境检查")
+    parser.add_argument("--fix", action="store_true", help="自动修复问题")
+    args = parser.parse_args()
+
     print("AI-Finance 环境检查\n")
     checks = [
         check_python(),
         check_node(),
         check_npm(),
-        check_deps(),
-        check_env_file(),
+        check_deps(auto_fix=args.fix),
+        check_frontend_deps(auto_fix=args.fix),
+        check_env_file(auto_create=args.fix),
         check_ports(),
-        check_dirs(),
+        check_dirs(auto_create=args.fix),
     ]
     passed = sum(checks)
     total = len(checks)
@@ -135,7 +193,10 @@ def main() -> int:
     if all(checks):
         print("\033[32m可以启动！\033[0m")
         return 0
-    print("\033[31m请先修复上述问题再启动。\033[0m")
+    if args.fix:
+        print("\033[33m部分问题无法自动修复，请手动处理。\033[0m")
+    else:
+        print("\033[31m请先修复上述问题再启动，或使用 --fix 自动修复。\033[0m")
     return 1
 
 
