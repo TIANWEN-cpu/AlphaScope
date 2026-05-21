@@ -45,8 +45,6 @@ if HAS_FASTAPI:
         ReportData,
         SearchData,
         TeamData,
-        VisionRequest,
-        VisionResultData,
     )
 
     app = FastAPI(
@@ -75,6 +73,7 @@ if HAS_FASTAPI:
     from backend.api.technical import router as technical_router
     from backend.api.fundamentals import router as fundamentals_router
     from backend.api.news import router as news_router
+    from backend.api.vision import router as vision_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -86,6 +85,7 @@ if HAS_FASTAPI:
     app.include_router(technical_router)
     app.include_router(fundamentals_router)
     app.include_router(news_router)
+    app.include_router(vision_router)
 
     # ============== 全局错误处理 ==============
 
@@ -341,60 +341,7 @@ if HAS_FASTAPI:
             ),
         )
 
-    # ============== 视觉分析 API ==============
-
-    @app.post("/api/vision/analyze", response_model=ApiResponse[VisionResultData])
-    async def analyze_vision(req: VisionRequest):
-        """图片/K线图分析"""
-        from backend.schemas.api import KlineAnalysisData, RealDataComparison
-        from backend.vision.vision_agent import analyze_image
-
-        result = analyze_image(
-            image_base64=req.image_base64,
-            mime_type=req.mime_type,
-            user_context=req.user_context,
-            vendor=req.vendor,
-            model=req.model,
-            ticker=req.ticker,
-        )
-
-        ticker = result.detection.ticker if result.detection else ""
-        needs_followup = result.needs_more_info or False
-        followup = result.missing_info if needs_followup else None
-
-        # 构建 K 线分析结构化数据
-        kline_data = None
-        if result.kline_analysis:
-            kline_data = KlineAnalysisData(
-                trend=result.kline_analysis.trend,
-                support_levels=result.kline_analysis.support_levels,
-                resistance_levels=result.kline_analysis.resistance_levels,
-                patterns=result.kline_analysis.patterns,
-                summary=result.kline_analysis.summary,
-            )
-
-        # 构建真实行情交叉验证数据
-        real_data = None
-        if result.real_data and result.real_data.data_available:
-            real_data = RealDataComparison(
-                real_trend=result.real_data.real_trend,
-                trend_consistent=result.real_data.trend_consistent,
-                latest_close=result.real_data.latest_close,
-                conflicts=result.real_data.conflicts,
-            )
-
-        return ApiResponse(
-            success=True,
-            data=VisionResultData(
-                chart_type=result.detection.chart_type if result.detection else None,
-                ticker=ticker or None,
-                analysis=result.summary or "",
-                needs_followup=needs_followup,
-                followup_question=followup,
-                kline_analysis=kline_data,
-                real_data=real_data,
-            ),
-        )
+    # ============== 视觉分析 API (已迁移至 backend/api/vision.py) ==============
 
     # ============== Agent 配置 API ==============
 

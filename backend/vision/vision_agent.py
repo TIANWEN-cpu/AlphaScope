@@ -443,6 +443,15 @@ def analyze_image(
 
     kline = interpret_kline(image_base64, mime_type, context, vendor, model)
 
+    # Step 3.5: 市场推断
+    if detection.ticker and not detection.market:
+        try:
+            from backend.price_store import get_market
+
+            detection.market = get_market(detection.ticker)
+        except Exception:
+            detection.market = "CN"
+
     # Step 4: 真实行情数据交叉验证
     real_comparison = None
     if detection.ticker:
@@ -472,32 +481,55 @@ def analyze_image(
         "请结合实时行情数据验证关键价位。本分析不构成投资建议。"
     )
 
-    summary_parts = []
-    if kline.trend:
-        summary_parts.append(f"趋势判断: {kline.trend}")
-    if kline.summary:
-        summary_parts.append(kline.summary)
+    # 置信度门控
+    confidence_warnings = []
+    if detection.confidence > 0 and detection.confidence < 0.6:
+        confidence_warnings.append("图表识别置信度较低，结果仅供参考")
+    if kline.confidence > 0 and kline.confidence < 0.6:
+        confidence_warnings.append("K线解读置信度较低，建议结合其他分析")
 
-    # 交叉验证摘要
-    if real_comparison and real_comparison.data_available:
-        if real_comparison.conflicts:
-            summary_parts.append(
-                f"[交叉验证] 发现 {len(real_comparison.conflicts)} 处冲突:"
-            )
-            for conflict in real_comparison.conflicts:
-                summary_parts.append(f"  - {conflict}")
-        else:
-            summary_parts.append("[交叉验证] 视觉分析与真实行情数据一致")
-        if real_comparison.latest_close > 0:
-            summary_parts.append(
-                f"最新收盘价: {real_comparison.latest_close:.2f} "
-                f"(数据来源: {real_comparison.data_source})"
-            )
-    elif real_comparison and not real_comparison.data_available:
-        summary_parts.append("[交叉验证] 未能获取真实行情数据，仅展示视觉分析结果")
+    # 生成结构化报告
+    try:
+        from backend.vision.report_generator import generate_vision_report
 
-    if missing:
-        summary_parts.append(f"需要补充: {', '.join(missing)}")
+        _temp_result = VisionAnalysisResult(
+            detection=detection,
+            kline_analysis=kline,
+            real_data=real_comparison,
+            needs_more_info=bool(missing),
+            missing_info=missing,
+            disclaimer=disclaimer,
+            summary="",
+            ok=True,
+        )
+        structured_summary = generate_vision_report(_temp_result)
+    except Exception:
+        # 降级到简单文本
+        summary_parts = []
+        if kline.trend:
+            summary_parts.append(f"趋势判断: {kline.trend}")
+        if kline.summary:
+            summary_parts.append(kline.summary)
+        if real_comparison and real_comparison.data_available:
+            if real_comparison.conflicts:
+                summary_parts.append(
+                    f"[交叉验证] 发现 {len(real_comparison.conflicts)} 处冲突:"
+                )
+                for conflict in real_comparison.conflicts:
+                    summary_parts.append(f"  - {conflict}")
+            else:
+                summary_parts.append("[交叉验证] 视觉分析与真实行情数据一致")
+            if real_comparison.latest_close > 0:
+                summary_parts.append(f"最新收盘价: {real_comparison.latest_close:.2f}")
+        if missing:
+            summary_parts.append(f"需要补充: {', '.join(missing)}")
+        structured_summary = "\n".join(summary_parts)
+
+    # 添加置信度警告
+    if confidence_warnings:
+        structured_summary += "\n\n## ⚠️ 置信度警告\n"
+        for w in confidence_warnings:
+            structured_summary += f"\n- {w}"
 
     return VisionAnalysisResult(
         detection=detection,
@@ -506,7 +538,7 @@ def analyze_image(
         needs_more_info=bool(missing),
         missing_info=missing,
         disclaimer=disclaimer,
-        summary="\n".join(summary_parts),
+        summary=structured_summary,
         ok=True,
     )
 
