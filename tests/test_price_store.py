@@ -1,0 +1,312 @@
+"""Tests for Price Store — 行情存储层 + API"""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("httpx")
+
+from httpx import ASGITransport, AsyncClient
+
+from backend.api.main import app
+
+
+# ============== normalize_symbol 测试 ==============
+
+
+class TestNormalizeSymbol:
+    """测试股票代码标准化"""
+
+    def test_plain_digits(self):
+        from backend.price_store import normalize_symbol
+
+        assert normalize_symbol("600519") == "600519"
+
+    def test_sh_suffix(self):
+        from backend.price_store import normalize_symbol
+
+        assert normalize_symbol("600519.SH") == "600519"
+
+    def test_sz_suffix(self):
+        from backend.price_store import normalize_symbol
+
+        assert normalize_symbol("000001.SZ") == "000001"
+
+    def test_bj_suffix(self):
+        from backend.price_store import normalize_symbol
+
+        assert normalize_symbol("830799.BJ") == "830799"
+
+    def test_prefix_format(self):
+        from backend.price_store import normalize_symbol
+
+        assert normalize_symbol("SH600519") == "600519"
+        assert normalize_symbol("SZ000001") == "000001"
+
+    def test_dot_prefix_format(self):
+        from backend.price_store import normalize_symbol
+
+        assert normalize_symbol("sh.600519") == "600519"
+
+    def test_empty(self):
+        from backend.price_store import normalize_symbol
+
+        assert normalize_symbol("") == ""
+        assert normalize_symbol("  ") == ""
+
+    def test_hk_stock(self):
+        from backend.price_store import normalize_symbol
+
+        assert normalize_symbol("00700.HK") == "00700"
+
+    def test_mixed_case(self):
+        from backend.price_store import normalize_symbol
+
+        assert normalize_symbol("600519.sh") == "600519"
+        assert normalize_symbol("600519.Sh") == "600519"
+
+
+# ============== get_market 测试 ==============
+
+
+class TestGetMarket:
+    """测试市场推断"""
+
+    def test_sh(self):
+        from backend.price_store import get_market
+
+        assert get_market("600519") == "CN"
+
+    def test_sz(self):
+        from backend.price_store import get_market
+
+        assert get_market("000001") == "CN"
+
+    def test_bj(self):
+        from backend.price_store import get_market
+
+        assert get_market("830799") == "CN"
+
+    def test_hk(self):
+        from backend.price_store import get_market
+
+        assert get_market("00700") == "HK"
+
+
+# ============== validate_price_bar 测试 ==============
+
+
+class TestValidatePriceBar:
+    """测试数据质量校验"""
+
+    def test_valid_bar(self):
+        from backend.price_store import validate_price_bar
+
+        bar = {"open": 100, "high": 105, "low": 98, "close": 103, "volume": 1000}
+        ok, msg = validate_price_bar(bar)
+        assert ok is True
+        assert msg == ""
+
+    def test_zero_price(self):
+        from backend.price_store import validate_price_bar
+
+        bar = {"open": 0, "high": 105, "low": 98, "close": 103, "volume": 1000}
+        ok, msg = validate_price_bar(bar)
+        assert ok is False
+        assert "OHLC" in msg
+
+    def test_high_below_low(self):
+        from backend.price_store import validate_price_bar
+
+        bar = {"open": 100, "high": 95, "low": 98, "close": 103, "volume": 1000}
+        ok, msg = validate_price_bar(bar)
+        assert ok is False
+        assert "最高价" in msg
+
+    def test_negative_volume(self):
+        from backend.price_store import validate_price_bar
+
+        bar = {"open": 100, "high": 105, "low": 98, "close": 103, "volume": -100}
+        ok, msg = validate_price_bar(bar)
+        assert ok is False
+        assert "成交量" in msg
+
+    def test_high_below_close(self):
+        from backend.price_store import validate_price_bar
+
+        bar = {"open": 100, "high": 103, "low": 98, "close": 105, "volume": 1000}
+        ok, msg = validate_price_bar(bar)
+        assert ok is False
+        assert "最高价" in msg
+
+    def test_low_above_open(self):
+        from backend.price_store import validate_price_bar
+
+        bar = {"open": 95, "high": 105, "low": 98, "close": 103, "volume": 1000}
+        ok, msg = validate_price_bar(bar)
+        assert ok is False
+        assert "最低价" in msg
+
+
+# ============== price_store CRUD 测试 ==============
+
+
+class TestPriceStore:
+    """测试 price_store CRUD"""
+
+    def test_save_price_bar(self):
+        from backend.price_store import save_price_bar
+
+        with patch("backend.price_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            save_price_bar(
+                {
+                    "symbol": "600519",
+                    "date": "2025-01-01",
+                    "open": 100,
+                    "high": 105,
+                    "low": 98,
+                    "close": 103,
+                    "volume": 1000,
+                }
+            )
+            assert conn.execute.called
+            assert conn.commit.called
+
+    def test_save_price_bars(self):
+        from backend.price_store import save_price_bars
+
+        with patch("backend.price_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            bars = [
+                {
+                    "symbol": "600519",
+                    "date": "2025-01-01",
+                    "open": 100,
+                    "high": 105,
+                    "low": 98,
+                    "close": 103,
+                },
+                {
+                    "symbol": "600519",
+                    "date": "2025-01-02",
+                    "open": 103,
+                    "high": 108,
+                    "low": 101,
+                    "close": 106,
+                },
+            ]
+            count = save_price_bars(bars)
+            assert count == 2
+
+    def test_get_prices(self):
+        from backend.price_store import get_prices
+
+        with patch("backend.price_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchall.return_value = []
+            result = get_prices("600519")
+            assert isinstance(result, list)
+
+    def test_get_latest_price_none(self):
+        from backend.price_store import get_latest_price
+
+        with patch("backend.price_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.fetchone.return_value = None
+            result = get_latest_price("600519")
+            assert result is None
+
+    def test_delete_prices(self):
+        from backend.price_store import delete_prices
+
+        with patch("backend.price_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.rowcount = 10
+            count = delete_prices("600519")
+            assert count == 10
+
+    def test_delete_prices_with_frequency(self):
+        from backend.price_store import delete_prices
+
+        with patch("backend.price_store._get_conn") as mock_conn:
+            conn = MagicMock()
+            mock_conn.return_value = conn
+            conn.execute.return_value.rowcount = 5
+            count = delete_prices("600519", frequency="1d")
+            assert count == 5
+
+
+# ============== API 测试 ==============
+
+
+@pytest.fixture
+def client():
+    transport = ASGITransport(app=app)
+    return AsyncClient(transport=transport, base_url="http://test")
+
+
+@pytest.mark.anyio
+async def test_normalize_endpoint(client):
+    """GET /api/prices/normalize/{symbol}"""
+    resp = await client.get("/api/prices/normalize/600519.SH")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["normalized"] == "600519"
+    assert data["data"]["market"] == "CN"
+
+
+@pytest.mark.anyio
+async def test_get_prices(client):
+    """GET /api/prices/{symbol}"""
+    with patch("backend.price_store.get_prices", return_value=[]):
+        resp = await client.get("/api/prices/600519")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+    assert resp.json()["data"]["total"] == 0
+
+
+@pytest.mark.anyio
+async def test_get_latest_price_not_found(client):
+    """GET /api/prices/{symbol}/latest 无数据"""
+    with patch("backend.price_store.get_latest_price", return_value=None):
+        resp = await client.get("/api/prices/600519/latest")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is False
+
+
+@pytest.mark.anyio
+async def test_get_latest_price_found(client):
+    """GET /api/prices/{symbol}/latest 有数据"""
+    mock_bar = {
+        "symbol": "600519",
+        "date": "2025-05-20",
+        "open": 100,
+        "high": 105,
+        "low": 98,
+        "close": 103,
+        "volume": 1000,
+    }
+    with patch("backend.price_store.get_latest_price", return_value=mock_bar):
+        resp = await client.get("/api/prices/600519/latest")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+    assert resp.json()["data"]["close"] == 103
+
+
+@pytest.mark.anyio
+async def test_fetch_prices_invalid_symbol(client):
+    """POST /api/prices/{symbol}/fetch 无效代码"""
+    with patch("backend.price_store.normalize_symbol", return_value=""):
+        resp = await client.post("/api/prices/INVALID/fetch")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is False
