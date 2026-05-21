@@ -594,6 +594,281 @@ def load_fundamentals(
     return data
 
 
+# ============== 估值指标计算 ==============
+
+
+def calc_valuation_metrics(
+    pe: float = 0,
+    pb: float = 0,
+    eps: float = 0,
+    revenue_yi: float = 0,
+    net_profit_yi: float = 0,
+    market_cap_yi: float = 0,
+) -> dict:
+    """计算估值指标：PEG/PS/EV-EBITDA 估算。"""
+    result = {
+        "pe": round(pe, 2) if pe else 0,
+        "pb": round(pb, 2) if pb else 0,
+        "eps": round(eps, 4) if eps else 0,
+        "peg": 0.0,
+        "ps": 0.0,
+        "ev_ebitda_est": 0.0,
+        "valuation_level": "unknown",
+    }
+
+    # PEG（PE / 净利润增速，需外部传入增速）
+    # PS（市值 / 营收）
+    if revenue_yi > 0 and market_cap_yi > 0:
+        result["ps"] = round(market_cap_yi / revenue_yi, 2)
+
+    # EV/EBITDA 估算（简化：市值 / 净利润 × 折旧系数）
+    if net_profit_yi > 0 and market_cap_yi > 0:
+        result["ev_ebitda_est"] = round(market_cap_yi / net_profit_yi * 0.8, 2)
+
+    # 估值水平判断
+    if pe > 0:
+        if pe < 15:
+            result["valuation_level"] = "低估"
+        elif pe < 30:
+            result["valuation_level"] = "合理"
+        elif pe < 60:
+            result["valuation_level"] = "偏高"
+        else:
+            result["valuation_level"] = "高估"
+
+    return result
+
+
+# ============== 盈利质量评估 ==============
+
+
+def assess_earnings_quality(
+    net_profit: float = 0,
+    operating_cf: float = 0,
+    non_recurring: float = 0,
+) -> dict:
+    """评估盈利质量。"""
+    result = {
+        "ocf_to_profit_ratio": 0.0,
+        "non_recurring_ratio": 0.0,
+        "quality_score": 0,
+        "quality_level": "unknown",
+        "warnings": [],
+    }
+
+    if net_profit > 0 and operating_cf != 0:
+        ratio = operating_cf / net_profit
+        result["ocf_to_profit_ratio"] = round(ratio, 2)
+        if ratio >= 1.0:
+            result["quality_score"] += 40
+        elif ratio >= 0.7:
+            result["quality_score"] += 25
+        else:
+            result["warnings"].append("经营现金流/净利润比偏低，盈利质量存疑")
+
+    if non_recurring != 0 and net_profit > 0:
+        ratio = abs(non_recurring) / net_profit
+        result["non_recurring_ratio"] = round(ratio, 2)
+        if ratio < 0.1:
+            result["quality_score"] += 30
+        elif ratio < 0.3:
+            result["quality_score"] += 15
+        else:
+            result["warnings"].append("扣非净利润占比过高，盈利依赖非经常性损益")
+
+    if net_profit > 0:
+        result["quality_score"] += 30
+
+    # 评级
+    score = result["quality_score"]
+    if score >= 80:
+        result["quality_level"] = "优秀"
+    elif score >= 60:
+        result["quality_level"] = "良好"
+    elif score >= 40:
+        result["quality_level"] = "一般"
+    else:
+        result["quality_level"] = "较差"
+
+    return result
+
+
+# ============== 现金流分析 ==============
+
+
+def analyze_cash_flow(
+    operating_cf: float = 0,
+    investing_cf: float = 0,
+    financing_cf: float = 0,
+    net_profit: float = 0,
+) -> dict:
+    """分析现金流状况。"""
+    free_cf = operating_cf + investing_cf  # 自由现金流 = 经营 + 投资
+
+    result = {
+        "operating_cf": round(operating_cf, 2),
+        "investing_cf": round(investing_cf, 2),
+        "financing_cf": round(financing_cf, 2),
+        "free_cash_flow": round(free_cf, 2),
+        "cf_coverage": 0.0,
+        "cf_pattern": "unknown",
+        "cf_score": 0,
+    }
+
+    # 现金流覆盖比（经营现金流 / 净利润）
+    if net_profit > 0:
+        result["cf_coverage"] = round(operating_cf / net_profit, 2)
+
+    # 现金流模式判断
+    if operating_cf > 0 and investing_cf < 0 and financing_cf > 0:
+        result["cf_pattern"] = "成长型"  # 经营+、投资-、融资+
+    elif operating_cf > 0 and investing_cf < 0 and financing_cf < 0:
+        result["cf_pattern"] = "成熟型"  # 经营+、投资-、融资-
+    elif operating_cf > 0 and investing_cf > 0:
+        result["cf_pattern"] = "收缩型"  # 经营+、投资+
+    elif operating_cf < 0:
+        result["cf_pattern"] = "预警型"  # 经营-
+    else:
+        result["cf_pattern"] = "其他"
+
+    # 评分
+    if operating_cf > 0:
+        result["cf_score"] += 30
+    if free_cf > 0:
+        result["cf_score"] += 30
+    if result["cf_coverage"] >= 1.0:
+        result["cf_score"] += 20
+    elif result["cf_coverage"] >= 0.5:
+        result["cf_score"] += 10
+    if financing_cf < 0:
+        result["cf_score"] += 20  # 分红/还债
+
+    return result
+
+
+# ============== 资产负债分析 ==============
+
+
+def analyze_balance_sheet(
+    debt_ratio: float = 0,
+    current_ratio: float = 0,
+    roa: float = 0,
+) -> dict:
+    """分析资产负债健康度。"""
+    result = {
+        "debt_ratio": round(debt_ratio, 2),
+        "current_ratio": round(current_ratio, 2),
+        "roa": round(roa, 2),
+        "health_score": 0,
+        "health_level": "unknown",
+        "warnings": [],
+    }
+
+    # 资产负债率评分
+    if debt_ratio > 0:
+        if debt_ratio < 40:
+            result["health_score"] += 30
+        elif debt_ratio < 60:
+            result["health_score"] += 20
+        elif debt_ratio < 70:
+            result["health_score"] += 10
+            result["warnings"].append("资产负债率偏高")
+        else:
+            result["warnings"].append("资产负债率过高，财务风险较大")
+
+    # 流动比率评分
+    if current_ratio > 0:
+        if current_ratio >= 2.0:
+            result["health_score"] += 30
+        elif current_ratio >= 1.5:
+            result["health_score"] += 20
+        elif current_ratio >= 1.0:
+            result["health_score"] += 10
+        else:
+            result["warnings"].append("流动比率不足，短期偿债压力大")
+
+    # ROA 评分
+    if roa > 0:
+        if roa >= 10:
+            result["health_score"] += 40
+        elif roa >= 5:
+            result["health_score"] += 25
+        elif roa >= 2:
+            result["health_score"] += 15
+        else:
+            result["health_score"] += 5
+
+    # 评级
+    score = result["health_score"]
+    if score >= 80:
+        result["health_level"] = "优秀"
+    elif score >= 60:
+        result["health_level"] = "良好"
+    elif score >= 40:
+        result["health_level"] = "一般"
+    else:
+        result["health_level"] = "较差"
+
+    return result
+
+
+# ============== 综合基本面评分 ==============
+
+
+def compute_fundamental_score(
+    valuation: dict | None = None,
+    earnings: dict | None = None,
+    cashflow: dict | None = None,
+    balance: dict | None = None,
+) -> dict:
+    """综合基本面评分（0-100）。"""
+    valuation = valuation or {}
+    earnings = earnings or {}
+    cashflow = cashflow or {}
+    balance = balance or {}
+
+    scores = {
+        "valuation": 0,
+        "earnings": 0,
+        "cashflow": 0,
+        "balance": 0,
+    }
+
+    # 估值评分
+    level = valuation.get("valuation_level", "unknown")
+    level_map = {"低估": 90, "合理": 70, "偏高": 40, "高估": 20}
+    scores["valuation"] = level_map.get(level, 50)
+
+    # 盈利质量评分
+    scores["earnings"] = earnings.get("quality_score", 50)
+
+    # 现金流评分
+    scores["cashflow"] = cashflow.get("cf_score", 50)
+
+    # 资产负债评分
+    scores["balance"] = balance.get("health_score", 50)
+
+    # 加权综合（各 25%）
+    total = sum(scores.values()) / 4
+    total = round(min(max(total, 0), 100), 1)
+
+    # 评级
+    if total >= 80:
+        grade = "A"
+    elif total >= 65:
+        grade = "B"
+    elif total >= 50:
+        grade = "C"
+    else:
+        grade = "D"
+
+    return {
+        "total_score": total,
+        "grade": grade,
+        "dimension_scores": scores,
+    }
+
+
 # ============== 命令行自测 ==============
 if __name__ == "__main__":
     import sys
