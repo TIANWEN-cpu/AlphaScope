@@ -71,7 +71,7 @@ def test_check_dirs_missing(tmp_path):
 
 def test_check_dirs_complete(tmp_path):
     """所有目录齐全应通过"""
-    for d in ("data/db", "data/cache", "data/reports", "data/uploads"):
+    for d in ("data/db", "data/cache", "data/reports", "data/uploads", "data/logs"):
         (tmp_path / d).mkdir(parents=True)
     with patch.object(check_env, "PROJECT_ROOT", tmp_path):
         assert check_env.check_dirs() is True
@@ -84,9 +84,11 @@ def test_main_all_pass(capsys):
         patch.object(check_env, "check_node", return_value=True),
         patch.object(check_env, "check_npm", return_value=True),
         patch.object(check_env, "check_deps", return_value=True),
+        patch.object(check_env, "check_frontend_deps", return_value=True),
         patch.object(check_env, "check_env_file", return_value=True),
         patch.object(check_env, "check_ports", return_value=True),
         patch.object(check_env, "check_dirs", return_value=True),
+        patch("sys.argv", ["check_env.py"]),
     ):
         assert check_env.main() == 0
 
@@ -98,8 +100,10 @@ def test_main_has_failure(capsys):
         patch.object(check_env, "check_node", return_value=False),
         patch.object(check_env, "check_npm", return_value=True),
         patch.object(check_env, "check_deps", return_value=True),
+        patch.object(check_env, "check_frontend_deps", return_value=True),
         patch.object(check_env, "check_env_file", return_value=True),
         patch.object(check_env, "check_ports", return_value=True),
         patch.object(check_env, "check_dirs", return_value=True),
+        patch("sys.argv", ["check_env.py"]),
     ):
         assert check_env.main() == 1

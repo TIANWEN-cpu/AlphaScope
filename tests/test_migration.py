@@ -93,7 +93,7 @@ def test_check_dirs_new_structure(tmp_path):
         sys.path.insert(0, str(SCRIPTS_DIR))
     import check_env
 
-    for d in ("data/db", "data/cache", "data/reports", "data/uploads"):
+    for d in ("data/db", "data/cache", "data/reports", "data/uploads", "data/logs"):
         (tmp_path / d).mkdir(parents=True)
     with patch.object(check_env, "PROJECT_ROOT", tmp_path):
         assert check_env.check_dirs() is True
