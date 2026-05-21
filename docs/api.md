@@ -106,6 +106,15 @@ uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 | GET | `/api/archive/{path}` | 读取报告 Markdown 全文 |
 | DELETE | `/api/archive/{path}` | 删除报告 |
 
+### 任务中心
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/tasks` | 任务列表（支持 status 筛选） |
+| GET | `/api/tasks/{id}` | 任务详情 |
+| POST | `/api/tasks/{id}/cancel` | 取消任务 |
+| POST | `/api/analysis/async` | 异步运行分析（返回 task_id） |
+
 ## SSE 流式聊天
 
 `POST /api/chat/stream` 返回 `text/event-stream`：

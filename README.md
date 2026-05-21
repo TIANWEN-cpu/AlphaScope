@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-415%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v0.44-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.44)
+[![Tests](https://img.shields.io/badge/tests-423%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
+[![Release](https://img.shields.io/badge/release-v0.45-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v0.45)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -170,6 +170,10 @@ The FastAPI backend exposes 25+ endpoints:
 | `/api/archive/stats` | GET | 报告统计 |
 | `/api/archive/combo-stats` | GET | 模型组合统计 |
 | `/api/archive/{path}` | GET/DELETE | 读取/删除报告 |
+| `/api/tasks` | GET | 任务列表 |
+| `/api/tasks/{id}` | GET | 任务详情 |
+| `/api/tasks/{id}/cancel` | POST | 取消任务 |
+| `/api/analysis/async` | POST | 异步运行分析 |
 | `/api/files/upload` | POST | File upload |
 | `/api/templates` | GET | Research task templates |
 | `/api/costs` | GET | LLM cost statistics |
@@ -223,7 +227,7 @@ Without a critic, agents produce confident-sounding but occasionally hallucinate
 ## Testing
 
 ```bash
-# Run all tests (415 tests, ~6s)
+# Run all tests (423 tests, ~6s)
 python -m pytest tests/ -v
 
 # Lint
@@ -271,6 +275,7 @@ data/                   # 运行时数据 (gitignore)
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v0.45 | 2026-05-21 | Task Center: 后台任务队列、任务列表/取消/异步分析 API, 423 tests |
 | v0.44 | 2026-05-21 | Report Center: 报告列表/统计/读取/删除 API, 415 tests |
 | v0.43 | 2026-05-21 | 数据目录标准化：统一 data/ 目录、迁移脚本、406 tests |
 | v0.42 | 2026-05-21 | Settings Center: provider CRUD, connection test, export/import, 396 tests |
