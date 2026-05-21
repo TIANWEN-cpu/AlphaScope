@@ -72,6 +72,7 @@ if HAS_FASTAPI:
     from backend.api.knowledge import router as knowledge_router
     from backend.api.evidence import router as evidence_router
     from backend.api.prices import router as prices_router
+    from backend.api.technical import router as technical_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -80,6 +81,7 @@ if HAS_FASTAPI:
     app.include_router(knowledge_router)
     app.include_router(evidence_router)
     app.include_router(prices_router)
+    app.include_router(technical_router)
 
     # ============== 全局错误处理 ==============
 
