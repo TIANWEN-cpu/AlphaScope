@@ -21,7 +21,9 @@ class AsyncAnalysisRequest(BaseModel):
 
 @router.get("/api/tasks")
 async def list_tasks(
-    status: Optional[str] = Query(None, description="状态筛选: pending/running/success/failed/cancelled"),
+    status: Optional[str] = Query(
+        None, description="状态筛选: pending/running/success/failed/cancelled"
+    ),
     limit: int = Query(50, ge=1, le=500, description="返回数量"),
 ):
     """任务列表"""
@@ -86,6 +88,10 @@ async def run_analysis_async(req: AsyncAnalysisRequest):
         task_type="analysis",
         func=_run,
         conversation_id=req.conversation_id,
-        input_data={"stock_symbol": req.stock_symbol, "stock_name": req.stock_name, "mode": req.mode},
+        input_data={
+            "stock_symbol": req.stock_symbol,
+            "stock_name": req.stock_name,
+            "mode": req.mode,
+        },
     )
     return ApiResponse(success=True, data={"task_id": task_id, "status": "pending"})
