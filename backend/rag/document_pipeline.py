@@ -237,24 +237,72 @@ class DocumentPipeline:
     def _index_document(self, doc: ProcessedDocument):
         """将文档索引到 RAG"""
         try:
-            from backend.rag.vector_store import get_vector_store
+            from backend.rag.vector_store import VectorStore
 
-            store = get_vector_store()
-
-            for i, chunk in enumerate(doc.chunks):
-                store.add(
-                    text=chunk,
-                    metadata={
-                        "doc_id": doc.doc_id,
-                        "filename": doc.filename,
-                        "file_type": doc.file_type,
-                        "chunk_index": i,
-                        **doc.metadata,
-                    },
-                )
+            store = VectorStore()
+            ids = [f"{doc.doc_id}_chunk_{i}" for i in range(len(doc.chunks))]
+            metadatas = [
+                {
+                    "doc_id": doc.doc_id,
+                    "filename": doc.filename,
+                    "file_type": doc.file_type,
+                    "chunk_index": i,
+                    **doc.metadata,
+                }
+                for i in range(len(doc.chunks))
+            ]
+            store.add_documents(
+                collection_name="user_documents",
+                documents=doc.chunks,
+                metadatas=metadatas,
+                ids=ids,
+            )
             logger.info(f"已索引文档 {doc.filename}: {doc.chunk_count} 个分块")
+            return ids
         except Exception as e:
             logger.debug(f"索引文档失败: {e}")
+            return []
+
+    def process_and_persist(
+        self, file_path: str, metadata: Optional[Dict] = None
+    ) -> Optional[ProcessedDocument]:
+        """处理文件 → 保存到 SQLite → 索引到向量库"""
+        from backend.file_store import content_hash, save_chunks, save_document
+
+        p = Path(file_path)
+        if not p.exists():
+            logger.warning(f"文件不存在: {file_path}")
+            return None
+
+        # 计算内容 hash
+        try:
+            raw = p.read_bytes()
+            c_hash = content_hash(raw)
+        except Exception:
+            c_hash = ""
+
+        # 处理文件（解析 → 清洗 → 分块）
+        doc = self.process_file(file_path, metadata)
+        if not doc:
+            return None
+
+        # 保存到 SQLite
+        saved = save_document(
+            title=doc.filename,
+            file_path=file_path,
+            content_hash=c_hash,
+            source_type="upload",
+            metadata=metadata or {},
+        )
+        doc.doc_id = saved["id"]
+
+        # 保存 chunks 到 SQLite
+        save_chunks(doc.doc_id, doc.chunks)
+
+        # 索引到向量库（ChromaDB 不可用时跳过）
+        self._index_document(doc)
+
+        return doc
 
     def get_document(self, doc_id: str) -> Optional[ProcessedDocument]:
         """获取已处理的文档"""

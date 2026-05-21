@@ -1,5 +1,5 @@
 """
-FastAPI 主入口 (v0.40.7)
+FastAPI 主入口 (v0.48)
 
 提供完整的 REST API 和 SSE 流式输出：
 - /api/chat/stream — 对话流式输出 (SSE)
@@ -10,6 +10,7 @@ FastAPI 主入口 (v0.40.7)
 - /api/models/providers — 模型供应商管理
 - /api/reports — 分析报告
 - /api/conversations — 对话管理
+- /api/knowledge — 知识库管理
 
 使用方式：
     uvicorn backend.api.main:app --reload --port 8000
@@ -68,11 +69,13 @@ if HAS_FASTAPI:
     from backend.api.reports import router as reports_router
     from backend.api.tasks import router as tasks_router
     from backend.api.agents import router as agents_router
+    from backend.api.knowledge import router as knowledge_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
     app.include_router(tasks_router)
     app.include_router(agents_router)
+    app.include_router(knowledge_router)
 
     # ============== 全局错误处理 ==============
 
