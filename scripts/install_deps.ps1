@@ -30,7 +30,7 @@ Write-Host "[OK] Node.js $nodeVer" -ForegroundColor Green
 # 3. 安装 Python 依赖
 Write-Host "`n安装 Python 依赖..." -ForegroundColor Yellow
 Set-Location $ProjectRoot
-pip install -e . 2>&1 | Out-Null
+pip install -e .
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[OK] Python 依赖已安装" -ForegroundColor Green
 } else {
@@ -42,7 +42,7 @@ if ($LASTEXITCODE -eq 0) {
 Write-Host "`n安装前端依赖..." -ForegroundColor Yellow
 $webDir = Join-Path $ProjectRoot "apps\web"
 Set-Location $webDir
-npm install 2>&1 | Out-Null
+npm install
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[OK] 前端依赖已安装" -ForegroundColor Green
 } else {

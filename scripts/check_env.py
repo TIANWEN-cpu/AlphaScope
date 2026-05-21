@@ -152,7 +152,11 @@ def check_ports() -> bool:
     ports = [3000, 8000, 8501]
     blocked = [p for p in ports if not _port_free(p)]
     ok = len(blocked) == 0
-    detail = f"被占用: {blocked}" if blocked else f"{ports} 均可用"
+    detail = (
+        f"被占用: {blocked} (运行 stop_local.ps1 释放)"
+        if blocked
+        else f"{ports} 均可用"
+    )
     return _check("端口", ok, detail)
 
 

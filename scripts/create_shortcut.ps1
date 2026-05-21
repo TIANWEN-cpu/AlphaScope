@@ -17,10 +17,17 @@ $shortcut = $WshShell.CreateShortcut($shortcutPath)
 
 # 设置快捷方式属性
 $shortcut.TargetPath = "powershell.exe"
-$shortcut.Arguments = "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ProjectRoot\scripts\start_local.ps1`""
+$shortcut.Arguments = "-ExecutionPolicy Bypass -File `"$ProjectRoot\scripts\start_local.ps1`""
 $shortcut.WorkingDirectory = $ProjectRoot
 $shortcut.Description = "AI-Finance 本地金融分析工作台"
-$shortcut.IconLocation = "powershell.exe,0"
+
+# 使用项目 logo（如果存在）
+$iconPath = Join-Path $ProjectRoot "assets\logo.ico"
+if (Test-Path $iconPath) {
+    $shortcut.IconLocation = "$iconPath,0"
+} else {
+    $shortcut.IconLocation = "powershell.exe,0"
+}
 
 # 保存
 $shortcut.Save()
