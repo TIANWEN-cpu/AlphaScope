@@ -62,6 +62,12 @@ if HAS_FASTAPI:
         allow_headers=["*"],
     )
 
+    # ============== 注册路由 ==============
+
+    from backend.api.settings import router as settings_router
+
+    app.include_router(settings_router)
+
     # ============== 全局错误处理 ==============
 
     @app.exception_handler(HTTPException)
