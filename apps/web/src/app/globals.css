@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --foreground: #171717;
-  --background: #ffffff;
+  --foreground: #e4e4e7;
+  --background: #09090b;
 }
 
 body {
@@ -13,6 +13,35 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out forwards;
+}
+
+/* Prose styles for markdown content */
 .prose h1, .prose h2, .prose h3 {
   margin-top: 1em;
   margin-bottom: 0.5em;
@@ -28,18 +57,20 @@ body {
 }
 
 .prose code {
-  background: #f3f4f6;
+  background: #27272a;
   padding: 0.2em 0.4em;
   border-radius: 0.25em;
   font-size: 0.875em;
+  color: #a1a1aa;
 }
 
 .prose pre {
-  background: #1f2937;
-  color: #e5e7eb;
+  background: #18181b;
+  color: #e4e4e7;
   padding: 1em;
   border-radius: 0.5em;
   overflow-x: auto;
+  border: 1px solid #27272a;
 }
 
 .prose table {
@@ -48,17 +79,32 @@ body {
 }
 
 .prose th, .prose td {
-  border: 1px solid #e5e7eb;
+  border: 1px solid #27272a;
   padding: 0.5em;
   text-align: left;
 }
 
 .prose th {
-  background: #f9fafb;
+  background: #18181b;
 }
 
-.bg-hero-gradient {
-  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.24), transparent 34%),
-    radial-gradient(circle at top right, rgba(20, 184, 166, 0.16), transparent 28%),
-    linear-gradient(135deg, #020617 0%, #0f172a 52%, #111827 100%);
+.prose strong {
+  color: #e4e4e7;
+}
+
+.prose a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.prose a:hover {
+  text-decoration: underline;
+}
+
+/* Line clamp utility */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
