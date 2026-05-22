@@ -5,7 +5,7 @@
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
 [![Tests](https://img.shields.io/badge/tests-697%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v1.0.1-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.0.1)
+[![Release](https://img.shields.io/badge/release-v1.1-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.1)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -279,6 +279,7 @@ data/                   # 运行时数据 (gitignore)
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v1.1 | 2026-05-22 | 前端完整重构: 深色工作台、K线SVG图、资讯/财务/资金流/因子四标签、SSE流式AI面板、存档/专家/健康/设置页面、资金流+因子 API |
 | v1.0.1 | 2026-05-22 | 性能优化 + 安全加固: async→sync 端点、YAML 缓存、并行 provider、SHA-256、React.memo、error boundary |
 | v1.0 | 2026-05-21 | Local 正式版: 一键启动、主工作台、专家团/K线/报告/备份、697 tests |
 | v0.90 | 2026-05-21 | Release Candidate: 功能冻结、全面测试、Next.js 构建、CI 全绿 |
@@ -335,14 +336,15 @@ data/                   # 运行时数据 (gitignore)
 | v0.5 | 2026-05-16 | 5-model heterogeneous architecture |
 | v0.1 | 2026-05-16 | Initial release |
 
-## Roadmap (v1.1)
+## Roadmap (v1.2)
 
-- 前端页面完善: K 线图页面、新闻页面、资金流页面
 - 异步 SSE 流式: orchestrator 改为异步生成器，真正流式输出
 - Auth 认证: API Key 或 session token
 - 前端响应式布局: 移动端适配、可折叠面板
 - 虚拟列表: 长对话性能优化
 - 更多 Provider 健康追踪接入
+- Playwright E2E 测试
+- API contract tests
 
 ## Documentation
 
