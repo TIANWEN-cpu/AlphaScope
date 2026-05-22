@@ -13,6 +13,8 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+build/
+dist/
 
 # Virtual envs
 venvs/
@@ -26,6 +28,9 @@ data/db/
 data/uploads/
 data/logs/
 data/raw/
+cache/
+uploads/
+.first_run_complete
 *.parquet.tmp
 
 # Reports / logs
@@ -34,6 +39,7 @@ data/reports/streamlit-*.err
 data/reports/archive/
 data/reports/roundtables/
 data/reports/chat_history/
+reports/archive/
 *.log
 
 # External study repos (separate git projects, not part of this repo)

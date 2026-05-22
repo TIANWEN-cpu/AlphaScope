@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.1 - 2026-05-22
+
+### Windows 前端与启动修复
+
+- 修复 v0.85 Windows 一键包遗留问题：PowerShell UTF-8 无 BOM 脚本在 GB2312 环境下解析失败。
+- 修复 `start_local.ps1` 使用 `npm` 可能误打开 Notepad，导致 Next.js 3000 端口未正确启动。
+- 修复 `stop_local.ps1` 使用 `$pid` 与 PowerShell 内置变量冲突的问题。
+- 增强停止脚本：递归停止进程树，清理端口 3000/8000/8501 和残留 Next.js 子进程。
+- 新增 `apps/web/postcss.config.js`，修复 v1.0 主前端 Tailwind CSS 未输出、`layout.css` 404、页面呈现裸 HTML 的问题。
+- 启动前清理 `apps/web/.next`，避免 `next build` 覆盖 dev server 缓存后 CSS 404。
+- 重做 Next.js 主工作台 UI：左侧研究控制台、中间分析区、右侧研究监控面板。
+- 修复 `/health` 版本号仍为 `0.50.0` 的问题，统一为 `1.0.1`。
+- 更新前端 package 版本为 `1.0.1`，补充 v1.0.1 release notes。
+
 ## v1.0 - 2026-05-21
 
 ### 正式版发布

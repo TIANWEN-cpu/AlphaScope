@@ -47,10 +47,12 @@ if HAS_FASTAPI:
         TeamData,
     )
 
+    api_version = "1.0.1"
+
     app = FastAPI(
         title="AI-Finance API",
         description="金融 AI 分析工作台 API — 多 Agent 异构分析、专家团、K线图视觉分析",
-        version="0.50.0",
+        version=api_version,
     )
 
     app.add_middleware(
@@ -115,7 +117,7 @@ if HAS_FASTAPI:
             data={
                 "status": "ok",
                 "service": "AI-Finance API",
-                "version": "0.50.0",
+                "version": api_version,
             },
         )
 
@@ -123,7 +125,7 @@ if HAS_FASTAPI:
     async def health():
         return ApiResponse(
             success=True,
-            data=HealthData(status="healthy", version="0.50.0"),
+            data=HealthData(status="healthy", version=api_version),
         )
 
     @app.get("/api/providers/health", response_model=ApiResponse[dict[str, Any]])

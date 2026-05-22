@@ -5,7 +5,7 @@
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
 [![Tests](https://img.shields.io/badge/tests-697%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v1.0-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.0)
+[![Release](https://img.shields.io/badge/release-v1.0.1-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.0.1)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -279,6 +279,11 @@ data/                   # 运行时数据 (gitignore)
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v1.0.1 | 2026-05-22 | Windows 前端与启动修复: Tailwind CSS 404/裸 HTML、Next.js 残留进程、PowerShell 兼容性 |
+| v1.0 | 2026-05-21 | Local 正式版: 一键启动、主工作台、专家团/K线/报告/备份、697 tests |
+| v0.90 | 2026-05-21 | Release Candidate: 功能冻结、全面测试、Next.js 构建、CI 全绿 |
+| v0.85 | 2026-05-21 | Windows 一键包: 启动器/依赖安装/快捷方式；v1.0.1 修复 PowerShell/npm/stop 脚本问题 |
+| v0.81 | 2026-05-21 | 用户手册: 安装、快速开始、模型/数据源、专家团、K线、报告、FAQ |
 | v0.70 | 2026-05-21 | Local RC: 稳定性/错误处理/诊断/降级/备份验收, 697 tests |
 | v0.69 | 2026-05-21 | 性能优化: TTLCache/重试退避/并发限制, 675 tests |
 | v0.68 | 2026-05-21 | 日志与诊断: diagnostics_store/诊断API 6端点/汇总统计, 656 tests |

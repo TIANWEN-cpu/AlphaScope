@@ -345,8 +345,8 @@ class TestVersion:
     """版本号验证"""
 
     @pytest.mark.anyio
-    async def test_version_is_050(self, client):
-        """API 版本为 0.50.0"""
+    async def test_version_is_101(self, client):
+        """API 版本为 1.0.1"""
         resp = await client.get("/health")
         assert resp.status_code == 200
-        assert resp.json()["data"]["version"] == "0.50.0"
+        assert resp.json()["data"]["version"] == "1.0.1"

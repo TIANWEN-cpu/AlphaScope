@@ -1,5 +1,5 @@
 /**
- * AI-Finance API Client (v0.40)
+ * AI-Finance API Client (v1.0.1)
  *
  * Connects to the FastAPI backend for chat, analysis, vision, and config.
  * Handles SSE streaming for chat responses.

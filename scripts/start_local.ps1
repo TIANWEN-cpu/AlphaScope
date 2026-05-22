@@ -1,4 +1,4 @@
-# AI-Finance 本地启动脚本
+﻿# AI-Finance 本地启动脚本
 # 用法: powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1 [-WithStreamlit] [-FirstRun]
 
 param(
@@ -72,7 +72,16 @@ Write-Host "  PID: $($apiProc.Id)" -ForegroundColor Gray
 # Next.js
 Write-Host "启动 Next.js (端口 3000)..." -ForegroundColor Green
 $webDir = Join-Path $ProjectRoot "apps\web"
-$webProc = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -WorkingDirectory $webDir -PassThru -WindowStyle Hidden
+$nextCacheDir = Join-Path $webDir ".next"
+if (Test-Path $nextCacheDir) {
+    Remove-Item $nextCacheDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "  已清理 Next.js 缓存" -ForegroundColor Gray
+}
+$npmCmd = (Get-Command "npm.cmd" -ErrorAction SilentlyContinue).Source
+if (-not $npmCmd) {
+    $npmCmd = (Get-Command "npm" -ErrorAction Stop).Source
+}
+$webProc = Start-Process -FilePath $npmCmd -ArgumentList "run", "dev" -WorkingDirectory $webDir -PassThru -WindowStyle Hidden
 $pids["web"] = $webProc.Id
 Write-Host "  PID: $($webProc.Id)" -ForegroundColor Gray
 

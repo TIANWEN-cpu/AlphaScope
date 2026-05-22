@@ -1,4 +1,4 @@
-# AI-Finance 创建桌面快捷方式
+﻿# AI-Finance 创建桌面快捷方式
 # 用法: powershell -ExecutionPolicy Bypass -File scripts/create_shortcut.ps1
 
 $ErrorActionPreference = "Stop"
