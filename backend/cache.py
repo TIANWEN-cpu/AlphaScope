@@ -81,6 +81,15 @@ class TTLCache:
             oldest = min(self._data, key=lambda k: self._data[k][1])
             del self._data[oldest]
 
+    def cleanup_expired(self) -> int:
+        """主动清理所有过期项，返回清理数量。"""
+        with self._lock:
+            now = time.time()
+            expired = [k for k, (_, exp) in self._data.items() if exp < now]
+            for k in expired:
+                del self._data[k]
+            return len(expired)
+
 
 # 全局缓存实例
 _global_cache = TTLCache(max_size=2000)

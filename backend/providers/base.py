@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class ProviderStatus(str, Enum):
     HEALTHY = "healthy"
     DEGRADED = "degraded"
-    UNHEALTHY = "unknown"
+    UNHEALTHY = "unhealthy"
 
 
 @dataclass

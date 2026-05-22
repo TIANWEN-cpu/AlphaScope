@@ -50,9 +50,11 @@ async def get_combo_stats():
     return ApiResponse(success=True, data={"combos": _combo()})
 
 
-@router.get("/{path:path}")
+@router.get("/report/{path:path}")
 async def get_report(path: str):
     """读取报告内容"""
+    if ".." in path or path.startswith("/"):
+        raise HTTPException(status_code=400, detail="非法路径")
     from backend.archive import load_report as _load
 
     content = _load(path)
@@ -61,9 +63,11 @@ async def get_report(path: str):
     return ApiResponse(success=True, data={"path": path, "content": content})
 
 
-@router.delete("/{path:path}")
+@router.delete("/report/{path:path}")
 async def delete_report(path: str):
     """删除报告"""
+    if ".." in path or path.startswith("/"):
+        raise HTTPException(status_code=400, detail="非法路径")
     from backend.archive import delete_report as _delete
 
     deleted = _delete(path)

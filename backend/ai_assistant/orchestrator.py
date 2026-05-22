@@ -14,18 +14,12 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
-import sys
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-
-# 确保 backend 在 path 中
-_backend_dir = os.path.join(os.path.dirname(__file__), "..")
-if _backend_dir not in sys.path:
-    sys.path.insert(0, _backend_dir)
 
 from .compliance import check_forbidden_words, wrap_with_disclaimer
 from .conversation_store import ConversationStore
@@ -367,7 +361,7 @@ class ChatOrchestrator:
             if stock_symbol:
                 title = f"{stock_name}({stock_symbol}) - {mode_label}"
             else:
-                title = f"{mode_label} - {__import__('datetime').datetime.now().strftime('%m-%d %H:%M')}"
+                title = f"{mode_label} - {datetime.now().strftime('%m-%d %H:%M')}"
         return self._store.create_conversation(
             title=title,
             stock_symbol=stock_symbol,

@@ -17,6 +17,7 @@ try:
 except ImportError:
     from backend.project_paths import CONFIG_DIR
 
+from backend.cache import get_cached
 
 EXPERTS_YAML_PATH = CONFIG_DIR / "experts.yaml"
 
@@ -65,8 +66,8 @@ class ExpertTeam:
     require_risk_review: bool = True
 
 
-def load_teams(config_path: Optional[str] = None) -> Dict[str, ExpertTeam]:
-    """从 experts.yaml 的 teams 段加载所有专家团配置"""
+def _load_teams_from_disk(config_path: Optional[str] = None) -> Dict[str, ExpertTeam]:
+    """从磁盘加载专家团配置（内部函数，无缓存）"""
     p = Path(config_path) if config_path else EXPERTS_YAML_PATH
     if not p.exists():
         return {}
@@ -120,6 +121,13 @@ def load_teams(config_path: Optional[str] = None) -> Dict[str, ExpertTeam]:
             members=members,
         )
     return teams
+
+
+def load_teams(config_path: Optional[str] = None) -> Dict[str, ExpertTeam]:
+    """从 experts.yaml 的 teams 段加载所有专家团配置（带缓存）"""
+    if config_path is not None:
+        return _load_teams_from_disk(config_path)
+    return get_cached("teams:all", lambda: _load_teams_from_disk(), ttl_seconds=60)
 
 
 def get_team(team_id: str, config_path: Optional[str] = None) -> Optional[ExpertTeam]:

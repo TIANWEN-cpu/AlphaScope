@@ -129,7 +129,7 @@ if HAS_FASTAPI:
         )
 
     @app.get("/api/providers/health", response_model=ApiResponse[dict[str, Any]])
-    async def providers_health():
+    def providers_health():
         """数据源健康状态"""
         from backend.providers.registry import get_registry
 
@@ -170,7 +170,7 @@ if HAS_FASTAPI:
     # ============== 对话 API ==============
 
     @app.post("/api/conversations", response_model=ApiResponse[ConversationData])
-    async def create_conversation(req: ConversationCreate):
+    def create_conversation(req: ConversationCreate):
         """创建新对话"""
         from backend.ai_assistant.conversation_store import ConversationStore
         from backend.storage.db import Database
@@ -189,7 +189,7 @@ if HAS_FASTAPI:
         )
 
     @app.get("/api/conversations", response_model=ApiResponse[dict[str, Any]])
-    async def list_conversations(stock_symbol: Optional[str] = None, limit: int = 20):
+    def list_conversations(stock_symbol: Optional[str] = None, limit: int = 20):
         """列出对话"""
         from backend.ai_assistant.conversation_store import ConversationStore
         from backend.storage.db import Database
@@ -202,7 +202,7 @@ if HAS_FASTAPI:
         "/api/conversations/{conversation_id}",
         response_model=ApiResponse[dict[str, Any]],
     )
-    async def get_conversation(conversation_id: str):
+    def get_conversation(conversation_id: str):
         """获取对话详情"""
         from backend.ai_assistant.conversation_store import ConversationStore
         from backend.storage.db import Database
@@ -220,7 +220,7 @@ if HAS_FASTAPI:
         "/api/conversations/{conversation_id}",
         response_model=ApiResponse[dict[str, str]],
     )
-    async def delete_conversation(conversation_id: str):
+    def delete_conversation(conversation_id: str):
         """删除对话"""
         from backend.ai_assistant.conversation_store import ConversationStore
         from backend.storage.db import Database
@@ -253,7 +253,7 @@ if HAS_FASTAPI:
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     @app.post("/api/chat/stream")
-    async def chat_stream(req: ChatRequest):
+    def chat_stream(req: ChatRequest):
         """对话流式输出 (SSE)"""
         from backend.ai_assistant.orchestrator import ChatOrchestrator
 
@@ -291,7 +291,7 @@ if HAS_FASTAPI:
     # ============== 分析 API ==============
 
     @app.post("/api/analysis/run", response_model=ApiResponse[AnalysisResultData])
-    async def run_analysis(req: AnalysisRequest):
+    def run_analysis(req: AnalysisRequest):
         """运行 Agent 分析"""
         from backend.runtime.orchestrator import run_agents_with_mode
         from backend.agent_modes import AnalysisMode
@@ -350,14 +350,14 @@ if HAS_FASTAPI:
     # ============== Agent 配置 API ==============
 
     @app.get("/api/agents", response_model=ApiResponse[dict[str, Any]])
-    async def list_agents():
+    def list_agents():
         """列出所有 Agent 配置"""
         from backend.agents.base import get_default_agent_configs
 
         return ApiResponse(success=True, data={"agents": get_default_agent_configs()})
 
     @app.get("/api/agents/models", response_model=ApiResponse[dict[str, Any]])
-    async def list_agent_models():
+    def list_agent_models():
         """列出 Agent 模型分配表"""
         from backend.agents.financial_agents import get_agent_model_table
 
@@ -375,14 +375,14 @@ if HAS_FASTAPI:
     # ============== 专家团 API ==============
 
     @app.get("/api/teams", response_model=ApiResponse[dict[str, Any]])
-    async def list_teams():
+    def list_teams():
         """列出所有专家团"""
         from backend.teams.team_loader import list_team_names
 
         return ApiResponse(success=True, data={"teams": list_team_names()})
 
     @app.get("/api/teams/{team_id}", response_model=ApiResponse[TeamData])
-    async def get_team(team_id: str):
+    def get_team(team_id: str):
         """获取专家团详情"""
         from backend.teams.team_loader import get_team
 
@@ -411,7 +411,7 @@ if HAS_FASTAPI:
     # ============== 模型供应商 API ==============
 
     @app.get("/api/models/providers", response_model=ApiResponse[dict[str, Any]])
-    async def list_providers():
+    def list_providers():
         """列出所有模型供应商"""
         from backend.models.provider_gateway import get_provider_list
 
@@ -421,7 +421,7 @@ if HAS_FASTAPI:
         "/api/models/providers/{provider_id}/models",
         response_model=ApiResponse[dict[str, Any]],
     )
-    async def list_provider_models(provider_id: str):
+    def list_provider_models(provider_id: str):
         """列出指定供应商的模型"""
         from backend.models.provider_gateway import get_provider_models
 
@@ -431,7 +431,7 @@ if HAS_FASTAPI:
     # ============== 报告 API ==============
 
     @app.get("/api/reports/{report_id}", response_model=ApiResponse[ReportData])
-    async def get_report(report_id: str):
+    def get_report(report_id: str):
         """获取分析报告"""
         from backend.ai_assistant.report_generator import generate_report
         from backend.ai_assistant.conversation_store import ConversationStore
@@ -457,7 +457,7 @@ if HAS_FASTAPI:
     # ============== 分析模式 API ==============
 
     @app.get("/api/modes", response_model=ApiResponse[dict[str, Any]])
-    async def list_modes():
+    def list_modes():
         """列出所有分析模式"""
         from backend.agent_modes import get_mode_choices
 
@@ -491,7 +491,7 @@ if HAS_FASTAPI:
         if len(content) > 20 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="文件大小超过 20MB 限制")
 
-        file_hash = hashlib.md5(content).hexdigest()
+        file_hash = hashlib.sha256(content).hexdigest()[:16]
 
         from backend.project_paths import UPLOADS_DIR
 
@@ -505,7 +505,7 @@ if HAS_FASTAPI:
             data=FileUploadData(
                 filename=filename,
                 size=len(content),
-                path=str(save_path),
+                path=filename,
                 message="上传成功",
             ),
         )
@@ -545,7 +545,7 @@ if HAS_FASTAPI:
     # ============== Web 搜索 API ==============
 
     @app.get("/api/search", response_model=ApiResponse[SearchData])
-    async def web_search(query: str, max_results: int = 5):
+    def web_search(query: str, max_results: int = 5):
         """联网搜索"""
         from backend.providers.web_search_provider import get_web_search_provider
 
@@ -576,7 +576,7 @@ if HAS_FASTAPI:
     # ============== 成本统计 API ==============
 
     @app.get("/api/costs", response_model=ApiResponse[dict[str, Any]])
-    async def get_costs(mode: Optional[str] = None):
+    def get_costs(mode: Optional[str] = None):
         """获取 LLM 调用成本统计"""
         from backend.observability.cost_tracker import get_cost_tracker
 
@@ -586,7 +586,7 @@ if HAS_FASTAPI:
     # ============== 回测 API ==============
 
     @app.get("/api/backtest/stats", response_model=ApiResponse[dict[str, Any]])
-    async def get_backtest_stats(mode: Optional[str] = None):
+    def get_backtest_stats(mode: Optional[str] = None):
         """获取后验验证统计"""
         from backend.archive.backtester import get_backtester
 
@@ -594,7 +594,7 @@ if HAS_FASTAPI:
         return ApiResponse(success=True, data=bt.get_performance_stats(mode=mode))
 
     @app.get("/api/backtest/agent-accuracy", response_model=ApiResponse[dict[str, Any]])
-    async def get_agent_accuracy():
+    def get_agent_accuracy():
         """按 Agent 统计准确率"""
         from backend.archive.backtester import get_backtester
 
@@ -602,7 +602,7 @@ if HAS_FASTAPI:
         return ApiResponse(success=True, data={"agents": bt.get_agent_accuracy()})
 
     @app.get("/api/backtest/pending", response_model=ApiResponse[dict[str, Any]])
-    async def get_pending_evaluations():
+    def get_pending_evaluations():
         """获取待评估的决策"""
         from backend.archive.backtester import get_backtester
 
@@ -612,7 +612,7 @@ if HAS_FASTAPI:
     # ============== 审计日志 API ==============
 
     @app.get("/api/audit", response_model=ApiResponse[dict[str, Any]])
-    async def get_audit_logs(limit: int = 50):
+    def get_audit_logs(limit: int = 50):
         """获取审计日志"""
         from backend.storage.db import Database
 

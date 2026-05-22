@@ -52,7 +52,7 @@ async def upload_document(file: UploadFile = File(...)):
 
     # 保存到磁盘
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    c_hash = hashlib.md5(content).hexdigest()
+    c_hash = hashlib.sha256(content).hexdigest()[:16]
     save_name = f"{c_hash}_{file.filename}"
     save_path = UPLOADS_DIR / save_name
     save_path.write_bytes(content)
