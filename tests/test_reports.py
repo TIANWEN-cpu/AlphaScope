@@ -131,7 +131,7 @@ async def test_get_combo_stats(client):
 async def test_load_report(client):
     """读取报告内容"""
     with patch("backend.archive.load_report", return_value="# 测试报告\n\n买入"):
-        resp = await client.get("/api/archive/archive/600519/test.md")
+        resp = await client.get("/api/archive/report/archive/600519/test.md")
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
@@ -142,7 +142,7 @@ async def test_load_report(client):
 async def test_load_report_not_found(client):
     """不存在的报告返回 404"""
     with patch("backend.archive.load_report", return_value="⚠️ 报告文件不存在"):
-        resp = await client.get("/api/archive/archive/nonexistent.md")
+        resp = await client.get("/api/archive/report/archive/nonexistent.md")
     assert resp.status_code == 404
 
 
@@ -150,7 +150,7 @@ async def test_load_report_not_found(client):
 async def test_delete_report(client):
     """删除报告"""
     with patch("backend.archive.delete_report", return_value=True):
-        resp = await client.delete("/api/archive/archive/600519/test.md")
+        resp = await client.delete("/api/archive/report/archive/600519/test.md")
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
@@ -161,7 +161,7 @@ async def test_delete_report(client):
 async def test_delete_report_not_found(client):
     """删除不存在的报告返回失败"""
     with patch("backend.archive.delete_report", return_value=False):
-        resp = await client.delete("/api/archive/archive/nonexistent.md")
+        resp = await client.delete("/api/archive/report/archive/nonexistent.md")
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is False

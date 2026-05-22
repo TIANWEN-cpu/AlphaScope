@@ -63,6 +63,10 @@ async def get_prices(
 @router.post("/{symbol}/fetch")
 async def fetch_prices(symbol: str, days: int = 30):
     """从 Provider 拉取并存储 K 线数据"""
+    if days < 1 or days > 365:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail="days 参数必须在 1-365 之间")
     from backend.price_store import normalize_symbol as _norm, save_price_bars
 
     sym = _norm(symbol)

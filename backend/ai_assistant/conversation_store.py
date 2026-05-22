@@ -201,13 +201,14 @@ class ConversationStore:
 
     def search_messages(self, query: str, limit: int = 20) -> List[dict]:
         """全文搜索消息内容"""
+        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         rows = self._conn.execute(
             """SELECT m.*, c.title as conversation_title
             FROM ai_messages m
             JOIN ai_conversations c ON m.conversation_id = c.id
-            WHERE m.content LIKE ?
+            WHERE m.content LIKE ? ESCAPE '\\'
             ORDER BY m.timestamp DESC LIMIT ?""",
-            (f"%{query}%", limit),
+            (f"%{escaped}%", limit),
         ).fetchall()
         return [self._row_to_dict(r) for r in rows]
 

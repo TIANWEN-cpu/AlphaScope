@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import {
   Activity,
   BarChart3,
@@ -94,11 +94,16 @@ export default function ChatPage() {
     loadConversation(conv.id);
   };
 
-  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const lastAssistant = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return messages[i];
+    }
+    return undefined;
+  }, [messages]);
 
   return (
     <main className="min-h-screen overflow-hidden bg-slate-950 text-slate-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.24),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(20,184,166,0.16),_transparent_28%),linear-gradient(135deg,_#020617_0%,_#0f172a_52%,_#111827_100%)]" />
+      <div className="absolute inset-0 bg-hero-gradient" />
       <div className="relative flex h-screen p-4 gap-4">
         <Sidebar
           stockSymbol={stockSymbol}

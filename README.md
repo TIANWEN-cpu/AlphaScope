@@ -279,7 +279,7 @@ data/                   # 运行时数据 (gitignore)
 
 | Version | Date | Focus |
 |---------|------|-------|
-| v1.0.1 | 2026-05-22 | Windows 前端与启动修复: Tailwind CSS 404/裸 HTML、Next.js 残留进程、PowerShell 兼容性 |
+| v1.0.1 | 2026-05-22 | 性能优化 + 安全加固: async→sync 端点、YAML 缓存、并行 provider、SHA-256、React.memo、error boundary |
 | v1.0 | 2026-05-21 | Local 正式版: 一键启动、主工作台、专家团/K线/报告/备份、697 tests |
 | v0.90 | 2026-05-21 | Release Candidate: 功能冻结、全面测试、Next.js 构建、CI 全绿 |
 | v0.85 | 2026-05-21 | Windows 一键包: 启动器/依赖安装/快捷方式；v1.0.1 修复 PowerShell/npm/stop 脚本问题 |
@@ -335,11 +335,21 @@ data/                   # 运行时数据 (gitignore)
 | v0.5 | 2026-05-16 | 5-model heterogeneous architecture |
 | v0.1 | 2026-05-16 | Initial release |
 
+## Roadmap (v1.1)
+
+- 前端页面完善: K 线图页面、新闻页面、资金流页面
+- 异步 SSE 流式: orchestrator 改为异步生成器，真正流式输出
+- Auth 认证: API Key 或 session token
+- 前端响应式布局: 移动端适配、可折叠面板
+- 虚拟列表: 长对话性能优化
+- 更多 Provider 健康追踪接入
+
 ## Documentation
 
 - [Quick Start](docs/local-quickstart.md) — 本地快速启动指南
+- [User Manual](docs/user-manual/README.md) — 完整用户手册（8 章）
 - [Architecture](docs/architecture.md) — 系统架构与数据流
-- [API Reference](docs/api.md) — 27 个 REST 端点文档
+- [API Reference](docs/api.md) — 87 个 REST 端点文档
 - [API Contract](docs/contract.md) — 前后端契约（ApiResponse/SSE/Upload 格式）
 - [Deployment](docs/deployment.md) — 部署指南（本地/Docker/Windows）
 - [Agent Design](docs/agent-design.md) — Agent 与专家团设计

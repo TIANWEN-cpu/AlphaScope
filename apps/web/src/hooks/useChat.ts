@@ -27,6 +27,7 @@ export function useChat() {
   const [streamingContent, setStreamingContent] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const streamingRef = useRef("");
+  const loadingRef = useRef(false);
 
   const loadConversation = useCallback(async (convId: string) => {
     try {
@@ -50,7 +51,7 @@ export function useChat() {
 
   const sendMessage = useCallback(
     async (content: string, mode: string, stockSymbol: string, stockName: string) => {
-      if (!content.trim() || loading) return;
+      if (!content.trim() || loadingRef.current) return;
 
       const userMsg: Message = {
         id: `user-${crypto.randomUUID()}`,
@@ -60,6 +61,7 @@ export function useChat() {
       };
       setMessages((prev) => [...prev, userMsg]);
       setLoading(true);
+      loadingRef.current = true;
       setStreamingContent("");
       streamingRef.current = "";
 
@@ -104,6 +106,7 @@ export function useChat() {
           setStreamingContent("");
           streamingRef.current = "";
           setLoading(false);
+          loadingRef.current = false;
         },
         (error: string) => {
           const errorMsg: Message = {
@@ -116,15 +119,17 @@ export function useChat() {
           setStreamingContent("");
           streamingRef.current = "";
           setLoading(false);
+          loadingRef.current = false;
         }
       );
     },
-    [loading, conversationId]
+    [conversationId]
   );
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
     setLoading(false);
+    loadingRef.current = false;
     setStreamingContent("");
     streamingRef.current = "";
   }, []);

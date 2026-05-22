@@ -44,7 +44,7 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = Field(
         default=None, description="会话ID，为空则创建新会话"
     )
-    message: str = Field(description="用户消息")
+    message: str = Field(description="用户消息", max_length=10000)
     mode: str = Field(
         default="free", description="模式: free/standard/deep/expert/vision"
     )

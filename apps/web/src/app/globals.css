@@ -56,3 +56,9 @@ body {
 .prose th {
   background: #f9fafb;
 }
+
+.bg-hero-gradient {
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.24), transparent 34%),
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.16), transparent 28%),
+    linear-gradient(135deg, #020617 0%, #0f172a 52%, #111827 100%);
+}

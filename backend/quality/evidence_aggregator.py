@@ -10,6 +10,7 @@ Replaces the simple "first one wins" fallback chain with "collect and cross-vali
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
 
@@ -119,18 +120,26 @@ class EvidenceAggregator:
         }
         method_name = method_map.get(data_type, "get_news")
 
-        for provider in providers:
-            try:
-                method = getattr(provider, method_name, None)
-                if method is None:
-                    continue
-                items = method({"symbol": query, "limit": 20})
-                if items:
-                    all_items.extend(items)
-                    source_names.append(provider.name)
-            except Exception as e:
-                errors.append(f"{provider.name}: {e}")
-                logger.debug("Provider %s failed: %s", provider.name, e)
+        def _fetch_one(provider):
+            method = getattr(provider, method_name, None)
+            if method is None:
+                return None
+            return provider.name, method({"symbol": query, "limit": 20})
+
+        with ThreadPoolExecutor(max_workers=min(len(providers), 4)) as pool:
+            futures = {pool.submit(_fetch_one, p): p for p in providers}
+            for future in as_completed(futures, timeout=15):
+                try:
+                    result = future.result()
+                    if result:
+                        name, items = result
+                        if items:
+                            all_items.extend(items)
+                            source_names.append(name)
+                except Exception as e:
+                    provider = futures[future]
+                    errors.append(f"{provider.name}: {e}")
+                    logger.debug("Provider %s failed: %s", provider.name, e)
 
         if not all_items:
             return AggregatedEvidence(data_type=data_type)

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import { MODES } from "./Sidebar";
 import { TrendingUp, TrendingDown, Minus, Link, Shield, Clock } from "lucide-react";
@@ -23,7 +24,7 @@ function SignalIcon({ signal }: { signal: string }) {
   return <Minus className="w-3 h-3 text-yellow-600 inline" />;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   role,
   content,
   mode,
@@ -115,4 +116,4 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});

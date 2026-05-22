@@ -61,8 +61,12 @@ export function Sidebar({
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    await deleteConversation(id);
-    setConversations((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await deleteConversation(id);
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      console.error("删除对话失败:", err);
+    }
   };
 
   return (

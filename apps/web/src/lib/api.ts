@@ -126,9 +126,13 @@ export async function getConversation(
 export async function deleteConversation(
   conversation_id: string
 ): Promise<void> {
-  await fetch(`${API_BASE}/api/conversations/${conversation_id}`, {
+  const res = await fetch(`${API_BASE}/api/conversations/${conversation_id}`, {
     method: "DELETE",
   });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
+  }
 }
 
 // ============== Chat (SSE Streaming) ==============
@@ -202,7 +206,7 @@ export function streamChat(
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
-      onError(String(err));
+      onError(err instanceof Error ? err.message : String(err));
     }
   })();
 
