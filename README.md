@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-697%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v1.1.3-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.1.3)
+[![Tests](https://img.shields.io/badge/tests-780%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
+[![Release](https://img.shields.io/badge/release-v1.1.4-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.1.4)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -280,6 +280,7 @@ data/                   # 运行时数据 (gitignore)
 | Version | Date | Focus |
 |---------|------|-------|
 | v1.2 | 2026-05-23 | 前端功能补全: Settings CRUD(Provider/Agent/Team 增删改)、Expert 圆桌接通、TaskCenter 任务中心、成本统计结构化 UI、模型自动拉取、Streamlit 14 Tab |
+| v1.1.4 | 2026-05-23 | 报告生成&证据链可视化: 3报告模板、/api/reports/templates/*、/api/evidence/chain/graph、ReportGeneratorView/EvidenceChainView连接API、16新测试 |
 | v1.1.3 | 2026-05-23 | 组合管理&基金定投: DCASimulator、/api/portfolio/*、/api/funds/*、PortfolioView/FundDcaView连接API、23新测试 |
 | v1.1.2 | 2026-05-23 | 回测前端+量化仪表盘: EquityCurveChart、RiskMetricsPanel、StrategyCard、BacktestView连接API、交易记录表、风控违规展示 |
 | v1.1.1 | 2026-05-23 | 量化回测引擎后端: BacktestEngine、3内置策略(MACD/MA/RSI)、RiskController、Portfolio、metrics、/api/quant/* 端点、45新测试 |
