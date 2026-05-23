@@ -231,7 +231,7 @@ Without a critic, agents produce confident-sounding but occasionally hallucinate
 ## Testing
 
 ```bash
-# Run all tests (431 tests, ~6s)
+# Run all tests (697 tests, ~10s)
 python -m pytest tests/ -v
 
 # Lint
@@ -265,7 +265,7 @@ apps/web/               # Next.js 主前端
 config/                 # YAML 配置
 prompts/                # 提示词模板
 scripts/                # 启动/迁移/检查脚本
-tests/                  # 406 单元测试
+tests/                  # 697 单元测试
 
 data/                   # 运行时数据 (gitignore)
 ├── db/                 # SQLite 数据库
