@@ -13,6 +13,10 @@ import {
   Table,
   Brain,
   ListTodo,
+  FlaskConical,
+  TrendingUp,
+  FileText,
+  Link2,
 } from "lucide-react";
 
 export type NavView =
@@ -26,14 +30,19 @@ export type NavView =
   | "expert"
   | "health"
   | "settings"
-  | "tasks";
+  | "tasks"
+  | "portfolio"
+  | "backtest"
+  | "funddca"
+  | "report"
+  | "evidence";
 
 interface SidebarRailProps {
   activeView: NavView;
   onNav: (view: NavView) => void;
 }
 
-const NAV_ITEMS: { view: NavView; icon: React.ReactNode; title: string }[] = [
+const NAV_ITEMS: { view: NavView; icon: React.ReactNode; title: string; group?: string }[] = [
   { view: "dashboard", icon: <LayoutDashboard size={20} />, title: "工作台" },
   { view: "news", icon: <Newspaper size={20} />, title: "资讯与研报" },
   { view: "fundflow", icon: <BarChart2 size={20} />, title: "资金流向" },
@@ -44,11 +53,16 @@ const NAV_ITEMS: { view: NavView; icon: React.ReactNode; title: string }[] = [
   { view: "expert", icon: <Users size={20} />, title: "专家圆桌" },
   { view: "tasks", icon: <ListTodo size={20} />, title: "任务中心" },
   { view: "health", icon: <Activity size={20} />, title: "数据源" },
+  { view: "portfolio", icon: <PieChart size={20} />, title: "投资组合" },
+  { view: "backtest", icon: <FlaskConical size={20} />, title: "量化回测" },
+  { view: "funddca", icon: <TrendingUp size={20} />, title: "基金定投" },
+  { view: "report", icon: <FileText size={20} />, title: "报告生成" },
+  { view: "evidence", icon: <Link2 size={20} />, title: "证据链" },
 ];
 
 export function SidebarRail({ activeView, onNav }: SidebarRailProps) {
   return (
-    <div className="w-14 bg-[#09090b] border-r border-zinc-800/50 flex flex-col items-center py-4 z-20 flex-shrink-0">
+    <div className="w-14 bg-[#050505] border-r border-zinc-800/50 flex flex-col items-center py-4 z-20 flex-shrink-0">
       <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white mb-8 shadow-[0_0_15px_rgba(37,99,235,0.4)]">
         <LineChart size={18} strokeWidth={2.5} />
       </div>
