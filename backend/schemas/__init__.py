@@ -50,6 +50,37 @@ from .api import (
     VisionResultData,
 )
 
+# 量化模块
+from .quant import (
+    BacktestMetrics,
+    BacktestRequest,
+    BacktestResult,
+    JinceStatus,
+    LiveRunRequest,
+    LiveRunStatus,
+    RunRecord,
+    RunStatus,
+    StrategyInfo,
+    StrategyParam,
+    StrategyStatus,
+)
+
+# 基金模块
+from .funds import (
+    DCAFrequency,
+    DCAPlan,
+    DCASimulationRequest,
+    DCASimulationResult,
+    FundInfo,
+    FundMetrics,
+    FundNav,
+    FundType,
+    Portfolio,
+    PortfolioHolding,
+    RebalanceRequest,
+    RebalanceResult,
+)
+
 __all__ = [
     # 数据模型
     "NewsItem",
@@ -99,4 +130,29 @@ __all__ = [
     "AuditLogData",
     "SearchData",
     "FileUploadData",
+    # 量化模块
+    "BacktestMetrics",
+    "BacktestRequest",
+    "BacktestResult",
+    "JinceStatus",
+    "LiveRunRequest",
+    "LiveRunStatus",
+    "RunRecord",
+    "RunStatus",
+    "StrategyInfo",
+    "StrategyParam",
+    "StrategyStatus",
+    # 基金模块
+    "DCAFrequency",
+    "DCAPlan",
+    "DCASimulationRequest",
+    "DCASimulationResult",
+    "FundInfo",
+    "FundMetrics",
+    "FundNav",
+    "FundType",
+    "Portfolio",
+    "PortfolioHolding",
+    "RebalanceRequest",
+    "RebalanceResult",
 ]
