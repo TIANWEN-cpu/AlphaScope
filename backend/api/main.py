@@ -80,6 +80,7 @@ if HAS_FASTAPI:
     from backend.api.fund_flow import router as fund_flow_router
     from backend.api.factors import router as factors_router
     from backend.api.quant import router as quant_router
+    from backend.api.funds import router as funds_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -96,6 +97,7 @@ if HAS_FASTAPI:
     app.include_router(fund_flow_router)
     app.include_router(factors_router)
     app.include_router(quant_router)
+    app.include_router(funds_router)
 
     # ============== 全局错误处理 ==============
 
