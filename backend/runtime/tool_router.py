@@ -109,6 +109,43 @@ class ToolRouter:
                 handler=self._tool_evidence_search,
             )
         )
+        # === M4: 量化/基金工具 ===
+        self.register_tool(
+            ToolDefinition(
+                id="quant_backtest",
+                name="量化回测",
+                description="通过 Jince 引擎运行策略回测，返回收益率/夏普/回撤等指标",
+                tool_type="calculator",
+                handler=self._tool_quant_backtest,
+            )
+        )
+        self.register_tool(
+            ToolDefinition(
+                id="fund_metrics",
+                name="基金指标",
+                description="获取基金净值序列并计算夏普/回撤/波动率/卡玛等指标",
+                tool_type="calculator",
+                handler=self._tool_fund_metrics,
+            )
+        )
+        self.register_tool(
+            ToolDefinition(
+                id="dca_simulate",
+                name="定投模拟",
+                description="基于历史净值模拟定期定额投资的收益情况",
+                tool_type="calculator",
+                handler=self._tool_dca_simulate,
+            )
+        )
+        self.register_tool(
+            ToolDefinition(
+                id="portfolio_rebalance",
+                name="组合再平衡",
+                description="根据目标权重计算基金组合再平衡交易建议",
+                tool_type="calculator",
+                handler=self._tool_portfolio_rebalance,
+            )
+        )
 
     def register_tool(self, tool: ToolDefinition):
         """注册工具"""
@@ -270,6 +307,148 @@ class ToolRouter:
             return {"query": query, "results": results}
         except Exception as e:
             return {"query": query, "error": str(e)}
+
+    def _tool_quant_backtest(
+        self,
+        strategy_id: str = "",
+        symbol: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        initial_capital: float = 1000000.0,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """量化回测工具"""
+        try:
+            import asyncio
+
+            from backend.integrations.jince.service import JinceService
+
+            svc = JinceService()
+            result = asyncio.run(
+                svc.run_backtest(
+                    strategy_id=strategy_id,
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    initial_capital=initial_capital,
+                )
+            )
+            return {
+                "run_id": result.run_id,
+                "strategy_id": result.strategy_id,
+                "symbol": result.symbol,
+                "status": result.status.value,
+                "metrics": result.metrics.model_dump() if result.metrics else None,
+            }
+        except Exception as e:
+            return {"error": str(e), "strategy_id": strategy_id, "symbol": symbol}
+
+    def _tool_fund_metrics(self, fund_code: str = "", **kwargs) -> Dict[str, Any]:
+        """基金指标工具"""
+        try:
+            import asyncio
+
+            from backend.funds.metrics import calc_fund_metrics
+            from backend.funds.providers import get_provider
+
+            provider = get_provider()
+            records = asyncio.run(provider.get_nav_history(fund_code))
+            if not records:
+                return {"fund_code": fund_code, "error": "无净值数据"}
+
+            navs = [r["nav"] for r in records]
+            metrics = calc_fund_metrics(navs)
+            return {"fund_code": fund_code, "metrics": metrics}
+        except Exception as e:
+            return {"fund_code": fund_code, "error": str(e)}
+
+    def _tool_dca_simulate(
+        self,
+        fund_code: str = "",
+        amount: float = 1000,
+        frequency: str = "monthly",
+        start_date: str = "",
+        end_date: str = "",
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """定投模拟工具"""
+        try:
+            import asyncio
+
+            from backend.funds.dca import DCASimulator
+            from backend.funds.providers import get_provider
+            from backend.schemas.funds import DCAFrequency
+
+            provider = get_provider()
+            records = asyncio.run(
+                provider.get_nav_history(fund_code, start_date, end_date)
+            )
+            if not records:
+                return {"fund_code": fund_code, "error": "无净值数据"}
+
+            freq_map = {
+                "weekly": DCAFrequency.WEEKLY,
+                "biweekly": DCAFrequency.BIWEEKLY,
+                "monthly": DCAFrequency.MONTHLY,
+                "quarterly": DCAFrequency.QUARTERLY,
+            }
+            simulator = DCASimulator()
+            result = simulator.simulate(
+                nav_records=records,
+                amount=amount,
+                frequency=freq_map.get(frequency, DCAFrequency.MONTHLY),
+                start_date=start_date,
+                end_date=end_date,
+            )
+            return {
+                "fund_code": fund_code,
+                "total_invested": result.total_invested,
+                "final_value": result.final_value,
+                "total_return": result.total_return,
+                "annualized_return": result.annualized_return,
+                "max_drawdown": result.max_drawdown,
+                "investment_count": result.investment_count,
+            }
+        except Exception as e:
+            return {"fund_code": fund_code, "error": str(e)}
+
+    def _tool_portfolio_rebalance(
+        self,
+        holdings: list = None,
+        target_weights: dict = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """组合再平衡工具"""
+        try:
+            holdings = holdings or []
+            target_weights = target_weights or {}
+
+            total_target = sum(target_weights.values())
+            if total_target <= 0:
+                return {"error": "目标权重总和必须大于 0"}
+
+            normalized = {k: v / total_target for k, v in target_weights.items()}
+            trades = []
+
+            for fund_code, target_weight in normalized.items():
+                current_weight = 0.0
+                for h in holdings:
+                    if h.get("fund_code") == fund_code:
+                        current_weight = h.get("weight", 0.0)
+                        break
+                diff = target_weight - current_weight
+                if abs(diff) > 0.001:
+                    trades.append(
+                        {
+                            "fund_code": fund_code,
+                            "action": "buy" if diff > 0 else "sell",
+                            "weight_change": round(diff, 4),
+                        }
+                    )
+
+            return {"trades": trades}
+        except Exception as e:
+            return {"error": str(e)}
 
 
 # 单例
