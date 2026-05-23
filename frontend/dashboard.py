@@ -166,6 +166,28 @@ except Exception as e:
     AI_ASSISTANT_AVAILABLE = False
     AI_ASSISTANT_ERROR = str(e)
 
+# v1.1: Agent 工作室、团队构建器、模型提供商管理
+try:
+    from components import agent_studio
+
+    AGENT_STUDIO_AVAILABLE = True
+except Exception:
+    AGENT_STUDIO_AVAILABLE = False
+
+try:
+    from components import team_builder
+
+    TEAM_BUILDER_AVAILABLE = True
+except Exception:
+    TEAM_BUILDER_AVAILABLE = False
+
+try:
+    from components import model_provider_manager
+
+    MODEL_PROVIDER_AVAILABLE = True
+except Exception:
+    MODEL_PROVIDER_AVAILABLE = False
+
 # ============== Agent 自定义配置 UI ==============
 AGENT_CARD_STYLES = ["default", "value", "growth", "technical", "risk", "macro"]
 
@@ -1127,7 +1149,22 @@ if st.session_state.get("show_ai_chat", False):
             st.rerun()
 
 # ============== 图表 ==============
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(
+(
+    tab1,
+    tab2,
+    tab3,
+    tab4,
+    tab5,
+    tab6,
+    tab7,
+    tab8,
+    tab9,
+    tab10,
+    tab11,
+    tab12,
+    tab13,
+    tab14,
+) = st.tabs(
     [
         "📈 K 线 & 技术指标",
         "🤖 Agent 协作分析",
@@ -1140,6 +1177,9 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(
         "🎓 专家团圆桌",
         "📊 数据源健康",
         "🧠 AI 智能助手",
+        "🎛️ Agent 工作室",
+        "👥 团队构建器",
+        "🔌 模型提供商",
     ]
 )
 
@@ -4432,6 +4472,39 @@ with tab11:
     else:
         st.error(f"AI 智能助手模块不可用: {AI_ASSISTANT_ERROR}")
         st.info("请检查 backend/ai_assistant/ 目录是否完整")
+
+# ============== Tab 12: Agent 工作室 ==============
+with tab12:
+    if AGENT_STUDIO_AVAILABLE:
+        try:
+            agent_studio.render()
+        except Exception as _e:
+            st.error(f"Agent 工作室加载失败: {_e}")
+    else:
+        st.warning("Agent 工作室模块不可用")
+        st.info("请检查 frontend/components/agent_studio.py 是否存在")
+
+# ============== Tab 13: 团队构建器 ==============
+with tab13:
+    if TEAM_BUILDER_AVAILABLE:
+        try:
+            team_builder.render()
+        except Exception as _e:
+            st.error(f"团队构建器加载失败: {_e}")
+    else:
+        st.warning("团队构建器模块不可用")
+        st.info("请检查 frontend/components/team_builder.py 是否存在")
+
+# ============== Tab 14: 模型提供商管理 ==============
+with tab14:
+    if MODEL_PROVIDER_AVAILABLE:
+        try:
+            model_provider_manager.render()
+        except Exception as _e:
+            st.error(f"模型提供商管理加载失败: {_e}")
+    else:
+        st.warning("模型提供商管理模块不可用")
+        st.info("请检查 frontend/components/model_provider_manager.py 是否存在")
 
 # ============== 底部 ==============
 st.markdown('<hr class="fancy">', unsafe_allow_html=True)

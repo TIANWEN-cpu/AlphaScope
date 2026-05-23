@@ -30,10 +30,17 @@ export function KLinePanel({ symbol, stockName }: KLinePanelProps) {
         const res = await getPrices(symbol, "1d", 250);
         bars = res.bars || [];
       } catch {
-        // No data, try fetching
-        await fetchPrices(symbol, 60);
-        const res = await getPrices(symbol, "1d", 250);
-        bars = res.bars || [];
+        // getPrices failed
+      }
+      // If no stored data, try fetching from provider
+      if (bars.length === 0) {
+        try {
+          await fetchPrices(symbol, 60);
+          const res = await getPrices(symbol, "1d", 250);
+          bars = res.bars || [];
+        } catch {
+          // fetch failed too
+        }
       }
       setData(bars);
     } catch {
