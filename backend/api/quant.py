@@ -1,0 +1,199 @@
+"""量化实验室 API — Jince 适配层端点"""
+
+from __future__ import annotations
+
+from typing import Any, Optional
+
+from fastapi import APIRouter
+from pydantic import BaseModel, Field
+
+from backend.integrations.jince.errors import JinceConnectionError
+from backend.integrations.jince.service import JinceService
+from backend.schemas.api import ApiResponse
+
+router = APIRouter(prefix="/api/quant", tags=["quant"])
+
+# 默认服务实例（可被覆盖）
+_service: Optional[JinceService] = None
+
+
+def _get_service() -> JinceService:
+    global _service
+    if _service is None:
+        _service = JinceService()
+    return _service
+
+
+def set_service(service: JinceService):
+    """注入服务实例（测试用）"""
+    global _service
+    _service = service
+
+
+# ============================================================
+# 请求模型
+# ============================================================
+
+
+class BacktestRequestBody(BaseModel):
+    """回测请求体"""
+
+    strategy_id: str = Field(description="策略ID")
+    symbol: str = Field(description="标的代码")
+    start_date: str = Field(description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(description="结束日期 YYYY-MM-DD")
+    initial_capital: float = Field(default=1000000.0, description="初始资金")
+    params: dict[str, Any] = Field(default_factory=dict, description="策略参数覆盖")
+
+
+class LiveStartBody(BaseModel):
+    """实盘启动请求体"""
+
+    strategy_id: str = Field(description="策略ID")
+    symbol: str = Field(description="标的代码")
+    params: dict[str, Any] = Field(default_factory=dict, description="策略参数覆盖")
+    capital: float = Field(default=1000000.0, description="投入资金")
+
+
+# ============================================================
+# 端点
+# ============================================================
+
+
+@router.get("/status")
+async def get_status():
+    """获取 Jince 服务状态"""
+    svc = _get_service()
+    status = await svc.get_status()
+    return ApiResponse(success=status.connected, data=status.model_dump())
+
+
+@router.get("/strategies")
+async def list_strategies():
+    """获取策略列表"""
+    svc = _get_service()
+    try:
+        strategies = await svc.list_strategies()
+        return ApiResponse(
+            success=True,
+            data={"strategies": [s.model_dump() for s in strategies]},
+        )
+    except JinceConnectionError:
+        return ApiResponse(
+            success=False,
+            error="Jince 服务未连接",
+            error_code="JINCE_DISCONNECTED",
+            data={"strategies": []},
+        )
+
+
+@router.post("/strategies/reload")
+async def reload_strategies():
+    """重载策略"""
+    svc = _get_service()
+    try:
+        result = await svc.reload_strategies()
+        return ApiResponse(success=True, data=result)
+    except JinceConnectionError:
+        return ApiResponse(
+            success=False,
+            error="Jince 服务未连接",
+            error_code="JINCE_DISCONNECTED",
+        )
+
+
+@router.post("/backtest")
+async def run_backtest(body: BacktestRequestBody):
+    """发起回测"""
+    svc = _get_service()
+    try:
+        result = await svc.run_backtest(
+            strategy_id=body.strategy_id,
+            symbol=body.symbol,
+            start_date=body.start_date,
+            end_date=body.end_date,
+            initial_capital=body.initial_capital,
+            params=body.params,
+        )
+        return ApiResponse(success=True, data=result.model_dump())
+    except JinceConnectionError:
+        return ApiResponse(
+            success=False,
+            error="Jince 服务未连接，无法执行回测",
+            error_code="JINCE_DISCONNECTED",
+        )
+    except Exception as e:
+        return ApiResponse(
+            success=False,
+            error=str(e),
+            error_code="JINCE_BACKTEST_ERROR",
+        )
+
+
+@router.post("/live/start")
+async def start_live(body: LiveStartBody):
+    """启动实盘"""
+    svc = _get_service()
+    try:
+        result = await svc.start_live(
+            strategy_id=body.strategy_id,
+            symbol=body.symbol,
+            params=body.params,
+            capital=body.capital,
+        )
+        return ApiResponse(success=True, data=result)
+    except JinceConnectionError:
+        return ApiResponse(
+            success=False,
+            error="Jince 服务未连接，无法启动实盘",
+            error_code="JINCE_DISCONNECTED",
+        )
+
+
+@router.post("/live/{run_id}/stop")
+async def stop_live(run_id: str):
+    """停止实盘"""
+    svc = _get_service()
+    try:
+        result = await svc.stop_live(run_id)
+        return ApiResponse(success=True, data=result)
+    except JinceConnectionError:
+        return ApiResponse(
+            success=False,
+            error="Jince 服务未连接",
+            error_code="JINCE_DISCONNECTED",
+        )
+
+
+@router.get("/runs")
+async def list_runs():
+    """获取运行记录"""
+    svc = _get_service()
+    try:
+        runs = await svc.list_runs()
+        return ApiResponse(
+            success=True,
+            data={"runs": [r.model_dump() for r in runs]},
+        )
+    except JinceConnectionError:
+        return ApiResponse(
+            success=False,
+            error="Jince 服务未连接",
+            error_code="JINCE_DISCONNECTED",
+            data={"runs": []},
+        )
+
+
+@router.get("/runs/{run_id}")
+async def get_run(run_id: str):
+    """获取运行详情"""
+    svc = _get_service()
+    try:
+        result = await svc.get_run(run_id)
+        return ApiResponse(success=True, data=result.model_dump())
+    except JinceConnectionError:
+        return ApiResponse(
+            success=False,
+            error="Jince 服务未连接",
+            error_code="JINCE_DISCONNECTED",
+        )
