@@ -22,6 +22,13 @@ class ApiResponse(BaseModel, Generic[T]):
     data: Optional[T] = Field(default=None, description="响应数据")
     error: Optional[str] = Field(default=None, description="错误信息")
     message: Optional[str] = Field(default=None, description="提示信息")
+    error_code: Optional[str] = Field(default=None, description="错误码")
+    trace_id: Optional[str] = Field(default=None, description="请求追踪ID")
+    source: Optional[str] = Field(default=None, description="数据来源")
+    tool_call_id: Optional[str] = Field(default=None, description="工具调用ID")
+    evidence_ids: Optional[list[str]] = Field(
+        default=None, description="关联证据ID列表"
+    )
 
 
 class PaginatedData(BaseModel, Generic[T]):

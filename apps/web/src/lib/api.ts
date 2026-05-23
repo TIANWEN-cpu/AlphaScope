@@ -14,6 +14,11 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  error_code?: string;
+  trace_id?: string;
+  source?: string;
+  tool_call_id?: string;
+  evidence_ids?: string[];
 }
 
 export interface ChatMessage {
