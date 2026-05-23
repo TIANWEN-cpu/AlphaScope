@@ -203,7 +203,7 @@ async def test_get_valuation(client):
     """GET /api/fundamentals/{symbol}/valuation"""
     mock_data = MagicMock()
     mock_data.has_error = False
-    mock_data.financial_periods = []
+    mock_data.financials = []
     mock_data.peers = []
 
     with patch("backend.fundamentals.load_fundamentals", return_value=mock_data):
