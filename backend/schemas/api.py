@@ -289,3 +289,68 @@ class FileUploadData(BaseModel):
     size: int = Field(description="文件大小（字节）")
     path: str = Field(default="", description="保存路径")
     message: str = Field(default="上传成功", description="提示信息")
+
+
+# ============================================================
+# 量化回测 (v1.1.1)
+# ============================================================
+
+
+class StrategyData(BaseModel):
+    """策略定义"""
+
+    name: str = Field(description="策略名称")
+    description: str = Field(default="", description="策略描述")
+    params: dict[str, Any] = Field(default_factory=dict, description="策略参数")
+
+
+class BacktestRunRequest(BaseModel):
+    """回测运行请求"""
+
+    strategy_name: str = Field(description="策略名称")
+    symbol: str = Field(description="股票代码")
+    days: int = Field(default=120, ge=10, le=1000, description="回测天数")
+    initial_capital: float = Field(default=100000.0, gt=0, description="初始资金")
+    params: dict[str, Any] = Field(default_factory=dict, description="策略参数覆盖")
+
+
+class TradeRecord(BaseModel):
+    """交易记录"""
+
+    symbol: str
+    side: str
+    shares: int
+    price: float
+    commission: float
+    pnl: float
+    timestamp: str
+
+
+class PerformanceMetrics(BaseModel):
+    """绩效指标"""
+
+    total_return: float
+    annualized_return: float
+    max_drawdown: float
+    sharpe_ratio: float
+    sortino_ratio: float
+    calmar_ratio: float
+    win_rate: float
+    profit_factor: float
+    total_trades: int
+    initial_capital: float
+    final_equity: float
+    trading_days: int
+
+
+class BacktestResultData(BaseModel):
+    """回测结果"""
+
+    strategy_name: str
+    symbol: str
+    params: dict[str, Any]
+    equity_curve: list[float]
+    dates: list[str]
+    trades: list[dict[str, Any]]
+    performance: dict[str, Any]
+    risk_violations: list[dict[str, Any]]

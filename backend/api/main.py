@@ -47,7 +47,7 @@ if HAS_FASTAPI:
         TeamData,
     )
 
-    api_version = "1.0.1"
+    api_version = "1.1.1"
 
     app = FastAPI(
         title="AI-Finance API",
@@ -79,6 +79,7 @@ if HAS_FASTAPI:
     from backend.api.diagnostics import router as diagnostics_router
     from backend.api.fund_flow import router as fund_flow_router
     from backend.api.factors import router as factors_router
+    from backend.api.backtest_new import router as quant_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -94,6 +95,7 @@ if HAS_FASTAPI:
     app.include_router(diagnostics_router)
     app.include_router(fund_flow_router)
     app.include_router(factors_router)
+    app.include_router(quant_router)
 
     # ============== 全局错误处理 ==============
 
