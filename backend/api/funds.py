@@ -271,3 +271,183 @@ async def delete_portfolio(portfolio_id: str):
             error_code="PORTFOLIO_NOT_FOUND",
         )
     return ApiResponse(success=True, data={"deleted": True})
+
+
+# ============================================================
+# 定投计划
+# ============================================================
+
+# 内存存储（可替换为 SQLite 持久化）
+_dca_plans: list[dict[str, Any]] = []
+
+
+class DCAPlanBody(BaseModel):
+    """创建定投计划请求"""
+
+    fund_code: str = Field(description="基金代码")
+    fund_name: str = Field(default="", description="基金名称")
+    amount: float = Field(description="每期金额")
+    frequency: str = Field(default="monthly", description="频率")
+    start_date: str = Field(description="开始日期")
+
+
+@router.post("/api/fund-dca/plans")
+async def create_dca_plan(body: DCAPlanBody):
+    """创建定投计划"""
+    import uuid
+
+    plan = {
+        "id": str(uuid.uuid4())[:8],
+        "fund_code": body.fund_code,
+        "fund_name": body.fund_name,
+        "amount": body.amount,
+        "frequency": body.frequency,
+        "start_date": body.start_date,
+        "status": "active",
+        "created_at": __import__("datetime").datetime.now().isoformat(),
+    }
+    _dca_plans.append(plan)
+    return ApiResponse(success=True, data=plan)
+
+
+@router.get("/api/fund-dca/plans")
+async def list_dca_plans():
+    """列出定投计划"""
+    return ApiResponse(
+        success=True,
+        data={"plans": _dca_plans, "total": len(_dca_plans)},
+    )
+
+
+# ============================================================
+# 组合再平衡
+# ============================================================
+
+
+class RebalanceBody(BaseModel):
+    """再平衡请求"""
+
+    portfolio_id: str = Field(description="组合ID")
+    target_weights: dict[str, float] = Field(description="目标权重 {fund_code: weight}")
+
+
+@router.post("/api/fund-portfolio/rebalance")
+async def rebalance_portfolio(body: RebalanceBody):
+    """计算组合再平衡交易"""
+    mgr = _get_portfolio_mgr()
+    portfolio = mgr.get(body.portfolio_id)
+    if not portfolio:
+        return ApiResponse(
+            success=False,
+            error="组合不存在",
+            error_code="PORTFOLIO_NOT_FOUND",
+        )
+
+    # 计算权重差异，生成交易建议
+    holdings = portfolio.get("holdings", [])
+    trades = []
+    total_target = sum(body.target_weights.values())
+    if total_target <= 0:
+        return ApiResponse(
+            success=False,
+            error="目标权重总和必须大于 0",
+        )
+
+    # 归一化权重
+    normalized = {k: v / total_target for k, v in body.target_weights.items()}
+
+    # 简单再平衡：计算每个基金的目标持仓变化
+    for fund_code, target_weight in normalized.items():
+        current_weight = 0.0
+        for h in holdings:
+            if h.get("fund_code") == fund_code:
+                current_weight = h.get("weight", 0.0)
+                break
+        diff = target_weight - current_weight
+        if abs(diff) > 0.001:
+            trades.append(
+                {
+                    "fund_code": fund_code,
+                    "action": "buy" if diff > 0 else "sell",
+                    "weight_change": round(diff, 4),
+                }
+            )
+
+    return ApiResponse(
+        success=True,
+        data={
+            "portfolio_id": body.portfolio_id,
+            "trades": trades,
+            "estimated_cost": 0.0,
+        },
+    )
+
+
+# ============================================================
+# 基金报告生成
+# ============================================================
+
+
+class FundReportBody(BaseModel):
+    """基金报告请求"""
+
+    fund_code: str = Field(description="基金代码")
+    include_metrics: bool = Field(default=True, description="包含指标")
+    include_dca: bool = Field(default=False, description="包含定投分析")
+
+
+@router.post("/api/fund-reports/generate")
+async def generate_fund_report(body: FundReportBody):
+    """生成基金分析报告"""
+    provider = get_provider()
+    try:
+        info = await provider.get_info(body.fund_code)
+        records = await provider.get_nav_history(body.fund_code)
+
+        if not info:
+            return ApiResponse(
+                success=False,
+                error=f"基金 {body.fund_code} 不存在",
+                error_code="FUND_NOT_FOUND",
+            )
+
+        navs = [r["nav"] for r in records] if records else []
+        metrics = calc_fund_metrics(navs) if navs else {}
+
+        # 生成 Markdown 报告
+        lines = [
+            f"# 基金分析报告: {info.get('name', body.fund_code)}",
+            "",
+            f"- 基金代码: {body.fund_code}",
+            f"- 基金类型: {info.get('fund_type', '未知')}",
+            f"- 基金经理: {info.get('manager', '未知')}",
+            f"- 基金公司: {info.get('company', '未知')}",
+            "",
+        ]
+
+        if body.include_metrics and metrics:
+            lines.extend(
+                [
+                    "## 核心指标",
+                    f"- 总收益率: {metrics.get('total_return', 0):.2%}",
+                    f"- 年化收益率: {metrics.get('annualized_return', 0):.2%}",
+                    f"- 夏普比率: {metrics.get('sharpe_ratio', 0):.4f}",
+                    f"- 最大回撤: {metrics.get('max_drawdown', 0):.2%}",
+                    f"- 波动率: {metrics.get('volatility', 0):.2%}",
+                    f"- 胜率: {metrics.get('win_rate', 0):.2%}",
+                    "",
+                ]
+            )
+
+        report_content = "\n".join(lines)
+
+        return ApiResponse(
+            success=True,
+            data={
+                "fund_code": body.fund_code,
+                "content": report_content,
+                "metrics": metrics,
+            },
+        )
+    except Exception as e:
+        return ApiResponse(success=False, error=str(e))

@@ -200,7 +200,7 @@ class TestQuantLiveStart:
         assert resp.json()["success"] is False
 
 
-# ========== POST /api/quant/live/{run_id}/stop ==========
+# ========== POST /api/quant/live/stop ==========
 
 
 class TestQuantLiveStop:
@@ -211,7 +211,7 @@ class TestQuantLiveStop:
         mock_svc = AsyncMock(spec=JinceService)
         mock_svc.stop_live.side_effect = JinceConnectionError()
         with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.post("/api/quant/live/r1/stop")
+            resp = await client.post("/api/quant/live/stop", json={"run_id": "r1"})
         assert resp.json()["success"] is False
 
 

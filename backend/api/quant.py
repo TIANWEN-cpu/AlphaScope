@@ -55,6 +55,12 @@ class LiveStartBody(BaseModel):
     capital: float = Field(default=1000000.0, description="投入资金")
 
 
+class LiveStopBody(BaseModel):
+    """实盘停止请求体"""
+
+    run_id: str = Field(description="运行ID")
+
+
 # ============================================================
 # 端点
 # ============================================================
@@ -65,7 +71,12 @@ async def get_status():
     """获取 Jince 服务状态"""
     svc = _get_service()
     status = await svc.get_status()
-    return ApiResponse(success=status.connected, data=status.model_dump())
+    return ApiResponse(
+        success=status.connected,
+        data=status.model_dump(),
+        error=status.error if not status.connected else None,
+        error_code="JINCE_DISCONNECTED" if not status.connected else None,
+    )
 
 
 @router.get("/strategies")
@@ -150,12 +161,12 @@ async def start_live(body: LiveStartBody):
         )
 
 
-@router.post("/live/{run_id}/stop")
-async def stop_live(run_id: str):
+@router.post("/live/stop")
+async def stop_live(body: LiveStopBody):
     """停止实盘"""
     svc = _get_service()
     try:
-        result = await svc.stop_live(run_id)
+        result = await svc.stop_live(body.run_id)
         return ApiResponse(success=True, data=result)
     except JinceConnectionError:
         return ApiResponse(
