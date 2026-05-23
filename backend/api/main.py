@@ -47,7 +47,7 @@ if HAS_FASTAPI:
         TeamData,
     )
 
-    api_version = "1.1.1"
+    api_version = "1.1.2"
 
     app = FastAPI(
         title="AI-Finance API",
