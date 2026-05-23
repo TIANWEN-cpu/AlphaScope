@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-697%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v1.2-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.2)
+[![Tests](https://img.shields.io/badge/tests-793%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
+[![Release](https://img.shields.io/badge/release-v1.3-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.3)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -54,8 +54,8 @@ This project tackles all three through architectural choices: heterogeneous mode
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Presentation Layer                         │
-│  Streamlit Dashboard (10 tabs) · FastAPI (25+ endpoints)    │
-│  Next.js Frontend (skeleton)                                │
+│  Streamlit Dashboard (10 tabs) · FastAPI (113 endpoints)    │
+│  Next.js Frontend (13 views)                                │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -149,7 +149,7 @@ pip install -r requirements.txt -r requirements-rag.txt  # Everything
 
 ## API Endpoints
 
-The FastAPI backend exposes 25+ endpoints:
+The FastAPI backend exposes 113 endpoints across 17 router modules:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -182,6 +182,24 @@ The FastAPI backend exposes 25+ endpoints:
 | `/api/templates` | GET | Research task templates |
 | `/api/costs` | GET | LLM cost statistics |
 | `/api/backtest/stats` | GET | Backtest performance |
+| `/api/quant/status` | GET | Jince 量化引擎状态 |
+| `/api/quant/strategies` | GET | 策略列表 |
+| `/api/quant/strategies/reload` | POST | 重载策略 |
+| `/api/quant/backtest` | POST | 发起回测 |
+| `/api/quant/live/start` | POST | 启动实盘 |
+| `/api/quant/live/stop` | POST | 停止实盘 |
+| `/api/quant/runs` | GET | 运行记录列表 |
+| `/api/quant/runs/{run_id}` | GET | 运行详情 |
+| `/api/funds/search` | GET | 基金搜索 |
+| `/api/funds/{code}` | GET | 基金信息 |
+| `/api/funds/{code}/nav` | GET | 基金净值历史 |
+| `/api/funds/{code}/metrics` | GET | 基金指标计算 |
+| `/api/fund-dca/simulate` | POST | 定投模拟 |
+| `/api/fund-dca/plans` | GET/POST | 定投计划 CRUD |
+| `/api/fund-portfolio` | GET/POST | 组合管理 CRUD |
+| `/api/fund-portfolio/{id}` | GET/PUT/DELETE | 组合详情/更新/删除 |
+| `/api/fund-portfolio/rebalance` | POST | 组合再平衡 |
+| `/api/fund-reports/generate` | POST | 基金报告生成 |
 
 Full API documentation available at `http://localhost:8000/docs` when the API server is running.
 
@@ -231,7 +249,7 @@ Without a critic, agents produce confident-sounding but occasionally hallucinate
 ## Testing
 
 ```bash
-# Run all tests (697 tests, ~10s)
+# Run all tests (793 tests, ~15s)
 python -m pytest tests/ -v
 
 # Lint
@@ -248,11 +266,13 @@ make check    # lint + test
 
 ```
 backend/                # FastAPI 后端
-├── api/                # REST 端点 (34+)
+├── api/                # REST 端点 (113)
 ├── agents/             # Agent 配置与执行
 ├── teams/              # 专家团
-├── runtime/            # 工作流编排
+├── runtime/            # 工作流编排 (含 ToolRouter)
 ├── providers/          # 20+ 数据源插件
+├── integrations/       # 外部引擎适配 (Jince)
+├── funds/              # 基金/定投/组合模块
 ├── vision/             # 图片/K线分析
 ├── storage/            # SQLite 数据库
 ├── rag/                # ChromaDB (可选)
@@ -265,7 +285,7 @@ apps/web/               # Next.js 主前端
 config/                 # YAML 配置
 prompts/                # 提示词模板
 scripts/                # 启动/迁移/检查脚本
-tests/                  # 697 单元测试
+tests/                  # 793 单元测试
 
 data/                   # 运行时数据 (gitignore)
 ├── db/                 # SQLite 数据库
@@ -279,6 +299,7 @@ data/                   # 运行时数据 (gitignore)
 
 | Version | Date | Focus |
 |---------|------|-------|
+| v1.3 | 2026-05-23 | Jince 量化引擎适配、基金/定投/组合模块、ToolRouter 10 工具、113 API、793 tests |
 | v1.2 | 2026-05-23 | 前端功能补全: Settings CRUD(Provider/Agent/Team 增删改)、Expert 圆桌接通、TaskCenter 任务中心、成本统计结构化 UI、模型自动拉取、Streamlit 14 Tab |
 | v1.1 | 2026-05-22 | 前端完整重构: 深色工作台、K线SVG图、资讯/财务/资金流/因子四标签、SSE流式AI面板、存档/专家/健康/设置页面、资金流+因子 API |
 | v1.0.1 | 2026-05-22 | 性能优化 + 安全加固: async→sync 端点、YAML 缓存、并行 provider、SHA-256、React.memo、error boundary |
@@ -337,22 +358,29 @@ data/                   # 运行时数据 (gitignore)
 | v0.5 | 2026-05-16 | 5-model heterogeneous architecture |
 | v0.1 | 2026-05-16 | Initial release |
 
-## Roadmap (v1.3)
+## Roadmap (v1.4)
 
 - 异步 SSE 流式: orchestrator 改为异步生成器，真正流式输出
 - Auth 认证: API Key 或 session token
 - 前端响应式布局: 移动端适配、可折叠面板
 - 虚拟列表: 长对话性能优化
-- 更多 Provider 健康追踪接入
+- DCA 计划持久化: 从内存列表迁移到 SQLite
+- Agent 自动调用工具: ToolRouter 与 orchestrator 深度集成
 - Playwright E2E 测试
 - API contract tests
+
+## Known Tech Debt
+
+- **DCA plans 存储**: `backend/api/funds.py` 中 DCA plans 使用模块级内存列表，重启后丢失。需迁移到 SQLite。
+- **React Hook warnings**: `AIAgentPanel.tsx`、`ArchivePanel.tsx`、`KLinePanel.tsx` 各有一个 useEffect 依赖项缺失 warning，为 pre-existing 问题。
+- **ToolRouter asyncio.run()**: 量化/基金工具的 handler 使用 `asyncio.run()` 调用异步代码，在已有事件循环的上下文中会失败。需改为异步 handler 或使用同步包装。
 
 ## Documentation
 
 - [Quick Start](docs/local-quickstart.md) — 本地快速启动指南
 - [User Manual](docs/user-manual/README.md) — 完整用户手册（8 章）
 - [Architecture](docs/architecture.md) — 系统架构与数据流
-- [API Reference](docs/api.md) — 87 个 REST 端点文档
+- [API Reference](docs/api.md) — 113 个 REST 端点文档
 - [API Contract](docs/contract.md) — 前后端契约（ApiResponse/SSE/Upload 格式）
 - [Deployment](docs/deployment.md) — 部署指南（本地/Docker/Windows）
 - [Agent Design](docs/agent-design.md) — Agent 与专家团设计
