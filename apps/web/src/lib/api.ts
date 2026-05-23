@@ -159,6 +159,49 @@ export interface FactorReport {
   signals: Array<Record<string, unknown>>;
 }
 
+// Quant Strategy
+export interface StrategyInfo {
+  name: string;
+  description: string;
+  default_params: Record<string, number>;
+}
+
+export interface TradeRecord {
+  symbol: string;
+  side: string;
+  shares: number;
+  price: number;
+  commission: number;
+  pnl: number;
+  timestamp: string;
+}
+
+export interface PerformanceMetrics {
+  total_return: number;
+  annualized_return: number;
+  max_drawdown: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  calmar_ratio: number;
+  win_rate: number;
+  profit_factor: number;
+  total_trades: number;
+  initial_capital: number;
+  final_equity: number;
+  trading_days: number;
+}
+
+export interface BacktestResultData {
+  strategy_name: string;
+  symbol: string;
+  params: Record<string, number>;
+  equity_curve: number[];
+  dates: string[];
+  trades: TradeRecord[];
+  performance: PerformanceMetrics;
+  risk_violations: Array<{ rule: string; details: string; timestamp: string }>;
+}
+
 // Archive
 export interface ArchiveReport {
   timestamp: string;
@@ -797,4 +840,34 @@ export async function runAnalysisAsync(data: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+}
+
+// ============== Quant / Backtest ==============
+
+export async function listStrategies(): Promise<StrategyInfo[]> {
+  return apiFetch("/api/quant/strategies");
+}
+
+export async function getStrategy(
+  name: string
+): Promise<StrategyInfo> {
+  return apiFetch(`/api/quant/strategies/${name}`);
+}
+
+export async function runBacktest(data: {
+  strategy_name: string;
+  symbol: string;
+  params?: Record<string, number>;
+  initial_capital?: number;
+  days?: number;
+}): Promise<BacktestResultData> {
+  return apiFetch("/api/quant/backtest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function listBuiltinStrategies(): Promise<StrategyInfo[]> {
+  return apiFetch("/api/quant/builtin-strategies");
 }
