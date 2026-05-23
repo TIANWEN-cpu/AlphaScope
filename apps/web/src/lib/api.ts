@@ -803,3 +803,230 @@ export async function runAnalysisAsync(data: {
     body: JSON.stringify(data),
   });
 }
+
+// ============== Quant / Jince ==============
+
+export interface JinceStatus {
+  connected: boolean;
+  version?: string;
+  strategy_count: number;
+  active_runs: number;
+  error?: string;
+}
+
+export interface StrategyInfo {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  params: { name: string; type: string; default?: unknown; description: string }[];
+}
+
+export interface BacktestResult {
+  run_id: string;
+  strategy_id: string;
+  symbol: string;
+  status: string;
+  metrics?: {
+    total_return: number;
+    annual_return: number;
+    sharpe_ratio: number;
+    max_drawdown: number;
+    win_rate: number;
+    trade_count: number;
+  };
+  equity_curve: { date: string; equity: number }[];
+  error?: string;
+}
+
+export async function getQuantStatus(): Promise<JinceStatus> {
+  const res = await apiFetch<{ success: boolean; data: JinceStatus }>(
+    "/api/quant/status"
+  );
+  return res.data;
+}
+
+export async function listQuantStrategies(): Promise<StrategyInfo[]> {
+  const res = await apiFetch<{
+    success: boolean;
+    data: { strategies: StrategyInfo[] };
+  }>("/api/quant/strategies");
+  return res.data?.strategies || [];
+}
+
+export async function runBacktest(data: {
+  strategy_id: string;
+  symbol: string;
+  start_date: string;
+  end_date: string;
+  initial_capital?: number;
+}): Promise<BacktestResult> {
+  const res = await apiFetch<{ success: boolean; data: BacktestResult }>(
+    "/api/quant/backtest",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
+  );
+  return res.data;
+}
+
+export async function listQuantRuns(): Promise<
+  { run_id: string; strategy_id: string; symbol: string; status: string; total_return?: number }[]
+> {
+  const res = await apiFetch<{
+    success: boolean;
+    data: { runs: { run_id: string; strategy_id: string; symbol: string; status: string; total_return?: number }[] };
+  }>("/api/quant/runs");
+  return res.data?.runs || [];
+}
+
+// ============== Funds ==============
+
+export interface FundInfo {
+  code: string;
+  name: string;
+  fund_type?: string;
+  manager?: string;
+  company?: string;
+  nav?: number;
+}
+
+export async function searchFunds(keyword: string): Promise<FundInfo[]> {
+  const res = await apiFetch<{
+    success: boolean;
+    data: { funds: FundInfo[] };
+  }>(`/api/funds/search?keyword=${encodeURIComponent(keyword)}`);
+  return res.data?.funds || [];
+}
+
+export async function getFundInfo(code: string): Promise<FundInfo> {
+  const res = await apiFetch<{ success: boolean; data: FundInfo }>(
+    `/api/funds/${code}`
+  );
+  return res.data;
+}
+
+export async function getFundMetrics(code: string): Promise<Record<string, number>> {
+  const res = await apiFetch<{ success: boolean; data: Record<string, number> }>(
+    `/api/funds/${code}/metrics`
+  );
+  return res.data;
+}
+
+export async function simulateDca(data: {
+  fund_code: string;
+  amount: number;
+  frequency?: string;
+  start_date: string;
+  end_date: string;
+}): Promise<Record<string, unknown>> {
+  const res = await apiFetch<{ success: boolean; data: Record<string, unknown> }>(
+    "/api/fund-dca/simulate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
+  );
+  return res.data;
+}
+
+export interface DCAPlan {
+  id: string;
+  fund_code: string;
+  fund_name: string;
+  amount: number;
+  frequency: string;
+  start_date: string;
+  status: string;
+}
+
+export async function listDcaPlans(): Promise<DCAPlan[]> {
+  const res = await apiFetch<{
+    success: boolean;
+    data: { plans: DCAPlan[] };
+  }>("/api/fund-dca/plans");
+  return res.data?.plans || [];
+}
+
+export async function createDcaPlan(data: {
+  fund_code: string;
+  fund_name?: string;
+  amount: number;
+  frequency?: string;
+  start_date: string;
+}): Promise<DCAPlan> {
+  const res = await apiFetch<{ success: boolean; data: DCAPlan }>(
+    "/api/fund-dca/plans",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
+  );
+  return res.data;
+}
+
+// ============== Portfolio ==============
+
+export interface FundPortfolio {
+  id: string;
+  name: string;
+  description: string;
+  holdings: { fund_code: string; fund_name?: string; weight: number }[];
+  total_value?: number;
+}
+
+export async function listPortfolios(): Promise<FundPortfolio[]> {
+  const res = await apiFetch<{
+    success: boolean;
+    data: { portfolios: FundPortfolio[] };
+  }>("/api/fund-portfolio");
+  return res.data?.portfolios || [];
+}
+
+export async function createPortfolio(data: {
+  name: string;
+  description?: string;
+  holdings?: { fund_code: string; weight: number }[];
+}): Promise<FundPortfolio> {
+  const res = await apiFetch<{ success: boolean; data: FundPortfolio }>(
+    "/api/fund-portfolio",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
+  );
+  return res.data;
+}
+
+export async function deletePortfolio(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/fund-portfolio/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+}
+
+export async function rebalancePortfolio(
+  portfolioId: string,
+  targetWeights: Record<string, number>
+): Promise<{ trades: { fund_code: string; action: string; weight_change: number }[] }> {
+  const res = await apiFetch<{
+    success: boolean;
+    data: { trades: { fund_code: string; action: string; weight_change: number }[] };
+  }>("/api/fund-portfolio/rebalance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      portfolio_id: portfolioId,
+      target_weights: targetWeights,
+    }),
+  });
+  return res.data;
+}

@@ -16,6 +16,9 @@ import { ExpertPanel } from "@/components/ExpertPanel";
 import { HealthPanel } from "@/components/HealthPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { TaskCenter } from "@/components/TaskCenter";
+import { QuantLabPanel } from "@/components/QuantLabPanel";
+import { FundDcaPanel } from "@/components/FundDcaPanel";
+import { PortfolioPanel } from "@/components/PortfolioPanel";
 import { Bot } from "lucide-react";
 
 export default function HomePage() {
@@ -88,6 +91,9 @@ export default function HomePage() {
         {activeView === "health" && <div className="flex-1 min-h-0"><HealthPanel /></div>}
         {activeView === "settings" && <div className="flex-1 min-h-0"><SettingsPanel /></div>}
         {activeView === "tasks" && <div className="flex-1 min-h-0"><TaskCenter /></div>}
+        {activeView === "quant" && <div className="flex-1 min-h-0"><QuantLabPanel /></div>}
+        {activeView === "fund" && <div className="flex-1 min-h-0"><FundDcaPanel /></div>}
+        {activeView === "portfolio" && <div className="flex-1 min-h-0"><PortfolioPanel /></div>}
       </div>
     </div>
   );

@@ -13,6 +13,9 @@ import {
   Table,
   Brain,
   ListTodo,
+  Zap,
+  TrendingUp,
+  Briefcase,
 } from "lucide-react";
 
 export type NavView =
@@ -26,7 +29,10 @@ export type NavView =
   | "expert"
   | "health"
   | "settings"
-  | "tasks";
+  | "tasks"
+  | "quant"
+  | "fund"
+  | "portfolio";
 
 interface SidebarRailProps {
   activeView: NavView;
@@ -40,6 +46,9 @@ const NAV_ITEMS: { view: NavView; icon: React.ReactNode; title: string }[] = [
   { view: "fundamentals", icon: <PieChart size={20} />, title: "基本面" },
   { view: "data", icon: <Table size={20} />, title: "行情明细" },
   { view: "agent", icon: <Brain size={20} />, title: "Agent分析" },
+  { view: "quant", icon: <Zap size={20} />, title: "量化实验室" },
+  { view: "fund", icon: <TrendingUp size={20} />, title: "基金定投" },
+  { view: "portfolio", icon: <Briefcase size={20} />, title: "组合管理" },
   { view: "archive", icon: <Bookmark size={20} />, title: "研究存档" },
   { view: "expert", icon: <Users size={20} />, title: "专家圆桌" },
   { view: "tasks", icon: <ListTodo size={20} />, title: "任务中心" },
