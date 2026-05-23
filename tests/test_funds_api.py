@@ -200,3 +200,98 @@ class TestPortfolioCRUD:
             resp = await client.get("/api/fund-portfolio")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
+
+
+# ========== 定投计划 ==========
+
+
+class TestDCAPlans:
+    """定投计划端点"""
+
+    @pytest.mark.anyio
+    async def test_create_and_list_plans(self, client):
+        # 先清空
+        import backend.api.funds as funds_mod
+
+        funds_mod._dca_plans.clear()
+
+        resp = await client.post(
+            "/api/fund-dca/plans",
+            json={
+                "fund_code": "000001",
+                "fund_name": "华夏成长",
+                "amount": 1000,
+                "frequency": "monthly",
+                "start_date": "2024-01-01",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        assert resp.json()["data"]["fund_code"] == "000001"
+
+        resp = await client.get("/api/fund-dca/plans")
+        assert resp.json()["data"]["total"] == 1
+
+
+# ========== 组合再平衡 ==========
+
+
+class TestRebalance:
+    """组合再平衡端点"""
+
+    @pytest.mark.anyio
+    async def test_rebalance_not_found(self, client):
+        mock_mgr = PortfolioManager(db=None)
+        with patch("backend.api.funds._get_portfolio_mgr", return_value=mock_mgr):
+            resp = await client.post(
+                "/api/fund-portfolio/rebalance",
+                json={
+                    "portfolio_id": "nonexistent",
+                    "target_weights": {"000001": 0.6, "000002": 0.4},
+                },
+            )
+        assert resp.json()["success"] is False
+        assert resp.json()["error_code"] == "PORTFOLIO_NOT_FOUND"
+
+
+# ========== 基金报告 ==========
+
+
+class TestFundReport:
+    """基金报告生成端点"""
+
+    @pytest.mark.anyio
+    async def test_generate_report(self, client):
+        mock_provider = AsyncMock()
+        mock_provider.get_info.return_value = {
+            "code": "000001",
+            "name": "华夏成长",
+            "fund_type": "stock",
+            "manager": "张三",
+            "company": "华夏基金",
+        }
+        mock_provider.get_nav_history.return_value = [
+            {"date": f"2024-01-{i:02d}", "nav": 1.0 + i * 0.01} for i in range(1, 31)
+        ]
+        with patch("backend.api.funds.get_provider", return_value=mock_provider):
+            resp = await client.post(
+                "/api/fund-reports/generate",
+                json={"fund_code": "000001", "include_metrics": True},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "华夏成长" in data["data"]["content"]
+        assert "total_return" in data["data"]["metrics"]
+
+    @pytest.mark.anyio
+    async def test_report_fund_not_found(self, client):
+        mock_provider = AsyncMock()
+        mock_provider.get_info.return_value = None
+        with patch("backend.api.funds.get_provider", return_value=mock_provider):
+            resp = await client.post(
+                "/api/fund-reports/generate",
+                json={"fund_code": "999999"},
+            )
+        assert resp.json()["success"] is False
+        assert resp.json()["error_code"] == "FUND_NOT_FOUND"
