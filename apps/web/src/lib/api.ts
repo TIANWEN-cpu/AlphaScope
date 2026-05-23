@@ -171,6 +171,50 @@ export interface ArchiveReport {
   path: string;
 }
 
+// Settings Providers (CRUD)
+export interface SettingsProvider {
+  id: string;
+  name: string;
+  base_url: string;
+  api_key_masked?: string;
+  enabled: boolean;
+}
+
+// Agent Management (CRUD)
+export interface ManageAgent {
+  id: string;
+  name: string;
+  description?: string;
+  system_prompt?: string;
+  provider: string;
+  model: string;
+  tools?: string[];
+  temperature?: number;
+  max_tokens?: number;
+  enabled: boolean;
+}
+
+export interface ManageTeam {
+  id: string;
+  name: string;
+  description?: string;
+  member_ids: string[];
+}
+
+// Tasks
+export interface TaskItem {
+  id: string;
+  conversation_id?: string;
+  task_type: string;
+  status: string;
+  error?: string;
+  started_at?: number;
+  completed_at?: number;
+  created_at: number;
+  input_json?: string;
+  output_json?: string;
+}
+
 // Provider Health
 export interface ProviderInfo {
   name: string;
@@ -597,4 +641,160 @@ export async function listTemplates(): Promise<{
   templates: Record<string, unknown>[];
 }> {
   return apiFetch("/api/templates");
+}
+
+// ============== Settings Providers (CRUD) ==============
+
+export async function listSettingsProviders(): Promise<{ providers: SettingsProvider[] }> {
+  return apiFetch("/api/settings/providers");
+}
+
+export async function saveSettingsProvider(data: {
+  id: string;
+  name: string;
+  base_url: string;
+  api_key?: string;
+  enabled?: boolean;
+}): Promise<SettingsProvider> {
+  return apiFetch("/api/settings/providers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteSettingsProvider(providerId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/settings/providers/${providerId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
+  }
+}
+
+export async function testSettingsProvider(
+  providerId: string
+): Promise<{ success: boolean; message?: string; models?: string[] }> {
+  return apiFetch(`/api/settings/providers/${providerId}/test`, {
+    method: "POST",
+  });
+}
+
+export async function listSettingsModels(
+  providerId: string
+): Promise<{ models: Array<{ id: string; owned_by: string }> }> {
+  return apiFetch(`/api/settings/providers/${providerId}/models`);
+}
+
+export async function exportSettings(): Promise<Record<string, unknown>> {
+  return apiFetch("/api/settings/export");
+}
+
+export async function importSettings(data: {
+  version?: string;
+  providers: Record<string, unknown>[];
+}): Promise<Record<string, unknown>> {
+  return apiFetch("/api/settings/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+// ============== Agent & Team Management (CRUD) ==============
+
+export async function listManageAgents(): Promise<{ agents: ManageAgent[] }> {
+  return apiFetch("/api/manage/agents");
+}
+
+export async function saveManageAgent(data: {
+  id: string;
+  name: string;
+  description?: string;
+  system_prompt?: string;
+  provider?: string;
+  model?: string;
+  tools?: string[];
+  temperature?: number;
+  max_tokens?: number;
+  enabled?: boolean;
+}): Promise<ManageAgent> {
+  return apiFetch("/api/manage/agents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteManageAgent(agentId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/manage/agents/${agentId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
+  }
+}
+
+export async function listManageTeams(): Promise<{ teams: ManageTeam[] }> {
+  return apiFetch("/api/manage/teams");
+}
+
+export async function saveManageTeam(data: {
+  id: string;
+  name: string;
+  description?: string;
+  member_ids?: string[];
+}): Promise<ManageTeam> {
+  return apiFetch("/api/manage/teams", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteManageTeam(teamId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/manage/teams/${teamId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
+  }
+}
+
+// ============== Task Management ==============
+
+export async function listTasks(
+  status?: string,
+  limit = 50
+): Promise<{ tasks: TaskItem[]; total: number }> {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  params.set("limit", String(limit));
+  return apiFetch(`/api/tasks?${params}`);
+}
+
+export async function getTask(taskId: string): Promise<TaskItem> {
+  return apiFetch(`/api/tasks/${taskId}`);
+}
+
+export async function cancelTask(
+  taskId: string
+): Promise<{ cancelled: string }> {
+  return apiFetch(`/api/tasks/${taskId}/cancel`, { method: "POST" });
+}
+
+export async function runAnalysisAsync(data: {
+  stock_symbol: string;
+  stock_name?: string;
+  mode?: string;
+  conversation_id?: string;
+}): Promise<{ task_id: string; status: string }> {
+  return apiFetch("/api/analysis/async", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }

@@ -53,7 +53,7 @@ export function HealthPanel() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 p-4 gap-4 overflow-y-auto">
+    <div className="flex-1 flex flex-col min-h-0 p-4 gap-4 overflow-y-auto custom-scrollbar">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
           <Activity size={20} className="text-emerald-400" />

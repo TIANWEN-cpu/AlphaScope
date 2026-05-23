@@ -10,7 +10,7 @@ import {
   ChevronUp,
   AlertTriangle,
 } from "lucide-react";
-import { listTeams, getTeam } from "@/lib/api";
+import { listTeams, getTeam, runAnalysis } from "@/lib/api";
 
 interface TeamMember {
   id: string;
@@ -57,8 +57,19 @@ interface RoundtableResult {
   elapsed_seconds?: number;
 }
 
-export function ExpertPanel() {
-  const [teams, setTeams] = useState<string[]>([]);
+interface TeamItem {
+  id: string;
+  name: string;
+  name_en?: string;
+}
+
+interface ExpertPanelProps {
+  stockSymbol?: string;
+  stockName?: string;
+}
+
+export function ExpertPanel({ stockSymbol = "", stockName = "" }: ExpertPanelProps) {
+  const [teams, setTeams] = useState<TeamItem[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string>("");
   const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
   const [result, setResult] = useState<RoundtableResult | null>(null);
@@ -69,9 +80,10 @@ export function ExpertPanel() {
     const load = async () => {
       try {
         const res = await listTeams();
-        setTeams(res.teams || []);
-        if (res.teams?.length > 0) {
-          setSelectedTeam(res.teams[0]);
+        const teamList = (res.teams || []) as unknown as TeamItem[];
+        setTeams(teamList);
+        if (teamList.length > 0) {
+          setSelectedTeam(teamList[0].id || String(teamList[0]));
         }
       } catch {
         setTeams([]);
@@ -93,8 +105,26 @@ export function ExpertPanel() {
     load();
   }, [selectedTeam]);
 
+  const handleRun = async () => {
+    if (!stockSymbol) return;
+    setRunning(true);
+    setResult(null);
+    try {
+      const res = await runAnalysis({
+        stock_symbol: stockSymbol,
+        stock_name: stockName,
+        mode: "expert",
+      });
+      setResult(res as unknown as RoundtableResult);
+    } catch (err) {
+      console.error("圆桌分析失败:", err);
+    } finally {
+      setRunning(false);
+    }
+  };
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 p-4 gap-4 overflow-y-auto">
+    <div className="flex-1 flex flex-col min-h-0 p-4 gap-4 overflow-y-auto custom-scrollbar">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
           <Users size={20} className="text-purple-400" />
@@ -110,16 +140,14 @@ export function ExpertPanel() {
           className="bg-[#18181b] border border-zinc-800 text-zinc-100 text-xs rounded-md px-3 py-2 focus:outline-none focus:border-blue-500/50 flex-1"
         >
           {teams.map((t) => (
-            <option key={t} value={t}>
-              {t}
+            <option key={t.id || String(t)} value={t.id || String(t)}>
+              {t.name || String(t)}
             </option>
           ))}
         </select>
         <button
-          disabled={running || !selectedTeam}
-          onClick={() => {
-            /* TODO: run roundtable */
-          }}
+          disabled={running || !selectedTeam || !stockSymbol}
+          onClick={handleRun}
           className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs rounded-md transition-colors"
         >
           <Play size={14} />

@@ -6,10 +6,16 @@ import { TopNavigation } from "@/components/TopNavigation";
 import { KLinePanel } from "@/components/KLinePanel";
 import { DataTabsPanel } from "@/components/DataTabsPanel";
 import { AIAgentPanel } from "@/components/AIAgentPanel";
+import { NewsPanel } from "@/components/NewsPanel";
+import { FundFlowPanel } from "@/components/FundFlowPanel";
+import { FundamentalsPanel } from "@/components/FundamentalsPanel";
+import { DataDetailPanel } from "@/components/DataDetailPanel";
+import { AgentAnalysisPanel } from "@/components/AgentAnalysisPanel";
 import { ArchivePanel } from "@/components/ArchivePanel";
 import { ExpertPanel } from "@/components/ExpertPanel";
 import { HealthPanel } from "@/components/HealthPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { TaskCenter } from "@/components/TaskCenter";
 import { Bot } from "lucide-react";
 
 export default function HomePage() {
@@ -62,10 +68,26 @@ export default function HomePage() {
           />
         )}
 
-        {activeView === "archive" && <ArchivePanel />}
-        {activeView === "expert" && <ExpertPanel />}
-        {activeView === "health" && <HealthPanel />}
-        {activeView === "settings" && <SettingsPanel />}
+        {activeView === "news" && (
+          <div className="flex-1 min-h-0"><NewsPanel symbol={stockSymbol} stockName={stockName} /></div>
+        )}
+        {activeView === "fundflow" && (
+          <div className="flex-1 min-h-0"><FundFlowPanel symbol={stockSymbol} stockName={stockName} /></div>
+        )}
+        {activeView === "fundamentals" && (
+          <div className="flex-1 min-h-0"><FundamentalsPanel symbol={stockSymbol} stockName={stockName} /></div>
+        )}
+        {activeView === "data" && (
+          <div className="flex-1 min-h-0"><DataDetailPanel symbol={stockSymbol} stockName={stockName} /></div>
+        )}
+        {activeView === "agent" && (
+          <div className="flex-1 min-h-0"><AgentAnalysisPanel symbol={stockSymbol} stockName={stockName} /></div>
+        )}
+        {activeView === "archive" && <div className="flex-1 min-h-0"><ArchivePanel /></div>}
+        {activeView === "expert" && <div className="flex-1 min-h-0"><ExpertPanel stockSymbol={stockSymbol} stockName={stockName} /></div>}
+        {activeView === "health" && <div className="flex-1 min-h-0"><HealthPanel /></div>}
+        {activeView === "settings" && <div className="flex-1 min-h-0"><SettingsPanel /></div>}
+        {activeView === "tasks" && <div className="flex-1 min-h-0"><TaskCenter /></div>}
       </div>
     </div>
   );

@@ -2,21 +2,31 @@
 
 import {
   LayoutDashboard,
-  Network,
-  TerminalSquare,
   Settings,
   LineChart,
   Bookmark,
   Users,
   Activity,
+  Newspaper,
+  BarChart2,
+  PieChart,
+  Table,
+  Brain,
+  ListTodo,
 } from "lucide-react";
 
 export type NavView =
   | "dashboard"
+  | "news"
+  | "fundflow"
+  | "fundamentals"
+  | "data"
+  | "agent"
   | "archive"
   | "expert"
+  | "health"
   | "settings"
-  | "health";
+  | "tasks";
 
 interface SidebarRailProps {
   activeView: NavView;
@@ -25,9 +35,15 @@ interface SidebarRailProps {
 
 const NAV_ITEMS: { view: NavView; icon: React.ReactNode; title: string }[] = [
   { view: "dashboard", icon: <LayoutDashboard size={20} />, title: "工作台" },
+  { view: "news", icon: <Newspaper size={20} />, title: "资讯与研报" },
+  { view: "fundflow", icon: <BarChart2 size={20} />, title: "资金流向" },
+  { view: "fundamentals", icon: <PieChart size={20} />, title: "基本面" },
+  { view: "data", icon: <Table size={20} />, title: "行情明细" },
+  { view: "agent", icon: <Brain size={20} />, title: "Agent分析" },
   { view: "archive", icon: <Bookmark size={20} />, title: "研究存档" },
   { view: "expert", icon: <Users size={20} />, title: "专家圆桌" },
-  { view: "health", icon: <Activity size={20} />, title: "数据源健康" },
+  { view: "tasks", icon: <ListTodo size={20} />, title: "任务中心" },
+  { view: "health", icon: <Activity size={20} />, title: "数据源" },
 ];
 
 export function SidebarRail({ activeView, onNav }: SidebarRailProps) {
@@ -37,7 +53,7 @@ export function SidebarRail({ activeView, onNav }: SidebarRailProps) {
         <LineChart size={18} strokeWidth={2.5} />
       </div>
 
-      <div className="flex flex-col gap-4 w-full">
+      <div className="flex flex-col gap-3 w-full">
         {NAV_ITEMS.map((item) => (
           <NavIcon
             key={item.view}
@@ -76,7 +92,7 @@ function NavIcon({
     <button
       onClick={onClick}
       title={title}
-      className={`w-full py-3 flex justify-center transition-colors border-l-2 focus:outline-none ${
+      className={`w-full py-2.5 flex justify-center transition-colors border-l-2 focus:outline-none ${
         active
           ? "border-blue-500 text-blue-400 bg-blue-500/10"
           : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30"

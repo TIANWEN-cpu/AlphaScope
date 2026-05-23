@@ -26,7 +26,7 @@ async def get_fundamentals(symbol: str):
         return ApiResponse(success=False, error=data.error_msg)
 
     # 从财务摘要取最新一期数据
-    latest = data.financial_periods[0] if data.financial_periods else None
+    latest = data.financials[0] if data.financials else None
     pe = data.peers[0].pe if data.peers else 0
     pb = data.peers[0].pb if data.peers else 0
 
@@ -45,6 +45,8 @@ async def get_fundamentals(symbol: str):
         success=True,
         data={
             "symbol": symbol,
+            "stock_name": data.stock_name,
+            "industry": data.industry_name,
             "financial_periods": [
                 {
                     "period": p.period,
@@ -53,16 +55,27 @@ async def get_fundamentals(symbol: str):
                     "gross_margin_pct": p.gross_margin_pct,
                     "roe_pct": p.roe_pct,
                     "debt_ratio_pct": p.debt_ratio_pct,
-                    "yoy_revenue_pct": p.yoy_revenue_pct,
-                    "yoy_net_profit_pct": p.yoy_net_profit_pct,
+                    "yoy_revenue_pct": p.yoy_revenue,
+                    "yoy_net_profit_pct": p.yoy_net_profit,
                 }
-                for p in data.financial_periods
+                for p in data.financials
             ],
             "valuation": valuation,
             "earnings_quality": earnings,
             "cashflow": cashflow,
             "balance_sheet": balance,
             "fundamental_score": score,
+            "peers": [
+                {
+                    "symbol": p.symbol,
+                    "name": p.name,
+                    "pe": p.pe,
+                    "pb": p.pb,
+                    "total_mcap_yi": p.total_mcap_yi,
+                    "is_self": p.is_self,
+                }
+                for p in data.peers
+            ],
         },
     )
 
@@ -79,7 +92,7 @@ async def get_valuation(symbol: str):
     if data.has_error:
         return ApiResponse(success=False, error=data.error_msg)
 
-    latest = data.financial_periods[0] if data.financial_periods else None
+    latest = data.financials[0] if data.financials else None
     pe = data.peers[0].pe if data.peers else 0
     pb = data.peers[0].pb if data.peers else 0
     mcap = data.peers[0].total_mcap_yi if data.peers else 0

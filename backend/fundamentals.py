@@ -540,7 +540,7 @@ def fetch_industry_peers(symbol: str, top_k: int = 8) -> Tuple[str, List[PeerRow
 
 # ============== 单次入口（带 24h 缓存） ==============
 def load_fundamentals(
-    symbol: str, stock_name: str, force_refresh: bool = False
+    symbol: str, stock_name: str = "", force_refresh: bool = False
 ) -> FundamentalsData:
     """单次入口：5 路并行 fetch + 24h 缓存。任一 fetch 失败不影响其他"""
     if not force_refresh:
