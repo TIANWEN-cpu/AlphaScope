@@ -5,7 +5,7 @@
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
 [![Tests](https://img.shields.io/badge/tests-697%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v1.1.0-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.1.0)
+[![Release](https://img.shields.io/badge/release-v1.1.1-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.1.1)
 
 A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
 
@@ -280,6 +280,7 @@ data/                   # 运行时数据 (gitignore)
 | Version | Date | Focus |
 |---------|------|-------|
 | v1.2 | 2026-05-23 | 前端功能补全: Settings CRUD(Provider/Agent/Team 增删改)、Expert 圆桌接通、TaskCenter 任务中心、成本统计结构化 UI、模型自动拉取、Streamlit 14 Tab |
+| v1.1.1 | 2026-05-23 | 量化回测引擎后端: BacktestEngine、3内置策略(MACD/MA/RSI)、RiskController、Portfolio、metrics、/api/quant/* 端点、45新测试 |
 | v1.1.0 | 2026-05-23 | 前端 UI 升级: 玻璃态工作台设计、5 新视图(投资组合/量化回测/基金定投/报告生成/证据链)、recharts/framer-motion、深色主题 #050505 |
 | v1.1 | 2026-05-22 | 前端完整重构: 深色工作台、K线SVG图、资讯/财务/资金流/因子四标签、SSE流式AI面板、存档/专家/健康/设置页面、资金流+因子 API |
 | v1.0.1 | 2026-05-22 | 性能优化 + 安全加固: async→sync 端点、YAML 缓存、并行 provider、SHA-256、React.memo、error boundary |
