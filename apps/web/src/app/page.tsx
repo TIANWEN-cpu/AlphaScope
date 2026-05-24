@@ -56,7 +56,11 @@ export default function HomePage() {
         <SidebarRail activeView={activeView} onNav={setActiveView} />
 
         <div className="flex-1 flex flex-col min-w-0">
-          <TopBar />
+          <TopBar
+            activeSymbol={stockSymbol}
+            activeName={stockName}
+            onSelectStock={handleSelectStock}
+          />
 
           <main className="flex-1 overflow-hidden relative">
             <div className="h-full overflow-y-auto custom-scrollbar">

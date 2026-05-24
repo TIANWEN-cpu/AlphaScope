@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Clock,
   Loader2,
+  Play,
   Plus,
   RefreshCw,
   TrendingUp,
@@ -470,22 +471,5 @@ function Metric({
         {value}
       </span>
     </div>
-  );
-}
-
-function Play({ size }: { size: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polygon points="6 3 20 12 6 21 6 3" />
-    </svg>
   );
 }
