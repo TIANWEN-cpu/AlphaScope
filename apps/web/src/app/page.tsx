@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { SidebarRail, type NavView } from "@/components/SidebarRail";
-import { TopNavigation } from "@/components/TopNavigation";
+import { TopBar } from "@/components/TopBar";
 import { KLinePanel } from "@/components/KLinePanel";
 import { DataTabsPanel } from "@/components/DataTabsPanel";
 import { AIAgentPanel } from "@/components/AIAgentPanel";
@@ -50,50 +51,105 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#09090b] text-zinc-300 font-sans overflow-hidden selection:bg-blue-500/30">
-      <SidebarRail activeView={activeView} onNav={setActiveView} />
+    <div className="flex h-screen w-full bg-[#050505] text-neutral-300 font-sans selection:bg-indigo-500/30 overflow-hidden relative">
+      <div className="relative z-10 flex w-full h-full">
+        <SidebarRail activeView={activeView} onNav={setActiveView} />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopNavigation
-          activeSymbol={stockSymbol}
-          activeName={stockName}
-          onSelectStock={handleSelectStock}
-        />
+        <div className="flex-1 flex flex-col min-w-0">
+          <TopBar />
 
-        {activeView === "dashboard" && (
-          <DashboardView
-            symbol={stockSymbol}
-            stockName={stockName}
-            isAgentPanelOpen={isAgentPanelOpen}
-            setIsAgentPanelOpen={setIsAgentPanelOpen}
-            agentWidth={agentWidth}
-            startResizing={startResizing}
-          />
-        )}
+          <main className="flex-1 overflow-hidden relative">
+            <div className="h-full overflow-y-auto custom-scrollbar">
+              <AnimatePresence mode="wait">
+                {activeView === "dashboard" && (
+                  <motion.div
+                    key="dashboard"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="h-full"
+                  >
+                    <DashboardView
+                      symbol={stockSymbol}
+                      stockName={stockName}
+                      isAgentPanelOpen={isAgentPanelOpen}
+                      setIsAgentPanelOpen={setIsAgentPanelOpen}
+                      agentWidth={agentWidth}
+                      startResizing={startResizing}
+                    />
+                  </motion.div>
+                )}
 
-        {activeView === "news" && (
-          <div className="flex-1 min-h-0"><NewsPanel symbol={stockSymbol} stockName={stockName} /></div>
-        )}
-        {activeView === "fundflow" && (
-          <div className="flex-1 min-h-0"><FundFlowPanel symbol={stockSymbol} stockName={stockName} /></div>
-        )}
-        {activeView === "fundamentals" && (
-          <div className="flex-1 min-h-0"><FundamentalsPanel symbol={stockSymbol} stockName={stockName} /></div>
-        )}
-        {activeView === "data" && (
-          <div className="flex-1 min-h-0"><DataDetailPanel symbol={stockSymbol} stockName={stockName} /></div>
-        )}
-        {activeView === "agent" && (
-          <div className="flex-1 min-h-0"><AgentAnalysisPanel symbol={stockSymbol} stockName={stockName} /></div>
-        )}
-        {activeView === "archive" && <div className="flex-1 min-h-0"><ArchivePanel /></div>}
-        {activeView === "expert" && <div className="flex-1 min-h-0"><ExpertPanel stockSymbol={stockSymbol} stockName={stockName} /></div>}
-        {activeView === "health" && <div className="flex-1 min-h-0"><HealthPanel /></div>}
-        {activeView === "settings" && <div className="flex-1 min-h-0"><SettingsPanel /></div>}
-        {activeView === "tasks" && <div className="flex-1 min-h-0"><TaskCenter /></div>}
-        {activeView === "quant" && <div className="flex-1 min-h-0"><QuantLabPanel /></div>}
-        {activeView === "fund" && <div className="flex-1 min-h-0"><FundDcaPanel /></div>}
-        {activeView === "portfolio" && <div className="flex-1 min-h-0"><PortfolioPanel /></div>}
+                {activeView === "news" && (
+                  <motion.div key="news" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <NewsPanel symbol={stockSymbol} stockName={stockName} />
+                  </motion.div>
+                )}
+                {activeView === "fundflow" && (
+                  <motion.div key="fundflow" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <FundFlowPanel symbol={stockSymbol} stockName={stockName} />
+                  </motion.div>
+                )}
+                {activeView === "fundamentals" && (
+                  <motion.div key="fundamentals" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <FundamentalsPanel symbol={stockSymbol} stockName={stockName} />
+                  </motion.div>
+                )}
+                {activeView === "data" && (
+                  <motion.div key="data" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <DataDetailPanel symbol={stockSymbol} stockName={stockName} />
+                  </motion.div>
+                )}
+                {activeView === "agent" && (
+                  <motion.div key="agent" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <AgentAnalysisPanel symbol={stockSymbol} stockName={stockName} />
+                  </motion.div>
+                )}
+                {activeView === "archive" && (
+                  <motion.div key="archive" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <ArchivePanel />
+                  </motion.div>
+                )}
+                {activeView === "expert" && (
+                  <motion.div key="expert" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <ExpertPanel stockSymbol={stockSymbol} stockName={stockName} />
+                  </motion.div>
+                )}
+                {activeView === "health" && (
+                  <motion.div key="health" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <HealthPanel />
+                  </motion.div>
+                )}
+                {activeView === "settings" && (
+                  <motion.div key="settings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <SettingsPanel />
+                  </motion.div>
+                )}
+                {activeView === "tasks" && (
+                  <motion.div key="tasks" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <TaskCenter />
+                  </motion.div>
+                )}
+                {activeView === "quant" && (
+                  <motion.div key="quant" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <QuantLabPanel />
+                  </motion.div>
+                )}
+                {activeView === "fund" && (
+                  <motion.div key="fund" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <FundDcaPanel />
+                  </motion.div>
+                )}
+                {activeView === "portfolio" && (
+                  <motion.div key="portfolio" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
+                    <PortfolioPanel />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );
@@ -115,13 +171,13 @@ function DashboardView({
   startResizing: (e: React.MouseEvent) => void;
 }) {
   return (
-    <div className="flex-1 p-2 pb-0 gap-2 flex min-h-0 animate-fade-in relative">
+    <div className="flex-1 p-4 gap-4 flex min-h-0 h-full">
       {/* Left: K-line + Data tabs */}
-      <div className="flex-1 flex flex-col gap-2 min-w-0 pb-2">
-        <div className="flex-[3] bg-[#18181b] rounded-lg border border-zinc-800/80 overflow-hidden flex flex-col shadow-xl">
+      <div className="flex-1 flex flex-col gap-4 min-w-0">
+        <div className="flex-[3] bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden flex flex-col shadow-xl backdrop-blur-md">
           <KLinePanel symbol={symbol} stockName={stockName} />
         </div>
-        <div className="flex-[2] bg-[#18181b] rounded-lg border border-zinc-800/80 overflow-hidden flex flex-col shadow-xl">
+        <div className="flex-[2] bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden flex flex-col shadow-xl backdrop-blur-md">
           <DataTabsPanel symbol={symbol} stockName={stockName} />
         </div>
       </div>
@@ -131,10 +187,10 @@ function DashboardView({
         <button
           onClick={() => setIsAgentPanelOpen(true)}
           title="展开 AI 工作台"
-          className="absolute right-0 top-1/2 -translate-y-1/2 bg-[#18181b] border border-zinc-800/80 border-r-0 text-zinc-400 p-2.5 rounded-l-lg hover:text-zinc-200 hover:bg-zinc-800 transition-colors z-50 shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center group"
+          className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/[0.02] border border-white/5 border-r-0 text-neutral-400 p-2.5 rounded-l-lg hover:text-neutral-200 hover:bg-white/[0.05] transition-colors z-50 shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center group"
         >
           <Bot size={20} className="group-hover:scale-110 transition-transform" />
-          <span className="w-2 h-2 rounded-full bg-blue-500 absolute top-1 right-1 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+          <span className="w-2 h-2 rounded-full bg-indigo-500 absolute top-1 right-1 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
         </button>
       )}
 
@@ -143,11 +199,11 @@ function DashboardView({
         <>
           <div
             onMouseDown={startResizing}
-            className="w-2 -mx-1 z-20 cursor-col-resize hover:bg-blue-500/30 active:bg-blue-500/50 transition-colors"
+            className="w-2 -mx-1 z-20 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-500/50 transition-colors rounded"
           />
           <div
             style={{ width: agentWidth }}
-            className="bg-[#18181b] rounded-lg border border-zinc-800/80 overflow-hidden flex flex-col shadow-xl mb-2 flex-shrink-0"
+            className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden flex flex-col shadow-xl flex-shrink-0 backdrop-blur-md"
           >
             <AIAgentPanel
               symbol={symbol}

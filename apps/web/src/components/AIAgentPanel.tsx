@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   BrainCircuit,
   Send,
@@ -17,6 +17,7 @@ import {
   Search,
 } from "lucide-react";
 import { streamChat, type SseEvent } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface AIAgentPanelProps {
   symbol: string;
@@ -65,7 +66,6 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isProcessing, streamingContent]);
 
-  // Context injection when stock changes
   useEffect(() => {
     setMessages((prev) => [
       ...prev,
@@ -76,6 +76,7 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
       },
     ]);
     setConversationId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol]);
 
   const clearChat = () => {
@@ -189,36 +190,35 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
   const currentMode = MODES.find((m) => m.id === mode);
 
   return (
-    <div className="flex flex-col h-full bg-[#0d0d0f] relative font-sans">
+    <div className="flex flex-col h-full relative font-sans">
       {/* Header */}
-      <div className="h-14 border-b border-zinc-800/80 px-4 flex items-center justify-between bg-[#18181b] z-20 flex-shrink-0 relative">
+      <div className="h-14 border-b border-white/5 px-4 flex items-center justify-between bg-black/40 z-20 flex-shrink-0 relative backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-6 h-6 rounded bg-blue-600/20 text-blue-500 border border-blue-500/30">
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             <BrainCircuit size={14} />
           </div>
-          <span className="font-semibold text-zinc-100 text-sm tracking-wide">
+          <span className="font-semibold text-white text-sm tracking-wide font-display">
             AI 分析引擎
           </span>
         </div>
 
         <div className="flex gap-2">
-          {/* Mode Switcher */}
           <div
             className="relative"
             onMouseLeave={() => setShowModeDropdown(false)}
           >
             <div
               onClick={() => setShowModeDropdown(!showModeDropdown)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#09090b] border border-zinc-800 cursor-pointer hover:bg-zinc-800/80 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/20 border border-white/5 cursor-pointer hover:bg-white/[0.03] transition-colors"
             >
-              <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
-              <span className="text-xs text-zinc-300">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+              <span className="text-xs text-neutral-300">
                 {currentMode?.name || mode}
               </span>
-              <ChevronDown size={14} className="text-zinc-500" />
+              <ChevronDown size={14} className="text-neutral-500" />
             </div>
             {showModeDropdown && (
-              <div className="absolute top-full right-0 mt-1 w-40 bg-[#18181b] border border-zinc-700 shadow-xl rounded-md py-1 z-50 animate-fade-in">
+              <div className="absolute top-full right-0 mt-1 w-40 bg-[#0a0a0f] border border-white/10 shadow-xl rounded-lg py-1 z-50 animate-fade-in backdrop-blur-md">
                 {MODES.map((m) => (
                   <div
                     key={m.id}
@@ -226,11 +226,12 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
                       setMode(m.id);
                       setShowModeDropdown(false);
                     }}
-                    className={`px-3 py-2 text-xs cursor-pointer transition-colors flex items-center gap-2 ${
+                    className={cn(
+                      "px-3 py-2 text-xs cursor-pointer transition-colors flex items-center gap-2",
                       mode === m.id
-                        ? "text-blue-400 bg-blue-500/10"
-                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-                    }`}
+                        ? "text-indigo-400 bg-indigo-500/10"
+                        : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.02]"
+                    )}
                   >
                     {m.icon}
                     {m.name}
@@ -243,15 +244,15 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
           <button
             onClick={clearChat}
             title="清空对话"
-            className="p-1.5 rounded-md text-zinc-400 hover:bg-[#09090b] hover:text-zinc-200 transition-colors border border-transparent hover:border-zinc-800 focus:outline-none"
+            className="p-1.5 rounded-lg text-neutral-400 hover:bg-white/[0.03] hover:text-neutral-200 transition-colors border border-transparent hover:border-white/5 focus:outline-none"
           >
             <RefreshCw size={14} />
           </button>
-          <div className="w-px h-4 bg-zinc-800 mx-1" />
+          <div className="w-px h-4 bg-white/10 mx-1" />
           <button
             onClick={onClose}
             title="收起面板"
-            className="p-1.5 rounded-md text-zinc-400 hover:bg-[#09090b] hover:text-red-400 transition-colors border border-transparent hover:border-zinc-800 focus:outline-none"
+            className="p-1.5 rounded-lg text-neutral-400 hover:bg-white/[0.03] hover:text-rose-400 transition-colors border border-transparent hover:border-white/5 focus:outline-none"
           >
             <PanelRightClose size={14} />
           </button>
@@ -261,7 +262,7 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4 scroll-smooth">
         {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full text-zinc-600 text-sm font-mono flex-col gap-2">
+          <div className="flex items-center justify-center h-full text-neutral-600 text-sm font-mono flex-col gap-2">
             <Bot size={32} className="opacity-20" />
             流已清空，请发起提问
           </div>
@@ -269,20 +270,21 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex flex-col animate-fade-in ${
+            className={cn(
+              "flex flex-col animate-fade-in",
               msg.role === "user" ? "items-end" : "items-start"
-            }`}
+            )}
           >
             {msg.role === "system" && (
               <div className="w-full text-center py-1">
-                <span className="text-[10px] text-zinc-500 font-mono tracking-wider bg-zinc-800/30 px-3 py-1 rounded-full border border-zinc-800/50">
+                <span className="text-[10px] text-neutral-500 font-mono tracking-wider bg-white/[0.02] px-3 py-1 rounded-full border border-white/5">
                   {msg.content}
                 </span>
               </div>
             )}
 
             {msg.role === "user" && (
-              <div className="max-w-[85%] bg-blue-600/15 border border-blue-500/30 text-blue-100 px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm">
+              <div className="max-w-[85%] bg-indigo-600/15 border border-indigo-500/30 text-indigo-100 px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm">
                 {msg.content}
               </div>
             )}
@@ -290,14 +292,14 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
             {msg.role === "agent" && (
               <div className="w-full">
                 {msg.process && (
-                  <div className="mb-2 font-mono bg-[#09090b]/50 p-3 rounded-lg border border-zinc-800/50">
+                  <div className="mb-2 font-mono bg-black/20 p-3 rounded-xl border border-white/5">
                     <div className="flex items-center gap-2 text-xs mb-2">
                       {msg.process.status === "analyzing" ? (
-                        <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                       ) : (
-                        <div className="w-3 h-3 rounded-full bg-blue-500" />
+                        <div className="w-3 h-3 rounded-full bg-indigo-500" />
                       )}
-                      <span className="text-blue-400 font-medium tracking-wide">
+                      <span className="text-indigo-400 font-medium tracking-wide">
                         {msg.process.status === "analyzing"
                           ? "ANALYZING..."
                           : "COMPLETED"}
@@ -305,17 +307,12 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
                     </div>
 
                     {msg.process.logs.length > 0 && (
-                      <div className="border-l-2 border-zinc-800 ml-1.5 pl-3 space-y-2 py-1">
+                      <div className="border-l-2 border-white/5 ml-1.5 pl-3 space-y-2 py-1">
                         {msg.process.logs.map((log, i) => (
                           <div key={i} className="text-xs animate-fade-in">
-                            <div className="absolute -left-[17px] top-[5px] w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                            <span className="text-zinc-600 mr-2">
-                              [{log.time}]
-                            </span>
-                            <span className="text-emerald-500 font-medium mr-2">
-                              {log.name}:
-                            </span>
-                            <span className="text-zinc-400">{log.task}</span>
+                            <span className="text-neutral-600 mr-2">[{log.time}]</span>
+                            <span className="text-emerald-400 font-medium mr-2">{log.name}:</span>
+                            <span className="text-neutral-400">{log.task}</span>
                           </div>
                         ))}
                       </div>
@@ -324,22 +321,22 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
                 )}
 
                 {(msg.content || (msg.id === messages[messages.length - 1]?.id && streamingContent)) && (
-                  <div className="max-w-[95%] bg-[#18181b] border border-zinc-800 shadow-xl rounded-xl rounded-tl-sm overflow-hidden animate-fade-in">
-                    <div className="p-4 text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                  <div className="max-w-[95%] bg-white/[0.02] border border-white/5 shadow-xl rounded-xl rounded-tl-sm overflow-hidden animate-fade-in backdrop-blur-md">
+                    <div className="p-4 text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap">
                       {msg.content || streamingContent}
                       {isProcessing &&
                         msg.id === messages[messages.length - 1]?.id &&
                         !msg.content && (
-                          <span className="inline-block w-2 h-4 bg-blue-400 animate-pulse ml-0.5" />
+                          <span className="inline-block w-2 h-4 bg-indigo-400 animate-pulse ml-0.5" />
                         )}
                     </div>
 
                     {msg.process?.evidence && (
-                      <div className="px-4 py-3 bg-zinc-900/50 border-t border-zinc-800/80 flex flex-wrap gap-2">
+                      <div className="px-4 py-3 bg-black/20 border-t border-white/5 flex flex-wrap gap-2">
                         {msg.process.evidence.map((evi, i) => (
                           <div
                             key={i}
-                            className="flex items-center gap-1.5 text-[10px] text-zinc-400 bg-[#09090b] border border-zinc-800 px-2 py-1 rounded cursor-pointer hover:text-blue-400 hover:border-blue-500/30 transition-colors"
+                            className="flex items-center gap-1.5 text-[10px] text-neutral-400 bg-black/20 border border-white/5 px-2 py-1 rounded-lg cursor-pointer hover:text-indigo-400 hover:border-indigo-500/30 transition-colors"
                           >
                             <FileText size={10} />
                             {evi}
@@ -357,8 +354,8 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
       </div>
 
       {/* Input */}
-      <div className="p-4 bg-gradient-to-t from-[#0d0d0f] to-transparent z-10 flex-shrink-0">
-        <div className="relative bg-[#18181b] border border-zinc-700/80 hover:border-zinc-600 focus-within:border-blue-500/50 rounded-xl overflow-hidden transition-colors shadow-2xl">
+      <div className="p-4 bg-gradient-to-t from-[#050505] to-transparent z-10 flex-shrink-0">
+        <div className="relative bg-white/[0.02] border border-white/5 hover:border-white/10 focus-within:border-indigo-500/50 rounded-xl overflow-hidden transition-colors shadow-2xl backdrop-blur-md">
           <textarea
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
@@ -378,13 +375,13 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
                 ? "分析中，按 Enter 停止..."
                 : `对 ${stockName} 提出分析需求...`
             }
-            className="w-full bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 resize-none h-16 px-4 py-3 focus:outline-none disabled:opacity-50 font-sans"
+            className="w-full bg-transparent text-sm text-neutral-200 placeholder:text-neutral-600 resize-none h-16 px-4 py-3 focus:outline-none disabled:opacity-50 font-sans"
             spellCheck="false"
           />
-          <div className="flex justify-between items-center px-3 pb-2 pt-1 bg-[#18181b]">
+          <div className="flex justify-between items-center px-3 pb-2 pt-1">
             <div className="flex gap-1.5">
               <button
-                className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors"
+                className="p-1.5 text-neutral-500 hover:text-neutral-300 hover:bg-white/[0.03] rounded-lg transition-colors"
                 title="快速提示词"
               >
                 <Layers size={14} />
@@ -393,17 +390,18 @@ export function AIAgentPanel({ symbol, stockName, onClose }: AIAgentPanelProps) 
             <button
               onClick={isProcessing ? handleCancel : handleSend}
               disabled={!isProcessing && !inputValue.trim()}
-              className={`${
+              className={cn(
+                "disabled:bg-white/5 disabled:text-neutral-600 text-white shadow-lg rounded-lg px-4 py-1.5 text-sm font-medium flex items-center gap-2 transition-all focus:outline-none",
                 isProcessing
-                  ? "bg-red-600 hover:bg-red-500"
-                  : "bg-blue-600 hover:bg-blue-500"
-              } disabled:bg-zinc-800 disabled:text-zinc-600 text-white shadow-lg rounded-lg px-4 py-1.5 text-sm font-medium flex items-center gap-2 transition-all focus:outline-none`}
+                  ? "bg-rose-600 hover:bg-rose-500"
+                  : "bg-indigo-600 hover:bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]"
+              )}
             >
               {isProcessing ? "停止" : "发送"} <Send size={14} />
             </button>
           </div>
         </div>
-        <div className="text-center mt-2 text-[10px] text-zinc-600 font-mono">
+        <div className="text-center mt-2 text-[10px] text-neutral-600 font-mono">
           ENTER 发送 · SHIFT+ENTER 换行
         </div>
       </div>

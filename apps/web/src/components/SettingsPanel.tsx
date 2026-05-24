@@ -42,15 +42,16 @@ import {
   ManageAgent,
   ManageTeam,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 const INPUT_CLS =
-  "bg-[#09090b] border border-zinc-800 text-zinc-100 text-xs rounded-md px-3 py-2 focus:outline-none focus:border-blue-500/50 w-full";
+  "bg-black/20 border border-white/10 text-neutral-100 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500/50 w-full";
 const BTN_PRIMARY =
-  "flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs rounded-md transition-colors";
+  "flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-white/[0.02] disabled:text-neutral-600 text-white text-xs rounded-xl transition-colors shadow-[0_0_15px_rgba(99,102,241,0.3)]";
 const BTN_DANGER =
-  "flex items-center gap-1 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 text-xs rounded-md transition-colors border border-red-500/30";
+  "flex items-center gap-1 px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 text-xs rounded-xl transition-colors border border-rose-500/30";
 const BTN_SECONDARY =
-  "flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-md transition-colors border border-zinc-700";
+  "flex items-center gap-1 px-3 py-1.5 bg-white/[0.02] hover:bg-white/[0.04] text-neutral-300 text-xs rounded-xl transition-colors border border-white/5";
 
 export function SettingsPanel() {
   const [activeTab, setActiveTab] = useState<
@@ -294,8 +295,8 @@ export function SettingsPanel() {
   return (
     <div className="flex-1 flex flex-col min-h-0 p-4 gap-4 overflow-y-auto custom-scrollbar">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
-          <Settings size={20} className="text-zinc-400" />
+        <h2 className="text-2xl font-display font-medium text-white flex items-center gap-3">
+          <Settings size={22} className="text-indigo-400" />
           设置中心
         </h2>
       </div>
@@ -306,10 +307,10 @@ export function SettingsPanel() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 text-xs rounded-md border transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 text-xs rounded-xl border transition-colors ${
               activeTab === tab.id
-                ? "border-blue-500/50 text-blue-400 bg-blue-500/10"
-                : "border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30"
+                ? "border-indigo-500/50 text-indigo-400 bg-indigo-500/10"
+                : "border-white/5 text-neutral-500 hover:text-neutral-300 hover:bg-white/[0.02]/30"
             }`}
           >
             {tab.icon} {tab.label}
@@ -319,7 +320,7 @@ export function SettingsPanel() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">
+        <div className="flex items-center justify-center h-32 text-neutral-500 text-sm">
           <RefreshCw size={14} className="animate-spin mr-2" />
           加载中...
         </div>
@@ -329,7 +330,7 @@ export function SettingsPanel() {
           {activeTab === "providers" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-zinc-300">
+                <h3 className="text-sm font-medium text-neutral-300">
                   模型供应商管理
                 </h3>
                 <button
@@ -351,13 +352,13 @@ export function SettingsPanel() {
 
               {/* Provider Form */}
               {editingProvider !== null && (
-                <div className="bg-[#18181b] rounded-lg border border-blue-500/30 p-4 space-y-3">
+                <div className="bg-white/[0.02] rounded-xl border border-indigo-500/30 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm text-zinc-200 font-medium">
+                    <h4 className="text-sm text-neutral-200 font-medium">
                       {editingProvider.id ? "编辑供应商" : "添加供应商"}
                     </h4>
                     <button
-                      className="p-1 text-zinc-500 hover:text-zinc-300"
+                      className="p-1 text-neutral-500 hover:text-neutral-300"
                       onClick={() => setEditingProvider(null)}
                     >
                       <X size={14} />
@@ -365,7 +366,7 @@ export function SettingsPanel() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-zinc-500 mb-1 block">
+                      <label className="text-[10px] text-neutral-500 mb-1 block">
                         ID
                       </label>
                       <input
@@ -379,7 +380,7 @@ export function SettingsPanel() {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-500 mb-1 block">
+                      <label className="text-[10px] text-neutral-500 mb-1 block">
                         名称
                       </label>
                       <input
@@ -395,7 +396,7 @@ export function SettingsPanel() {
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="text-[10px] text-zinc-500 mb-1 block">
+                      <label className="text-[10px] text-neutral-500 mb-1 block">
                         Base URL
                       </label>
                       <input
@@ -411,7 +412,7 @@ export function SettingsPanel() {
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="text-[10px] text-zinc-500 mb-1 block">
+                      <label className="text-[10px] text-neutral-500 mb-1 block">
                         API Key
                       </label>
                       <input
@@ -429,7 +430,7 @@ export function SettingsPanel() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 text-xs text-zinc-400">
+                    <label className="flex items-center gap-2 text-xs text-neutral-400">
                       <input
                         type="checkbox"
                         checked={providerForm.enabled}
@@ -469,22 +470,22 @@ export function SettingsPanel() {
 
               {/* Provider List */}
               {settingsProviders.length === 0 ? (
-                <div className="text-zinc-600 text-sm text-center py-8">
+                <div className="text-neutral-600 text-sm text-center py-8">
                   暂无供应商配置
                 </div>
               ) : (
                 settingsProviders.map((p) => (
                   <div
                     key={p.id}
-                    className="bg-[#18181b] rounded-lg border border-zinc-800/50 p-3"
+                    className="bg-white/[0.02] rounded-xl border border-white/5 p-3 backdrop-blur-md"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-zinc-200 font-medium">
+                          <span className="text-sm text-neutral-200 font-medium">
                             {p.name}
                           </span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-zinc-800 text-zinc-500">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-white/[0.02] text-neutral-500">
                             {p.id}
                           </span>
                           {p.enabled ? (
@@ -492,29 +493,29 @@ export function SettingsPanel() {
                               启用
                             </span>
                           ) : (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-500 bg-zinc-800/50">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/5 text-neutral-500 bg-white/[0.02]">
                               禁用
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-zinc-600 font-mono mt-1">
+                        <div className="text-[10px] text-neutral-600 font-mono mt-1">
                           {p.base_url}
                         </div>
                         {p.api_key_masked && (
-                          <div className="text-[10px] text-zinc-600 font-mono">
+                          <div className="text-[10px] text-neutral-600 font-mono">
                             Key: {p.api_key_masked}
                           </div>
                         )}
                         {providerModels[p.id] && providerModels[p.id].length > 0 && (
                           <div className="mt-2">
-                            <div className="text-[10px] text-zinc-500 mb-1">
+                            <div className="text-[10px] text-neutral-500 mb-1">
                               可用模型 ({providerModels[p.id].length})
                             </div>
                             <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar">
                               {providerModels[p.id].map((m) => (
                                 <span
                                   key={m}
-                                  className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono"
+                                  className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono"
                                 >
                                   {m}
                                 </span>
@@ -529,21 +530,21 @@ export function SettingsPanel() {
                             className={`text-[10px] px-2 py-1 rounded ${
                               testResult[p.id].success
                                 ? "text-emerald-400 bg-emerald-500/10"
-                                : "text-red-400 bg-red-500/10"
+                                : "text-rose-400 bg-red-500/10"
                             }`}
                           >
                             {testResult[p.id].message}
                           </span>
                         )}
                         <button
-                          className="p-1.5 rounded-md text-zinc-400 hover:bg-[#09090b] hover:text-zinc-200 transition-colors border border-transparent hover:border-zinc-800"
+                          className="p-1.5 rounded-xl text-neutral-400 hover:bg-white/[0.02] hover:text-neutral-200 transition-colors border border-transparent hover:border-white/5"
                           title="测试连接"
                           onClick={() => handleTestProvider(p.id)}
                         >
                           <TestTube size={14} />
                         </button>
                         <button
-                          className="p-1.5 rounded-md text-zinc-400 hover:bg-[#09090b] hover:text-zinc-200 transition-colors border border-transparent hover:border-zinc-800"
+                          className="p-1.5 rounded-xl text-neutral-400 hover:bg-white/[0.02] hover:text-neutral-200 transition-colors border border-transparent hover:border-white/5"
                           title="编辑"
                           onClick={() => {
                             setEditingProvider(p);
@@ -559,7 +560,7 @@ export function SettingsPanel() {
                           <Edit size={14} />
                         </button>
                         <button
-                          className="p-1.5 rounded-md text-red-500 hover:bg-red-500/10 transition-colors border border-transparent hover:border-red-500/30"
+                          className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-500/10 transition-colors border border-transparent hover:border-rose-500/30"
                           title="删除"
                           onClick={() => handleDeleteProvider(p.id)}
                         >
@@ -579,7 +580,7 @@ export function SettingsPanel() {
               {/* Agents Section */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-zinc-300">
+                  <h3 className="text-sm font-medium text-neutral-300">
                     Agent 管理
                   </h3>
                   <button
@@ -605,13 +606,13 @@ export function SettingsPanel() {
 
                 {/* Agent Form */}
                 {editingAgent !== null && (
-                  <div className="bg-[#18181b] rounded-lg border border-blue-500/30 p-4 space-y-3">
+                  <div className="bg-white/[0.02] rounded-xl border border-indigo-500/30 p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm text-zinc-200 font-medium">
+                      <h4 className="text-sm text-neutral-200 font-medium">
                         {editingAgent.id ? "编辑 Agent" : "添加 Agent"}
                       </h4>
                       <button
-                        className="p-1 text-zinc-500 hover:text-zinc-300"
+                        className="p-1 text-neutral-500 hover:text-neutral-300"
                         onClick={() => setEditingAgent(null)}
                       >
                         <X size={14} />
@@ -619,7 +620,7 @@ export function SettingsPanel() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           ID
                         </label>
                         <input
@@ -636,7 +637,7 @@ export function SettingsPanel() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           名称
                         </label>
                         <input
@@ -652,7 +653,7 @@ export function SettingsPanel() {
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           描述
                         </label>
                         <input
@@ -668,7 +669,7 @@ export function SettingsPanel() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           Provider
                         </label>
                         <input
@@ -683,7 +684,7 @@ export function SettingsPanel() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           Model
                         </label>
                         <input
@@ -698,7 +699,7 @@ export function SettingsPanel() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           Temperature
                         </label>
                         <input
@@ -717,7 +718,7 @@ export function SettingsPanel() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           Max Tokens
                         </label>
                         <input
@@ -735,7 +736,7 @@ export function SettingsPanel() {
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           System Prompt
                         </label>
                         <textarea
@@ -752,7 +753,7 @@ export function SettingsPanel() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 text-xs text-zinc-400">
+                      <label className="flex items-center gap-2 text-xs text-neutral-400">
                         <input
                           type="checkbox"
                           checked={agentForm.enabled}
@@ -787,22 +788,22 @@ export function SettingsPanel() {
 
                 {/* Agent List */}
                 {manageAgents.length === 0 ? (
-                  <div className="text-zinc-600 text-sm text-center py-4">
+                  <div className="text-neutral-600 text-sm text-center py-4">
                     暂无自定义 Agent
                   </div>
                 ) : (
                   manageAgents.map((a) => (
                     <div
                       key={a.id}
-                      className="bg-[#18181b] rounded-lg border border-zinc-800/50 p-3"
+                      className="bg-white/[0.02] rounded-xl border border-white/5 p-3 backdrop-blur-md"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-zinc-200 font-medium">
+                            <span className="text-sm text-neutral-200 font-medium">
                               {a.name}
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-zinc-800 text-zinc-500">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-white/[0.02] text-neutral-500">
                               {a.id}
                             </span>
                             {a.enabled ? (
@@ -810,19 +811,19 @@ export function SettingsPanel() {
                                 启用
                               </span>
                             ) : (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-500 bg-zinc-800/50">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/5 text-neutral-500 bg-white/[0.02]">
                                 禁用
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-zinc-600 font-mono mt-1">
+                          <div className="text-[10px] text-neutral-600 font-mono mt-1">
                             {a.provider} / {a.model}
                             {a.description && ` — ${a.description}`}
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
-                            className="p-1.5 rounded-md text-zinc-400 hover:bg-[#09090b] hover:text-zinc-200 transition-colors border border-transparent hover:border-zinc-800"
+                            className="p-1.5 rounded-xl text-neutral-400 hover:bg-white/[0.02] hover:text-neutral-200 transition-colors border border-transparent hover:border-white/5"
                             title="编辑"
                             onClick={() => {
                               setEditingAgent(a);
@@ -842,7 +843,7 @@ export function SettingsPanel() {
                             <Edit size={14} />
                           </button>
                           <button
-                            className="p-1.5 rounded-md text-red-500 hover:bg-red-500/10 transition-colors border border-transparent hover:border-red-500/30"
+                            className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-500/10 transition-colors border border-transparent hover:border-rose-500/30"
                             title="删除"
                             onClick={() => handleDeleteAgent(a.id)}
                           >
@@ -858,7 +859,7 @@ export function SettingsPanel() {
               {/* Teams Section */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-zinc-300">
+                  <h3 className="text-sm font-medium text-neutral-300">
                     团队管理
                   </h3>
                   <button
@@ -879,13 +880,13 @@ export function SettingsPanel() {
 
                 {/* Team Form */}
                 {editingTeam !== null && (
-                  <div className="bg-[#18181b] rounded-lg border border-blue-500/30 p-4 space-y-3">
+                  <div className="bg-white/[0.02] rounded-xl border border-indigo-500/30 p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm text-zinc-200 font-medium">
+                      <h4 className="text-sm text-neutral-200 font-medium">
                         {editingTeam.id ? "编辑团队" : "添加团队"}
                       </h4>
                       <button
-                        className="p-1 text-zinc-500 hover:text-zinc-300"
+                        className="p-1 text-neutral-500 hover:text-neutral-300"
                         onClick={() => setEditingTeam(null)}
                       >
                         <X size={14} />
@@ -893,7 +894,7 @@ export function SettingsPanel() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           ID
                         </label>
                         <input
@@ -910,7 +911,7 @@ export function SettingsPanel() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           名称
                         </label>
                         <input
@@ -926,7 +927,7 @@ export function SettingsPanel() {
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="text-[10px] text-zinc-500 mb-1 block">
+                        <label className="text-[10px] text-neutral-500 mb-1 block">
                           描述
                         </label>
                         <input
@@ -942,7 +943,7 @@ export function SettingsPanel() {
                       </div>
                       {manageAgents.length > 0 && (
                         <div className="col-span-2">
-                          <label className="text-[10px] text-zinc-500 mb-1 block">
+                          <label className="text-[10px] text-neutral-500 mb-1 block">
                             成员 Agent（可多选）
                           </label>
                           <div className="flex flex-wrap gap-2 mt-1">
@@ -951,8 +952,8 @@ export function SettingsPanel() {
                                 key={a.id}
                                 className={`flex items-center gap-1.5 px-2 py-1 text-[10px] rounded border cursor-pointer transition-colors ${
                                   teamForm.member_ids.includes(a.id)
-                                    ? "border-blue-500/50 text-blue-400 bg-blue-500/10"
-                                    : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                                    ? "border-indigo-500/50 text-indigo-400 bg-indigo-500/10"
+                                    : "border-white/5 text-neutral-500 hover:border-white/5"
                                 }`}
                               >
                                 <input
@@ -999,37 +1000,37 @@ export function SettingsPanel() {
 
                 {/* Team List */}
                 {manageTeams.length === 0 ? (
-                  <div className="text-zinc-600 text-sm text-center py-4">
+                  <div className="text-neutral-600 text-sm text-center py-4">
                     暂无自定义团队
                   </div>
                 ) : (
                   manageTeams.map((t) => (
                     <div
                       key={t.id}
-                      className="bg-[#18181b] rounded-lg border border-zinc-800/50 p-3"
+                      className="bg-white/[0.02] rounded-xl border border-white/5 p-3 backdrop-blur-md"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-zinc-200 font-medium">
+                            <span className="text-sm text-neutral-200 font-medium">
                               {t.name}
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-zinc-800 text-zinc-500">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-white/[0.02] text-neutral-500">
                               {t.id}
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-500 bg-zinc-800/50">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/5 text-neutral-500 bg-white/[0.02]">
                               {t.member_ids?.length ?? 0} 成员
                             </span>
                           </div>
                           {t.description && (
-                            <div className="text-[10px] text-zinc-600 mt-1">
+                            <div className="text-[10px] text-neutral-600 mt-1">
                               {t.description}
                             </div>
                           )}
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
-                            className="p-1.5 rounded-md text-zinc-400 hover:bg-[#09090b] hover:text-zinc-200 transition-colors border border-transparent hover:border-zinc-800"
+                            className="p-1.5 rounded-xl text-neutral-400 hover:bg-white/[0.02] hover:text-neutral-200 transition-colors border border-transparent hover:border-white/5"
                             title="编辑"
                             onClick={() => {
                               setEditingTeam(t);
@@ -1044,7 +1045,7 @@ export function SettingsPanel() {
                             <Edit size={14} />
                           </button>
                           <button
-                            className="p-1.5 rounded-md text-red-500 hover:bg-red-500/10 transition-colors border border-transparent hover:border-red-500/30"
+                            className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-500/10 transition-colors border border-transparent hover:border-rose-500/30"
                             title="删除"
                             onClick={() => handleDeleteTeam(t.id)}
                           >
@@ -1063,19 +1064,19 @@ export function SettingsPanel() {
           {activeTab === "modes" && (
             <div className="space-y-2">
               {modes.length === 0 ? (
-                <div className="text-zinc-600 text-sm text-center py-8">
+                <div className="text-neutral-600 text-sm text-center py-8">
                   暂无模式配置
                 </div>
               ) : (
                 modes.map((m, i) => (
                   <div
                     key={i}
-                    className="bg-[#18181b] rounded-lg border border-zinc-800/50 p-3"
+                    className="bg-white/[0.02] rounded-xl border border-white/5 p-3 backdrop-blur-md"
                   >
-                    <div className="text-sm text-zinc-200 font-medium">
+                    <div className="text-sm text-neutral-200 font-medium">
                       {String(m.name)}
                     </div>
-                    <div className="text-xs text-zinc-400 mt-1">
+                    <div className="text-xs text-neutral-400 mt-1">
                       {String(m.description)}
                     </div>
                   </div>
@@ -1120,7 +1121,7 @@ function CostsTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-zinc-300">成本统计</h3>
+        <h3 className="text-sm font-medium text-neutral-300">成本统计</h3>
         <button className={BTN_SECONDARY} onClick={onRefresh}>
           <RefreshCw size={13} /> 刷新
         </button>
@@ -1129,15 +1130,15 @@ function CostsTab({
       {/* Summary cards */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: "总调用", value: String(totalCalls), icon: <Activity size={16} />, color: "text-blue-400" },
+          { label: "总调用", value: String(totalCalls), icon: <Activity size={16} />, color: "text-indigo-400" },
           { label: "总费用", value: fmtCost(totalCost), icon: <DollarSign size={16} />, color: "text-emerald-400" },
-          { label: "输入 Token", value: fmtTokens(inputTokens), icon: <Zap size={16} />, color: "text-yellow-400" },
-          { label: "输出 Token", value: fmtTokens(outputTokens), icon: <Zap size={16} />, color: "text-purple-400" },
+          { label: "输入 Token", value: fmtTokens(inputTokens), icon: <Zap size={16} />, color: "text-amber-400" },
+          { label: "输出 Token", value: fmtTokens(outputTokens), icon: <Zap size={16} />, color: "text-indigo-400" },
         ].map((c, i) => (
-          <div key={i} className="bg-[#18181b] rounded-lg border border-zinc-800/50 p-4">
+          <div key={i} className="bg-white/[0.02] rounded-xl border border-white/5 p-4 backdrop-blur-md">
             <div className="flex items-center gap-2 mb-2">
               <span className={c.color}>{c.icon}</span>
-              <span className="text-[10px] text-zinc-500">{c.label}</span>
+              <span className="text-[10px] text-neutral-500">{c.label}</span>
             </div>
             <div className={`text-lg font-mono font-semibold ${c.color}`}>{c.value}</div>
           </div>
@@ -1145,26 +1146,26 @@ function CostsTab({
       </div>
 
       {totalCalls === 0 ? (
-        <div className="bg-[#18181b] rounded-lg border border-zinc-800/50 p-8 text-center">
-          <DollarSign size={32} className="text-zinc-700 mx-auto mb-2" />
-          <p className="text-sm text-zinc-500">暂无调用记录</p>
-          <p className="text-xs text-zinc-600 mt-1">使用 Agent 分析后将自动记录费用</p>
+        <div className="bg-white/[0.02] rounded-xl border border-white/5 p-8 text-center">
+          <DollarSign size={32} className="text-neutral-700 mx-auto mb-2" />
+          <p className="text-sm text-neutral-500">暂无调用记录</p>
+          <p className="text-xs text-neutral-600 mt-1">使用 Agent 分析后将自动记录费用</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
           {/* By Agent */}
-          <div className="bg-[#18181b] rounded-lg border border-zinc-800/50 p-4">
-            <div className="text-xs text-zinc-500 mb-3 flex items-center gap-1.5">
+          <div className="bg-white/[0.02] rounded-xl border border-white/5 p-4 backdrop-blur-md">
+            <div className="text-xs text-neutral-500 mb-3 flex items-center gap-1.5">
               <Users size={13} /> 按 Agent 分组
             </div>
             {Object.keys(byAgent).length === 0 ? (
-              <p className="text-xs text-zinc-600">无数据</p>
+              <p className="text-xs text-neutral-600">无数据</p>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                 {Object.entries(byAgent).map(([name, d]) => (
                   <div key={name} className="flex items-center justify-between text-xs">
-                    <span className="text-zinc-300 truncate flex-1">{name}</span>
-                    <span className="text-zinc-500 font-mono mx-2">{d.calls}次</span>
+                    <span className="text-neutral-300 truncate flex-1">{name}</span>
+                    <span className="text-neutral-500 font-mono mx-2">{d.calls}次</span>
                     <span className="text-emerald-400 font-mono w-16 text-right">{fmtCost(d.cost)}</span>
                   </div>
                 ))}
@@ -1173,18 +1174,18 @@ function CostsTab({
           </div>
 
           {/* By Model */}
-          <div className="bg-[#18181b] rounded-lg border border-zinc-800/50 p-4">
-            <div className="text-xs text-zinc-500 mb-3 flex items-center gap-1.5">
+          <div className="bg-white/[0.02] rounded-xl border border-white/5 p-4 backdrop-blur-md">
+            <div className="text-xs text-neutral-500 mb-3 flex items-center gap-1.5">
               <Cpu size={13} /> 按模型分组
             </div>
             {Object.keys(byModel).length === 0 ? (
-              <p className="text-xs text-zinc-600">无数据</p>
+              <p className="text-xs text-neutral-600">无数据</p>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                 {Object.entries(byModel).map(([name, d]) => (
                   <div key={name} className="flex items-center justify-between text-xs">
-                    <span className="text-zinc-300 truncate flex-1 font-mono">{name}</span>
-                    <span className="text-zinc-500 font-mono mx-2">{d.calls}次</span>
+                    <span className="text-neutral-300 truncate flex-1 font-mono">{name}</span>
+                    <span className="text-neutral-500 font-mono mx-2">{d.calls}次</span>
                     <span className="text-emerald-400 font-mono w-16 text-right">{fmtCost(d.cost)}</span>
                   </div>
                 ))}

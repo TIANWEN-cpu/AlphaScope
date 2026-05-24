@@ -19,6 +19,7 @@ import {
   type FundInfo,
   type DCAPlan,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type Tab = "search" | "simulate" | "plans";
 
@@ -45,14 +46,14 @@ export function FundDcaPanel() {
   return (
     <div className="h-full flex flex-col p-4 gap-4 overflow-auto">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+        <h2 className="text-lg font-semibold font-display text-neutral-100 flex items-center gap-2">
           <TrendingUp size={20} className="text-emerald-400" />
           基金定投
         </h2>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-1">
+      <div className="flex gap-1 bg-white/5 rounded-xl backdrop-blur-md p-1">
         {[
           { id: "search" as Tab, label: "基金搜索" },
           { id: "simulate" as Tab, label: "定投模拟" },
@@ -61,11 +62,12 @@ export function FundDcaPanel() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-1.5 text-xs rounded transition-colors ${
+            className={cn(
+              "flex-1 py-1.5 text-xs rounded transition-colors",
               tab === t.id
-                ? "bg-zinc-700 text-zinc-100"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
+                ? "bg-indigo-500/80 text-white"
+                : "text-neutral-500 hover:text-neutral-300"
+            )}
           >
             {t.label}
           </button>
@@ -125,19 +127,19 @@ function FundSearchTab() {
           onChange={(e) => setKeyword(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           placeholder="输入基金名称或代码..."
-          className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500"
+          className="flex-1 bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-indigo-500"
         />
         <button
           onClick={handleSearch}
           disabled={loading}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded text-sm"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-sm"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : "搜索"}
         </button>
       </div>
 
       {searched && !loading && results.length === 0 && (
-        <div className="py-8 text-center text-zinc-600 text-sm">
+        <div className="py-8 text-center text-neutral-600 text-sm">
           未找到匹配的基金
         </div>
       )}
@@ -147,26 +149,27 @@ function FundSearchTab() {
           {results.map((f) => (
             <div
               key={f.code}
-              className={`bg-zinc-800/40 rounded border p-3 cursor-pointer transition-colors ${
+              className={cn(
+                "bg-black/40 backdrop-blur-md rounded-xl border p-3 cursor-pointer transition-colors",
                 selectedFund === f.code
-                  ? "border-blue-500/50"
-                  : "border-zinc-800/60 hover:border-zinc-700"
-              }`}
+                  ? "border-indigo-500/50"
+                  : "border-white/5 hover:border-white/10"
+              )}
               onClick={() => handleViewMetrics(f.code)}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-sm text-zinc-200">{f.name}</span>
-                  <span className="text-xs text-zinc-500 ml-2">{f.code}</span>
+                  <span className="text-sm text-neutral-200">{f.name}</span>
+                  <span className="text-xs font-mono text-neutral-500 ml-2">{f.code}</span>
                 </div>
                 {f.fund_type && (
-                  <span className="text-xs bg-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded">
+                  <span className="text-xs bg-neutral-700 text-neutral-400 px-1.5 py-0.5 rounded">
                     {f.fund_type}
                   </span>
                 )}
               </div>
               {f.manager && (
-                <div className="text-xs text-zinc-500 mt-1">
+                <div className="text-xs text-neutral-500 mt-1">
                   {f.manager} / {f.company}
                 </div>
               )}
@@ -176,12 +179,12 @@ function FundSearchTab() {
       )}
 
       {selectedFund && (
-        <div className="bg-zinc-800/30 rounded-lg border border-zinc-800 p-4">
-          <h3 className="text-sm font-medium text-zinc-300 mb-3">
+        <div className="bg-black/40 backdrop-blur-md rounded-xl border border-white/5 p-4">
+          <h3 className="text-sm font-medium text-neutral-300 mb-3">
             {selectedFund} 指标
           </h3>
           {metricsLoading ? (
-            <div className="flex items-center gap-2 text-zinc-500 text-sm">
+            <div className="flex items-center gap-2 text-neutral-500 text-sm">
               <Loader2 size={14} className="animate-spin" /> 计算中...
             </div>
           ) : metrics ? (
@@ -196,10 +199,10 @@ function FundSearchTab() {
               ].map(({ label, key, fmt }) => (
                 <div
                   key={key}
-                  className="bg-zinc-900/50 rounded p-2 flex justify-between"
+                  className="bg-black/20 rounded-xl p-2 flex justify-between"
                 >
-                  <span className="text-xs text-zinc-500">{label}</span>
-                  <span className="text-xs text-zinc-200">
+                  <span className="text-xs font-mono text-neutral-500">{label}</span>
+                  <span className="text-xs font-mono text-neutral-200">
                     {metrics[key] != null
                       ? fmt === "pct"
                         ? `${(metrics[key] * 100).toFixed(2)}%`
@@ -210,7 +213,7 @@ function FundSearchTab() {
               ))}
             </div>
           ) : (
-            <div className="text-xs text-zinc-600">无数据</div>
+            <div className="text-xs text-neutral-600">无数据</div>
           )}
         </div>
       )}
@@ -269,11 +272,11 @@ function DCASimulateTab({ onPlanCreated }: { onPlanCreated: () => void }) {
         <InputField label="基金代码" value={fundCode} onChange={setFundCode} />
         <InputField label="每期金额" value={amount} onChange={setAmount} />
         <div>
-          <label className="text-xs text-zinc-500 mb-1 block">频率</label>
+          <label className="text-xs font-mono text-neutral-500 mb-1 block">频率</label>
           <select
             value={frequency}
             onChange={(e) => setFrequency(e.target.value)}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200"
+            className="w-full bg-black/20 border border-white/10 rounded-xl px-2 py-1.5 text-sm text-neutral-200"
           >
             <option value="weekly">每周</option>
             <option value="biweekly">每两周</option>
@@ -289,7 +292,7 @@ function DCASimulateTab({ onPlanCreated }: { onPlanCreated: () => void }) {
         <button
           onClick={handleSimulate}
           disabled={loading || !fundCode.trim()}
-          className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded text-sm flex items-center justify-center gap-1"
+          className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-sm flex items-center justify-center gap-1"
         >
           {loading ? (
             <Loader2 size={14} className="animate-spin" />
@@ -301,7 +304,7 @@ function DCASimulateTab({ onPlanCreated }: { onPlanCreated: () => void }) {
         {result && (
           <button
             onClick={handleSavePlan}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm flex items-center gap-1"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm flex items-center gap-1"
           >
             <Plus size={14} />
             保存计划
@@ -310,7 +313,7 @@ function DCASimulateTab({ onPlanCreated }: { onPlanCreated: () => void }) {
       </div>
 
       {error && (
-        <div className="bg-red-500/5 border border-red-500/20 rounded p-3 text-xs text-red-400 flex items-center gap-2">
+        <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-3 text-xs text-rose-400 flex items-center gap-2">
           <AlertTriangle size={14} />
           {error}
         </div>
@@ -329,8 +332,8 @@ function DCAResultCard({ result }: { result: Record<string, unknown> }) {
   const count = (result.investment_count as number) || 0;
 
   return (
-    <div className="bg-zinc-800/30 rounded-lg border border-zinc-800 p-4">
-      <h3 className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-1">
+    <div className="bg-black/40 backdrop-blur-md rounded-xl border border-white/5 p-4">
+      <h3 className="text-sm font-medium text-neutral-300 mb-3 flex items-center gap-1">
         <Wallet size={14} />
         模拟结果
       </h3>
@@ -365,7 +368,7 @@ function PlansTab({
 }) {
   if (!loaded) {
     return (
-      <div className="flex-1 flex items-center justify-center text-zinc-500">
+      <div className="flex-1 flex items-center justify-center text-neutral-500">
         <Loader2 size={20} className="animate-spin" />
       </div>
     );
@@ -373,10 +376,10 @@ function PlansTab({
 
   if (plans.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-zinc-500">
-        <Clock size={32} className="text-zinc-600" />
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-neutral-500">
+        <Clock size={32} className="text-neutral-600" />
         <p className="text-sm">暂无定投计划</p>
-        <p className="text-xs text-zinc-600">
+        <p className="text-xs text-neutral-600">
           在「定投模拟」标签中创建计划
         </p>
       </div>
@@ -387,7 +390,7 @@ function PlansTab({
     <div className="flex flex-col gap-2">
       <button
         onClick={onRefresh}
-        className="self-end px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1"
+        className="self-end px-2 py-1 text-xs text-neutral-400 hover:text-neutral-200 flex items-center gap-1"
       >
         <RefreshCw size={10} />
         刷新
@@ -395,23 +398,24 @@ function PlansTab({
       {plans.map((p) => (
         <div
           key={p.id}
-          className="bg-zinc-800/40 rounded border border-zinc-800/60 p-3"
+          className="bg-black/40 backdrop-blur-md rounded-xl border border-white/5 p-3"
         >
           <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-200">
+            <span className="text-sm text-neutral-200">
               {p.fund_name || p.fund_code}
             </span>
             <span
-              className={`text-xs px-1.5 py-0.5 rounded ${
+              className={cn(
+                "text-xs px-1.5 py-0.5 rounded",
                 p.status === "active"
                   ? "bg-emerald-500/10 text-emerald-400"
-                  : "bg-zinc-700 text-zinc-400"
-              }`}
+                  : "bg-neutral-700 text-neutral-400"
+              )}
             >
               {p.status}
             </span>
           </div>
-          <div className="text-xs text-zinc-500 mt-1">
+          <div className="text-xs font-mono text-neutral-500 mt-1">
             ¥{p.amount} / {p.frequency} / 起始 {p.start_date}
           </div>
         </div>
@@ -431,11 +435,11 @@ function InputField({
 }) {
   return (
     <div>
-      <label className="text-xs text-zinc-500 mb-1 block">{label}</label>
+      <label className="text-xs font-mono text-neutral-500 mb-1 block">{label}</label>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
+        className="w-full bg-black/20 border border-white/10 rounded-xl px-2 py-1.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
       />
     </div>
   );
@@ -451,16 +455,17 @@ function Metric({
   color?: string;
 }) {
   return (
-    <div className="bg-zinc-900/50 rounded p-2 flex justify-between">
-      <span className="text-xs text-zinc-500">{label}</span>
+    <div className="bg-black/20 rounded-xl p-2 flex justify-between">
+      <span className="text-xs font-mono text-neutral-500">{label}</span>
       <span
-        className={`text-xs ${
+        className={cn(
+          "text-xs font-mono",
           color === "emerald"
             ? "text-emerald-400"
             : color === "red"
-              ? "text-red-400"
-              : "text-zinc-200"
-        }`}
+              ? "text-rose-400"
+              : "text-neutral-200"
+        )}
       >
         {value}
       </span>

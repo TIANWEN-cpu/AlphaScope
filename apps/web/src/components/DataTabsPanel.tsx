@@ -21,6 +21,7 @@ import {
   type FundFlowData,
   type FactorReport,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface DataTabsPanelProps {
   symbol: string;
@@ -40,18 +41,19 @@ export function DataTabsPanel({ symbol, stockName }: DataTabsPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>("news");
 
   return (
-    <div className="flex flex-col h-full bg-[#18181b]">
+    <div className="flex flex-col h-full">
       {/* Tabs */}
-      <div className="flex border-b border-zinc-800/80">
+      <div className="flex border-b border-white/5">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-all outline-none ${
+            className={cn(
+              "flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-all outline-none",
               activeTab === tab.id
-                ? "border-blue-500 text-blue-400 bg-blue-500/5"
-                : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30"
-            }`}
+                ? "border-indigo-500 text-indigo-400 bg-indigo-500/5"
+                : "border-transparent text-neutral-500 hover:text-neutral-300 hover:bg-white/[0.02]"
+            )}
           >
             {tab.icon} {tab.label}
           </button>
@@ -59,7 +61,7 @@ export function DataTabsPanel({ symbol, stockName }: DataTabsPanelProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
         {activeTab === "news" && <NewsTab symbol={symbol} />}
         {activeTab === "fin" && <FinTab symbol={symbol} />}
         {activeTab === "flow" && <FlowTab symbol={symbol} />}
@@ -92,7 +94,7 @@ function NewsTab({ symbol }: { symbol: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">
+      <div className="flex items-center justify-center h-32 text-neutral-500 text-sm">
         <RefreshCw size={14} className="animate-spin mr-2" />
         加载资讯...
       </div>
@@ -101,7 +103,7 @@ function NewsTab({ symbol }: { symbol: string }) {
 
   if (news.length === 0) {
     return (
-      <div className="text-zinc-600 text-sm mt-4 text-center">
+      <div className="text-neutral-600 text-sm mt-4 text-center">
         暂无近期重要资讯
       </div>
     );
@@ -112,9 +114,9 @@ function NewsTab({ symbol }: { symbol: string }) {
       {news.map((item, i) => (
         <div
           key={item.id || i}
-          className="flex gap-4 group cursor-pointer hover:bg-zinc-800/20 p-2 -mx-2 rounded transition-colors"
+          className="flex gap-4 group cursor-pointer hover:bg-white/[0.02] p-2 -mx-2 rounded-lg transition-colors"
         >
-          <div className="text-zinc-500 text-xs font-mono w-20 flex-shrink-0 pt-0.5">
+          <div className="text-neutral-500 text-xs font-mono w-20 flex-shrink-0 pt-0.5">
             {item.datetime
               ? new Date(item.datetime).toLocaleTimeString("zh-CN", {
                   hour: "2-digit",
@@ -125,13 +127,14 @@ function NewsTab({ symbol }: { symbol: string }) {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <span
-                className={`text-[10px] px-1.5 py-0 rounded border ${
+                className={cn(
+                  "text-[10px] px-1.5 py-0 rounded border font-mono",
                   item.event_type === "announcement"
                     ? "border-purple-500/30 text-purple-400 bg-purple-500/10"
                     : item.source
-                    ? "border-orange-500/30 text-orange-400 bg-orange-500/10"
-                    : "border-blue-500/30 text-blue-400 bg-blue-500/10"
-                }`}
+                    ? "border-amber-500/30 text-amber-400 bg-amber-500/10"
+                    : "border-indigo-500/30 text-indigo-400 bg-indigo-500/10"
+                )}
               >
                 {item.event_type === "announcement"
                   ? "公告"
@@ -139,21 +142,22 @@ function NewsTab({ symbol }: { symbol: string }) {
               </span>
               {item.sentiment !== undefined && (
                 <span
-                  className={`w-2 h-2 rounded-full shadow-sm ${
+                  className={cn(
+                    "w-2 h-2 rounded-full shadow-sm",
                     item.sentiment > 0.2
-                      ? "bg-red-500 shadow-red-500/50"
+                      ? "bg-rose-500 shadow-rose-500/50"
                       : item.sentiment < -0.2
                       ? "bg-emerald-500 shadow-emerald-500/50"
-                      : "bg-zinc-600"
-                  }`}
+                      : "bg-neutral-600"
+                  )}
                 />
               )}
             </div>
-            <p className="text-sm text-zinc-300 group-hover:text-blue-400 transition-colors leading-relaxed">
+            <p className="text-sm text-neutral-300 group-hover:text-indigo-400 transition-colors leading-relaxed">
               {item.title}
             </p>
             {item.summary && (
-              <p className="text-xs text-zinc-500 mt-1 line-clamp-2">
+              <p className="text-xs text-neutral-500 mt-1 line-clamp-2">
                 {item.summary}
               </p>
             )}
@@ -187,7 +191,7 @@ function FinTab({ symbol }: { symbol: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">
+      <div className="flex items-center justify-center h-32 text-neutral-500 text-sm">
         <RefreshCw size={14} className="animate-spin mr-2" />
         加载财务数据...
       </div>
@@ -196,7 +200,7 @@ function FinTab({ symbol }: { symbol: string }) {
 
   if (!data) {
     return (
-      <div className="text-zinc-600 text-sm mt-4 text-center">
+      <div className="text-neutral-600 text-sm mt-4 text-center">
         暂无财务数据
       </div>
     );
@@ -210,54 +214,42 @@ function FinTab({ symbol }: { symbol: string }) {
     { label: "市净率(MRQ)", value: valuation.pb?.toFixed(2) ?? "--" },
     { label: "总市值", value: valuation.market_cap ?? "--" },
     { label: "ROE", value: latest ? `${latest.roe_pct.toFixed(1)}%` : "--" },
-    {
-      label: "营业总收入",
-      value: latest ? `${latest.revenue_yi.toFixed(1)}亿` : "--",
-    },
-    {
-      label: "净利润",
-      value: latest ? `${latest.net_profit_yi.toFixed(1)}亿` : "--",
-    },
-    {
-      label: "毛利率",
-      value: latest ? `${latest.gross_margin_pct.toFixed(1)}%` : "--",
-    },
-    {
-      label: "资产负债率",
-      value: latest ? `${latest.debt_ratio_pct.toFixed(1)}%` : "--",
-    },
+    { label: "营业总收入", value: latest ? `${latest.revenue_yi.toFixed(1)}亿` : "--" },
+    { label: "净利润", value: latest ? `${latest.net_profit_yi.toFixed(1)}亿` : "--" },
+    { label: "毛利率", value: latest ? `${latest.gross_margin_pct.toFixed(1)}%` : "--" },
+    { label: "资产负债率", value: latest ? `${latest.debt_ratio_pct.toFixed(1)}%` : "--" },
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-4 gap-3">
       {cards.map((card, i) => (
         <div
           key={i}
-          className="bg-[#09090b] p-3 rounded-lg border border-zinc-800/50 flex flex-col justify-between hover:border-zinc-600 transition-colors cursor-default"
+          className="bg-black/20 p-3 rounded-xl border border-white/5 flex flex-col justify-between hover:border-white/10 transition-colors cursor-default"
         >
-          <div className="text-xs text-zinc-500 mb-2">{card.label}</div>
-          <div className="text-base font-mono text-zinc-200">{card.value}</div>
+          <div className="text-xs text-neutral-500 mb-2">{card.label}</div>
+          <div className="text-base font-mono text-neutral-200">{card.value}</div>
         </div>
       ))}
 
-      {/* Revenue trend */}
       {data.financial_periods && data.financial_periods.length > 1 && (
         <div className="col-span-4 mt-2">
-          <div className="text-xs text-zinc-500 mb-2">近四期营收趋势</div>
+          <div className="text-xs text-neutral-500 mb-2 font-mono uppercase tracking-wider">近四期营收趋势</div>
           <div className="flex gap-2">
             {data.financial_periods.slice(0, 4).map((p, i) => (
               <div
                 key={i}
-                className="flex-1 bg-[#09090b] p-2 rounded border border-zinc-800/50 text-center"
+                className="flex-1 bg-black/20 p-2.5 rounded-xl border border-white/5 text-center"
               >
-                <div className="text-[10px] text-zinc-600">{p.period}</div>
-                <div className="text-sm font-mono text-zinc-300">
+                <div className="text-[10px] text-neutral-600 font-mono">{p.period}</div>
+                <div className="text-sm font-mono text-neutral-300">
                   {p.revenue_yi.toFixed(1)}亿
                 </div>
                 <div
-                  className={`text-[10px] font-mono ${
-                    p.yoy_revenue_pct >= 0 ? "text-red-400" : "text-emerald-400"
-                  }`}
+                  className={cn(
+                    "text-[10px] font-mono",
+                    p.yoy_revenue_pct >= 0 ? "text-rose-400" : "text-emerald-400"
+                  )}
                 >
                   {p.yoy_revenue_pct >= 0 ? "+" : ""}
                   {p.yoy_revenue_pct.toFixed(1)}%
@@ -294,7 +286,7 @@ function FlowTab({ symbol }: { symbol: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">
+      <div className="flex items-center justify-center h-32 text-neutral-500 text-sm">
         <RefreshCw size={14} className="animate-spin mr-2" />
         加载资金流向...
       </div>
@@ -303,8 +295,8 @@ function FlowTab({ symbol }: { symbol: string }) {
 
   if (!data || !data.summary) {
     return (
-      <div className="flex flex-col items-center justify-center h-32 text-zinc-600 space-y-3">
-        <AlertTriangle size={24} className="text-zinc-700" />
+      <div className="flex flex-col items-center justify-center h-32 text-neutral-600 space-y-3">
+        <AlertTriangle size={24} className="text-neutral-700" />
         <p className="text-sm">暂无资金流向数据</p>
       </div>
     );
@@ -315,7 +307,6 @@ function FlowTab({ symbol }: { symbol: string }) {
   const superTotal = s.super_total_yi ?? 0;
   const largeTotal = s.large_total_yi ?? 0;
   const mediumTotal = s.medium_total_yi ?? 0;
-  const smallTotal = s.small_total_yi ?? 0;
 
   const flowCards = [
     { label: "主力净流入(5日)", value: mainTotal, unit: "亿" },
@@ -326,18 +317,15 @@ function FlowTab({ symbol }: { symbol: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Summary cards */}
       <div className="grid grid-cols-4 gap-3">
         {flowCards.map((card, i) => (
-          <div
-            key={i}
-            className="bg-[#09090b] p-3 rounded-lg border border-zinc-800/50"
-          >
-            <div className="text-[10px] text-zinc-500 mb-1">{card.label}</div>
+          <div key={i} className="bg-black/20 p-3 rounded-xl border border-white/5">
+            <div className="text-[10px] text-neutral-500 mb-1 font-mono">{card.label}</div>
             <div
-              className={`text-sm font-mono font-medium ${
-                card.value >= 0 ? "text-red-400" : "text-emerald-400"
-              }`}
+              className={cn(
+                "text-sm font-mono font-medium",
+                card.value >= 0 ? "text-rose-400" : "text-emerald-400"
+              )}
             >
               {card.value >= 0 ? "+" : ""}
               {card.value.toFixed(2)}
@@ -347,56 +335,49 @@ function FlowTab({ symbol }: { symbol: string }) {
         ))}
       </div>
 
-      {/* Trend indicator */}
-      <div className="bg-[#09090b] p-3 rounded-lg border border-zinc-800/50">
+      <div className="bg-black/20 p-3 rounded-xl border border-white/5">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-zinc-500">主力判断</span>
+          <span className="text-xs text-neutral-500">主力判断</span>
           <span
-            className={`text-sm font-medium flex items-center gap-1 ${
+            className={cn(
+              "text-sm font-medium flex items-center gap-1",
               mainTotal > 0.5
-                ? "text-red-400"
+                ? "text-rose-400"
                 : mainTotal < -0.5
                 ? "text-emerald-400"
-                : "text-zinc-400"
-            }`}
+                : "text-neutral-400"
+            )}
           >
             {mainTotal > 0.5 ? (
-              <>
-                <TrendingUp size={14} /> 进场
-              </>
+              <><TrendingUp size={14} /> 进场</>
             ) : mainTotal < -0.5 ? (
-              <>
-                <TrendingDown size={14} /> 出货
-              </>
+              <><TrendingDown size={14} /> 出货</>
             ) : (
               "观望"
             )}
           </span>
         </div>
-        <div className="text-[10px] text-zinc-600 mt-1">
+        <div className="text-[10px] text-neutral-600 mt-1 font-mono">
           近5日: 流入{s.inflow_days ?? 0}天 / 流出{s.outflow_days ?? 0}天
         </div>
       </div>
 
-      {/* Recent flow bars */}
       {data.records && data.records.length > 0 && (
         <div>
-          <div className="text-xs text-zinc-500 mb-2">近期主力净流入</div>
+          <div className="text-xs text-neutral-500 mb-2 font-mono uppercase tracking-wider">近期主力净流入</div>
           <div className="flex items-end gap-1 h-20">
             {data.records.slice(-15).map((r, i) => {
               const h = Math.abs(r.main_net_yi) * 8;
               return (
-                <div
-                  key={i}
-                  className="flex-1 flex flex-col items-center gap-0.5"
-                >
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
                   <div
-                    className={`w-full rounded-t ${
-                      r.main_net_yi >= 0 ? "bg-red-500/60" : "bg-emerald-500/60"
-                    }`}
+                    className={cn(
+                      "w-full rounded-t",
+                      r.main_net_yi >= 0 ? "bg-rose-500/60" : "bg-emerald-500/60"
+                    )}
                     style={{ height: `${Math.min(h, 60)}px` }}
                   />
-                  <div className="text-[8px] text-zinc-600 font-mono">
+                  <div className="text-[8px] text-neutral-600 font-mono">
                     {r.date.slice(5)}
                   </div>
                 </div>
@@ -411,13 +392,7 @@ function FlowTab({ symbol }: { symbol: string }) {
 
 // ---- Factor Tab ----
 
-function FactorTab({
-  symbol,
-  stockName,
-}: {
-  symbol: string;
-  stockName: string;
-}) {
+function FactorTab({ symbol, stockName }: { symbol: string; stockName: string }) {
   const [data, setData] = useState<FactorReport | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -438,7 +413,7 @@ function FactorTab({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">
+      <div className="flex items-center justify-center h-32 text-neutral-500 text-sm">
         <RefreshCw size={14} className="animate-spin mr-2" />
         计算量化因子...
       </div>
@@ -447,7 +422,7 @@ function FactorTab({
 
   if (!data) {
     return (
-      <div className="text-zinc-600 text-sm mt-4 text-center">
+      <div className="text-neutral-600 text-sm mt-4 text-center">
         暂无因子数据
       </div>
     );
@@ -455,75 +430,55 @@ function FactorTab({
 
   const factors = data.factors;
   const factorItems = [
-    { label: "综合因子", value: factors.composite, color: "text-blue-400" },
-    {
-      label: "新闻情绪",
-      value: factors.news_sentiment,
-      color: "text-yellow-400",
-    },
+    { label: "综合因子", value: factors.composite, color: "text-indigo-400" },
+    { label: "新闻情绪", value: factors.news_sentiment, color: "text-yellow-400" },
     { label: "事件信号", value: factors.event_signal, color: "text-purple-400" },
-    {
-      label: "分析师评级",
-      value: factors.analyst_rating,
-      color: "text-cyan-400",
-    },
-    { label: "资金流向", value: factors.fund_flow, color: "text-red-400" },
-    { label: "价格动量", value: factors.momentum, color: "text-orange-400" },
+    { label: "分析师评级", value: factors.analyst_rating, color: "text-cyan-400" },
+    { label: "资金流向", value: factors.fund_flow, color: "text-rose-400" },
+    { label: "价格动量", value: factors.momentum, color: "text-amber-400" },
   ];
 
   return (
     <div className="space-y-4">
-      {/* Factor cards */}
       <div className="grid grid-cols-3 gap-3">
         {factorItems.map((item, i) => (
-          <div
-            key={i}
-            className="bg-[#09090b] p-3 rounded-lg border border-zinc-800/50"
-          >
-            <div className="text-[10px] text-zinc-500 mb-1">{item.label}</div>
-            <div className={`text-lg font-mono font-medium ${item.color}`}>
+          <div key={i} className="bg-black/20 p-3 rounded-xl border border-white/5">
+            <div className="text-[10px] text-neutral-500 mb-1 font-mono">{item.label}</div>
+            <div className={cn("text-lg font-mono font-medium", item.color)}>
               {item.value >= 0 ? "+" : ""}
               {item.value.toFixed(3)}
             </div>
-            {/* Simple bar indicator */}
-            <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="mt-2 h-1 bg-white/5 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full ${
-                  item.value >= 0 ? "bg-red-500/60" : "bg-emerald-500/60"
-                }`}
-                style={{ width: `${Math.abs(item.value) * 100}%` }}
+                className={cn(
+                  "h-full rounded-full",
+                  item.value >= 0 ? "bg-indigo-500/60" : "bg-emerald-500/60"
+                )}
+                style={{ width: `${Math.min(Math.abs(item.value) * 100, 100)}%` }}
               />
             </div>
           </div>
         ))}
       </div>
 
-      {/* Sample stats */}
-      <div className="bg-[#09090b] p-3 rounded-lg border border-zinc-800/50 text-[10px] text-zinc-600">
-        样本: 新闻 {data.sample_counts.news} 条 | 公告{" "}
-        {data.sample_counts.events} 条 | 研报 {data.sample_counts.reports} 条 |
-        计算时间: {new Date(data.computed_at).toLocaleString("zh-CN")}
+      <div className="bg-black/20 p-3 rounded-xl border border-white/5 text-[10px] text-neutral-600 font-mono">
+        样本: 新闻 {data.sample_counts.news} 条 | 公告 {data.sample_counts.events} 条 | 研报 {data.sample_counts.reports} 条 | 计算时间: {new Date(data.computed_at).toLocaleString("zh-CN")}
       </div>
 
-      {/* Key signals */}
       {data.signals && data.signals.length > 0 && (
         <div>
-          <div className="text-xs text-zinc-500 mb-2">关键信号</div>
+          <div className="text-xs text-neutral-500 mb-2 font-mono uppercase tracking-wider">关键信号</div>
           <div className="space-y-1.5">
             {data.signals.slice(0, 8).map((sig, i) => (
-              <div
-                key={i}
-                className="text-xs text-zinc-400 bg-[#09090b] p-2 rounded border border-zinc-800/50"
-              >
-                <span className="text-zinc-600 mr-2">[{String(sig.type)}]</span>
+              <div key={i} className="text-xs text-neutral-400 bg-black/20 p-2.5 rounded-lg border border-white/5">
+                <span className="text-neutral-600 mr-2 font-mono">[{String(sig.type)}]</span>
                 {String(sig.title || sig.institution || "")}
                 {sig.sentiment !== undefined && (
                   <span
-                    className={`ml-2 font-mono ${
-                      Number(sig.sentiment) >= 0
-                        ? "text-red-400"
-                        : "text-emerald-400"
-                    }`}
+                    className={cn(
+                      "ml-2 font-mono",
+                      Number(sig.sentiment) >= 0 ? "text-rose-400" : "text-emerald-400"
+                    )}
                   >
                     {Number(sig.sentiment) >= 0 ? "+" : ""}
                     {Number(sig.sentiment).toFixed(2)}

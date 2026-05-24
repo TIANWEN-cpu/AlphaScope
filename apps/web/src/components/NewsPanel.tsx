@@ -12,6 +12,7 @@ import {
   RefreshCw,
   ExternalLink,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   listNews,
   listAnnouncements,
@@ -114,16 +115,16 @@ export function NewsPanel({ symbol, stockName }: NewsPanelProps) {
   return (
     <div className="flex-1 flex flex-col min-h-0 p-4 gap-3 overflow-y-auto custom-scrollbar">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
-          <Newspaper size={20} className="text-orange-400" />
+        <h2 className="text-lg font-semibold text-neutral-100 flex items-center gap-2 font-display">
+          <Newspaper size={20} className="text-amber-400" />
           资讯与研报
-          <span className="text-xs text-zinc-500 font-normal ml-2">
+          <span className="text-xs text-neutral-500 font-normal ml-2 font-mono">
             {stockName} ({symbol})
           </span>
         </h2>
         <button
           onClick={() => window.location.reload()}
-          className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1"
+          className="text-xs text-neutral-400 hover:text-neutral-200 transition-colors flex items-center gap-1"
         >
           <RefreshCw size={12} /> 刷新
         </button>
@@ -137,13 +138,13 @@ export function NewsPanel({ symbol, stockName }: NewsPanelProps) {
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors ${
               activeTab === tab.id
-                ? "border-orange-500/50 text-orange-400 bg-orange-500/10"
-                : "border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30"
+                ? "border-indigo-500 text-indigo-400 bg-indigo-500/5"
+                : "border-white/5 text-neutral-500 hover:text-neutral-300 hover:bg-white/[0.02]"
             }`}
           >
             {tab.icon} {tab.label}
             {tab.id === "announce" && announcements.length > 0 && (
-              <span className="ml-1 text-[10px] bg-orange-500/20 px-1 rounded">
+              <span className="ml-1 text-[10px] bg-indigo-500/20 px-1 rounded">
                 {announcements.length}
               </span>
             )}
@@ -153,12 +154,12 @@ export function NewsPanel({ symbol, stockName }: NewsPanelProps) {
 
       {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">
+        <div className="flex items-center justify-center h-32 text-neutral-500 text-sm">
           <RefreshCw size={14} className="animate-spin mr-2" />
           加载资讯...
         </div>
       ) : tabData.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-32 text-zinc-600">
+        <div className="flex flex-col items-center justify-center h-32 text-neutral-600">
           <Newspaper size={32} className="opacity-20 mb-2" />
           <p className="text-sm">暂无{SUB_TABS.find((t) => t.id === activeTab)?.label}数据</p>
         </div>
@@ -167,26 +168,26 @@ export function NewsPanel({ symbol, stockName }: NewsPanelProps) {
           {tabData.map((item, i) => (
             <div
               key={item.id || i}
-              className="bg-[#18181b] rounded-lg border border-zinc-800/50 p-3 hover:border-zinc-600 transition-colors group"
+              className="bg-black/20 rounded-xl border border-white/5 p-3 hover:border-white/10 transition-colors group"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded border border-orange-500/30 text-orange-400 bg-orange-500/10">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-500/30 text-indigo-400 bg-indigo-500/10 font-mono">
                       {item.source || "快讯"}
                     </span>
                     {item.event_type && (
-                      <span className="text-[10px] text-zinc-600">
+                      <span className="text-[10px] text-neutral-600 font-mono">
                         {item.event_type}
                       </span>
                     )}
-                    <span className="text-[10px] text-zinc-600 font-mono">
+                    <span className="text-[10px] text-neutral-600 font-mono">
                       {item.published_at || item.datetime || ""}
                     </span>
                     {item.sentiment !== undefined && item.sentiment !== 0 && (
                       <span
                         className={`text-[10px] font-mono ${
-                          item.sentiment > 0 ? "text-red-400" : "text-emerald-400"
+                          item.sentiment > 0 ? "text-rose-400" : "text-emerald-400"
                         }`}
                       >
                         {item.sentiment > 0 ? "+" : ""}
@@ -194,11 +195,11 @@ export function NewsPanel({ symbol, stockName }: NewsPanelProps) {
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-zinc-200 leading-relaxed">
+                  <p className="text-sm text-neutral-200 leading-relaxed">
                     {item.title || "无标题"}
                   </p>
                   {item.summary && (
-                    <p className="text-xs text-zinc-500 mt-1 line-clamp-2">
+                    <p className="text-xs text-neutral-500 mt-1 line-clamp-2">
                       {item.summary}
                     </p>
                   )}
@@ -208,7 +209,7 @@ export function NewsPanel({ symbol, stockName }: NewsPanelProps) {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-zinc-600 hover:text-blue-400 transition-colors flex-shrink-0"
+                    className="text-neutral-600 hover:text-indigo-400 transition-colors flex-shrink-0"
                   >
                     <ExternalLink size={14} />
                   </a>
