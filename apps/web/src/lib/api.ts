@@ -840,18 +840,19 @@ export interface BacktestResult {
 }
 
 export async function getQuantStatus(): Promise<JinceStatus> {
-  const res = await apiFetch<{ success: boolean; data: JinceStatus }>(
-    "/api/quant/status"
-  );
-  return res.data;
+  const res = await fetch(`${API_BASE}/api/quant/status`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
+  }
+  return body.data ?? body;
 }
 
 export async function listQuantStrategies(): Promise<StrategyInfo[]> {
-  const res = await apiFetch<{
-    success: boolean;
-    data: { strategies: StrategyInfo[] };
-  }>("/api/quant/strategies");
-  return res.data?.strategies || [];
+  const data = await apiFetch<{ strategies: StrategyInfo[] }>(
+    "/api/quant/strategies"
+  );
+  return data.strategies || [];
 }
 
 export async function runBacktest(data: {
@@ -861,25 +862,32 @@ export async function runBacktest(data: {
   end_date: string;
   initial_capital?: number;
 }): Promise<BacktestResult> {
-  const res = await apiFetch<{ success: boolean; data: BacktestResult }>(
-    "/api/quant/backtest",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    }
-  );
-  return res.data;
+  return apiFetch<BacktestResult>("/api/quant/backtest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }
 
 export async function listQuantRuns(): Promise<
-  { run_id: string; strategy_id: string; symbol: string; status: string; total_return?: number }[]
+  {
+    run_id: string;
+    strategy_id: string;
+    symbol: string;
+    status: string;
+    total_return?: number;
+  }[]
 > {
-  const res = await apiFetch<{
-    success: boolean;
-    data: { runs: { run_id: string; strategy_id: string; symbol: string; status: string; total_return?: number }[] };
+  const data = await apiFetch<{
+    runs: {
+      run_id: string;
+      strategy_id: string;
+      symbol: string;
+      status: string;
+      total_return?: number;
+    }[];
   }>("/api/quant/runs");
-  return res.data?.runs || [];
+  return data.runs || [];
 }
 
 // ============== Funds ==============
@@ -894,25 +902,18 @@ export interface FundInfo {
 }
 
 export async function searchFunds(keyword: string): Promise<FundInfo[]> {
-  const res = await apiFetch<{
-    success: boolean;
-    data: { funds: FundInfo[] };
-  }>(`/api/funds/search?keyword=${encodeURIComponent(keyword)}`);
-  return res.data?.funds || [];
+  const data = await apiFetch<{ funds: FundInfo[] }>(
+    `/api/funds/search?keyword=${encodeURIComponent(keyword)}`
+  );
+  return data.funds || [];
 }
 
 export async function getFundInfo(code: string): Promise<FundInfo> {
-  const res = await apiFetch<{ success: boolean; data: FundInfo }>(
-    `/api/funds/${code}`
-  );
-  return res.data;
+  return apiFetch<FundInfo>(`/api/funds/${code}`);
 }
 
 export async function getFundMetrics(code: string): Promise<Record<string, number>> {
-  const res = await apiFetch<{ success: boolean; data: Record<string, number> }>(
-    `/api/funds/${code}/metrics`
-  );
-  return res.data;
+  return apiFetch<Record<string, number>>(`/api/funds/${code}/metrics`);
 }
 
 export async function simulateDca(data: {
@@ -922,15 +923,11 @@ export async function simulateDca(data: {
   start_date: string;
   end_date: string;
 }): Promise<Record<string, unknown>> {
-  const res = await apiFetch<{ success: boolean; data: Record<string, unknown> }>(
-    "/api/fund-dca/simulate",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    }
-  );
-  return res.data;
+  return apiFetch<Record<string, unknown>>("/api/fund-dca/simulate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }
 
 export interface DCAPlan {
@@ -944,11 +941,8 @@ export interface DCAPlan {
 }
 
 export async function listDcaPlans(): Promise<DCAPlan[]> {
-  const res = await apiFetch<{
-    success: boolean;
-    data: { plans: DCAPlan[] };
-  }>("/api/fund-dca/plans");
-  return res.data?.plans || [];
+  const data = await apiFetch<{ plans: DCAPlan[] }>("/api/fund-dca/plans");
+  return data.plans || [];
 }
 
 export async function createDcaPlan(data: {
@@ -958,15 +952,11 @@ export async function createDcaPlan(data: {
   frequency?: string;
   start_date: string;
 }): Promise<DCAPlan> {
-  const res = await apiFetch<{ success: boolean; data: DCAPlan }>(
-    "/api/fund-dca/plans",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    }
-  );
-  return res.data;
+  return apiFetch<DCAPlan>("/api/fund-dca/plans", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }
 
 // ============== Portfolio ==============
@@ -980,11 +970,10 @@ export interface FundPortfolio {
 }
 
 export async function listPortfolios(): Promise<FundPortfolio[]> {
-  const res = await apiFetch<{
-    success: boolean;
-    data: { portfolios: FundPortfolio[] };
-  }>("/api/fund-portfolio");
-  return res.data?.portfolios || [];
+  const data = await apiFetch<{ portfolios: FundPortfolio[] }>(
+    "/api/fund-portfolio"
+  );
+  return data.portfolios || [];
 }
 
 export async function createPortfolio(data: {
@@ -992,15 +981,11 @@ export async function createPortfolio(data: {
   description?: string;
   holdings?: { fund_code: string; weight: number }[];
 }): Promise<FundPortfolio> {
-  const res = await apiFetch<{ success: boolean; data: FundPortfolio }>(
-    "/api/fund-portfolio",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    }
-  );
-  return res.data;
+  return apiFetch<FundPortfolio>("/api/fund-portfolio", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }
 
 export async function deletePortfolio(id: string): Promise<void> {
@@ -1016,17 +1001,20 @@ export async function deletePortfolio(id: string): Promise<void> {
 export async function rebalancePortfolio(
   portfolioId: string,
   targetWeights: Record<string, number>
-): Promise<{ trades: { fund_code: string; action: string; weight_change: number }[] }> {
-  const res = await apiFetch<{
-    success: boolean;
-    data: { trades: { fund_code: string; action: string; weight_change: number }[] };
-  }>("/api/fund-portfolio/rebalance", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      portfolio_id: portfolioId,
-      target_weights: targetWeights,
-    }),
-  });
-  return res.data;
+): Promise<{
+  trades: { fund_code: string; action: string; weight_change: number }[];
+}> {
+  return apiFetch<{
+    trades: { fund_code: string; action: string; weight_change: number }[];
+  }>(
+    "/api/fund-portfolio/rebalance",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        portfolio_id: portfolioId,
+        target_weights: targetWeights,
+      }),
+    }
+  );
 }
