@@ -2,9 +2,11 @@
 
 ## Overview
 
-Migrate UI design from reference workbench (`reference-frontend/`) into existing Next.js app (`apps/web/`).
+Migrate UI design from the upstream reference frontend into the existing Next.js app (`apps/web/`).
 
-**Reference**: Vite + React + @google/genai (NOT to be used directly)
+**Reference Source**: <https://github.com/TIANWEN-cpu/ai-finance-> (`main`, commit `7fc627f`)
+**Local Mirror**: `reference-frontend/`
+**Reference Stack**: Vite + React + @google/genai (NOT to be used directly)
 **Target**: Next.js 15 + existing API layer (`apps/web/src/lib/api.ts`)
 
 ## Component Mapping
