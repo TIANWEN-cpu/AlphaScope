@@ -31,13 +31,13 @@ run: ## Run Streamlit dashboard
 api: ## Run FastAPI backend
 	uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
 
-web-install: ## Install Next.js frontend dependencies
+web-install: ## Install Vite React frontend dependencies
 	cd apps/web && npm install
 
-web-build: ## Build Next.js frontend
+web-build: ## Build Vite React frontend
 	cd apps/web && npm run build
 
-web-dev: ## Run Next.js dev server
+web-dev: ## Run Vite React dev server
 	cd apps/web && npm run dev
 
 clean: ## Clean cache and temp files

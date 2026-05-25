@@ -7,7 +7,7 @@ This document describes the system architecture and data flow of AI-Finance.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                 Presentation Layer                        │
-│  Streamlit Dashboard · FastAPI (27 endpoints) · Next.js  │
+│  Streamlit Dashboard · FastAPI (27 endpoints) · Vite UI  │
 └───────────────────────────┬─────────────────────────────┘
                             ▼
 ┌─────────────────────────────────────────────────────────┐

@@ -1,0 +1,6 @@
+{
+  "name": "AI Finance Workbench",
+  "description": "Multi-agent quantitative financial analysis workspace connected to the AI-Finance FastAPI backend.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

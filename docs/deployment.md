@@ -22,7 +22,7 @@ python -m streamlit run frontend/dashboard.py --server.port 8501
 # 5. (可选) 启动 FastAPI 后端
 uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 
-# 6. (可选) 启动 Next.js 前端
+# 6. (可选) 启动 Vite React 前端
 cd apps/web && npm install && npm run dev
 ```
 
@@ -32,7 +32,7 @@ cd apps/web && npm install && npm run dev
 cp .env.example .env
 # 编辑 .env，至少配置 DEEPSEEK_API_KEY
 
-# 启动全部服务 (Streamlit + FastAPI + Next.js + Redis)
+# 启动全部服务 (Streamlit + FastAPI + Vite React + Redis)
 docker-compose up -d
 
 # 仅启动 Streamlit (port 8501)
@@ -41,10 +41,10 @@ docker-compose up -d app
 # 仅启动 FastAPI API (port 8000)
 docker-compose up -d api
 
-# 仅启动 Next.js 前端 (port 3000)
+# 仅启动 Vite React 前端 (port 3000)
 docker-compose up -d web
 
-# 启动 Streamlit + FastAPI + Next.js
+# 启动 Streamlit + FastAPI + Vite React
 docker-compose up -d app api web
 ```
 
@@ -54,7 +54,7 @@ docker-compose up -d app api web
 |------|------|------|
 | `app` | 8501 | Streamlit 界面（传统 UI） |
 | `api` | 8000 | FastAPI REST API（27 端点） |
-| `web` | 3000 | Next.js 前端（standalone 构建） |
+| `web` | 3000 | Vite React 前端（预览服务） |
 | `redis` | 6379 | Redis 缓存 |
 
 健康检查：
@@ -62,7 +62,7 @@ docker-compose up -d app api web
 docker-compose ps                    # 查看服务状态
 curl http://localhost:8501/_stcore/health  # Streamlit
 curl http://localhost:8000/health          # FastAPI
-curl http://localhost:3000/                # Next.js
+curl http://localhost:3000/                # Frontend
 ```
 
 ### 方式三：Windows .exe
@@ -130,7 +130,7 @@ make lint        # 代码检查
 make format      # 代码格式化
 make run         # 启动 Streamlit
 make api         # 启动 FastAPI
-make web-build   # 构建 Next.js
+make web-build   # 构建 Vite React 前端
 make docker-up   # Docker 启动
 make check       # lint + test
 ```

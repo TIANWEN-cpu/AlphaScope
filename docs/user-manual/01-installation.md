@@ -167,7 +167,7 @@ cd apps/web && npm run dev &
 ```bash
 # 查找并终止进程
 pkill -f "uvicorn backend.api.main"
-pkill -f "next dev"
+pkill -f "vite"
 ```
 
 ---

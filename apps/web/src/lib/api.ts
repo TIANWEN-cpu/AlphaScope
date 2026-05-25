@@ -1,719 +1,102 @@
-/**
- * AI-Finance API Client (v1.0.1)
- *
- * Connects to the FastAPI backend for chat, analysis, vision, and config.
- * Handles SSE streaming for chat responses.
- */
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-// ============== Types ==============
-
 export interface ApiResponse<T> {
   success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-  error_code?: string;
-  trace_id?: string;
-  source?: string;
-  tool_call_id?: string;
-  evidence_ids?: string[];
+  data?: T | null;
+  error?: string | null;
+  message?: string | null;
 }
 
-export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface AgentResult {
-  key: string;
-  name: string;
-  signal: string;
-  confidence: number;
-  reason: string;
-  evidence?: Evidence[];
-  vendor?: string;
-  model?: string;
-}
-
-export interface Evidence {
-  type: string;
-  claim: string;
-  data_date?: string;
-  source?: string;
-}
-
-export interface VotingSummary {
-  final: string;
-  buy: number;
-  sell: number;
-  hold: number;
-  avg_confidence: number;
-}
-
-export interface Conversation {
-  id: string;
-  title: string;
-  stock_symbol?: string;
-  stock_name?: string;
-  mode: string;
-  message_count: number;
-  updated_at: string;
-}
-
-export interface SseEvent {
-  type: "status" | "content" | "evidence" | "agents" | "done";
-  mode?: string;
-  chunk?: string;
-  data?: unknown;
-}
-
-export interface ChatResult {
-  conversation_id: string;
-  mode: string;
-  content: string;
-  agents?: Record<string, AgentResult>;
-  evidence?: Evidence[];
-  summary?: VotingSummary;
-  compliance_note?: string;
-  detected_intent?: string;
-  auto_routed?: boolean;
-}
-
-// K-line / Price
 export interface PriceBar {
+  symbol: string;
   date: string;
   open: number;
   high: number;
   low: number;
   close: number;
   volume: number;
+  amount?: number;
+  turnover?: number;
+  change_pct?: number;
+  frequency?: string;
+  source?: string;
 }
 
-// News
-export interface NewsItem {
-  id?: string;
+export interface NewsRecord {
+  id: string;
   title: string;
   summary?: string;
-  datetime?: string;
-  published_at?: string;
-  url?: string;
   source?: string;
+  source_url?: string;
+  published_at?: string;
+  symbols?: string[];
   event_type?: string;
   sentiment?: number;
   importance?: number;
+  confidence?: number;
 }
 
-// Fundamentals
-export interface FinancialPeriod {
-  period: string;
-  revenue_yi: number;
-  net_profit_yi: number;
-  gross_margin_pct: number;
-  roe_pct: number;
-  debt_ratio_pct: number;
-  yoy_revenue_pct: number;
-  yoy_net_profit_pct: number;
-}
-
-export interface FundamentalsData {
-  symbol: string;
-  financial_periods: FinancialPeriod[];
-  valuation: Record<string, number>;
-  earnings_quality: Record<string, unknown>;
-  cashflow: Record<string, unknown>;
-  balance_sheet: Record<string, unknown>;
-  fundamental_score: number;
-}
-
-// Fund Flow
-export interface FundFlowRecord {
-  date: string;
-  close: number;
-  change_pct: number;
-  main_net_yi: number;
-  main_net_pct: number;
-  super_net_yi: number;
-  large_net_yi: number;
-  medium_net_yi: number;
-  small_net_yi: number;
-}
-
-export interface FundFlowData {
-  symbol: string;
-  summary: Record<string, number>;
-  records: FundFlowRecord[];
-}
-
-// Factors
-export interface FactorReport {
-  symbol: string;
-  stock_name: string;
-  computed_at: string;
-  factors: {
-    news_sentiment: number;
-    event_signal: number;
-    analyst_rating: number;
-    fund_flow: number;
-    momentum: number;
-    composite: number;
-  };
-  sample_counts: { news: number; events: number; reports: number };
-  signals: Array<Record<string, unknown>>;
-}
-
-// Archive
-export interface ArchiveReport {
-  timestamp: string;
-  date: string;
-  type: string;
-  stock_name: string;
-  symbol: string;
-  decision: string;
-  avg_confidence: number;
-  path: string;
-}
-
-// Settings Providers (CRUD)
-export interface SettingsProvider {
+export interface AnnouncementRecord {
   id: string;
-  name: string;
-  base_url: string;
-  api_key_masked?: string;
-  enabled: boolean;
-}
-
-// Agent Management (CRUD)
-export interface ManageAgent {
-  id: string;
-  name: string;
-  description?: string;
-  system_prompt?: string;
-  provider: string;
-  model: string;
-  tools?: string[];
-  temperature?: number;
-  max_tokens?: number;
-  enabled: boolean;
-}
-
-export interface ManageTeam {
-  id: string;
-  name: string;
-  description?: string;
-  member_ids: string[];
-}
-
-// Tasks
-export interface TaskItem {
-  id: string;
-  conversation_id?: string;
-  task_type: string;
-  status: string;
-  error?: string;
-  started_at?: number;
-  completed_at?: number;
-  created_at: number;
-  input_json?: string;
-  output_json?: string;
-}
-
-// Provider Health
-export interface ProviderInfo {
-  name: string;
-  status: string;
-  consecutive_failures: number;
-  avg_latency_ms: number;
-  last_error: string | null;
-  data_types: string[];
-  markets: string[];
-}
-
-export interface ProvidersHealthData {
-  total: number;
-  healthy: number;
-  degraded: number;
-  unhealthy: number;
-  providers: ProviderInfo[];
-}
-
-// ============== Helper ==============
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
-  }
-  const body = await res.json();
-  if (body.success === false) {
-    throw new Error(body.error || "请求失败");
-  }
-  return body.data ?? body;
-}
-
-// ============== Health ==============
-
-export async function getHealth(): Promise<{ status: string; version: string }> {
-  return apiFetch("/health");
-}
-
-// ============== Conversations ==============
-
-export async function createConversation(data: {
-  title?: string;
-  stock_symbol?: string;
-  stock_name?: string;
-  mode?: string;
-}): Promise<{ id: string }> {
-  return apiFetch("/api/conversations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-}
-
-export async function listConversations(
-  stock_symbol?: string,
-  limit = 20
-): Promise<{ conversations: Conversation[] }> {
-  const params = new URLSearchParams();
-  if (stock_symbol) params.set("stock_symbol", stock_symbol);
-  params.set("limit", String(limit));
-  return apiFetch(`/api/conversations?${params}`);
-}
-
-export async function getConversation(
-  conversation_id: string
-): Promise<{ conversation: Conversation; messages: ChatMessage[] }> {
-  return apiFetch(`/api/conversations/${conversation_id}`);
-}
-
-export async function deleteConversation(
-  conversation_id: string
-): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/conversations/${conversation_id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
-  }
-}
-
-// ============== Chat (SSE Streaming) ==============
-
-export function streamChat(
-  data: {
-    conversation_id?: string;
-    message: string;
-    mode?: string;
-    stock_symbol?: string;
-    stock_name?: string;
-    expert_team_id?: string;
-  },
-  onEvent: (event: SseEvent) => void,
-  onDone: (fullContent: string) => void,
-  onError: (error: string) => void
-): AbortController {
-  const controller = new AbortController();
-
-  (async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/chat/stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        onError(body.error || body.detail || `HTTP ${res.status}`);
-        return;
-      }
-
-      const contentType = res.headers.get("content-type") || "";
-
-      if (contentType.includes("text/event-stream") && res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let fullContent = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const event: SseEvent = JSON.parse(line.slice(6));
-              onEvent(event);
-              if (event.type === "content" && event.chunk) {
-                fullContent += event.chunk;
-              }
-            } catch {
-              // skip malformed events
-            }
-          }
-        }
-        onDone(fullContent);
-      } else {
-        const body = await res.json();
-        const content = body.content || body.data?.content || "";
-        onDone(content);
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      onError(err instanceof Error ? err.message : String(err));
-    }
-  })();
-
-  return controller;
-}
-
-// ============== Analysis ==============
-
-export async function runAnalysis(data: {
-  stock_symbol: string;
-  stock_name?: string;
-  mode?: string;
-}): Promise<Record<string, unknown>> {
-  return apiFetch("/api/analysis/run", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-}
-
-// ============== Vision ==============
-
-export async function analyzeVision(data: {
-  image_base64: string;
-  mime_type?: string;
-  user_context?: string;
-  ticker?: string;
-}): Promise<Record<string, unknown>> {
-  return apiFetch("/api/vision/analyze", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-}
-
-// ============== Prices / K-line ==============
-
-export async function getPrices(
-  symbol: string,
-  frequency = "1d",
-  limit = 250
-): Promise<{ symbol: string; bars: PriceBar[]; total: number }> {
-  return apiFetch(`/api/prices/${symbol}?frequency=${frequency}&limit=${limit}`);
-}
-
-export async function getLatestPrice(
-  symbol: string
-): Promise<PriceBar | null> {
-  try {
-    return await apiFetch(`/api/prices/${symbol}/latest`);
-  } catch {
-    return null;
-  }
-}
-
-export async function fetchPrices(
-  symbol: string,
-  days = 30
-): Promise<{ symbol: string; fetched: number }> {
-  return apiFetch(`/api/prices/${symbol}/fetch?days=${days}`, {
-    method: "POST",
-  });
-}
-
-// ============== News ==============
-
-export async function listNews(params?: {
-  symbol?: string;
-  event_type?: string;
-  limit?: number;
-}): Promise<{ news: NewsItem[]; total: number }> {
-  const sp = new URLSearchParams();
-  if (params?.symbol) sp.set("symbol", params.symbol);
-  if (params?.event_type) sp.set("event_type", params.event_type);
-  if (params?.limit) sp.set("limit", String(params.limit));
-  return apiFetch(`/api/news?${sp}`);
-}
-
-export async function listAnnouncements(params?: {
-  symbol?: string;
+  symbol: string;
+  company_name?: string;
+  title: string;
   category?: string;
-  limit?: number;
-}): Promise<{ announcements: NewsItem[]; total: number }> {
-  const sp = new URLSearchParams();
-  if (params?.symbol) sp.set("symbol", params.symbol);
-  if (params?.category) sp.set("category", params.category);
-  if (params?.limit) sp.set("limit", String(params.limit));
-  return apiFetch(`/api/news/announcements?${sp}`);
+  published_at?: string;
+  source?: string;
+  source_url?: string;
+  importance?: number;
+  confidence?: number;
 }
 
-export async function searchNews(
-  query: string,
-  limit = 20
-): Promise<{ results: NewsItem[]; total: number }> {
-  return apiFetch("/api/news/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, limit }),
-  });
+export interface ProviderRecord {
+  id?: string;
+  name?: string;
+  type?: string;
+  base_url?: string;
+  enabled?: boolean;
+  api_key?: string;
+  api_key_masked?: string;
+  has_api_key?: boolean;
+  models?: string[];
+  config_json?: string;
+  [key: string]: unknown;
 }
 
-// ============== Fundamentals ==============
-
-export async function getFundamentals(
-  symbol: string
-): Promise<FundamentalsData> {
-  return apiFetch(`/api/fundamentals/${symbol}`);
-}
-
-export async function getPeers(
-  symbol: string
-): Promise<{ industry: string; peers: Record<string, unknown>[] }> {
-  return apiFetch(`/api/fundamentals/${symbol}/peers`);
-}
-
-export async function getShareholders(
-  symbol: string
-): Promise<{
-  top_holders: Record<string, unknown>[];
-  circulate_holders: Record<string, unknown>[];
-  institutional_changes: Record<string, unknown>[];
-}> {
-  return apiFetch(`/api/fundamentals/${symbol}/shareholders`);
-}
-
-// ============== Fund Flow ==============
-
-export async function getFundFlow(
-  symbol: string,
-  days = 30
-): Promise<FundFlowData> {
-  return apiFetch(`/api/fund-flow/${symbol}?days=${days}`);
-}
-
-export async function getMarketFundFlow(
-  days = 30
-): Promise<{ summary: Record<string, number>; records: Record<string, unknown>[] }> {
-  return apiFetch(`/api/fund-flow/market/overview?days=${days}`);
-}
-
-// ============== Factors ==============
-
-export async function getFactors(
-  symbol: string,
-  stockName = "",
-  days = 30
-): Promise<FactorReport> {
-  const params = new URLSearchParams();
-  if (stockName) params.set("stock_name", stockName);
-  params.set("days", String(days));
-  return apiFetch(`/api/factors/${symbol}?${params}`);
-}
-
-// ============== Technical ==============
-
-export async function getTechnicalIndicators(
-  symbol: string,
-  limit = 250
-): Promise<Record<string, unknown>> {
-  return apiFetch(`/api/technical/${symbol}?limit=${limit}`);
-}
-
-// ============== Archive ==============
-
-export async function listArchiveReports(params?: {
-  stock_filter?: string;
-  decision_filter?: string;
-  type_filter?: string;
-  date_from?: string;
-  date_to?: string;
-  limit?: number;
-}): Promise<{ reports: ArchiveReport[]; total: number }> {
-  const sp = new URLSearchParams();
-  if (params?.stock_filter) sp.set("stock", params.stock_filter);
-  if (params?.decision_filter) sp.set("decision", params.decision_filter);
-  if (params?.type_filter) sp.set("type", params.type_filter);
-  if (params?.date_from) sp.set("date_from", params.date_from);
-  if (params?.date_to) sp.set("date_to", params.date_to);
-  if (params?.limit) sp.set("limit", String(params.limit));
-  return apiFetch(`/api/archive?${sp}`);
-}
-
-export async function getArchiveStats(): Promise<Record<string, unknown>> {
-  return apiFetch("/api/archive/stats");
-}
-
-export async function getArchiveComboStats(): Promise<{
-  combos: Record<string, unknown>[];
-}> {
-  return apiFetch("/api/archive/combo-stats");
-}
-
-export async function loadArchiveReport(
-  path: string
-): Promise<{ content: string }> {
-  return apiFetch(`/api/archive/report/${path}`);
-}
-
-export async function deleteArchiveReport(path: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/archive/report/${path}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
-  }
-}
-
-// ============== Config ==============
-
-export async function listAgents(): Promise<{ agents: Record<string, unknown>[] }> {
-  return apiFetch("/api/agents");
-}
-
-export async function listAgentModels(): Promise<{ agents: Record<string, unknown>[] }> {
-  return apiFetch("/api/agents/models");
-}
-
-export async function listTeams(): Promise<{ teams: string[] }> {
-  return apiFetch("/api/teams");
-}
-
-export async function getTeam(
-  teamId: string
-): Promise<Record<string, unknown>> {
-  return apiFetch(`/api/teams/${teamId}`);
-}
-
-export async function listProviders(): Promise<{
-  providers: Record<string, unknown>[];
-}> {
-  return apiFetch("/api/models/providers");
-}
-
-export async function listModes(): Promise<{ modes: Record<string, unknown>[] }> {
-  return apiFetch("/api/modes");
-}
-
-export async function getCosts(
-  mode?: string
-): Promise<Record<string, unknown>> {
-  const params = mode ? `?mode=${mode}` : "";
-  return apiFetch(`/api/costs${params}`);
-}
-
-export async function getBacktestStats(
-  mode?: string
-): Promise<Record<string, unknown>> {
-  const params = mode ? `?mode=${mode}` : "";
-  return apiFetch(`/api/backtest/stats${params}`);
-}
-
-export async function getProvidersHealth(): Promise<ProvidersHealthData> {
-  return apiFetch("/api/providers/health");
-}
-
-export async function uploadFile(
-  file: File
-): Promise<Record<string, unknown>> {
-  const formData = new FormData();
-  formData.append("file", file);
-  return apiFetch("/api/files/upload", {
-    method: "POST",
-    body: formData,
-  });
-}
-
-// ============== Templates ==============
-
-export async function listTemplates(): Promise<{
-  templates: Record<string, unknown>[];
-}> {
-  return apiFetch("/api/templates");
-}
-
-// ============== Settings Providers (CRUD) ==============
-
-export async function listSettingsProviders(): Promise<{ providers: SettingsProvider[] }> {
-  return apiFetch("/api/settings/providers");
-}
-
-export async function saveSettingsProvider(data: {
+export interface ProviderSavePayload {
   id: string;
   name: string;
   base_url: string;
   api_key?: string;
   enabled?: boolean;
-}): Promise<SettingsProvider> {
-  return apiFetch("/api/settings/providers", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
 }
 
-export async function deleteSettingsProvider(providerId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/settings/providers/${providerId}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
-  }
+export interface ProviderTestResult {
+  success: boolean;
+  models?: string[];
+  message?: string;
+  error?: string;
 }
 
-export async function testSettingsProvider(
-  providerId: string
-): Promise<{ success: boolean; message?: string; models?: string[] }> {
-  return apiFetch(`/api/settings/providers/${providerId}/test`, {
-    method: "POST",
-  });
+export interface ProviderModelsResult {
+  models: Array<{ id: string; owned_by?: string }>;
 }
 
-export async function listSettingsModels(
-  providerId: string
-): Promise<{ models: Array<{ id: string; owned_by: string }> }> {
-  return apiFetch(`/api/settings/providers/${providerId}/models`);
+export interface AgentRecord {
+  key?: string;
+  id?: string;
+  name?: string;
+  role?: string;
+  model?: string;
+  provider?: string;
+  enabled?: boolean;
+  description?: string;
+  system_prompt?: string;
+  tools?: string[];
+  temperature?: number;
+  max_tokens?: number;
+  [key: string]: unknown;
 }
 
-export async function exportSettings(): Promise<Record<string, unknown>> {
-  return apiFetch("/api/settings/export");
-}
-
-export async function importSettings(data: {
-  version?: string;
-  providers: Record<string, unknown>[];
-}): Promise<Record<string, unknown>> {
-  return apiFetch("/api/settings/import", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-}
-
-// ============== Agent & Team Management (CRUD) ==============
-
-export async function listManageAgents(): Promise<{ agents: ManageAgent[] }> {
-  return apiFetch("/api/manage/agents");
-}
-
-export async function saveManageAgent(data: {
+export interface AgentSavePayload {
   id: string;
   name: string;
   description?: string;
@@ -724,297 +107,422 @@ export async function saveManageAgent(data: {
   temperature?: number;
   max_tokens?: number;
   enabled?: boolean;
-}): Promise<ManageAgent> {
-  return apiFetch("/api/manage/agents", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
 }
 
-export async function deleteManageAgent(agentId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/manage/agents/${agentId}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
-  }
-}
-
-export async function listManageTeams(): Promise<{ teams: ManageTeam[] }> {
-  return apiFetch("/api/manage/teams");
-}
-
-export async function saveManageTeam(data: {
-  id: string;
-  name: string;
-  description?: string;
-  member_ids?: string[];
-}): Promise<ManageTeam> {
-  return apiFetch("/api/manage/teams", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-}
-
-export async function deleteManageTeam(teamId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/manage/teams/${teamId}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
-  }
-}
-
-// ============== Task Management ==============
-
-export async function listTasks(
-  status?: string,
-  limit = 50
-): Promise<{ tasks: TaskItem[]; total: number }> {
-  const params = new URLSearchParams();
-  if (status) params.set("status", status);
-  params.set("limit", String(limit));
-  return apiFetch(`/api/tasks?${params}`);
-}
-
-export async function getTask(taskId: string): Promise<TaskItem> {
-  return apiFetch(`/api/tasks/${taskId}`);
-}
-
-export async function cancelTask(
-  taskId: string
-): Promise<{ cancelled: string }> {
-  return apiFetch(`/api/tasks/${taskId}/cancel`, { method: "POST" });
-}
-
-export async function runAnalysisAsync(data: {
-  stock_symbol: string;
-  stock_name?: string;
-  mode?: string;
+export interface ChatStreamRequest {
   conversation_id?: string;
-}): Promise<{ task_id: string; status: string }> {
-  return apiFetch("/api/analysis/async", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+  message: string;
+  mode?: string;
+  stock_symbol?: string;
+  stock_name?: string;
+  expert_team_id?: string;
 }
 
-// ============== Quant / Jince ==============
+export interface ChatStreamEvent {
+  type: "status" | "content" | "evidence" | "agents" | "done" | string;
+  chunk?: string;
+  data?: unknown;
+  mode?: string;
+}
 
-export interface JinceStatus {
-  connected: boolean;
+export interface TechnicalSnapshot {
+  symbol?: string;
+  ma?: Record<string, unknown>[] | Record<string, unknown>;
+  macd?: Record<string, unknown>[] | Record<string, unknown>;
+  rsi?: Record<string, unknown>[] | number;
+  kdj?: Record<string, unknown>[] | Record<string, unknown>;
+  support?: number;
+  resistance?: number;
+  support_levels?: number[];
+  resistance_levels?: number[];
+  [key: string]: unknown;
+}
+
+export interface EvidenceRecord {
+  id: string;
+  evidence_type?: string;
+  title: string;
+  source?: string;
+  claim?: string;
+  content_summary?: string;
+  symbols?: string[];
+  confidence?: number;
+  source_url?: string;
+  data_date?: string;
+  relevance?: number;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+export interface QuantStrategyParam {
+  name: string;
+  type?: string;
+  default?: unknown;
+  min?: number | null;
+  max?: number | null;
+  description?: string;
+}
+
+export interface QuantStrategy {
+  id?: string;
+  name?: string;
+  description?: string;
+  enabled?: boolean;
+  status?: string;
+  params?: QuantStrategyParam[];
   version?: string;
-  strategy_count: number;
-  active_runs: number;
-  error?: string;
+  [key: string]: unknown;
 }
 
-export interface StrategyInfo {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-  params: { name: string; type: string; default?: unknown; description: string }[];
+export interface QuantRun {
+  id?: string;
+  run_id?: string;
+  strategy_id?: string;
+  symbol?: string;
+  status?: string;
+  total_return?: number;
+  result?: Record<string, unknown>;
+  created_at?: string;
+  [key: string]: unknown;
 }
 
-export interface BacktestResult {
-  run_id: string;
-  strategy_id: string;
-  symbol: string;
-  status: string;
-  metrics?: {
-    total_return: number;
-    annual_return: number;
-    sharpe_ratio: number;
-    max_drawdown: number;
-    win_rate: number;
-    trade_count: number;
-  };
-  equity_curve: { date: string; equity: number }[];
-  error?: string;
-}
-
-export async function getQuantStatus(): Promise<JinceStatus> {
-  const res = await fetch(`${API_BASE}/api/quant/status`);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(body.error || body.detail || `HTTP ${res.status}`);
-  }
-  return body.data ?? body;
-}
-
-export async function listQuantStrategies(): Promise<StrategyInfo[]> {
-  const data = await apiFetch<{ strategies: StrategyInfo[] }>(
-    "/api/quant/strategies"
-  );
-  return data.strategies || [];
-}
-
-export async function runBacktest(data: {
-  strategy_id: string;
-  symbol: string;
-  start_date: string;
-  end_date: string;
-  initial_capital?: number;
-}): Promise<BacktestResult> {
-  return apiFetch<BacktestResult>("/api/quant/backtest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-}
-
-export async function listQuantRuns(): Promise<
-  {
-    run_id: string;
-    strategy_id: string;
-    symbol: string;
-    status: string;
-    total_return?: number;
-  }[]
-> {
-  const data = await apiFetch<{
-    runs: {
-      run_id: string;
-      strategy_id: string;
-      symbol: string;
-      status: string;
-      total_return?: number;
-    }[];
-  }>("/api/quant/runs");
-  return data.runs || [];
-}
-
-// ============== Funds ==============
-
-export interface FundInfo {
-  code: string;
-  name: string;
+export interface FundRecord {
+  code?: string;
+  fund_code?: string;
+  name?: string;
+  fund_name?: string;
+  type?: string;
   fund_type?: string;
-  manager?: string;
-  company?: string;
-  nav?: number;
+  [key: string]: unknown;
 }
 
-export async function searchFunds(keyword: string): Promise<FundInfo[]> {
-  const data = await apiFetch<{ funds: FundInfo[] }>(
-    `/api/funds/search?keyword=${encodeURIComponent(keyword)}`
-  );
-  return data.funds || [];
-}
-
-export async function getFundInfo(code: string): Promise<FundInfo> {
-  return apiFetch<FundInfo>(`/api/funds/${code}`);
-}
-
-export async function getFundMetrics(code: string): Promise<Record<string, number>> {
-  return apiFetch<Record<string, number>>(`/api/funds/${code}/metrics`);
-}
-
-export async function simulateDca(data: {
-  fund_code: string;
-  amount: number;
-  frequency?: string;
-  start_date: string;
-  end_date: string;
-}): Promise<Record<string, unknown>> {
-  return apiFetch<Record<string, unknown>>("/api/fund-dca/simulate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-}
-
-export interface DCAPlan {
-  id: string;
-  fund_code: string;
-  fund_name: string;
-  amount: number;
-  frequency: string;
-  start_date: string;
-  status: string;
-}
-
-export async function listDcaPlans(): Promise<DCAPlan[]> {
-  const data = await apiFetch<{ plans: DCAPlan[] }>("/api/fund-dca/plans");
-  return data.plans || [];
-}
-
-export async function createDcaPlan(data: {
+export interface FundPortfolioHolding {
   fund_code: string;
   fund_name?: string;
-  amount: number;
-  frequency?: string;
-  start_date: string;
-}): Promise<DCAPlan> {
-  return apiFetch<DCAPlan>("/api/fund-dca/plans", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+  weight: number;
+  current_value?: number | null;
+  actual_weight?: number | null;
 }
-
-// ============== Portfolio ==============
 
 export interface FundPortfolio {
   id: string;
   name: string;
-  description: string;
-  holdings: { fund_code: string; fund_name?: string; weight: number }[];
-  total_value?: number;
+  description?: string;
+  holdings: FundPortfolioHolding[];
+  total_value?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
-export async function listPortfolios(): Promise<FundPortfolio[]> {
-  const data = await apiFetch<{ portfolios: FundPortfolio[] }>(
-    "/api/fund-portfolio"
-  );
-  return data.portfolios || [];
-}
-
-export async function createPortfolio(data: {
+export interface FundPortfolioCreatePayload {
   name: string;
   description?: string;
-  holdings?: { fund_code: string; weight: number }[];
-}): Promise<FundPortfolio> {
-  return apiFetch<FundPortfolio>("/api/fund-portfolio", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+  holdings?: FundPortfolioHolding[];
 }
 
-export async function deletePortfolio(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/fund-portfolio/${id}`, {
-    method: "DELETE",
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://127.0.0.1:8000"
+).replace(/\/$/, "");
+
+function buildUrl(path: string, params?: Record<string, string | number | boolean | undefined | null>) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const url = new URL(`${API_BASE_URL}${normalizedPath}`);
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `HTTP ${res.status}`);
+  return url.toString();
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  params?: Record<string, string | number | boolean | undefined | null>,
+): Promise<ApiResponse<T>> {
+  try {
+    const response = await fetch(buildUrl(path, params), {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+
+    const payload = (await response.json()) as ApiResponse<T>;
+    if (!response.ok) {
+      return {
+        success: false,
+        error: payload.error || payload.message || `HTTP ${response.status}`,
+        data: payload.data,
+      };
+    }
+    return payload;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "API request failed",
+      data: null,
+    };
   }
 }
 
-export async function rebalancePortfolio(
-  portfolioId: string,
-  targetWeights: Record<string, number>
-): Promise<{
-  trades: { fund_code: string; action: string; weight_change: number }[];
-}> {
-  return apiFetch<{
-    trades: { fund_code: string; action: string; weight_change: number }[];
-  }>(
-    "/api/fund-portfolio/rebalance",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        portfolio_id: portfolioId,
-        target_weights: targetWeights,
-      }),
+export async function streamChat(
+  payload: ChatStreamRequest,
+  onEvent: (event: ChatStreamEvent) => void,
+) {
+  const response = await fetch(buildUrl("/api/chat/stream"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok || !response.body) {
+    let errorMessage = `Chat stream failed: HTTP ${response.status}`;
+    try {
+      const text = await response.text();
+      if (text) {
+        try {
+          const payload = JSON.parse(text) as {
+            error?: string;
+            message?: string;
+            detail?: string | { msg?: string } | Array<{ msg?: string }>;
+          };
+          if (payload.error || payload.message) {
+            errorMessage = payload.error || payload.message || errorMessage;
+          } else if (typeof payload.detail === "string") {
+            errorMessage = payload.detail;
+          } else if (Array.isArray(payload.detail) && payload.detail[0]?.msg) {
+            errorMessage = payload.detail[0].msg;
+          } else if (payload.detail && typeof payload.detail === "object" && "msg" in payload.detail) {
+            errorMessage = String(payload.detail.msg);
+          }
+        } catch {
+          errorMessage = text;
+        }
+      }
+    } catch {
+      // Keep HTTP fallback.
     }
-  );
+    throw new Error(errorMessage);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+    const events = buffer.split("\n\n");
+    buffer = events.pop() || "";
+
+    for (const rawEvent of events) {
+      const dataLine = rawEvent
+        .split("\n")
+        .find((line) => line.startsWith("data:"));
+      if (!dataLine) continue;
+
+      const jsonText = dataLine.replace(/^data:\s*/, "");
+      try {
+        onEvent(JSON.parse(jsonText) as ChatStreamEvent);
+      } catch {
+        onEvent({ type: "content", chunk: jsonText });
+      }
+    }
+
+    if (done) break;
+  }
 }
+
+export const api = {
+  baseUrl: API_BASE_URL,
+  health: () => request<{ status: string; version: string }>("/health"),
+  prices: (symbol: string, limit = 80, frequency = "1d") =>
+    request<{ symbol: string; bars: PriceBar[]; total: number }>(
+      `/api/prices/${encodeURIComponent(symbol)}`,
+      {},
+      { limit, frequency },
+    ),
+  latestPrice: (symbol: string) =>
+    request<PriceBar>(`/api/prices/${encodeURIComponent(symbol)}/latest`),
+  fundamentals: (symbol: string) =>
+    request<Record<string, unknown>>(`/api/fundamentals/${encodeURIComponent(symbol)}`),
+  news: (symbol?: string, limit = 20) =>
+    request<{ news: NewsRecord[]; total: number }>("/api/news", {}, { symbol, limit }),
+  announcements: (symbol?: string, limit = 10) =>
+    request<{ announcements: AnnouncementRecord[]; total: number }>(
+      "/api/news/announcements",
+      {},
+      { symbol, limit },
+    ),
+  fundFlow: (symbol: string, days = 30) =>
+    request<Record<string, unknown>>(`/api/fund-flow/${encodeURIComponent(symbol)}`, {}, { days }),
+  agents: () => request<{ agents: AgentRecord[] }>("/api/agents"),
+  manageAgents: () => request<{ agents: AgentRecord[] }>("/api/manage/agents"),
+  manageAgentSave: (payload: AgentSavePayload) =>
+    request<AgentRecord>("/api/manage/agents", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  teams: () => request<{ teams: unknown[] }>("/api/teams"),
+  providers: () => request<{ providers: ProviderRecord[] }>("/api/settings/providers"),
+  providerSave: (payload: ProviderSavePayload) =>
+    request<ProviderRecord>("/api/settings/providers", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  providerDelete: (id: string) =>
+    request<{ deleted: string }>(`/api/settings/providers/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  providerTest: (id: string) =>
+    request<ProviderTestResult>(`/api/settings/providers/${encodeURIComponent(id)}/test`, {
+      method: "POST",
+    }),
+  providerModels: (id: string) =>
+    request<ProviderModelsResult>(`/api/settings/providers/${encodeURIComponent(id)}/models`),
+  modelProviders: () => request<{ providers: ProviderRecord[] }>("/api/models/providers"),
+  tasks: () => request<Record<string, unknown>>("/api/tasks"),
+  normalizeSymbol: (symbol: string) =>
+    request<{ original: string; normalized: string; market: string }>(
+      `/api/prices/normalize/${encodeURIComponent(symbol)}`,
+    ),
+  priceFetch: (symbol: string, days = 120) =>
+    request<{ symbol: string; fetched: number }>(
+      `/api/prices/${encodeURIComponent(symbol)}/fetch`,
+      { method: "POST" },
+      { days },
+    ),
+  technical: (symbol: string, limit = 250) =>
+    request<TechnicalSnapshot>(`/api/technical/${encodeURIComponent(symbol)}`, {}, { limit }),
+  technicalSupportResistance: (symbol: string, lookback = 20) =>
+    request<TechnicalSnapshot>(
+      `/api/technical/${encodeURIComponent(symbol)}/support-resistance`,
+      {},
+      { lookback },
+    ),
+  factors: (symbol: string, stockName = "", days = 30) =>
+    request<Record<string, unknown>>(
+      `/api/factors/${encodeURIComponent(symbol)}`,
+      {},
+      { stock_name: stockName, days },
+    ),
+  newsSearch: (query: string, limit = 20) =>
+    request<{ query: string; results: NewsRecord[]; total: number }>("/api/news/search", {
+      method: "POST",
+      body: JSON.stringify({ query, limit }),
+    }),
+  newsDetail: (id: string) => request<NewsRecord>(`/api/news/${encodeURIComponent(id)}`),
+  newsEvents: (symbol: string, days = 30) =>
+    request<Record<string, unknown>>(`/api/news/events/${encodeURIComponent(symbol)}`, {}, { days }),
+  newsImpact: (symbol: string, days = 30, window = 5) =>
+    request<Record<string, unknown>>(
+      `/api/news/impact/${encodeURIComponent(symbol)}`,
+      {},
+      { days, window },
+    ),
+  evidenceList: (symbol?: string, limit = 50) =>
+    request<{ evidence: EvidenceRecord[]; total: number }>("/api/evidence", {}, { symbol, limit }),
+  evidenceCreate: (payload: Partial<EvidenceRecord>) =>
+    request<EvidenceRecord>("/api/evidence", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  evidenceDelete: (id: string) =>
+    request<{ deleted: string }>(`/api/evidence/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  evidenceChain: (evidence: EvidenceRecord[], agentSignals: Record<string, unknown>[] = []) =>
+    request<Record<string, unknown>>("/api/evidence/chain", {
+      method: "POST",
+      body: JSON.stringify({ evidence, agent_signals: agentSignals }),
+    }),
+  archiveList: (stock?: string, limit = 50) =>
+    request<{ reports: Record<string, unknown>[]; total: number }>("/api/archive", {}, { stock, limit }),
+  archiveReport: (path: string) =>
+    request<{ path: string; content: string }>(`/api/archive/report/${encodeURIComponent(path)}`),
+  quantStatus: () => request<Record<string, unknown>>("/api/quant/status"),
+  quantStrategies: () => request<{ strategies: QuantStrategy[] }>("/api/quant/strategies"),
+  quantRuns: () => request<{ runs: QuantRun[] }>("/api/quant/runs"),
+  quantReloadStrategies: () =>
+    request<Record<string, unknown>>("/api/quant/strategies/reload", { method: "POST" }),
+  quantBacktest: (payload: {
+    strategy_id: string;
+    symbol: string;
+    start_date: string;
+    end_date: string;
+    initial_capital?: number;
+    params?: Record<string, unknown>;
+  }) =>
+    request<Record<string, unknown>>("/api/quant/backtest", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  fundSearch: (keyword: string) =>
+    request<{ funds: FundRecord[]; total: number }>("/api/funds/search", {}, { keyword }),
+  fundInfo: (code: string) => request<FundRecord>(`/api/funds/${encodeURIComponent(code)}`),
+  fundNav: (code: string, startDate = "", endDate = "") =>
+    request<{ code: string; navs: Record<string, unknown>[]; total: number }>(
+      `/api/funds/${encodeURIComponent(code)}/nav`,
+      {},
+      { start_date: startDate, end_date: endDate },
+    ),
+  fundMetrics: (code: string) =>
+    request<Record<string, unknown>>(`/api/funds/${encodeURIComponent(code)}/metrics`),
+  fundDcaSimulate: (payload: {
+    fund_code: string;
+    amount: number;
+    frequency: string;
+    start_date: string;
+    end_date: string;
+  }) =>
+    request<Record<string, unknown>>("/api/fund-dca/simulate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  fundPortfolios: () =>
+    request<{ portfolios: FundPortfolio[]; total: number }>("/api/fund-portfolio"),
+  fundPortfolioCreate: (payload: FundPortfolioCreatePayload) =>
+    request<FundPortfolio>("/api/fund-portfolio", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  fundReportGenerate: (payload: {
+    fund_code: string;
+    include_metrics?: boolean;
+    include_dca?: boolean;
+  }) =>
+    request<{ fund_code: string; content: string; metrics: Record<string, unknown> }>(
+      "/api/fund-reports/generate",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+  visionAnalyze: (payload: {
+    image_base64: string;
+    mime_type?: string;
+    user_context?: string;
+    vendor?: string;
+    model?: string;
+    ticker?: string;
+  }) =>
+    request<Record<string, unknown>>("/api/vision/analyze", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  visionReport: (payload: {
+    image_base64: string;
+    mime_type?: string;
+    user_context?: string;
+    vendor?: string;
+    model?: string;
+    ticker?: string;
+  }) =>
+    request<{ report: string; ticker: string; is_chart: boolean }>("/api/vision/report", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  streamChat,
+};

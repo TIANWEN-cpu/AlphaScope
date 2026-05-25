@@ -28,6 +28,51 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+CARD_STYLE_MAP = {
+    "fundamental": "value",
+    "technical": "technical",
+    "sentiment": "growth",
+    "risk": "risk",
+    "retail": "macro",
+}
+
+
+def _managed_agent_to_runtime_config(raw: dict) -> dict:
+    key = str(raw.get("id") or raw.get("key") or "custom_agent").strip()
+    prompt = AGENT_PROMPTS.get(key, {})
+    role = (
+        raw.get("description") or prompt.get("role") or "你是一位专业投资分析 Agent。"
+    )
+    instruction = (
+        raw.get("system_prompt")
+        or prompt.get("instruction")
+        or "请基于市场简报输出投资信号、置信度和理由。"
+    )
+    name = raw.get("name") or prompt.get("name") or key
+    return {
+        "key": key,
+        "name": name,
+        "avatar": str(name)[:2].strip() or "🤖",
+        "role": role,
+        "instruction": instruction,
+        "provider": raw.get("provider", "deepseek"),
+        "model": raw.get("model", "deepseek-chat"),
+        "enabled": bool(raw.get("enabled", True)),
+        "inherit_global_key": True,
+        "card_style": CARD_STYLE_MAP.get(key, "default"),
+    }
+
+
+def _load_managed_agent_configs() -> List[dict]:
+    try:
+        from backend.agent_store import list_agents
+
+        agents = list_agents()
+    except Exception as exc:
+        logger.warning("Failed to load managed agent configs: %s", exc)
+        return []
+    return [_managed_agent_to_runtime_config(agent) for agent in agents]
+
 
 def run_agents_with_mode(
     stock_data: Dict[str, Any],
@@ -52,11 +97,20 @@ def run_agents_with_mode(
     resolver = get_mode_resolver()
     config = resolver.resolve(mode)
 
+    if agent_configs is None:
+        agent_configs = _load_managed_agent_configs()
+
     if mode == AnalysisMode.AUTO:
-        return _run_auto_mode(stock_data, config, global_ai_settings, api_keys)
+        return _run_auto_mode(
+            stock_data,
+            config,
+            global_ai_settings,
+            api_keys,
+            agent_configs=agent_configs,
+        )
 
     # STANDARD or DEEP mode
-    if agent_configs is None:
+    if not agent_configs:
         agent_configs = _mode_config_to_agent_dicts(config)
 
     from backend.runtime.context_builder import (
@@ -196,6 +250,7 @@ def _run_auto_mode(
     config: AgentModeConfig,
     global_ai_settings: Optional[dict] = None,
     api_keys: Optional[Dict[str, str]] = None,
+    agent_configs: Optional[List[dict]] = None,
 ) -> Dict[str, Any]:
     """
     Auto mode: quick pre-screen with cheap model, escalate if ambiguous.
@@ -280,11 +335,10 @@ def _run_auto_mode(
         }
 
     # Escalation needed: run full DEEP analysis
-    deep_configs = _mode_config_to_agent_dicts(config)
     deep_result = run_agents_with_mode(
         stock_data,
         mode=AnalysisMode.DEEP,
-        agent_configs=deep_configs,
+        agent_configs=agent_configs or _mode_config_to_agent_dicts(config),
         global_ai_settings=global_ai_settings,
         api_keys=api_keys,
     )
@@ -308,14 +362,6 @@ def _mode_config_to_agent_dicts(config: AgentModeConfig) -> List[dict]:
         "risk": AGENT_PROMPTS.get("risk", {}),
         "retail": AGENT_PROMPTS.get("retail", {}),
     }
-    card_style_map = {
-        "fundamental": "value",
-        "technical": "technical",
-        "sentiment": "growth",
-        "risk": "risk",
-        "retail": "macro",
-    }
-
     result = []
     for agent_entry in config.enabled_agents:
         prompt = prompt_map.get(agent_entry.key, {})
@@ -330,7 +376,7 @@ def _mode_config_to_agent_dicts(config: AgentModeConfig) -> List[dict]:
                 "model": agent_entry.model,
                 "enabled": agent_entry.enabled,
                 "inherit_global_key": True,
-                "card_style": card_style_map.get(agent_entry.key, "default"),
+                "card_style": CARD_STYLE_MAP.get(agent_entry.key, "default"),
             }
         )
     return result

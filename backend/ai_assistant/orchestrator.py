@@ -306,27 +306,42 @@ def suggest_mode(
 
 def _import_ai_chat():
     """延迟导入 ai_chat 模块"""
-    from ai_chat import new_session, send_message
+    try:
+        from backend.ai_chat import new_session, send_message
+    except ImportError:
+        from ai_chat import new_session, send_message
 
     return new_session, send_message
 
 
 def _import_llm_agents():
     """延迟导入 llm_agents 模块"""
-    from agent_modes import AnalysisMode as AgentAnalysisMode
-    from llm_agents import build_market_brief, run_agents_with_mode
+    try:
+        from backend.agent_modes import AnalysisMode as AgentAnalysisMode
+        from backend.llm_agents import build_market_brief, run_agents_with_mode
+    except ImportError:
+        from agent_modes import AnalysisMode as AgentAnalysisMode
+        from llm_agents import build_market_brief, run_agents_with_mode
 
     return run_agents_with_mode, build_market_brief, AgentAnalysisMode
 
 
 def _import_expert_panel():
     """延迟导入 expert_panel 模块"""
-    from expert_panel import (
-        ExpertTeamConfig,
-        load_default_team,
-        load_experts_config_v2,
-        run_team_roundtable,
-    )
+    try:
+        from backend.expert_panel import (
+            ExpertTeamConfig,
+            load_default_team,
+            load_experts_config_v2,
+            run_team_roundtable,
+        )
+    except ImportError:
+        from expert_panel import (
+            ExpertTeamConfig,
+            load_default_team,
+            load_experts_config_v2,
+            run_team_roundtable,
+        )
 
     return (
         run_team_roundtable,

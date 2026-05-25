@@ -15,13 +15,13 @@
 1. 环境检查（Python、Node、依赖、端口）
 2. 创建必要目录
 3. 启动 FastAPI 后端（端口 8000）
-4. 启动 Next.js 前端（端口 3000）
+4. 启动 Vite React 前端（端口 3000）
 5. 自动打开浏览器
 
 ### PowerShell
 
 ```powershell
-# 基础启动（FastAPI + Next.js）
+# 基础启动（FastAPI + Vite React）
 powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1
 
 # 包含 Streamlit 调试台
@@ -58,7 +58,7 @@ cd apps/web && npm install && cd ../..
 # FastAPI 后端
 uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 
-# Next.js 前端（新终端）
+# Vite React 前端（新终端）
 cd apps/web && npm run dev
 
 # Streamlit 调试台（可选，新终端）
@@ -67,7 +67,7 @@ streamlit run frontend/dashboard.py --server.port 8501
 
 ### 4. 访问
 
-- Next.js 主界面: http://localhost:3000
+- 前端主界面: http://localhost:3000
 - FastAPI API 文档: http://localhost:8000/docs
 - Streamlit 调试台: http://localhost:8501
 
@@ -96,7 +96,7 @@ AI--FINANCE/
 │   ├── reports/        # 分析报告
 │   ├── uploads/        # 上传文件
 │   └── logs/           # 日志
-├── apps/web/           # Next.js 前端
+├── apps/web/           # Vite React 前端
 ├── backend/            # FastAPI 后端
 ├── frontend/           # Streamlit 调试台
 ├── config/             # YAML 配置

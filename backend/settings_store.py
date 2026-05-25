@@ -93,17 +93,30 @@ def save_provider(
     """添加或更新 provider"""
     conn = _get_conn()
     now = time.time()
-    encrypted = encrypt_key(api_key) if api_key else ""
-
     existing = conn.execute(
         "SELECT id FROM model_providers WHERE id = ?", (provider_id,)
     ).fetchone()
     if existing:
-        conn.execute(
-            "UPDATE model_providers SET name=?, base_url=?, encrypted_api_key=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
-            (name, base_url, encrypted, int(enabled), config_json, now, provider_id),
-        )
+        if api_key:
+            conn.execute(
+                "UPDATE model_providers SET name=?, base_url=?, encrypted_api_key=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
+                (
+                    name,
+                    base_url,
+                    encrypt_key(api_key),
+                    int(enabled),
+                    config_json,
+                    now,
+                    provider_id,
+                ),
+            )
+        else:
+            conn.execute(
+                "UPDATE model_providers SET name=?, base_url=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
+                (name, base_url, int(enabled), config_json, now, provider_id),
+            )
     else:
+        encrypted = encrypt_key(api_key) if api_key else ""
         conn.execute(
             "INSERT INTO model_providers (id, name, type, base_url, encrypted_api_key, enabled, config_json, created_at, updated_at) "
             "VALUES (?, ?, 'openai_compatible', ?, ?, ?, ?, ?, ?)",

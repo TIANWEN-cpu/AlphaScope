@@ -28,6 +28,10 @@ class ImportRequest(BaseModel):
     providers: list[dict[str, Any]] = Field(default_factory=list)
 
 
+def _public_provider(provider: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in provider.items() if key != "api_key"}
+
+
 # ============== Endpoints ==============
 
 
@@ -51,7 +55,7 @@ async def save_provider(req: ProviderSaveRequest):
         api_key=req.api_key,
         enabled=req.enabled,
     )
-    return ApiResponse(success=True, data=result)
+    return ApiResponse(success=True, data=_public_provider(result))
 
 
 @router.delete("/providers/{provider_id}")

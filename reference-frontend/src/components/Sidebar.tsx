@@ -49,7 +49,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
       ]
     },
     {
-      title: '金策智算引擎',
+      title: '量化回测实验室',
       items: [
         { id: 'tasks', label: '量化回测与执行', icon: Activity },
         { id: 'fund_dca', label: '基金与定投研究室', icon: Coins },
