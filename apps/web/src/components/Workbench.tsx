@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Bot, Maximize2, RefreshCw, Send, Zap, Clock, LineChart as LineChartIcon, Settings2, Sparkles, ChevronDown, ImagePlus } from 'lucide-react';
-import { ResponsiveContainer, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Cell } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
@@ -11,6 +10,22 @@ type MetricTone = 'up' | 'down' | 'neutral';
 type FinanceItem = { label: string; value: string; trend: MetricTone };
 type QuantCard = { label: string; value: string; tone: MetricTone; detail: string };
 type QuantSignal = { type: string; title: string; meta: string };
+type PriceFrequency = 'intraday' | '1d' | '1w' | '1mo';
+type ChartPoint = {
+  date: string;
+  label: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  amount: number;
+  changePct: number;
+  ma5: number | null;
+  ma10: number | null;
+  ma20: number | null;
+  up: boolean;
+};
 type FactorPanelData = {
   state: LoadState;
   cards: QuantCard[];
@@ -20,30 +35,46 @@ type FactorPanelData = {
   message?: string;
 };
 
-const periodToPoints = (period: string) => {
-  if (period === '分时') return 60;
-  if (period === '周K') return 30;
-  if (period === '月K') return 20;
-  return 40;
+const PERIOD_CONFIG: Record<string, { frequency: PriceFrequency; limit: number; label: string }> = {
+  分时: { frequency: 'intraday', limit: 240, label: '分时' },
+  日K: { frequency: '1d', limit: 120, label: '日K' },
+  周K: { frequency: '1w', limit: 80, label: '周K' },
+  月K: { frequency: '1mo', limit: 60, label: '月K' },
 };
 
-const averageClose = (bars: PriceBar[], index: number, window: number) => {
+const getPeriodConfig = (period: string) => PERIOD_CONFIG[period] || PERIOD_CONFIG['日K'];
+
+const averageClose = (bars: PriceBar[], index: number, window: number): number | null => {
   const start = Math.max(0, index - window + 1);
   const slice = bars.slice(start, index + 1);
+  if (slice.length < window) return null;
   const total = slice.reduce((sum, bar) => sum + Number(bar.close || 0), 0);
-  return slice.length ? total / slice.length : Number(bars[index]?.close || 0);
+  return slice.length ? total / slice.length : null;
 };
 
-const toChartData = (bars: PriceBar[], points = 40) => {
+const formatChartLabel = (date: string, frequency: PriceFrequency) => {
+  if (!date) return '';
+  if (frequency === 'intraday') return date.slice(11, 16) || date.slice(-5);
+  if (frequency === '1mo') return date.slice(0, 7);
+  return date.slice(5);
+};
+
+const toChartData = (bars: PriceBar[], frequency: PriceFrequency): ChartPoint[] => {
   const sorted = [...bars].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  return sorted.slice(-points).map((bar, index, arr) => ({
-    date: String(bar.date || '').slice(5) || `${index + 1}`,
+  return sorted.map((bar, index, arr) => ({
+    date: String(bar.date || ''),
+    label: formatChartLabel(String(bar.date || ''), frequency) || `${index + 1}`,
+    open: Number(bar.open || bar.close || 0),
+    high: Number(bar.high || bar.close || 0),
+    low: Number(bar.low || bar.close || 0),
+    close: Number(bar.close || 0),
     ma5: averageClose(arr, index, 5),
     ma10: averageClose(arr, index, 10),
     ma20: averageClose(arr, index, 20),
     volume: Number(bar.volume || 0),
+    amount: Number(bar.amount || 0),
+    changePct: Number(bar.change_pct || 0),
     up: Number(bar.close || 0) >= Number(bar.open || bar.close || 0),
-    close: Number(bar.close || 0),
   }));
 };
 
@@ -248,6 +279,171 @@ const buildFactorPanel = (data: Record<string, unknown>): FactorPanelData => {
   };
 };
 
+const formatVolume = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return '--';
+  if (value >= 100000000) return `${(value / 100000000).toFixed(2)}亿`;
+  if (value >= 10000) return `${(value / 10000).toFixed(1)}万`;
+  return value.toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+};
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+function MarketChart({
+  data,
+  frequency,
+  activePeriod,
+  hoveredIndex,
+  onHover,
+  onLeave,
+}: {
+  data: ChartPoint[];
+  frequency: PriceFrequency;
+  activePeriod: string;
+  hoveredIndex: number | null;
+  onHover: (index: number | null) => void;
+  onLeave: () => void;
+}) {
+  const width = 960;
+  const priceHeight = 250;
+  const volumeHeight = 78;
+  const pad = { top: 18, right: 54, bottom: 22, left: 12 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = priceHeight - pad.top - pad.bottom;
+  const volumeTop = priceHeight + 18;
+  const volumePlotHeight = volumeHeight - 20;
+  const visible = data.filter(item => item.close > 0);
+
+  if (!visible.length) {
+    return null;
+  }
+
+  const priceValues = visible.flatMap(item => [item.high, item.low, item.ma5 || 0, item.ma10 || 0, item.ma20 || 0]).filter(value => Number.isFinite(value) && value > 0);
+  const minPrice = Math.min(...priceValues);
+  const maxPrice = Math.max(...priceValues);
+  const padding = Math.max((maxPrice - minPrice) * 0.08, maxPrice * 0.005, 0.01);
+  const yMin = minPrice - padding;
+  const yMax = maxPrice + padding;
+  const xStep = visible.length > 1 ? plotWidth / (visible.length - 1) : plotWidth;
+  const candleSlot = visible.length > 0 ? plotWidth / visible.length : plotWidth;
+  const candleWidth = frequency === 'intraday' ? 2 : clamp(candleSlot * 0.54, 3, 13);
+  const maxVolume = Math.max(...visible.map(item => item.volume || 0), 1);
+  const currentIndex = hoveredIndex !== null && hoveredIndex < visible.length ? hoveredIndex : visible.length - 1;
+  const current = visible[currentIndex];
+
+  const xFor = (index: number) => pad.left + index * xStep;
+  const yFor = (value: number) => pad.top + (yMax - value) / (yMax - yMin) * plotHeight;
+  const volumeY = (value: number) => volumeTop + volumePlotHeight - (value / maxVolume) * volumePlotHeight;
+  const linePath = (key: 'ma5' | 'ma10' | 'ma20' | 'close') => {
+    let started = false;
+    return visible
+      .map((item, index) => {
+        const raw = key === 'close' ? item.close : item[key];
+        if (!raw) return '';
+        const command = started ? 'L' : 'M';
+        started = true;
+        return `${command} ${xFor(index).toFixed(2)} ${yFor(raw).toFixed(2)}`;
+      })
+      .filter(Boolean)
+      .join(' ');
+  };
+  const intradayPath = linePath('close');
+  const tickIndexes = Array.from(new Set([0, Math.floor(visible.length * 0.25), Math.floor(visible.length * 0.5), Math.floor(visible.length * 0.75), visible.length - 1]))
+    .filter(index => index >= 0 && index < visible.length);
+  const priceTicks = [yMax, yMax - (yMax - yMin) / 3, yMax - (yMax - yMin) * 2 / 3, yMin];
+  const hoverX = xFor(currentIndex);
+
+  return (
+    <div className="relative h-full w-full">
+      <svg viewBox={`0 0 ${width} ${priceHeight + volumeHeight + 34}`} preserveAspectRatio="none" className="h-full w-full">
+        <rect x={0} y={0} width={width} height={priceHeight + volumeHeight + 34} fill="transparent" />
+        {priceTicks.map((tick, index) => (
+          <g key={`tick-${index}`}>
+            <line x1={pad.left} x2={width - pad.right} y1={yFor(tick)} y2={yFor(tick)} stroke="#ffffff" strokeOpacity={0.05} strokeDasharray="4 4" />
+            <text x={width - pad.right + 8} y={yFor(tick) + 4} fill="#525252" fontSize="10" fontFamily="monospace">
+              {displayNumber(tick)}
+            </text>
+          </g>
+        ))}
+
+        {frequency === 'intraday' ? (
+          <>
+            <path d={intradayPath} fill="none" stroke="#eab308" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
+            <path d={`${intradayPath} L ${xFor(visible.length - 1)} ${priceHeight - pad.bottom} L ${xFor(0)} ${priceHeight - pad.bottom} Z`} fill="#eab308" fillOpacity="0.08" />
+          </>
+        ) : (
+          <>
+            <path d={linePath('ma5')} fill="none" stroke="#eab308" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+            <path d={linePath('ma10')} fill="none" stroke="#818cf8" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+            <path d={linePath('ma20')} fill="none" stroke="#34d399" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+            {visible.map((item, index) => {
+              const x = xFor(index);
+              const openY = yFor(item.open);
+              const closeY = yFor(item.close);
+              const highY = yFor(item.high);
+              const lowY = yFor(item.low);
+              const color = item.up ? '#f43f5e' : '#10b981';
+              const bodyY = Math.min(openY, closeY);
+              const bodyHeight = Math.max(Math.abs(closeY - openY), 1.5);
+              return (
+                <g key={`${item.date}-${index}`}>
+                  <line x1={x} x2={x} y1={highY} y2={lowY} stroke={color} strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+                  <rect x={x - candleWidth / 2} y={bodyY} width={candleWidth} height={bodyHeight} fill={color} fillOpacity={item.up ? 0.9 : 0.78} rx={0.8} />
+                </g>
+              );
+            })}
+          </>
+        )}
+
+        <line x1={pad.left} x2={width - pad.right} y1={volumeTop + volumePlotHeight} y2={volumeTop + volumePlotHeight} stroke="#ffffff" strokeOpacity={0.07} />
+        {visible.map((item, index) => {
+          const x = xFor(index);
+          const y = volumeY(item.volume || 0);
+          const color = item.up ? '#f43f5e' : '#10b981';
+          return (
+            <rect key={`vol-${item.date}-${index}`} x={x - Math.max(candleWidth, 2) / 2} y={y} width={Math.max(candleWidth, 2)} height={volumeTop + volumePlotHeight - y} fill={color} fillOpacity={0.35} rx={1} />
+          );
+        })}
+
+        {tickIndexes.map(index => (
+          <text key={`x-${index}`} x={xFor(index)} y={priceHeight + volumeHeight + 24} fill="#525252" fontSize="10" fontFamily="monospace" textAnchor={index === 0 ? 'start' : index === visible.length - 1 ? 'end' : 'middle'}>
+            {visible[index].label}
+          </text>
+        ))}
+
+        <line x1={hoverX} x2={hoverX} y1={pad.top} y2={volumeTop + volumePlotHeight} stroke="#ffffff" strokeOpacity={0.16} strokeDasharray="3 3" />
+        <rect
+          x={pad.left}
+          y={pad.top}
+          width={plotWidth}
+          height={volumeTop + volumePlotHeight - pad.top}
+          fill="transparent"
+          onMouseMove={(event) => {
+            const box = event.currentTarget.getBoundingClientRect();
+            const ratio = clamp((event.clientX - box.left) / box.width, 0, 1);
+            onHover(Math.round(ratio * (visible.length - 1)));
+          }}
+          onMouseLeave={onLeave}
+        />
+      </svg>
+
+      <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-white/10 bg-black/70 px-3 py-2 text-[11px] text-neutral-300 shadow-xl backdrop-blur">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="font-mono text-neutral-500">{current.date}</span>
+          <span className={cn("font-mono", current.up ? "text-rose-400" : "text-emerald-400")}>{current.changePct >= 0 ? '+' : ''}{current.changePct.toFixed(2)}%</span>
+          <span className="text-neutral-600">{activePeriod}</span>
+        </div>
+        <div className="grid grid-cols-4 gap-x-3 gap-y-1 font-mono">
+          <span>开 {displayNumber(current.open)}</span>
+          <span>高 {displayNumber(current.high)}</span>
+          <span>低 {displayNumber(current.low)}</span>
+          <span>收 {displayNumber(current.close)}</span>
+        </div>
+        <div className="mt-1 font-mono text-neutral-500">量 {formatVolume(current.volume)}</div>
+      </div>
+    </div>
+  );
+}
+
 const mapBackendNews = (items: NewsRecord[]) =>
   items.slice(0, 6).map((item) => ({
     id: item.id,
@@ -284,9 +480,10 @@ const ANALYSIS_MODES: Array<{ id: AnalysisMode; label: string; description: stri
 export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: WorkbenchProps) {
   const [activePeriod, setActivePeriod] = useState('日K');
   const [activePanelTab, setActivePanelTab] = useState('news');
-  const [chartData, setChartData] = useState<ReturnType<typeof toChartData>>([]);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [priceBars, setPriceBars] = useState<PriceBar[]>([]);
   const [latestPrice, setLatestPrice] = useState<PriceBar | null>(null);
+  const [hoveredChartIndex, setHoveredChartIndex] = useState<number | null>(null);
   const [financeItems, setFinanceItems] = useState(EMPTY_FINANCE);
   const [fundItems, setFundItems] = useState(EMPTY_FUNDS);
   const [newsItems, setNewsItems] = useState<ReturnType<typeof mapBackendNews>>([]);
@@ -331,6 +528,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     setChartData([]);
     setPriceBars([]);
     setLatestPrice(null);
+    setHoveredChartIndex(null);
     setNewsItems([]);
     setFinanceItems(EMPTY_FINANCE);
     setFundItems(EMPTY_FUNDS);
@@ -338,8 +536,9 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
     async function loadWorkbenchData() {
       setDataStatus(`正在同步 ${stockName} (${symbol}) 后端行情、财务、新闻与因子...`);
+      const periodConfig = getPeriodConfig(activePeriodRef.current);
       const [pricesResult, latestResult, fundamentalsResult, newsResult, fundFlowResult, factorsResult] = await Promise.allSettled([
-        api.prices(symbol, 90, '1d', { signal: controller.signal }),
+        api.prices(symbol, periodConfig.limit, periodConfig.frequency, { signal: controller.signal }),
         api.latestPrice(symbol, { signal: controller.signal }),
         api.fundamentals(symbol, { signal: controller.signal }),
         api.news(symbol, 8, { signal: controller.signal }),
@@ -348,17 +547,18 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
       ]);
 
       if (!isCurrent()) return;
+      const shouldApplyPriceResult = activePeriodRef.current === periodConfig.label;
 
-      if (pricesResult.status === 'fulfilled' && pricesResult.value.success && pricesResult.value.data?.bars?.length) {
+      if (shouldApplyPriceResult && pricesResult.status === 'fulfilled' && pricesResult.value.success && pricesResult.value.data?.bars?.length) {
         const bars = pricesResult.value.data.bars;
         setPriceBars(bars);
-        setChartData(toChartData(bars, periodToPoints(activePeriodRef.current)));
+        setChartData(toChartData(bars, periodConfig.frequency));
         setMarketState('ready');
-      } else if (pricesResult.status === 'fulfilled' && pricesResult.value.success) {
+      } else if (shouldApplyPriceResult && pricesResult.status === 'fulfilled' && pricesResult.value.success) {
         setPriceBars([]);
         setChartData([]);
         setMarketState('empty');
-      } else {
+      } else if (shouldApplyPriceResult) {
         setPriceBars([]);
         setChartData([]);
         setMarketState('error');
@@ -434,34 +634,71 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     };
   }, [symbol, stockName]);
 
+  useEffect(() => {
+    const requestId = priceRefreshRequestRef.current + 1;
+    priceRefreshRequestRef.current = requestId;
+    const controller = new AbortController();
+    const periodConfig = getPeriodConfig(activePeriod);
+    const refreshSymbol = symbol;
+    const isCurrent = () => priceRefreshRequestRef.current === requestId && activeSymbolRef.current === refreshSymbol && !controller.signal.aborted;
+
+    setMarketState('loading');
+    setDataStatus(`正在切换到 ${periodConfig.label} 数据...`);
+    setHoveredChartIndex(null);
+
+    api.prices(symbol, periodConfig.limit, periodConfig.frequency, { signal: controller.signal }).then((result) => {
+      if (!isCurrent()) return;
+      if (result.success && result.data?.bars?.length) {
+        setPriceBars(result.data.bars);
+        setChartData(toChartData(result.data.bars, periodConfig.frequency));
+        setMarketState('ready');
+        setDataStatus(`已同步 ${periodConfig.label} 行情数据`);
+      } else {
+        setPriceBars([]);
+        setChartData([]);
+        setMarketState(result.success ? 'empty' : 'error');
+        setDataStatus(result.success ? `${periodConfig.label} 暂无可用数据` : result.error || `${periodConfig.label} 行情接口暂不可用`);
+      }
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [activePeriod, symbol]);
+
   const handlePeriodChange = (period: string) => {
     activePeriodRef.current = period;
     setActivePeriod(period);
-    const points = periodToPoints(period);
-    setChartData(priceBars.length ? toChartData(priceBars, points) : []);
+    setHoveredChartIndex(null);
   };
 
   const refreshPrices = async () => {
     const requestId = priceRefreshRequestRef.current + 1;
     priceRefreshRequestRef.current = requestId;
     const refreshSymbol = symbol;
+    const periodConfig = getPeriodConfig(activePeriodRef.current);
     const isCurrent = () => priceRefreshRequestRef.current === requestId && activeSymbolRef.current === refreshSymbol;
     setIsRefreshingPrices(true);
     setMarketState('loading');
-    setDataStatus(`正在刷新 ${stockName} 行情...`);
-    const fetched = await api.priceFetch(symbol, 120);
+    setDataStatus(`正在刷新 ${stockName} ${periodConfig.label} 行情...`);
+    const fetched = periodConfig.frequency === 'intraday'
+      ? { success: true, data: { fetched: 0 }, error: null }
+      : await api.priceFetch(symbol, 120);
     if (!isCurrent()) return;
-    if (!fetched.success) {
+    if (!fetched.success && periodConfig.frequency !== 'intraday') {
       setDataStatus(fetched.error || '行情刷新失败');
       setMarketState(priceBars.length ? 'ready' : 'error');
       setIsRefreshingPrices(false);
       return;
     }
-    const [pricesResult, latestResult] = await Promise.all([api.prices(symbol, 120), api.latestPrice(symbol)]);
+    const [pricesResult, latestResult] = await Promise.all([
+      api.prices(symbol, periodConfig.limit, periodConfig.frequency),
+      api.latestPrice(symbol),
+    ]);
     if (!isCurrent()) return;
     if (pricesResult.success && pricesResult.data?.bars?.length) {
       setPriceBars(pricesResult.data.bars);
-      setChartData(toChartData(pricesResult.data.bars, periodToPoints(activePeriodRef.current)));
+      setChartData(toChartData(pricesResult.data.bars, periodConfig.frequency));
       setMarketState('ready');
     } else {
       setPriceBars([]);
@@ -473,7 +710,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     } else {
       setLatestPrice(null);
     }
-    setDataStatus(`行情刷新完成：${fetched.data?.fetched || 0} 条`);
+    setDataStatus(periodConfig.frequency === 'intraday' ? '分时行情刷新完成' : `行情刷新完成：${fetched.data?.fetched || 0} 条`);
     setIsRefreshingPrices(false);
   };
 
@@ -626,13 +863,14 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
   const currentMode = ANALYSIS_MODES.find(item => item.id === selectedMode) || ANALYSIS_MODES[1];
   const latestChartPoint = chartData[chartData.length - 1];
-  const chartValues = chartData.flatMap(point => [Number(point.ma5 || 0), Number(point.ma10 || 0), Number(point.ma20 || 0)]).filter(Number.isFinite);
+  const chartValues = chartData.flatMap(point => [Number(point.high || 0), Number(point.low || 0), Number(point.ma5 || 0), Number(point.ma10 || 0), Number(point.ma20 || 0)]).filter(value => Number.isFinite(value) && value > 0);
   const chartHigh = chartValues.length ? Math.max(...chartValues) : 0;
   const chartLow = chartValues.length ? Math.min(...chartValues) : 0;
   const hasPriceData = Boolean(latestPrice || latestChartPoint);
   const currentClose = latestPrice?.close || latestChartPoint?.close || latestChartPoint?.ma20 || 0;
-  const currentChange = latestPrice?.change_pct ?? 0;
+  const currentChange = latestChartPoint?.changePct ?? latestPrice?.change_pct ?? 0;
   const isPriceUp = Number(currentChange) >= 0;
+  const activeFrequency = getPeriodConfig(activePeriod).frequency;
 
   return (
     <motion.div 
@@ -712,10 +950,16 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
             </div>
 
             <div className="px-6 py-3 flex items-center gap-8 text-[11px] font-mono whitespace-nowrap bg-black/20 border-b border-white/5">
-               <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>MA5: {latestChartPoint ? displayNumber(Number(latestChartPoint.ma5 || 0)) : '--'}</span>
-               <span className="text-indigo-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-indigo-400/90"></div>MA10: {latestChartPoint ? displayNumber(Number(latestChartPoint.ma10 || 0)) : '--'}</span>
-               <span className="text-emerald-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-emerald-400/90"></div>MA20: {latestChartPoint ? displayNumber(Number(latestChartPoint.ma20 || 0)) : '--'}</span>
-               <span className="text-neutral-500 ml-auto">{priceBars.length ? `VOL: ${Number(latestChartPoint?.volume || 0).toLocaleString('zh-CN')}` : '等待后端行情'}</span>
+               {activeFrequency === 'intraday' ? (
+                 <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>分时价: {latestChartPoint ? displayNumber(Number(latestChartPoint.close || 0)) : '--'}</span>
+               ) : (
+                 <>
+                   <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>MA5: {latestChartPoint?.ma5 ? displayNumber(Number(latestChartPoint.ma5)) : '--'}</span>
+                   <span className="text-indigo-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-indigo-400/90"></div>MA10: {latestChartPoint?.ma10 ? displayNumber(Number(latestChartPoint.ma10)) : '--'}</span>
+                   <span className="text-emerald-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-emerald-400/90"></div>MA20: {latestChartPoint?.ma20 ? displayNumber(Number(latestChartPoint.ma20)) : '--'}</span>
+                 </>
+               )}
+               <span className="text-neutral-500 ml-auto">{priceBars.length ? `VOL: ${formatVolume(Number(latestChartPoint?.volume || 0))}` : '等待后端行情'}</span>
             </div>
 
              {/* Chart Area */}
@@ -731,38 +975,16 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                        : '暂无后端行情数据，请点击刷新或稍后重试。'}
                  </div>
                )}
-             
-              <ResponsiveContainer width="100%" height="80%">
-                <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                 <defs>
-                   <linearGradient id="colorMa5" x1="0" y1="0" x2="0" y2="1">
-                     <stop offset="5%" stopColor="#eab308" stopOpacity={0.4}/>
-                     <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
-                   </linearGradient>
-                 </defs>
-                 <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
-                 <YAxis domain={['auto', 'auto']} hide />
-                 <Area type="monotone" dataKey="ma5" stroke="#eab308" strokeWidth={2} fillOpacity={1} fill="url(#colorMa5)" />
-                 <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} />
-                 <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} />
-                 {/* Compact volume-like bars under the moving averages */}
-                 <Bar dataKey="ma5" barSize={4}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
-                    ))}
-                 </Bar>
-               </ComposedChart>
-             </ResponsiveContainer>
-             
-             <ResponsiveContainer width="100%" height="20%">
-               <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                 <Bar dataKey="volume" barSize={4} radius={[2, 2, 0, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-vol-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} fillOpacity={0.4} />
-                    ))}
-                 </Bar>
-               </ComposedChart>
-             </ResponsiveContainer>
+               {chartData.length > 0 && (
+                 <MarketChart
+                   data={chartData}
+                   frequency={activeFrequency}
+                   activePeriod={activePeriod}
+                   hoveredIndex={hoveredChartIndex}
+                   onHover={setHoveredChartIndex}
+                   onLeave={() => setHoveredChartIndex(null)}
+                 />
+               )}
           </div>
         </div>
 

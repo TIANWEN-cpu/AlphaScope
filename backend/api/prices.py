@@ -50,27 +50,59 @@ async def get_prices(
     limit: int = 250,
 ):
     """查询 K 线数据"""
+    from backend.price_periods import (
+        aggregate_price_bars,
+        default_daily_window_days,
+        fetch_intraday_prices,
+        normalize_frequency,
+    )
     from backend.price_store import get_prices as _get
 
+    normalized_frequency = normalize_frequency(frequency)
+    if normalized_frequency == "intraday":
+        bars = fetch_intraday_prices(symbol, limit=limit)
+        return ApiResponse(
+            success=True,
+            data={
+                "symbol": symbol,
+                "frequency": normalized_frequency,
+                "bars": bars,
+                "total": len(bars),
+            },
+        )
+
+    store_frequency = (
+        "1d" if normalized_frequency in {"1w", "1mo"} else normalized_frequency
+    )
+    fetch_days = default_daily_window_days(
+        max(1, min(limit, 500)), normalized_frequency
+    )
     bars = _get(
         symbol=symbol,
-        frequency=frequency,
+        frequency=store_frequency,
         start_date=start,
         end_date=end,
-        limit=limit,
+        limit=fetch_days if normalized_frequency in {"1w", "1mo"} else limit,
     )
     if not bars and not start and not end:
-        await fetch_prices(symbol, days=max(1, min(limit, 365)))
+        await fetch_prices(symbol, days=max(1, min(fetch_days, 365)))
         bars = _get(
             symbol=symbol,
-            frequency=frequency,
+            frequency=store_frequency,
             start_date=start,
             end_date=end,
-            limit=limit,
+            limit=fetch_days if normalized_frequency in {"1w", "1mo"} else limit,
         )
+    if normalized_frequency in {"1w", "1mo"}:
+        bars = aggregate_price_bars(bars, normalized_frequency)[-limit:]
     return ApiResponse(
         success=True,
-        data={"symbol": symbol, "bars": bars, "total": len(bars)},
+        data={
+            "symbol": symbol,
+            "frequency": normalized_frequency,
+            "bars": bars,
+            "total": len(bars),
+        },
     )
 
 
@@ -106,6 +138,8 @@ async def fetch_prices(symbol: str, days: int = 30):
             limit=days,
             start_date=start_date,
             end_date=end_date,
+            period="daily",
+            frequency="1d",
         )
         if not bars:
             return ApiResponse(success=False, error="未从 Provider 获取到数据")

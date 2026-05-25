@@ -224,7 +224,10 @@ class AkShareProvider(BaseProvider):
         symbol = query.get("symbol", "")
         if not symbol:
             return []
-        period = query.get("period", "daily")
+        frequency = str(query.get("frequency") or "").lower()
+        period = query.get("period") or {"1w": "weekly", "1mo": "monthly"}.get(
+            frequency, "daily"
+        )
         start_date = query.get("start_date", "")
         end_date = query.get("end_date", "")
         if not end_date:
@@ -263,6 +266,9 @@ class AkShareProvider(BaseProvider):
                         "turnover": _float_value(row.get("换手率", 0)),
                         "amplitude": _float_value(row.get("振幅", 0)),
                         "change_pct": _float_value(row.get("涨跌幅", 0)),
+                        "frequency": {"weekly": "1w", "monthly": "1mo"}.get(
+                            str(period), "1d"
+                        ),
                         "source": "akshare",
                     }
                 )
