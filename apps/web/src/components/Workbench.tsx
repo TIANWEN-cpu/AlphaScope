@@ -80,6 +80,7 @@ interface WorkbenchProps {
 }
 
 type AnalysisMode = 'free' | 'standard' | 'deep' | 'expert' | 'vision';
+type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 
 const ANALYSIS_MODES: Array<{ id: AnalysisMode; label: string; description: string }> = [
   { id: 'free', label: '自由问答', description: '轻量聊天，不强制股票分析链路' },
@@ -100,6 +101,9 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const [newsItems, setNewsItems] = useState<ReturnType<typeof mapBackendNews>>([]);
   const [factorSummary, setFactorSummary] = useState('多因子Alpha模型等待后端计算...');
   const [dataStatus, setDataStatus] = useState('后端数据待同步');
+  const [marketState, setMarketState] = useState<LoadState>('idle');
+  const [newsState, setNewsState] = useState<LoadState>('idle');
+  const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [selectedMode, setSelectedMode] = useState<AnalysisMode>('standard');
   const [showModeMenu, setShowModeMenu] = useState(false);
@@ -108,6 +112,10 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const [isSending, setIsSending] = useState(false);
   const [chatError, setChatError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const workbenchRequestRef = useRef(0);
+  const priceRefreshRequestRef = useRef(0);
+  const activeSymbolRef = useRef(symbol);
+  const activePeriodRef = useRef(activePeriod);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -120,7 +128,15 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const [input, setInput] = useState('');
 
   useEffect(() => {
-    let cancelled = false;
+    const requestId = workbenchRequestRef.current + 1;
+    workbenchRequestRef.current = requestId;
+    priceRefreshRequestRef.current += 1;
+    activeSymbolRef.current = symbol;
+    const controller = new AbortController();
+    const isCurrent = () => workbenchRequestRef.current === requestId && !controller.signal.aborted;
+    setMarketState('loading');
+    setNewsState('loading');
+    setIsRefreshingPrices(false);
     setChartData([]);
     setPriceBars([]);
     setLatestPrice(null);
@@ -131,24 +147,35 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     async function loadWorkbenchData() {
       setDataStatus(`正在同步 ${stockName} (${symbol}) 后端行情、财务、新闻与因子...`);
       const [pricesResult, latestResult, fundamentalsResult, newsResult, fundFlowResult, factorsResult] = await Promise.allSettled([
-        api.prices(symbol, 90),
-        api.latestPrice(symbol),
-        api.fundamentals(symbol),
-        api.news(symbol, 8),
-        api.fundFlow(symbol, 30),
-        api.factors(symbol, stockName, 60),
+        api.prices(symbol, 90, '1d', { signal: controller.signal }),
+        api.latestPrice(symbol, { signal: controller.signal }),
+        api.fundamentals(symbol, { signal: controller.signal }),
+        api.news(symbol, 8, { signal: controller.signal }),
+        api.fundFlow(symbol, 30, { signal: controller.signal }),
+        api.factors(symbol, stockName, 60, { signal: controller.signal }),
       ]);
 
-      if (cancelled) return;
+      if (!isCurrent()) return;
 
       if (pricesResult.status === 'fulfilled' && pricesResult.value.success && pricesResult.value.data?.bars?.length) {
         const bars = pricesResult.value.data.bars;
         setPriceBars(bars);
-        setChartData(toChartData(bars, periodToPoints(activePeriod)));
+        setChartData(toChartData(bars, periodToPoints(activePeriodRef.current)));
+        setMarketState('ready');
+      } else if (pricesResult.status === 'fulfilled' && pricesResult.value.success) {
+        setPriceBars([]);
+        setChartData([]);
+        setMarketState('empty');
+      } else {
+        setPriceBars([]);
+        setChartData([]);
+        setMarketState('error');
       }
 
       if (latestResult.status === 'fulfilled' && latestResult.value.success && latestResult.value.data) {
         setLatestPrice(latestResult.value.data);
+      } else if (pricesResult.status !== 'fulfilled' || !pricesResult.value.success || !pricesResult.value.data?.bars?.length) {
+        setLatestPrice(null);
       }
 
       if (fundamentalsResult.status === 'fulfilled' && fundamentalsResult.value.success && fundamentalsResult.value.data) {
@@ -166,8 +193,13 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
       if (newsResult.status === 'fulfilled' && newsResult.value.success && newsResult.value.data?.news?.length) {
         setNewsItems(mapBackendNews(newsResult.value.data.news));
+        setNewsState('ready');
+      } else if (newsResult.status === 'fulfilled' && newsResult.value.success) {
+        setNewsItems([]);
+        setNewsState('empty');
       } else {
         setNewsItems([]);
+        setNewsState('error');
       }
 
       if (fundFlowResult.status === 'fulfilled' && fundFlowResult.value.success && fundFlowResult.value.data) {
@@ -211,30 +243,43 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     setChatError('');
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [symbol, stockName]);
 
   const handlePeriodChange = (period: string) => {
+    activePeriodRef.current = period;
     setActivePeriod(period);
     const points = periodToPoints(period);
     setChartData(priceBars.length ? toChartData(priceBars, points) : []);
   };
 
   const refreshPrices = async () => {
+    const requestId = priceRefreshRequestRef.current + 1;
+    priceRefreshRequestRef.current = requestId;
+    const refreshSymbol = symbol;
+    const isCurrent = () => priceRefreshRequestRef.current === requestId && activeSymbolRef.current === refreshSymbol;
+    setIsRefreshingPrices(true);
+    setMarketState('loading');
     setDataStatus(`正在刷新 ${stockName} 行情...`);
     const fetched = await api.priceFetch(symbol, 120);
+    if (!isCurrent()) return;
     if (!fetched.success) {
       setDataStatus(fetched.error || '行情刷新失败');
+      setMarketState(priceBars.length ? 'ready' : 'error');
+      setIsRefreshingPrices(false);
       return;
     }
     const [pricesResult, latestResult] = await Promise.all([api.prices(symbol, 120), api.latestPrice(symbol)]);
+    if (!isCurrent()) return;
     if (pricesResult.success && pricesResult.data?.bars?.length) {
       setPriceBars(pricesResult.data.bars);
-      setChartData(toChartData(pricesResult.data.bars, periodToPoints(activePeriod)));
+      setChartData(toChartData(pricesResult.data.bars, periodToPoints(activePeriodRef.current)));
+      setMarketState('ready');
     } else {
       setPriceBars([]);
       setChartData([]);
+      setMarketState(pricesResult.success ? 'empty' : 'error');
     }
     if (latestResult.success && latestResult.data) {
       setLatestPrice(latestResult.data);
@@ -242,6 +287,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
       setLatestPrice(null);
     }
     setDataStatus(`行情刷新完成：${fetched.data?.fetched || 0} 条`);
+    setIsRefreshingPrices(false);
   };
 
   const toggleFullscreen = async () => {
@@ -469,10 +515,11 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                 ))}
                 <button
                   onClick={refreshPrices}
+                  disabled={isRefreshingPrices}
                   title="刷新后端行情"
-                  className="px-3 py-1.5 text-xs rounded-md font-medium transition-all cursor-pointer text-neutral-500 hover:text-indigo-300 border border-transparent"
+                  className="px-3 py-1.5 text-xs rounded-md font-medium transition-all cursor-pointer text-neutral-500 hover:text-indigo-300 border border-transparent disabled:opacity-50"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className={cn("w-3.5 h-3.5", isRefreshingPrices && "animate-spin text-indigo-300")} />
                 </button>
               </div>
             </div>
@@ -488,9 +535,13 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
              <div className="flex-1 p-5 bg-black/40 relative">
                 <div className="absolute right-6 top-6 text-[10px] font-mono text-neutral-600">{displayNumber(chartHigh)}</div>
                 <div className="absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{displayNumber(chartLow)}</div>
-               {chartData.length === 0 && (
+               {chartData.length === 0 && marketState !== 'ready' && (
                  <div className="absolute inset-0 z-10 flex items-center justify-center text-center text-xs text-neutral-500 bg-black/20">
-                   暂无后端行情数据，请点击刷新或稍后重试。
+                   {marketState === 'loading'
+                     ? `正在同步 ${stockName} (${symbol}) 行情...`
+                     : marketState === 'error'
+                       ? '行情接口暂不可用，请点击刷新或稍后重试。'
+                       : '暂无后端行情数据，请点击刷新或稍后重试。'}
                  </div>
                )}
              
@@ -564,7 +615,11 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                   >
                     {newsItems.length === 0 ? (
                       <div className="h-full min-h-[220px] flex items-center justify-center text-center text-xs text-neutral-500">
-                        暂无后端新闻数据，请点击刷新或稍后重试。
+                        {newsState === 'loading'
+                          ? `正在同步 ${stockName} (${symbol}) 新闻...`
+                          : newsState === 'error'
+                            ? '新闻接口暂不可用，请点击刷新或稍后重试。'
+                            : '暂无后端新闻数据，请点击刷新或稍后重试。'}
                       </div>
                     ) : newsItems.map((news, i) => (
                       <div
@@ -682,8 +737,8 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                 )}
               </AnimatePresence>
             </div>
-            <button onClick={refreshPrices} title="刷新行情与面板数据" className="p-1.5 hover:bg-white/5 rounded-md text-neutral-500 transition-colors">
-              <RefreshCw className="w-3.5 h-3.5" />
+            <button onClick={refreshPrices} title="刷新行情与面板数据" disabled={isRefreshingPrices} className="p-1.5 hover:bg-white/5 rounded-md text-neutral-500 transition-colors disabled:opacity-50">
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshingPrices && "animate-spin text-indigo-300")} />
             </button>
             <button onClick={toggleFullscreen} title="切换全屏" className="p-1.5 hover:bg-white/5 rounded-md text-neutral-500 transition-colors">
               <Maximize2 className="w-3.5 h-3.5" />
