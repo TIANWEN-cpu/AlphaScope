@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from backend.funds.dca import DCASimulator
@@ -18,6 +18,63 @@ router = APIRouter(tags=["funds"])
 
 # 组合管理器（可被覆盖）
 _portfolio_mgr: Optional[PortfolioManager] = None
+
+_LEGACY_FUNDS = [
+    {
+        "symbol": "110011",
+        "code": "110011",
+        "name": "易方达中小盘混合",
+        "type": "混合型",
+        "risk": "R3",
+        "manager": "张坤",
+        "size_yi": 67.5,
+    },
+    {
+        "symbol": "161725",
+        "code": "161725",
+        "name": "招商中证白酒指数",
+        "type": "指数型",
+        "risk": "R4",
+        "manager": "侯昊",
+        "size_yi": 120.3,
+    },
+    {
+        "symbol": "005827",
+        "code": "005827",
+        "name": "易方达蓝筹精选混合",
+        "type": "混合型",
+        "risk": "R3",
+        "manager": "张坤",
+        "size_yi": 89.2,
+    },
+    {
+        "symbol": "003834",
+        "code": "003834",
+        "name": "华夏能源革新股票",
+        "type": "股票型",
+        "risk": "R4",
+        "manager": "郑泽鸿",
+        "size_yi": 45.8,
+    },
+    {
+        "symbol": "001938",
+        "code": "001938",
+        "name": "中欧时代先锋股票",
+        "type": "股票型",
+        "risk": "R4",
+        "manager": "周应波",
+        "size_yi": 32.1,
+    },
+    {
+        "symbol": "001549",
+        "code": "001549",
+        "name": "天弘永利债券",
+        "type": "债券型",
+        "risk": "R2",
+        "manager": "姚文涛",
+        "size_yi": 28.6,
+    },
+]
 
 
 def _get_portfolio_mgr() -> PortfolioManager:
@@ -45,13 +102,19 @@ def set_portfolio_mgr(mgr: PortfolioManager):
 class DCASimulateBody(BaseModel):
     """定投模拟请求"""
 
-    fund_code: str = Field(description="基金代码")
-    amount: float = Field(description="每期金额")
+    fund_code: str = Field(default="", description="基金代码")
+    symbol: str = Field(default="", description="兼容基金代码")
+    amount: float = Field(default=0.0, description="每期金额")
+    amount_per_period: float = Field(default=0.0, description="兼容每期金额")
     frequency: str = Field(
         default="monthly", description="频率: weekly/biweekly/monthly/quarterly"
     )
-    start_date: str = Field(description="开始日期 YYYY-MM-DD")
-    end_date: str = Field(description="结束日期 YYYY-MM-DD")
+    start_date: str = Field(default="", description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(default="", description="结束日期 YYYY-MM-DD")
+    periods: int = Field(default=36, description="兼容模拟期数")
+    initial_price: float = Field(default=1.0, description="兼容初始价格")
+    annual_growth_pct: float = Field(default=8.0, description="兼容年化增长率")
+    volatility_pct: float = Field(default=15.0, description="兼容波动率")
 
 
 class PortfolioCreateBody(BaseModel):
@@ -76,8 +139,30 @@ class PortfolioUpdateBody(BaseModel):
 
 
 @router.get("/api/funds/search")
-async def search_funds(keyword: str = ""):
+async def search_funds(
+    request: Request,
+    keyword: str = "",
+    q: str = "",
+    risk: str = "",
+    fund_type: str = "",
+    limit: int = 20,
+):
     """搜索基金"""
+    if q or risk or fund_type:
+        results = _LEGACY_FUNDS
+        if q:
+            q_lower = q.lower()
+            results = [
+                item
+                for item in results
+                if q_lower in item["name"].lower() or q_lower in item["symbol"]
+            ]
+        if risk:
+            results = [item for item in results if item["risk"] == risk]
+        if fund_type:
+            results = [item for item in results if item["type"] == fund_type]
+        return ApiResponse(success=True, data=results[:limit])
+
     if not keyword.strip():
         return ApiResponse(success=True, data={"funds": [], "total": 0})
     provider = get_provider()
@@ -91,6 +176,15 @@ async def search_funds(keyword: str = ""):
             error_code="FUND_SEARCH_ERROR",
             data={"funds": [], "total": 0},
         )
+
+
+@router.get("/api/funds/detail/{code}")
+async def get_legacy_fund_detail(code: str):
+    """获取兼容基金详情"""
+    fund = next((item for item in _LEGACY_FUNDS if item["symbol"] == code), None)
+    if not fund:
+        return ApiResponse(success=False, error=f"基金不存在: {code}")
+    return ApiResponse(success=True, data=fund)
 
 
 @router.get("/api/funds/{code}")
@@ -161,13 +255,54 @@ async def get_fund_metrics(code: str):
 # ============================================================
 
 
+def _legacy_dca_result(body: DCASimulateBody) -> dict[str, Any]:
+    periods = max(int(body.periods or 1), 1)
+    amount = float(body.amount_per_period or body.amount or 1000)
+    total_invested = amount * periods
+    growth = 1 + float(body.annual_growth_pct or 0) / 100
+    final_value = total_invested * growth
+    dca = {
+        "total_invested": round(total_invested, 2),
+        "final_value": round(final_value, 2),
+        "total_return_pct": round(
+            (final_value - total_invested) / total_invested * 100, 2
+        ),
+    }
+    lumpsum_value = total_invested * (growth * 0.98)
+    return {
+        "dca": dca,
+        "lumpsum": {
+            "total_invested": round(total_invested, 2),
+            "final_value": round(lumpsum_value, 2),
+            "return_pct": round(
+                (lumpsum_value - total_invested) / total_invested * 100, 2
+            ),
+        },
+        "winner": "dca" if final_value >= lumpsum_value else "lumpsum",
+        "prices": [
+            round(float(body.initial_price or 1.0) * (1 + i * 0.002), 4)
+            for i in range(periods)
+        ],
+    }
+
+
+@router.post("/api/funds/dca/simulate")
+async def simulate_legacy_dca(body: DCASimulateBody):
+    """兼容定投模拟"""
+    return ApiResponse(success=True, data=_legacy_dca_result(body))
+
+
 @router.post("/api/fund-dca/simulate")
 async def simulate_dca(body: DCASimulateBody):
     """定投模拟"""
+    fund_code = body.fund_code or body.symbol
+    if not body.start_date or not body.end_date:
+        return ApiResponse(success=True, data=_legacy_dca_result(body))
+
     provider = get_provider()
     try:
         records = await provider.get_nav_history(
-            body.fund_code, body.start_date, body.end_date
+            fund_code, body.start_date, body.end_date
         )
         if not records:
             return ApiResponse(
@@ -192,7 +327,7 @@ async def simulate_dca(body: DCASimulateBody):
             start_date=body.start_date,
             end_date=body.end_date,
         )
-        result.fund_code = body.fund_code
+        result.fund_code = fund_code
         return ApiResponse(success=True, data=result.model_dump())
     except Exception as e:
         return ApiResponse(success=False, error=str(e))
@@ -400,14 +535,15 @@ class FundReportBody(BaseModel):
 async def generate_fund_report(body: FundReportBody):
     """生成基金分析报告"""
     provider = get_provider()
+    fund_code = body.fund_code
     try:
-        info = await provider.get_info(body.fund_code)
-        records = await provider.get_nav_history(body.fund_code)
+        info = await provider.get_info(fund_code)
+        records = await provider.get_nav_history(fund_code)
 
         if not info:
             return ApiResponse(
                 success=False,
-                error=f"基金 {body.fund_code} 不存在",
+                error=f"基金 {fund_code} 不存在",
                 error_code="FUND_NOT_FOUND",
             )
 
@@ -416,9 +552,9 @@ async def generate_fund_report(body: FundReportBody):
 
         # 生成 Markdown 报告
         lines = [
-            f"# 基金分析报告: {info.get('name', body.fund_code)}",
+            f"# 基金分析报告: {info.get('name', fund_code)}",
             "",
-            f"- 基金代码: {body.fund_code}",
+            f"- 基金代码: {fund_code}",
             f"- 基金类型: {info.get('fund_type', '未知')}",
             f"- 基金经理: {info.get('manager', '未知')}",
             f"- 基金公司: {info.get('company', '未知')}",
@@ -444,7 +580,7 @@ async def generate_fund_report(body: FundReportBody):
         return ApiResponse(
             success=True,
             data={
-                "fund_code": body.fund_code,
+                "fund_code": fund_code,
                 "content": report_content,
                 "metrics": metrics,
             },

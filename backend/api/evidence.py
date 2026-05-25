@@ -113,3 +113,119 @@ async def delete_evidence(evidence_id: str):
     if not deleted:
         return ApiResponse(success=False, error="证据不存在")
     return ApiResponse(success=True, data={"deleted": evidence_id})
+
+
+# ============== Evidence Chain Graph (v1.1.4) ==============
+
+
+class ChainGraphRequest(BaseModel):
+    evidence: list[dict] = Field(default_factory=list, description="证据列表")
+    symbol: str | None = Field(default=None, description="股票代码过滤")
+
+
+@router.post("/chain/graph")
+async def build_chain_graph(req: ChainGraphRequest):
+    """构建证据链可视化图谱数据 (v1.1.4)
+
+    返回 nodes 和 edges 用于前端图谱渲染。
+    """
+    nodes = []
+    edges = []
+    pillar_colors = {
+        "fundamental": "#6366f1",
+        "quant": "#10b981",
+        "sentiment": "#f59e0b",
+        "liquidity": "#06b6d4",
+        "default": "#737373",
+    }
+
+    # Build from provided evidence
+    for i, ev in enumerate(req.evidence):
+        ev_type = ev.get("evidence_type", ev.get("type", "other"))
+        pillar = _classify_pillar(ev_type)
+        nodes.append(
+            {
+                "id": ev.get("id", f"ev_{i}"),
+                "label": ev.get("title", f"证据 {i + 1}"),
+                "type": ev_type,
+                "pillar": pillar,
+                "color": pillar_colors.get(pillar, pillar_colors["default"]),
+                "confidence": ev.get("confidence", 0.5),
+                "source": ev.get("source", ""),
+            }
+        )
+
+    # Build edges from shared symbols or claims
+    for i in range(len(nodes)):
+        for j in range(i + 1, len(nodes)):
+            ev_i = req.evidence[i] if i < len(req.evidence) else {}
+            ev_j = req.evidence[j] if j < len(req.evidence) else {}
+            shared_symbols = set(ev_i.get("symbols", [])) & set(ev_j.get("symbols", []))
+            if shared_symbols or _related_claims(
+                ev_i.get("claim", ""), ev_j.get("claim", "")
+            ):
+                edges.append(
+                    {
+                        "source": nodes[i]["id"],
+                        "target": nodes[j]["id"],
+                        "weight": len(shared_symbols) * 0.3 + 0.2,
+                    }
+                )
+
+    # Also try loading from evidence store if no evidence provided
+    if not nodes and req.symbol:
+        try:
+            from backend.evidence_store import list_evidence as _list
+
+            items = _list(symbol=req.symbol, limit=20)
+            for i, ev in enumerate(items):
+                ev_type = ev.get("evidence_type", "other")
+                pillar = _classify_pillar(ev_type)
+                nodes.append(
+                    {
+                        "id": ev.get("id", f"ev_{i}"),
+                        "label": ev.get("title", f"证据 {i + 1}"),
+                        "type": ev_type,
+                        "pillar": pillar,
+                        "color": pillar_colors.get(pillar, pillar_colors["default"]),
+                        "confidence": ev.get("confidence", 0.5),
+                        "source": ev.get("source", ""),
+                    }
+                )
+        except Exception:
+            pass
+
+    return ApiResponse(
+        success=True,
+        data={
+            "nodes": nodes,
+            "edges": edges,
+            "pillars": list(pillar_colors.keys()),
+        },
+    )
+
+
+def _classify_pillar(evidence_type: str) -> str:
+    """Classify evidence type into a pillar category."""
+    mapping = {
+        "fundamental": "fundamental",
+        "report": "fundamental",
+        "announcement": "fundamental",
+        "price": "quant",
+        "technical": "quant",
+        "fund_flow": "liquidity",
+        "news": "sentiment",
+        "sentiment": "sentiment",
+        "other": "default",
+    }
+    return mapping.get(evidence_type, "default")
+
+
+def _related_claims(claim_a: str, claim_b: str) -> bool:
+    """Simple check if two claims are related (share keywords)."""
+    if not claim_a or not claim_b:
+        return False
+    words_a = set(claim_a.split())
+    words_b = set(claim_b.split())
+    common = words_a & words_b
+    return len(common) >= 2

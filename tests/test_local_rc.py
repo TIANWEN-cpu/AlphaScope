@@ -247,4 +247,4 @@ class TestVersion:
     @pytest.mark.anyio
     async def test_version_is_current(self, client):
         resp = await client.get("/health")
-        assert resp.json()["data"]["version"] == "1.0.1"
+        assert resp.json()["data"]["version"] == "1.1.4"

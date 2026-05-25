@@ -443,7 +443,12 @@ export const api = {
   archiveReport: (path: string) =>
     request<{ path: string; content: string }>(`/api/archive/report/${encodeURIComponent(path)}`),
   quantStatus: () => request<Record<string, unknown>>("/api/quant/status"),
-  quantStrategies: () => request<{ strategies: QuantStrategy[] }>("/api/quant/strategies"),
+  quantStrategies: async () => {
+    const result = await request<QuantStrategy[] | { strategies: QuantStrategy[] }>("/api/quant/strategies");
+    const raw = result.data;
+    const strategies = Array.isArray(raw) ? raw : raw?.strategies || [];
+    return { ...result, data: { strategies } };
+  },
   quantRuns: () => request<{ runs: QuantRun[] }>("/api/quant/runs"),
   quantReloadStrategies: () =>
     request<Record<string, unknown>>("/api/quant/strategies/reload", { method: "POST" }),

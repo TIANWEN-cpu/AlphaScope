@@ -79,6 +79,12 @@ async def get_status():
     )
 
 
+def _builtin_strategy_data() -> list[dict[str, Any]]:
+    from backend.quant.strategies import StrategyRegistry
+
+    return StrategyRegistry.list_strategies()
+
+
 @router.get("/strategies")
 async def list_strategies():
     """获取策略列表"""
@@ -94,8 +100,25 @@ async def list_strategies():
             success=False,
             error="Jince 服务未连接",
             error_code="JINCE_DISCONNECTED",
-            data={"strategies": []},
+            data={"strategies": _builtin_strategy_data()},
         )
+
+
+@router.get("/strategies/{strategy_name}")
+async def get_strategy(strategy_name: str):
+    """获取本地内置策略详情"""
+    for strategy in _builtin_strategy_data():
+        if strategy.get("name") == strategy_name:
+            return ApiResponse(success=True, data=strategy)
+    from fastapi import HTTPException
+
+    raise HTTPException(status_code=404, detail=f"策略不存在: {strategy_name}")
+
+
+@router.get("/builtin-strategies")
+async def list_builtin_strategies():
+    """列出本地内置策略"""
+    return ApiResponse(success=True, data=_builtin_strategy_data())
 
 
 @router.post("/strategies/reload")
