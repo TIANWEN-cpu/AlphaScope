@@ -340,3 +340,73 @@ async def test_fetch_prices_invalid_symbol(client):
         resp = await client.post("/api/prices/INVALID/fetch")
     assert resp.status_code == 200
     assert resp.json()["success"] is False
+
+
+@pytest.mark.anyio
+async def test_get_prices_weekly_aggregates_daily_bars(client):
+    """GET /api/prices/{symbol}?frequency=1w 返回按周聚合的 K 线"""
+    daily = [
+        {
+            "symbol": "600519",
+            "date": "2026-05-04",
+            "open": 10,
+            "high": 13,
+            "low": 9,
+            "close": 12,
+            "volume": 100,
+            "amount": 1000,
+        },
+        {
+            "symbol": "600519",
+            "date": "2026-05-05",
+            "open": 12,
+            "high": 15,
+            "low": 11,
+            "close": 14,
+            "volume": 200,
+            "amount": 2000,
+        },
+    ]
+    with patch("backend.price_store.get_prices", return_value=daily):
+        resp = await client.get("/api/prices/600519?frequency=1w&limit=5")
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["frequency"] == "1w"
+    assert data["total"] == 1
+    assert data["bars"][0]["open"] == 10
+    assert data["bars"][0]["high"] == 15
+    assert data["bars"][0]["low"] == 9
+    assert data["bars"][0]["close"] == 14
+
+
+@pytest.mark.anyio
+async def test_get_prices_intraday_uses_intraday_fetcher(client):
+    """GET /api/prices/{symbol}?frequency=intraday 不用日线冒充分时"""
+    intraday = [
+        {
+            "symbol": "600519",
+            "date": "2026-05-25 09:31",
+            "open": 10,
+            "high": 10.2,
+            "low": 9.9,
+            "close": 10.1,
+            "volume": 100,
+            "frequency": "intraday",
+        }
+    ]
+    with (
+        patch(
+            "backend.price_periods.fetch_intraday_prices", return_value=intraday
+        ) as mock_fetch_intraday,
+        patch("backend.price_store.get_prices") as mock_get_prices,
+    ):
+        resp = await client.get("/api/prices/600519?frequency=intraday&limit=240")
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["frequency"] == "intraday"
+    assert data["total"] == 1
+    assert data["bars"][0]["date"] == "2026-05-25 09:31"
+    mock_fetch_intraday.assert_called_once()
+    mock_get_prices.assert_not_called()
