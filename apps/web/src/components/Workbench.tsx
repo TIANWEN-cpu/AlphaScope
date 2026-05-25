@@ -6,6 +6,20 @@ import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
 import { api, NewsRecord, PriceBar } from '../lib/api';
 
+type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
+type MetricTone = 'up' | 'down' | 'neutral';
+type FinanceItem = { label: string; value: string; trend: MetricTone };
+type QuantCard = { label: string; value: string; tone: MetricTone; detail: string };
+type QuantSignal = { type: string; title: string; meta: string };
+type FactorPanelData = {
+  state: LoadState;
+  cards: QuantCard[];
+  counts: Array<{ label: string; value: string }>;
+  signals: QuantSignal[];
+  computedAt?: string;
+  message?: string;
+};
+
 const periodToPoints = (period: string) => {
   if (period === '分时') return 60;
   if (period === '周K') return 30;
@@ -33,7 +47,7 @@ const toChartData = (bars: PriceBar[], points = 40) => {
   }));
 };
 
-const EMPTY_FINANCE = [
+const EMPTY_FINANCE: FinanceItem[] = [
   { label: '市盈率(TTM)', value: '--', trend: 'up' },
   { label: '市净率(MRQ)', value: '--', trend: 'down' },
   { label: '毛利率', value: '--', trend: 'up' },
@@ -47,13 +61,191 @@ const EMPTY_FUNDS = [
   { label: '中单', value: '--', color: 'text-neutral-400' },
 ];
 
+const EMPTY_FACTOR_PANEL: FactorPanelData = {
+  state: 'idle',
+  cards: [
+    { label: '综合因子', value: '--', tone: 'neutral', detail: '等待后端计算' },
+    { label: '新闻情绪', value: '--', tone: 'neutral', detail: '新闻样本待同步' },
+    { label: '资金流', value: '--', tone: 'neutral', detail: '资金流样本待同步' },
+    { label: '价格动量', value: '--', tone: 'neutral', detail: '行情样本待同步' },
+  ],
+  counts: [
+    { label: '新闻', value: '--' },
+    { label: '事件', value: '--' },
+    { label: '研报', value: '--' },
+  ],
+  signals: [],
+  message: '多因子 Alpha 模型等待后端计算...',
+};
+
 const displayNumber = (value: number, digits = 2) =>
   Number.isFinite(value) ? value.toLocaleString('zh-CN', { maximumFractionDigits: digits, minimumFractionDigits: digits }) : '--';
+
+const toFiniteNumber = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+const isUsefulNumber = (value: unknown, allowZero = false) => {
+  const num = toFiniteNumber(value);
+  if (num === null) return false;
+  return allowZero || num !== 0;
+};
+
+const formatPlainNumber = (value: unknown, digits = 2, allowZero = false) => {
+  const num = toFiniteNumber(value);
+  if (num === null || (!allowZero && num === 0)) return '--';
+  return num.toLocaleString('zh-CN', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+};
+
+const formatPercentMetric = (value: unknown, signed = false, allowZero = false) => {
+  const num = toFiniteNumber(value);
+  if (num === null || (!allowZero && num === 0)) return '--';
+  const prefix = signed && num >= 0 ? '+' : '';
+  return `${prefix}${num.toFixed(1)}%`;
+};
+
+const formatYiMetric = (value: unknown, signed = false, allowZero = false) => {
+  const num = toFiniteNumber(value);
+  if (num === null || (!allowZero && num === 0)) return '--';
+  const prefix = signed && num >= 0 ? '+' : '';
+  return `${prefix}${num.toFixed(1)}亿`;
+};
 
 const formatYi = (value: unknown) => {
   const num = Number(value || 0);
   if (!Number.isFinite(num)) return '--';
   return `${num >= 0 ? '+' : ''}${num.toFixed(1)}亿`;
+};
+
+const metricTone = (value: unknown, inverse = false): MetricTone => {
+  const num = toFiniteNumber(value);
+  if (num === null || num === 0) return 'neutral';
+  const positive = num > 0;
+  if (inverse) return positive ? 'down' : 'up';
+  return positive ? 'up' : 'down';
+};
+
+const toneTextClass = (tone: MetricTone) => cn(
+  tone === 'up' && 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]',
+  tone === 'down' && 'text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]',
+  tone === 'neutral' && 'text-neutral-300',
+);
+
+const buildFinanceItems = (data: Record<string, unknown>): FinanceItem[] => {
+  const periods = Array.isArray(data.financial_periods) ? data.financial_periods as Record<string, unknown>[] : [];
+  const latest = periods[0] || {};
+  const valuation = (data.valuation || {}) as Record<string, unknown>;
+  const score = (data.fundamental_score || {}) as Record<string, unknown>;
+
+  const candidates: Array<FinanceItem | null> = [
+    isUsefulNumber(valuation.pe ?? valuation.pe_ttm)
+      ? { label: '市盈率(TTM)', value: formatPlainNumber(valuation.pe ?? valuation.pe_ttm), trend: metricTone(valuation.pe ?? valuation.pe_ttm, true) }
+      : null,
+    isUsefulNumber(valuation.pb)
+      ? { label: '市净率(MRQ)', value: formatPlainNumber(valuation.pb), trend: metricTone(valuation.pb, true) }
+      : null,
+    isUsefulNumber(latest.revenue_yi)
+      ? { label: '营收(最新)', value: formatYiMetric(latest.revenue_yi), trend: 'neutral' }
+      : null,
+    isUsefulNumber(latest.net_profit_yi)
+      ? { label: '归母净利', value: formatYiMetric(latest.net_profit_yi), trend: metricTone(latest.net_profit_yi) }
+      : null,
+    isUsefulNumber(latest.gross_margin_pct)
+      ? { label: '毛利率', value: formatPercentMetric(latest.gross_margin_pct), trend: metricTone(latest.gross_margin_pct) }
+      : null,
+    isUsefulNumber(latest.roe_pct)
+      ? { label: 'ROE', value: formatPercentMetric(latest.roe_pct), trend: metricTone(latest.roe_pct) }
+      : null,
+    isUsefulNumber(latest.debt_ratio_pct)
+      ? { label: '资产负债率', value: formatPercentMetric(latest.debt_ratio_pct), trend: metricTone(latest.debt_ratio_pct, true) }
+      : null,
+    isUsefulNumber(latest.yoy_net_profit_pct, true)
+      ? { label: '净利润同比', value: formatPercentMetric(latest.yoy_net_profit_pct, true, true), trend: metricTone(latest.yoy_net_profit_pct) }
+      : null,
+    isUsefulNumber(latest.yoy_revenue_pct, true)
+      ? { label: '营收同比', value: formatPercentMetric(latest.yoy_revenue_pct, true, true), trend: metricTone(latest.yoy_revenue_pct) }
+      : null,
+    isUsefulNumber(score.total_score)
+      ? { label: `基本面评分${score.grade ? ` ${score.grade}` : ''}`, value: formatPlainNumber(score.total_score, 1), trend: 'neutral' }
+      : null,
+  ];
+
+  const items = candidates.filter(Boolean) as FinanceItem[];
+  return [...items, ...EMPTY_FINANCE].slice(0, 4);
+};
+
+const factorTone = (value: unknown): MetricTone => {
+  const num = toFiniteNumber(value);
+  if (num === null || Math.abs(num) < 0.05) return 'neutral';
+  return num > 0 ? 'up' : 'down';
+};
+
+const formatFactorScore = (value: unknown) => {
+  const num = toFiniteNumber(value);
+  if (num === null) return '--';
+  return `${num >= 0 ? '+' : ''}${num.toFixed(2)}`;
+};
+
+const signalLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    news: '新闻',
+    event: '公告',
+    analyst: '研报',
+    fund_flow: '资金',
+    momentum: '动量',
+  };
+  return labels[type] || '信号';
+};
+
+const formatFactorSignal = (signal: Record<string, unknown>): QuantSignal => {
+  const type = String(signal.type || '');
+  if (type === 'fund_flow') {
+    return {
+      type: signalLabel(type),
+      title: `主力净流入 ${formatYiMetric(signal.last_main_yi, true, true)}`,
+      meta: `近段合计 ${formatYiMetric(signal.main_total_yi, true, true)} / 流入 ${signal.inflow_days ?? 0} 天`,
+    };
+  }
+  if (type === 'momentum') {
+    return {
+      type: signalLabel(type),
+      title: `短期涨跌 ${formatPercentMetric(signal.short_return_pct, true, true)}`,
+      meta: `中期 ${formatPercentMetric(signal.mid_return_pct, true, true)} / 量能 ${formatPercentMetric(signal.volume_change_pct, true, true)}`,
+    };
+  }
+  const score = signal.sentiment ?? signal.score ?? signal.rating_score;
+  return {
+    type: signalLabel(type),
+    title: String(signal.title || '暂无标题'),
+    meta: score !== undefined ? `信号值 ${formatFactorScore(score)}` : String(signal.institution || signal.category || ''),
+  };
+};
+
+const buildFactorPanel = (data: Record<string, unknown>): FactorPanelData => {
+  const factors = (data.factors || {}) as Record<string, unknown>;
+  const counts = (data.sample_counts || {}) as Record<string, unknown>;
+  const signals = Array.isArray(data.signals) ? data.signals as Record<string, unknown>[] : [];
+  const cards: QuantCard[] = [
+    { label: '综合因子', value: formatFactorScore(factors.composite), tone: factorTone(factors.composite), detail: '加权汇总新闻、事件、研报、资金与动量' },
+    { label: '新闻情绪', value: formatFactorScore(factors.news_sentiment), tone: factorTone(factors.news_sentiment), detail: `新闻样本 ${counts.news ?? 0} 条` },
+    { label: '资金流', value: formatFactorScore(factors.fund_flow), tone: factorTone(factors.fund_flow), detail: '主力资金近况归一化' },
+    { label: '价格动量', value: formatFactorScore(factors.momentum), tone: factorTone(factors.momentum), detail: '短中期涨跌与量能变化' },
+  ];
+
+  return {
+    state: 'ready',
+    cards,
+    counts: [
+      { label: '新闻', value: String(counts.news ?? 0) },
+      { label: '事件', value: String(counts.events ?? 0) },
+      { label: '研报', value: String(counts.reports ?? 0) },
+    ],
+    signals: signals.slice(0, 5).map(formatFactorSignal),
+    computedAt: String(data.computed_at || ''),
+    message: '因子计算完成',
+  };
 };
 
 const mapBackendNews = (items: NewsRecord[]) =>
@@ -74,13 +266,12 @@ const renderMessageHtml = (content: string) =>
     .replace(/\*\*(.*?)\*\*/g, '<span class="text-white font-medium">$1</span>')
     .replace(/\n/g, '<br/>');
 
+type AnalysisMode = 'free' | 'standard' | 'deep' | 'expert' | 'vision';
+
 interface WorkbenchProps {
   symbol?: string;
   stockName?: string;
 }
-
-type AnalysisMode = 'free' | 'standard' | 'deep' | 'expert' | 'vision';
-type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 
 const ANALYSIS_MODES: Array<{ id: AnalysisMode; label: string; description: string }> = [
   { id: 'free', label: '自由问答', description: '轻量聊天，不强制股票分析链路' },
@@ -99,7 +290,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const [financeItems, setFinanceItems] = useState(EMPTY_FINANCE);
   const [fundItems, setFundItems] = useState(EMPTY_FUNDS);
   const [newsItems, setNewsItems] = useState<ReturnType<typeof mapBackendNews>>([]);
-  const [factorSummary, setFactorSummary] = useState('多因子Alpha模型等待后端计算...');
+  const [factorPanel, setFactorPanel] = useState<FactorPanelData>(EMPTY_FACTOR_PANEL);
   const [dataStatus, setDataStatus] = useState('后端数据待同步');
   const [marketState, setMarketState] = useState<LoadState>('idle');
   const [newsState, setNewsState] = useState<LoadState>('idle');
@@ -143,6 +334,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     setNewsItems([]);
     setFinanceItems(EMPTY_FINANCE);
     setFundItems(EMPTY_FUNDS);
+    setFactorPanel({ ...EMPTY_FACTOR_PANEL, state: 'loading', message: `正在计算 ${stockName} (${symbol}) 量化因子...` });
 
     async function loadWorkbenchData() {
       setDataStatus(`正在同步 ${stockName} (${symbol}) 后端行情、财务、新闻与因子...`);
@@ -180,15 +372,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
       if (fundamentalsResult.status === 'fulfilled' && fundamentalsResult.value.success && fundamentalsResult.value.data) {
         const data = fundamentalsResult.value.data;
-        const periods = Array.isArray(data.financial_periods) ? data.financial_periods as Record<string, unknown>[] : [];
-        const latest = periods[0] || {};
-        const valuation = (data.valuation || {}) as Record<string, unknown>;
-        setFinanceItems([
-          { label: '市盈率(TTM)', value: String(valuation.pe || valuation.pe_ttm || '--'), trend: 'up' },
-          { label: '市净率(MRQ)', value: String(valuation.pb || '--'), trend: 'down' },
-          { label: '毛利率', value: latest.gross_margin_pct ? `${Number(latest.gross_margin_pct).toFixed(1)}%` : '--', trend: 'up' },
-          { label: '净利润同比', value: latest.yoy_net_profit_pct ? `${Number(latest.yoy_net_profit_pct) >= 0 ? '+' : ''}${Number(latest.yoy_net_profit_pct).toFixed(1)}%` : '--', trend: 'up' },
-        ]);
+        setFinanceItems(buildFinanceItems(data));
       }
 
       if (newsResult.status === 'fulfilled' && newsResult.value.success && newsResult.value.data?.news?.length) {
@@ -215,10 +399,13 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
       }
 
       if (factorsResult.status === 'fulfilled' && factorsResult.value.success && factorsResult.value.data) {
-        const factorText = JSON.stringify(factorsResult.value.data, null, 2).slice(0, 500);
-        setFactorSummary(factorText || '后端因子接口已返回，但内容为空。');
+        setFactorPanel(buildFactorPanel(factorsResult.value.data));
       } else {
-        setFactorSummary('后端因子接口暂不可用，请检查 /api/factors 数据源。');
+        setFactorPanel({
+          ...EMPTY_FACTOR_PANEL,
+          state: factorsResult.status === 'fulfilled' ? 'empty' : 'error',
+          message: '后端因子接口暂不可用，请检查 /api/factors 数据源。',
+        });
       }
 
       const syncedParts = [
@@ -481,7 +668,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
           {financeItems.slice(0, 4).map((item, i) => (
             <div key={i} className="bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-xl px-5 py-3.5 flex flex-col min-w-[120px] shadow-sm transform transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.04]">
               <span className="text-xs text-neutral-500 mb-1.5">{item.label}</span>
-              <span className={cn("text-sm font-mono font-medium tracking-wide", item.trend === 'up' ? 'text-rose-500' : 'text-emerald-500')}>
+              <span className={cn("text-sm font-mono font-medium tracking-wide", toneTextClass(item.trend))}>
                 {item.value}
               </span>
             </div>
@@ -653,7 +840,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                    {financeItems.map((item, i) => (
                      <div key={i} className="bg-white/[0.03] border border-white/5 p-4 rounded-xl flex flex-col justify-center hover:bg-white/[0.05] transition-colors">
                        <span className="text-xs text-neutral-500 mb-2">{item.label}</span>
-                       <span className={cn("text-2xl font-mono font-medium", item.trend === 'up' ? 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]' : 'text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]')}>
+                       <span className={cn("text-2xl font-mono font-medium", toneTextClass(item.trend))}>
                          {item.value}
                        </span>
                      </div>
@@ -675,11 +862,61 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                )}
 
                {activePanelTab === 'quant' && (
-                 <motion.div key="quant" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex h-full items-center justify-center p-4">
-                   <div className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-3 rounded-lg text-xs flex items-start gap-3 max-w-3xl whitespace-pre-wrap font-mono leading-relaxed">
-                     <Settings2 className="w-5 h-5" />
-                     {factorSummary}
-                   </div>
+                 <motion.div key="quant" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full p-4 space-y-4">
+                   {factorPanel.state === 'loading' || factorPanel.state === 'error' || factorPanel.state === 'empty' ? (
+                     <div className="h-full min-h-[220px] flex items-center justify-center text-center text-xs text-neutral-500">
+                       {factorPanel.message}
+                     </div>
+                   ) : (
+                     <>
+                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                         {factorPanel.cards.map((item) => (
+                           <div key={item.label} className="bg-white/[0.03] border border-white/5 p-4 rounded-xl">
+                             <div className="flex items-center justify-between gap-3">
+                               <span className="text-xs text-neutral-500">{item.label}</span>
+                               <Settings2 className="w-3.5 h-3.5 text-neutral-600" />
+                             </div>
+                             <div className={cn("mt-2 text-2xl font-mono font-medium", toneTextClass(item.tone))}>{item.value}</div>
+                             <div className="mt-1 text-[10px] leading-relaxed text-neutral-500">{item.detail}</div>
+                           </div>
+                         ))}
+                       </div>
+                       <div className="grid grid-cols-1 lg:grid-cols-[180px_1fr] gap-4">
+                         <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
+                           <div className="text-xs text-neutral-500 mb-3">样本量</div>
+                           <div className="space-y-2">
+                             {factorPanel.counts.map(item => (
+                               <div key={item.label} className="flex items-center justify-between text-xs">
+                                 <span className="text-neutral-500">{item.label}</span>
+                                 <span className="font-mono text-neutral-200">{item.value}</span>
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+                         <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4 min-w-0">
+                           <div className="flex items-center justify-between gap-3 mb-3">
+                             <span className="text-xs text-neutral-500">关键信号</span>
+                             {factorPanel.computedAt && <span className="text-[10px] text-neutral-600 font-mono">{factorPanel.computedAt.slice(0, 19).replace('T', ' ')}</span>}
+                           </div>
+                           {factorPanel.signals.length ? (
+                             <div className="space-y-2">
+                               {factorPanel.signals.map((signal, index) => (
+                                 <div key={`${signal.type}-${index}`} className="flex items-start gap-3 text-xs">
+                                   <span className="shrink-0 px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px]">{signal.type}</span>
+                                   <div className="min-w-0">
+                                     <div className="text-neutral-200 truncate">{signal.title}</div>
+                                     <div className="text-[10px] text-neutral-500 mt-0.5">{signal.meta}</div>
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+                           ) : (
+                             <div className="text-xs text-neutral-500">暂无可展示信号，后端样本量可能为 0。</div>
+                           )}
+                         </div>
+                       </div>
+                     </>
+                   )}
                  </motion.div>
                )}
              </AnimatePresence>

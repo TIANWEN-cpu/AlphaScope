@@ -220,6 +220,16 @@ export interface FundPortfolioCreatePayload {
   holdings?: FundPortfolioHolding[];
 }
 
+export interface StockResolveResult {
+  query: string;
+  symbol: string;
+  name: string;
+  market?: string;
+  exchange?: string;
+  resolved?: boolean;
+  source?: string;
+}
+
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000"
@@ -390,6 +400,8 @@ export const api = {
     request<{ original: string; normalized: string; market: string }>(
       `/api/prices/normalize/${encodeURIComponent(symbol)}`,
     ),
+  resolveStock: (query: string, options: RequestInit = {}) =>
+    request<StockResolveResult>("/api/stocks/resolve", options, { q: query }),
   priceFetch: (symbol: string, days = 120, options: RequestInit = {}) =>
     request<{ symbol: string; fetched: number }>(
       `/api/prices/${encodeURIComponent(symbol)}/fetch`,

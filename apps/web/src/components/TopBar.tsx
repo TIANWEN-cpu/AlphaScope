@@ -34,6 +34,11 @@ function parseStockInput(input: string, current: StockSelection): StockSelection
   };
 }
 
+function fromResolvedStock(input: string, current: StockSelection): StockSelection {
+  const parsed = parseStockInput(input, current);
+  return parsed;
+}
+
 export function TopBar({ activeStock, onStockChange }: TopBarProps) {
   const [searchValue, setSearchValue] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -46,15 +51,21 @@ export function TopBar({ activeStock, onStockChange }: TopBarProps) {
     setIsSearching(true);
     setSearchStatus('正在校验标的并同步行情...');
     try {
-      const normalized = await api.normalizeSymbol(parsed.symbol);
-      const normalizedSymbol = normalized.success && normalized.data?.normalized
-        ? normalized.data.normalized
-        : parsed.symbol;
-      const nextStock = { ...parsed, symbol: normalizedSymbol };
+      const resolved = await api.resolveStock(value.trim());
+      const nextStock = resolved.success && resolved.data?.symbol
+        ? {
+            symbol: resolved.data.symbol,
+            name: resolved.data.name || parsed.name,
+            exchange: resolved.data.exchange || parsed.exchange,
+            market: resolved.data.market,
+            resolved: resolved.data.resolved,
+            source: resolved.data.source,
+          }
+        : fromResolvedStock(value, activeStock);
       onStockChange(nextStock);
       setSearchValue('');
 
-      const fetched = await api.priceFetch(normalizedSymbol, 120);
+      const fetched = await api.priceFetch(nextStock.symbol, 120);
       setSearchStatus(
         fetched.success
           ? `已切换 ${nextStock.name}，同步 ${fetched.data?.fetched || 0} 条行情`

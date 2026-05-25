@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
@@ -14,17 +14,45 @@ import { PlaceholderModule } from './components/PlaceholderModule';
 import { Settings } from './components/Settings';
 import { FundDcaLab } from './components/FundDcaLab';
 import { StockSelection } from './types';
+import { api } from './lib/api';
 
 const DEFAULT_STOCK: StockSelection = {
   symbol: '600519',
   name: '贵州茅台',
   exchange: 'SH',
+  market: 'CN',
+  resolved: true,
 };
+
+const needsStockIdentityRefresh = (stock: StockSelection) =>
+  Boolean(stock.symbol) && (stock.resolved === false || stock.name.startsWith('股票代码 '));
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [activeStock, setActiveStock] = useState<StockSelection>(DEFAULT_STOCK);
   const stockViewKey = `${activeStock.symbol}-${activeStock.name}`;
+
+  useEffect(() => {
+    if (!needsStockIdentityRefresh(activeStock)) return;
+
+    let cancelled = false;
+    api.resolveStock(activeStock.symbol).then((result) => {
+      if (cancelled || !result.success || !result.data?.symbol || !result.data.name) return;
+      if (result.data.name === activeStock.name && result.data.resolved === activeStock.resolved) return;
+      setActiveStock({
+        symbol: result.data.symbol,
+        name: result.data.name,
+        exchange: result.data.exchange || activeStock.exchange,
+        market: result.data.market || activeStock.market,
+        resolved: result.data.resolved,
+        source: result.data.source,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStock]);
 
   return (
     <div className="flex h-screen w-full bg-[#050505] text-neutral-300 font-sans selection:bg-indigo-500/30 overflow-hidden relative">
