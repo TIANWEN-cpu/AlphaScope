@@ -12,7 +12,7 @@ pytest.importorskip("httpx")
 from httpx import ASGITransport, AsyncClient
 
 from backend.api.main import app
-from backend.integrations.jince.errors import JinceConnectionError
+from backend.integrations.jince.errors import JinceConnectionError, JinceError
 from backend.integrations.jince.service import JinceService
 from backend.schemas.quant import (
     BacktestMetrics,
@@ -112,6 +112,20 @@ class TestQuantStrategies:
         data = resp.json()
         assert data["success"] is False
         assert data["error_code"] == "JINCE_DISCONNECTED"
+
+    @pytest.mark.anyio
+    async def test_strategies_http_error_returns_structured_failure(self, client):
+        mock_svc = AsyncMock(spec=JinceService)
+        mock_svc.list_strategies.side_effect = JinceError(
+            "Jince HTTP 503: ", code="JINCE_HTTP_ERROR"
+        )
+        with patch("backend.api.quant._get_service", return_value=mock_svc):
+            resp = await client.get("/api/quant/strategies")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert data["error_code"] == "JINCE_HTTP_ERROR"
+        assert data["data"]["strategies"] == []
 
 
 # ========== POST /api/quant/strategies/reload ==========
@@ -248,6 +262,20 @@ class TestQuantRuns:
             resp = await client.get("/api/quant/runs")
         assert resp.json()["success"] is False
         assert resp.json()["error_code"] == "JINCE_DISCONNECTED"
+
+    @pytest.mark.anyio
+    async def test_runs_http_error_returns_structured_failure(self, client):
+        mock_svc = AsyncMock(spec=JinceService)
+        mock_svc.list_runs.side_effect = JinceError(
+            "Jince HTTP 503: ", code="JINCE_HTTP_ERROR"
+        )
+        with patch("backend.api.quant._get_service", return_value=mock_svc):
+            resp = await client.get("/api/quant/runs")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert data["error_code"] == "JINCE_HTTP_ERROR"
+        assert data["data"]["runs"] == []
 
 
 # ========== GET /api/quant/runs/{run_id} ==========

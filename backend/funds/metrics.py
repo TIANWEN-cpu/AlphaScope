@@ -65,11 +65,16 @@ def calc_sharpe_ratio(returns: list[float], risk_free_rate: float = 0.03) -> flo
     """计算夏普比率"""
     if len(returns) < 2:
         return 0.0
+    annual_return = sum(returns) / len(returns) * 252
+    excess_return = annual_return - risk_free_rate
     vol = calc_volatility(returns, annualize=True)
     if vol <= 0:
+        if excess_return > 0:
+            return math.inf
+        if excess_return < 0:
+            return -math.inf
         return 0.0
-    annual_return = sum(returns) / len(returns) * 252
-    return (annual_return - risk_free_rate) / vol
+    return excess_return / vol
 
 
 def calc_calmar_ratio(total_return: float, max_drawdown: float) -> float:

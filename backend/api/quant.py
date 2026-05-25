@@ -7,7 +7,7 @@ from typing import Any, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from backend.integrations.jince.errors import JinceConnectionError
+from backend.integrations.jince.errors import JinceConnectionError, JinceError
 from backend.integrations.jince.service import JinceService
 from backend.schemas.api import ApiResponse
 
@@ -15,6 +15,21 @@ router = APIRouter(prefix="/api/quant", tags=["quant"])
 
 # 默认服务实例（可被覆盖）
 _service: Optional[JinceService] = None
+
+
+def _jince_failure_response(error: JinceError, data: dict[str, Any] | None = None):
+    """Return a structured API response for unavailable Jince operations."""
+    error_code = (
+        "JINCE_DISCONNECTED"
+        if isinstance(error, JinceConnectionError)
+        else getattr(error, "code", "JINCE_ERROR")
+    )
+    return ApiResponse(
+        success=False,
+        error=str(error),
+        error_code=error_code,
+        data=data,
+    )
 
 
 def _get_service() -> JinceService:
@@ -89,13 +104,8 @@ async def list_strategies():
             success=True,
             data={"strategies": [s.model_dump() for s in strategies]},
         )
-    except JinceConnectionError:
-        return ApiResponse(
-            success=False,
-            error="Jince 服务未连接",
-            error_code="JINCE_DISCONNECTED",
-            data={"strategies": []},
-        )
+    except JinceError as e:
+        return _jince_failure_response(e, data={"strategies": []})
 
 
 @router.post("/strategies/reload")
@@ -105,12 +115,8 @@ async def reload_strategies():
     try:
         result = await svc.reload_strategies()
         return ApiResponse(success=True, data=result)
-    except JinceConnectionError:
-        return ApiResponse(
-            success=False,
-            error="Jince 服务未连接",
-            error_code="JINCE_DISCONNECTED",
-        )
+    except JinceError as e:
+        return _jince_failure_response(e)
 
 
 @router.post("/backtest")
@@ -127,12 +133,8 @@ async def run_backtest(body: BacktestRequestBody):
             params=body.params,
         )
         return ApiResponse(success=True, data=result.model_dump())
-    except JinceConnectionError:
-        return ApiResponse(
-            success=False,
-            error="Jince 服务未连接，无法执行回测",
-            error_code="JINCE_DISCONNECTED",
-        )
+    except JinceError as e:
+        return _jince_failure_response(e)
     except Exception as e:
         return ApiResponse(
             success=False,
@@ -153,12 +155,8 @@ async def start_live(body: LiveStartBody):
             capital=body.capital,
         )
         return ApiResponse(success=True, data=result)
-    except JinceConnectionError:
-        return ApiResponse(
-            success=False,
-            error="Jince 服务未连接，无法启动实盘",
-            error_code="JINCE_DISCONNECTED",
-        )
+    except JinceError as e:
+        return _jince_failure_response(e)
 
 
 @router.post("/live/stop")
@@ -168,12 +166,8 @@ async def stop_live(body: LiveStopBody):
     try:
         result = await svc.stop_live(body.run_id)
         return ApiResponse(success=True, data=result)
-    except JinceConnectionError:
-        return ApiResponse(
-            success=False,
-            error="Jince 服务未连接",
-            error_code="JINCE_DISCONNECTED",
-        )
+    except JinceError as e:
+        return _jince_failure_response(e)
 
 
 @router.get("/runs")
@@ -186,13 +180,8 @@ async def list_runs():
             success=True,
             data={"runs": [r.model_dump() for r in runs]},
         )
-    except JinceConnectionError:
-        return ApiResponse(
-            success=False,
-            error="Jince 服务未连接",
-            error_code="JINCE_DISCONNECTED",
-            data={"runs": []},
-        )
+    except JinceError as e:
+        return _jince_failure_response(e, data={"runs": []})
 
 
 @router.get("/runs/{run_id}")
@@ -202,9 +191,5 @@ async def get_run(run_id: str):
     try:
         result = await svc.get_run(run_id)
         return ApiResponse(success=True, data=result.model_dump())
-    except JinceConnectionError:
-        return ApiResponse(
-            success=False,
-            error="Jince 服务未连接",
-            error_code="JINCE_DISCONNECTED",
-        )
+    except JinceError as e:
+        return _jince_failure_response(e)

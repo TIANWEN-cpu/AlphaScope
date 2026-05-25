@@ -21,6 +21,7 @@ venvs/
 venv/
 env/
 ENV/
+.venv/
 
 # Data caches
 data/cache/
