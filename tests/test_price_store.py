@@ -268,11 +268,41 @@ async def test_normalize_endpoint(client):
 @pytest.mark.anyio
 async def test_get_prices(client):
     """GET /api/prices/{symbol}"""
-    with patch("backend.price_store.get_prices", return_value=[]):
+    with (
+        patch("backend.price_store.get_prices", return_value=[]),
+        patch("backend.api.prices.fetch_prices") as mock_fetch,
+    ):
         resp = await client.get("/api/prices/600519")
     assert resp.status_code == 200
     assert resp.json()["success"] is True
     assert resp.json()["data"]["total"] == 0
+    mock_fetch.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_fetch_prices_passes_symbol_to_provider(client):
+    """POST /api/prices/{symbol}/fetch 使用 symbol 参数调用 Provider"""
+    mock_registry = MagicMock()
+    mock_registry.get.return_value = [
+        {
+            "symbol": "600519",
+            "date": "2026-05-25",
+            "open": 1287,
+            "high": 1304,
+            "low": 1277,
+            "close": 1285,
+        }
+    ]
+    with (
+        patch("backend.providers.registry.get_registry", return_value=mock_registry),
+        patch("backend.price_store.save_price_bars", return_value=1),
+    ):
+        resp = await client.post("/api/prices/600519/fetch?days=30")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+    kwargs = mock_registry.get.call_args.kwargs
+    assert kwargs["symbol"] == "600519"
+    assert "query" not in kwargs
 
 
 @pytest.mark.anyio

@@ -311,6 +311,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                           item.source.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+  const sourceCount = new Set(news.map(item => item.source).filter(Boolean)).size;
 
   return (
     <motion.div 
@@ -380,7 +381,17 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                 <Newspaper className="w-6.5 h-6.5 text-indigo-400" />
                 数据源终端聚合
               </h2>
-              <p className="text-xs text-neutral-500 mt-1.5 font-mono">{dataStatus}</p>
+              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                <p className="text-xs text-neutral-500 font-mono">{dataStatus}</p>
+                <span className={cn(
+                  "text-[10px] font-mono px-2 py-0.5 rounded border",
+                  sourceCount > 0
+                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                    : "bg-white/[0.03] border-white/10 text-neutral-500"
+                )}>
+                  后端信源 {sourceCount}
+                </span>
+              </div>
             </div>
 
             {/* Simple Search */}

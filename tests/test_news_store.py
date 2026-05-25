@@ -221,11 +221,39 @@ def client():
 @pytest.mark.anyio
 async def test_list_news(client):
     """GET /api/news"""
-    with patch("backend.news_store.list_news", return_value=[]):
+    with (
+        patch("backend.news_store.list_news", return_value=[]),
+        patch("backend.api.news._fetch_and_store_news") as mock_fetch,
+    ):
         resp = await client.get("/api/news")
     assert resp.status_code == 200
     assert resp.json()["success"] is True
     assert "news" in resp.json()["data"]
+    mock_fetch.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_list_news_refetches_after_empty_store(client):
+    """GET /api/news 空库时触发采集并返回第二次查询结果"""
+    news_item = {
+        "id": "news_1",
+        "title": "贵州茅台新闻",
+        "summary": "",
+        "source": "eastmoney",
+        "source_url": "",
+        "published_at": "2026-05-25T10:00:00+08:00",
+        "symbols": ["600519"],
+    }
+    with (
+        patch("backend.news_store.list_news", side_effect=[[], [news_item]]),
+        patch("backend.api.news._fetch_and_store_news") as mock_fetch,
+    ):
+        resp = await client.get("/api/news?symbol=600519")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["total"] == 1
+    assert data["news"][0]["title"] == "贵州茅台新闻"
+    mock_fetch.assert_awaited_once()
 
 
 @pytest.mark.anyio

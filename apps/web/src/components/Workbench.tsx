@@ -6,21 +6,6 @@ import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
 import { api, NewsRecord, PriceBar } from '../lib/api';
 
-const generateKlineData = (points: number, basePrice: number = 1500) => {
-  let currentPrice = basePrice;
-  return Array.from({ length: points }).map((_, i) => {
-    currentPrice += (Math.random() * 20 - 10);
-    return {
-      date: `05-${String(10 + Math.floor(i / 2)).padStart(2, '0')}`,
-      ma5: currentPrice + 5,
-      ma10: currentPrice,
-      ma20: currentPrice - 10,
-      volume: 400000 + Math.random() * 800000,
-      up: Math.random() > 0.48,
-    };
-  });
-};
-
 const periodToPoints = (period: string) => {
   if (period === '分时') return 60;
   if (period === '周K') return 30;
@@ -47,6 +32,20 @@ const toChartData = (bars: PriceBar[], points = 40) => {
     close: Number(bar.close || 0),
   }));
 };
+
+const EMPTY_FINANCE = [
+  { label: '市盈率(TTM)', value: '--', trend: 'up' },
+  { label: '市净率(MRQ)', value: '--', trend: 'down' },
+  { label: '毛利率', value: '--', trend: 'up' },
+  { label: '净利润同比', value: '--', trend: 'up' },
+];
+
+const EMPTY_FUNDS = [
+  { label: '主力净流入', value: '--', color: 'text-neutral-400' },
+  { label: '超大单', value: '--', color: 'text-neutral-400' },
+  { label: '大单', value: '--', color: 'text-neutral-400' },
+  { label: '中单', value: '--', color: 'text-neutral-400' },
+];
 
 const displayNumber = (value: number, digits = 2) =>
   Number.isFinite(value) ? value.toLocaleString('zh-CN', { maximumFractionDigits: digits, minimumFractionDigits: digits }) : '--';
@@ -75,26 +74,6 @@ const renderMessageHtml = (content: string) =>
     .replace(/\*\*(.*?)\*\*/g, '<span class="text-white font-medium">$1</span>')
     .replace(/\n/g, '<br/>');
 
-const MOCK_NEWS = [
-  { time: "22:13", title: "市场定价显示，交易员已完全预期到2026年底美联储将加息25个基点。", source: "财联社", sourceUrl: "" },
-  { time: "22:12", title: "财联社5月22日电，美联储官员沃勒表示，4月份消费者价格上涨的范围令人担忧...", source: "财联社", sourceUrl: "" },
-  { time: "22:04", title: "港股IPO：融泰药业递表港交所", desc: "广东融泰药业股份有限公司向港交所提交上市申请书，独家保荐人为中信证券。", source: "公告", sourceUrl: "" }
-];
-
-const MOCK_FINANCE = [
-  { label: '市盈率(TTM)', value: '28.45', trend: 'up' },
-  { label: '市净率(MRQ)', value: '6.12', trend: 'down' },
-  { label: '毛利率', value: '91.8%', trend: 'up' },
-  { label: '净利润同增', value: '+19.1%', trend: 'up' },
-];
-
-const MOCK_FUNDS = [
-  { label: '主力净流入', value: '+3.2亿', color: 'text-rose-500' },
-  { label: '超大单', value: '+4.5亿', color: 'text-rose-500' },
-  { label: '大单', value: '-1.3亿', color: 'text-emerald-500' },
-  { label: '中单', value: '-2.1亿', color: 'text-emerald-500' },
-];
-
 interface WorkbenchProps {
   symbol?: string;
   stockName?: string;
@@ -113,12 +92,12 @@ const ANALYSIS_MODES: Array<{ id: AnalysisMode; label: string; description: stri
 export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: WorkbenchProps) {
   const [activePeriod, setActivePeriod] = useState('日K');
   const [activePanelTab, setActivePanelTab] = useState('news');
-  const [chartData, setChartData] = useState(() => generateKlineData(40));
+  const [chartData, setChartData] = useState<ReturnType<typeof toChartData>>([]);
   const [priceBars, setPriceBars] = useState<PriceBar[]>([]);
   const [latestPrice, setLatestPrice] = useState<PriceBar | null>(null);
-  const [financeItems, setFinanceItems] = useState(MOCK_FINANCE);
-  const [fundItems, setFundItems] = useState(MOCK_FUNDS);
-  const [newsItems, setNewsItems] = useState(MOCK_NEWS);
+  const [financeItems, setFinanceItems] = useState(EMPTY_FINANCE);
+  const [fundItems, setFundItems] = useState(EMPTY_FUNDS);
+  const [newsItems, setNewsItems] = useState<ReturnType<typeof mapBackendNews>>([]);
   const [factorSummary, setFactorSummary] = useState('多因子Alpha模型等待后端计算...');
   const [dataStatus, setDataStatus] = useState('后端数据待同步');
   const [conversationId, setConversationId] = useState<string | undefined>();
@@ -142,10 +121,12 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
   useEffect(() => {
     let cancelled = false;
-    const fallbackBasePrice = symbol === '301666' ? 28 : symbol.startsWith('3') ? 80 : symbol.startsWith('6') ? 1500 : 300;
-    setChartData(generateKlineData(40, fallbackBasePrice));
+    setChartData([]);
     setPriceBars([]);
     setLatestPrice(null);
+    setNewsItems([]);
+    setFinanceItems(EMPTY_FINANCE);
+    setFundItems(EMPTY_FUNDS);
 
     async function loadWorkbenchData() {
       setDataStatus(`正在同步 ${stockName} (${symbol}) 后端行情、财务、新闻与因子...`);
@@ -185,6 +166,8 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
       if (newsResult.status === 'fulfilled' && newsResult.value.success && newsResult.value.data?.news?.length) {
         setNewsItems(mapBackendNews(newsResult.value.data.news));
+      } else {
+        setNewsItems([]);
       }
 
       if (fundFlowResult.status === 'fulfilled' && fundFlowResult.value.success && fundFlowResult.value.data) {
@@ -206,7 +189,12 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
         setFactorSummary('后端因子接口暂不可用，请检查 /api/factors 数据源。');
       }
 
-      setDataStatus(`已同步 ${stockName} (${symbol}) 数据`);
+      const syncedParts = [
+        pricesResult.status === 'fulfilled' && pricesResult.value.success && pricesResult.value.data?.bars?.length ? '行情' : '',
+        newsResult.status === 'fulfilled' && newsResult.value.success && newsResult.value.data?.news?.length ? '新闻' : '',
+        fundamentalsResult.status === 'fulfilled' && fundamentalsResult.value.success ? '财务' : '',
+      ].filter(Boolean);
+      setDataStatus(syncedParts.length ? `已同步 ${syncedParts.join('、')} 数据` : `暂无 ${stockName} (${symbol}) 后端数据`);
     }
 
     loadWorkbenchData();
@@ -230,7 +218,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const handlePeriodChange = (period: string) => {
     setActivePeriod(period);
     const points = periodToPoints(period);
-    setChartData(priceBars.length ? toChartData(priceBars, points) : generateKlineData(points));
+    setChartData(priceBars.length ? toChartData(priceBars, points) : []);
   };
 
   const refreshPrices = async () => {
@@ -244,9 +232,14 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     if (pricesResult.success && pricesResult.data?.bars?.length) {
       setPriceBars(pricesResult.data.bars);
       setChartData(toChartData(pricesResult.data.bars, periodToPoints(activePeriod)));
+    } else {
+      setPriceBars([]);
+      setChartData([]);
     }
     if (latestResult.success && latestResult.data) {
       setLatestPrice(latestResult.data);
+    } else {
+      setLatestPrice(null);
     }
     setDataStatus(`行情刷新完成：${fetched.data?.fetched || 0} 条`);
   };
@@ -400,8 +393,10 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
   const currentMode = ANALYSIS_MODES.find(item => item.id === selectedMode) || ANALYSIS_MODES[1];
   const latestChartPoint = chartData[chartData.length - 1];
-  const chartHigh = Math.max(...chartData.flatMap(point => [Number(point.ma5 || 0), Number(point.ma10 || 0), Number(point.ma20 || 0)]));
-  const chartLow = Math.min(...chartData.flatMap(point => [Number(point.ma5 || 0), Number(point.ma10 || 0), Number(point.ma20 || 0)]).filter(Number.isFinite));
+  const chartValues = chartData.flatMap(point => [Number(point.ma5 || 0), Number(point.ma10 || 0), Number(point.ma20 || 0)]).filter(Number.isFinite);
+  const chartHigh = chartValues.length ? Math.max(...chartValues) : 0;
+  const chartLow = chartValues.length ? Math.min(...chartValues) : 0;
+  const hasPriceData = Boolean(latestPrice || latestChartPoint);
   const currentClose = latestPrice?.close || latestChartPoint?.close || latestChartPoint?.ma20 || 0;
   const currentChange = latestPrice?.change_pct ?? 0;
   const isPriceUp = Number(currentChange) >= 0;
@@ -422,12 +417,16 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
             <span className="text-xs font-mono font-medium text-neutral-400 bg-white/[0.03] px-2.5 py-1 rounded border border-white/5 tracking-wider">{symbol}</span>
           </h1>
           <div className={cn("flex items-baseline gap-4", isPriceUp ? "text-rose-500" : "text-emerald-500")}>
-            <span className="text-4xl font-mono font-medium tracking-tight drop-shadow-[0_0_15px_rgba(244,63,94,0.3)]">{displayNumber(Number(currentClose))}</span>
+            <span className="text-4xl font-mono font-medium tracking-tight drop-shadow-[0_0_15px_rgba(244,63,94,0.3)]">{hasPriceData ? displayNumber(Number(currentClose)) : '--'}</span>
             <span className={cn(
               "text-sm font-mono font-medium flex items-center px-2 py-0.5 rounded border",
-              isPriceUp ? "bg-rose-500/10 border-rose-500/20 text-rose-500" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+              !hasPriceData ? "bg-white/5 border-white/10 text-neutral-500" : isPriceUp ? "bg-rose-500/10 border-rose-500/20 text-rose-500" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
             )}>
-              <span className="rotate-45 mr-1 text-lg leading-none">{isPriceUp ? '↗' : '↙'}</span>{Number(currentChange) >= 0 ? '+' : ''}{Number(currentChange).toFixed(2)}%
+              {hasPriceData ? (
+                <>
+                  <span className="rotate-45 mr-1 text-lg leading-none">{isPriceUp ? '↗' : '↙'}</span>{Number(currentChange) >= 0 ? '+' : ''}{Number(currentChange).toFixed(2)}%
+                </>
+              ) : '等待行情'}
             </span>
           </div>
         </div>
@@ -479,19 +478,24 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
             </div>
 
             <div className="px-6 py-3 flex items-center gap-8 text-[11px] font-mono whitespace-nowrap bg-black/20 border-b border-white/5">
-               <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>MA5: {displayNumber(Number(latestChartPoint?.ma5 || 0))}</span>
-               <span className="text-indigo-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-indigo-400/90"></div>MA10: {displayNumber(Number(latestChartPoint?.ma10 || 0))}</span>
-               <span className="text-emerald-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-emerald-400/90"></div>MA20: {displayNumber(Number(latestChartPoint?.ma20 || 0))}</span>
-               <span className="text-neutral-500 ml-auto">{priceBars.length ? `VOL: ${Number(latestChartPoint?.volume || 0).toLocaleString('zh-CN')}` : '本地演示曲线'}</span>
+               <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>MA5: {latestChartPoint ? displayNumber(Number(latestChartPoint.ma5 || 0)) : '--'}</span>
+               <span className="text-indigo-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-indigo-400/90"></div>MA10: {latestChartPoint ? displayNumber(Number(latestChartPoint.ma10 || 0)) : '--'}</span>
+               <span className="text-emerald-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-emerald-400/90"></div>MA20: {latestChartPoint ? displayNumber(Number(latestChartPoint.ma20 || 0)) : '--'}</span>
+               <span className="text-neutral-500 ml-auto">{priceBars.length ? `VOL: ${Number(latestChartPoint?.volume || 0).toLocaleString('zh-CN')}` : '等待后端行情'}</span>
             </div>
 
-            {/* Chart Area */}
-            <div className="flex-1 p-5 bg-black/40 relative">
-               <div className="absolute right-6 top-6 text-[10px] font-mono text-neutral-600">{displayNumber(chartHigh)}</div>
-               <div className="absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{displayNumber(chartLow)}</div>
+             {/* Chart Area */}
+             <div className="flex-1 p-5 bg-black/40 relative">
+                <div className="absolute right-6 top-6 text-[10px] font-mono text-neutral-600">{displayNumber(chartHigh)}</div>
+                <div className="absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{displayNumber(chartLow)}</div>
+               {chartData.length === 0 && (
+                 <div className="absolute inset-0 z-10 flex items-center justify-center text-center text-xs text-neutral-500 bg-black/20">
+                   暂无后端行情数据，请点击刷新或稍后重试。
+                 </div>
+               )}
              
-             <ResponsiveContainer width="100%" height="80%">
-               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+              <ResponsiveContainer width="100%" height="80%">
+                <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                  <defs>
                    <linearGradient id="colorMa5" x1="0" y1="0" x2="0" y2="1">
                      <stop offset="5%" stopColor="#eab308" stopOpacity={0.4}/>
@@ -503,7 +507,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                  <Area type="monotone" dataKey="ma5" stroke="#eab308" strokeWidth={2} fillOpacity={1} fill="url(#colorMa5)" />
                  <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} />
                  <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} />
-                 {/* Fake Candlesticks using Bar */}
+                 {/* Compact volume-like bars under the moving averages */}
                  <Bar dataKey="ma5" barSize={4}>
                     {chartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
@@ -557,11 +561,15 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                  <motion.div 
                    key="news"
                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                 >
-                   {newsItems.map((news, i) => (
-                     <div
-                       key={i}
-                       onClick={() => news.sourceUrl && window.open(news.sourceUrl, '_blank', 'noopener,noreferrer')}
+                  >
+                    {newsItems.length === 0 ? (
+                      <div className="h-full min-h-[220px] flex items-center justify-center text-center text-xs text-neutral-500">
+                        暂无后端新闻数据，请点击刷新或稍后重试。
+                      </div>
+                    ) : newsItems.map((news, i) => (
+                      <div
+                        key={i}
+                        onClick={() => news.sourceUrl && window.open(news.sourceUrl, '_blank', 'noopener,noreferrer')}
                        className="px-4 py-3 border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer group"
                      >
                        <div className="flex gap-4">
@@ -578,12 +586,12 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                            <h4 className="text-sm text-neutral-200 font-medium leading-relaxed group-hover:text-indigo-300 transition-colors">{news.title}</h4>
                            {news.sourceUrl && <span className="text-[10px] text-indigo-400 mt-1 inline-block">打开原文 ↗</span>}
                            {news.desc && <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">{news.desc}</p>}
-                         </div>
-                       </div>
-                     </div>
-                   ))}
-                 </motion.div>
-               )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
 
                {activePanelTab === 'finance' && (
                  <motion.div key="finance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
