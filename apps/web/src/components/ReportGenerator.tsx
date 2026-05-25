@@ -14,14 +14,37 @@ import {
   FileCheck, 
   BookOpen, 
   ListOrdered,
-  Plus
+  Plus,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { api } from '../lib/api';
 
 interface ReportSection {
   title: string;
   id: string;
   content: string;
+}
+
+type ReportQuality = 'idle' | 'partial' | 'complete' | 'failed';
+type ReportSourceKey = 'fundamentals' | 'factors' | 'news' | 'fundFlow' | 'archive';
+
+interface SourceStatus {
+  key: ReportSourceKey;
+  label: string;
+  ok: boolean;
+  empty: boolean;
+  error?: string;
+}
+
+interface SourceResult<T> {
+  status: SourceStatus;
+  data: T;
+}
+
+interface ReportGeneratorProps {
+  symbol?: string;
+  stockName?: string;
 }
 
 const REPORT_TEMPLATES = [
@@ -30,14 +53,101 @@ const REPORT_TEMPLATES = [
   { id: 'risk', name: '黑天鹅情绪避险与信用预警评估', desc: '侧重于舆情违约风险、大股东股权质押及账外担保预警。' }
 ];
 
-export function ReportGenerator() {
-  const [selectedStock, setSelectedStock] = useState('贵州茅台 (600519.SH)');
+const SOURCE_LABELS: Record<ReportSourceKey, string> = {
+  fundamentals: '基本面',
+  factors: '因子',
+  news: '新闻',
+  fundFlow: '资金流',
+  archive: '历史归档',
+};
+
+const emptyStatus = (key: ReportSourceKey): SourceStatus => ({
+  key,
+  label: SOURCE_LABELS[key],
+  ok: false,
+  empty: true,
+});
+
+const hasObjectData = (value: unknown) =>
+  Boolean(value && typeof value === 'object' && Object.keys(value as Record<string, unknown>).length);
+
+const hasUsableFactorData = (value: unknown) => {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  const sampleCounts = record.sample_counts as Record<string, unknown> | undefined;
+  const factors = record.factors as Record<string, unknown> | undefined;
+  const hasSamples = Boolean(sampleCounts && Object.values(sampleCounts).some(count => Number(count) > 0));
+  const hasSignals = Array.isArray(record.signals) && record.signals.length > 0;
+  const hasNonZeroFactor = Boolean(factors && Object.values(factors).some(factor => Number(factor) !== 0));
+  return hasSamples || hasSignals || hasNonZeroFactor;
+};
+
+const sourceStatusText = (status: SourceStatus) => {
+  if (status.ok) return '可用';
+  if (status.error) return `失败：${status.error}`;
+  return '为空';
+};
+
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+function readSource<T>(
+  key: ReportSourceKey,
+  settled: PromiseSettledResult<{ success: boolean; data?: T | null; error?: string | null; message?: string | null }>,
+  fallback: T,
+  hasData: (data: T) => boolean,
+): SourceResult<T> {
+  if (settled.status === 'rejected') {
+    return {
+      data: fallback,
+      status: { key, label: SOURCE_LABELS[key], ok: false, empty: false, error: settled.reason instanceof Error ? settled.reason.message : String(settled.reason || '请求失败') },
+    };
+  }
+  const response = settled.value;
+  if (!response.success) {
+    return {
+      data: fallback,
+      status: { key, label: SOURCE_LABELS[key], ok: false, empty: false, error: response.error || response.message || '接口返回失败' },
+    };
+  }
+  const data = response.data ?? fallback;
+  if (!hasData(data)) {
+    return { data, status: emptyStatus(key) };
+  }
+  return { data, status: { key, label: SOURCE_LABELS[key], ok: true, empty: false } };
+}
+
+export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' }: ReportGeneratorProps) {
+  const [selectedStock, setSelectedStock] = useState(`${stockName} (${symbol})`);
   const [selectedTemplate, setSelectedTemplate] = useState('standard');
   const [rating, setRating] = useState('BUY / 强烈推荐');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
   const [reportGenerated, setReportGenerated] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState('summary');
+  const [dynamicSections, setDynamicSections] = useState<ReportSection[]>([]);
+  const [dataStatus, setDataStatus] = useState('等待后端数据整合');
+  const [generationError, setGenerationError] = useState('');
+  const [reportQuality, setReportQuality] = useState<ReportQuality>('idle');
+  const [sourceStatuses, setSourceStatuses] = useState<SourceStatus[]>([]);
+  const targetSymbol = selectedStock.match(/\d{5,6}/)?.[0] || symbol;
+  const selectedStockName = selectedStock.replace(/\s*\([^)]*\)\s*$/, '') || stockName;
+  const reportDate = formatLocalDate(new Date());
+  const reportId = `${targetSymbol}-AI-${reportDate.replace(/-/g, '')}`;
+  const selectedTemplateName = REPORT_TEMPLATES.find(item => item.id === selectedTemplate)?.name || selectedTemplate;
+
+  useEffect(() => {
+    setSelectedStock(`${stockName} (${symbol})`);
+    setReportGenerated(false);
+    setDynamicSections([]);
+    setGenerationError('');
+    setReportQuality('idle');
+    setSourceStatuses([]);
+  }, [symbol, stockName]);
 
   const steps = [
     { label: '多源信息收集', desc: '基本面 Agent 正从多方财经终端与交易所爬取财报与经营指标...' },
@@ -46,7 +156,7 @@ export function ReportGenerator() {
     { label: '智能排版与终审', desc: '专家圆桌交叉纠偏，渲染专业排版并输出投资逻辑评估报告面...' }
   ];
 
-  const reportSections: ReportSection[] = [
+  const fallbackReportSections: ReportSection[] = [
     {
       id: 'summary',
       title: '一、 核心投资摘要 (Executive Summary)',
@@ -68,11 +178,111 @@ export function ReportGenerator() {
       content: '需要审慎规避的尾部变量：1. 全球宏观流动性受挫对大消费主权估值的挤压。2. 自营店拓展可能引致的地方经销商利益摩擦或渠道存量竞争。3. 券商高频调降同业中枢的整体防御溢价拉平倾向。持仓合规底线建议设立 1420元 坚决止损红线，安全敞口不宜超过组合的 8%。'
     }
   ];
+  const reportSections = dynamicSections.length ? dynamicSections : fallbackReportSections;
 
-  const startGeneration = () => {
+  const startGeneration = async () => {
     setIsGenerating(true);
     setGenerationStep(0);
     setReportGenerated(false);
+    setGenerationError('');
+    setReportQuality('idle');
+    setSourceStatuses([]);
+    setDataStatus(`正在聚合 ${selectedStock} 后端数据...`);
+
+    const [fundamentalsResult, factorsResult, newsResult, fundFlowResult, archiveResult] = await Promise.allSettled([
+      api.fundamentals(targetSymbol),
+      api.factors(targetSymbol, selectedStockName, 60),
+      api.news(targetSymbol, 8),
+      api.fundFlow(targetSymbol, 30),
+      api.archiveList(targetSymbol, 10),
+    ]);
+
+    const fundamentalsSource = readSource('fundamentals', fundamentalsResult, {}, data => {
+      const record = data as Record<string, unknown>;
+      return Array.isArray(record.financial_periods) || hasObjectData(record.valuation);
+    });
+    const factorsSource = readSource('factors', factorsResult, {}, hasUsableFactorData);
+    const newsSource = readSource('news', newsResult, { news: [], total: 0 }, data => Boolean(data.news?.length));
+    const fundFlowSource = readSource('fundFlow', fundFlowResult, {}, hasObjectData);
+    const archiveSource = readSource('archive', archiveResult, { reports: [], total: 0 }, data => Boolean(data.reports?.length));
+
+    const statuses = [fundamentalsSource.status, factorsSource.status, newsSource.status, fundFlowSource.status, archiveSource.status];
+    const usableSources = statuses.filter(status => status.ok);
+    setSourceStatuses(statuses);
+
+    if (!usableSources.length) {
+      const message = '后端数据源全部不可用，未生成研报。请检查服务连接或稍后重试。';
+      setDynamicSections([]);
+      setReportGenerated(false);
+      setReportQuality('failed');
+      setGenerationError(message);
+      setDataStatus('报告生成失败：后端数据源全部不可用');
+      setIsGenerating(false);
+      return;
+    }
+
+    const fundamentals = fundamentalsSource.data as Record<string, unknown>;
+    const factors = factorsSource.data as Record<string, unknown>;
+    const newsItems = newsSource.data.news || [];
+    const fundFlow = fundFlowSource.data as Record<string, unknown>;
+    const archives = archiveSource.data.reports || [];
+    const periods = Array.isArray(fundamentals.financial_periods) ? fundamentals.financial_periods as Record<string, unknown>[] : [];
+    const latest = periods[0] || {};
+    const valuation = (fundamentals.valuation || {}) as Record<string, unknown>;
+    const factorText = factorsSource.status.ok ? JSON.stringify(factors, null, 2).slice(0, 900) : '因子接口无可用数据，本节仅保留缺口披露。';
+    const flowSummary = (fundFlow.summary || {}) as Record<string, unknown>;
+    const missingNote = statuses.some(status => !status.ok)
+      ? `数据缺口：${statuses.filter(status => !status.ok).map(status => `${status.label}${status.error ? `失败(${status.error})` : '为空'}`).join('；')}。`
+      : '全部后端数据源均返回可用数据。';
+
+    const sectionSets: Record<string, ReportSection[]> = {
+      standard: [
+        { id: 'summary', title: '一、 核心投资摘要 (Executive Summary)', content: `本报告对 ${selectedStock} 展开后端数据驱动的投研整合。当前评级设定为 ${rating}。估值侧 PE=${valuation.pe || valuation.pe_ttm || '--'}，PB=${valuation.pb || '--'}；系统同步到 ${newsItems.length} 条相关新闻/公告与 ${archives.length} 条历史归档报告。${missingNote}` },
+        { id: 'fundamentals', title: '二、 深度基本面多维透视 (Fundamentals Analysis)', content: `基本面接口返回最近财务期：${latest.period || latest.report_date || '--'}。毛利率=${latest.gross_margin_pct || '--'}，净利润同比=${latest.yoy_net_profit_pct || '--'}，ROE=${latest.roe_pct || '--'}。` },
+        { id: 'quant', title: '三、 金策量化多因子测绘 (Quantitative Factor Evaluation)', content: factorText },
+        { id: 'risk', title: '四、 舆情、资金流与风控披露 (Risk Assessment & Disclosure)', content: `近端资金流摘要：主力净流入=${flowSummary.main_net_yi ?? '--'}亿，超大单=${flowSummary.super_net_yi ?? '--'}亿，大单=${flowSummary.large_net_yi ?? '--'}亿。最新新闻要点：${newsItems.map(item => item.title).slice(0, 4).join('；') || '暂无后端新闻'}。` },
+      ],
+      macro: [
+        { id: 'summary', title: '一、 行业及产业链跟踪摘要', content: `${selectedStock} 当前评级为 ${rating}。本模板优先关注产业链、资金流和历史归档交叉验证。${missingNote}` },
+        { id: 'fundamentals', title: '二、 估值与财务上下文', content: `估值侧 PE=${valuation.pe || valuation.pe_ttm || '--'}，PB=${valuation.pb || '--'}；最近财务期=${latest.period || latest.report_date || '--'}。` },
+        { id: 'quant', title: '三、 资金流与因子联动', content: `资金流摘要：主力=${flowSummary.main_net_yi ?? '--'}亿，超大单=${flowSummary.super_net_yi ?? '--'}亿。因子片段：${factorText}` },
+        { id: 'risk', title: '四、 新闻与归档跟踪', content: `新闻要点：${newsItems.map(item => item.title).slice(0, 5).join('；') || '暂无后端新闻'}。历史报告数量：${archives.length}。` },
+      ],
+      risk: [
+        { id: 'summary', title: '一、 风险摘要与评级约束', content: `${selectedStock} 当前评级为 ${rating}。本模板优先披露不可用数据源与尾部风险。${missingNote}` },
+        { id: 'fundamentals', title: '二、 财务红旗扫描', content: `毛利率=${latest.gross_margin_pct || '--'}，净利润同比=${latest.yoy_net_profit_pct || '--'}，ROE=${latest.roe_pct || '--'}。缺失字段应视为后续人工复核重点。` },
+        { id: 'quant', title: '三、 因子与资金压力测试', content: `资金流：主力=${flowSummary.main_net_yi ?? '--'}亿，大单=${flowSummary.large_net_yi ?? '--'}亿。因子风险片段：${factorText}` },
+        { id: 'risk', title: '四、 舆情与历史归档预警', content: `新闻风险线索：${newsItems.map(item => item.title).slice(0, 4).join('；') || '暂无后端新闻'}。历史归档报告：${archives.length} 条。` },
+      ],
+    };
+
+    setDynamicSections(sectionSets[selectedTemplate] || sectionSets.standard);
+    const quality: ReportQuality = statuses.every(status => status.ok) ? 'complete' : 'partial';
+    setReportQuality(quality);
+    setReportGenerated(true);
+    setDataStatus(quality === 'complete' ? '后端数据已完成聚合，可在右侧预览、下载或打印' : '部分后端数据可用：已生成带缺口披露的研报');
+    setIsGenerating(false);
+  };
+
+  const downloadReport = () => {
+    const markdown = [
+      `# ${selectedStock} 投研报告`,
+      '',
+      `评级：${rating}`,
+      `模板：${selectedTemplateName}`,
+      `数据质量：${reportQuality === 'complete' ? '后端数据完整' : reportQuality === 'partial' ? '部分数据缺失' : '未生成'}`,
+      '',
+      ...sourceStatuses.map(status => `- ${status.label}：${sourceStatusText(status)}`),
+      '',
+      ...reportSections.map(section => `## ${section.title}\n\n${section.content}`),
+    ].join('\n\n');
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${targetSymbol}-research-report.md`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -82,9 +292,7 @@ export function ReportGenerator() {
         setGenerationStep(prev => {
           if (prev >= steps.length - 1) {
             clearInterval(timer);
-            setIsGenerating(false);
-            setReportGenerated(true);
-            return steps.length;
+            return steps.length - 1;
           }
           return prev + 1;
         });
@@ -109,7 +317,7 @@ export function ReportGenerator() {
           研究报告自动生成器
         </h2>
         <p className="text-xs text-neutral-500 mt-1.5 font-mono">
-          依托 AI 多 Agent 网络进行数据集成排版，协助分析师一键生成深度专业的信息披露与估值测绘草案。
+          {dataStatus}
         </p>
       </div>
 
@@ -127,6 +335,7 @@ export function ReportGenerator() {
               onChange={e => setSelectedStock(e.target.value)}
               className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500/50"
             >
+              <option value={selectedStock}>{selectedStock}</option>
               <option value="贵州茅台 (600519.SH)">贵州茅台 (600519.SH)</option>
               <option value="宁德时代 (300750.SZ)">宁德时代 (300750.SZ)</option>
               <option value="招商银行 (600036.SH)">招商银行 (600036.SH)</option>
@@ -295,13 +504,23 @@ export function ReportGenerator() {
                       <span className="px-2 py-0.5 bg-rose-500/15 border border-rose-500/20 rounded text-[9px] font-semibold text-rose-450 uppercase leading-none">
                         INSTITUTIONAL ONLY
                       </span>
+                      {reportQuality !== 'idle' && reportQuality !== 'failed' && (
+                        <span className={cn(
+                          "px-2 py-0.5 border rounded text-[9px] font-semibold uppercase leading-none",
+                          reportQuality === 'complete'
+                            ? "bg-emerald-500/15 border-emerald-500/20 text-emerald-400"
+                            : "bg-amber-500/15 border-amber-500/20 text-amber-300"
+                        )}>
+                          {reportQuality === 'complete' ? '后端数据完整' : '部分数据缺失'}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-400">
-                      <button className="p-1 px-2 flex items-center gap-1 bg-white/5 border border-white-5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
+                      <button onClick={downloadReport} className="p-1 px-2 flex items-center gap-1 bg-white/5 border border-white-5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
                         <Download className="w-3 h-3" /> 下载源
                       </button>
-                      <button className="p-1 px-2 flex items-center gap-1 bg-white/5 border border-white-5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
+                      <button onClick={() => window.print()} className="p-1 px-2 flex items-center gap-1 bg-white/5 border border-white-5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
                         <Printer className="w-3 h-3" /> 打印格式
                       </button>
                     </div>
@@ -318,7 +537,7 @@ export function ReportGenerator() {
                           金策投研体系正式上市公司评测书 (AI-FINANCIAL NOTE)
                         </h1>
                         <p className="text-[10px] font-mono tracking-widest text-[#6366f1] font-semibold">
-                          编号: GZ-MT-2026-0524 • 授信主体: 核心分析助理网络
+                          编号: {reportId} • 授信主体: 核心分析助理网络
                         </p>
                       </div>
 
@@ -333,14 +552,40 @@ export function ReportGenerator() {
                           <span className="text-rose-400 font-bold">{rating}</span>
                         </div>
                         <div>
-                          <span className="text-neutral-500 block">目标价区间 (Target Price):</span>
-                          <span className="text-neutral-200 font-bold">1,750 - 1,820 元</span>
+                          <span className="text-neutral-500 block">报告模板 (Template):</span>
+                          <span className="text-neutral-200 font-bold">{selectedTemplateName}</span>
                         </div>
                         <div>
                           <span className="text-neutral-500 block">汇编日期 (Date):</span>
-                          <span className="text-neutral-200 font-bold">2026-05-24</span>
+                          <span className="text-neutral-200 font-bold">{reportDate}</span>
                         </div>
                       </div>
+
+                      {sourceStatuses.length > 0 && (
+                        <div className="bg-black/30 border border-white/5 rounded-xl p-4">
+                          <div className="flex items-center gap-2 mb-3 text-[10px] font-mono uppercase tracking-widest text-neutral-500">
+                            <ListOrdered className="w-3.5 h-3.5" /> 后端数据源状态
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {sourceStatuses.map(status => (
+                              <div
+                                key={status.key}
+                                className={cn(
+                                  "rounded-lg border px-3 py-2 text-[10px] font-mono text-left",
+                                  status.ok
+                                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                                    : status.error
+                                      ? "bg-rose-500/10 border-rose-500/20 text-rose-300"
+                                      : "bg-amber-500/10 border-amber-500/20 text-amber-300"
+                                )}
+                              >
+                                <span className="font-semibold">{status.label}</span>
+                                <span className="block mt-0.5 text-neutral-400 line-clamp-2">{sourceStatusText(status)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Focused outlines text render dynamically or as block */}
                       <div className="space-y-6 font-sans text-xs leading-relaxed text-neutral-300">
@@ -398,6 +643,28 @@ export function ReportGenerator() {
                     请在左侧配置面板中指定您欲展开多因子分析与公司基本面测绘的股票，然后点击“启动智能整合排版”。AI Agent 助理网络将全面对标的资产进行结构化信源编纂，提供可出版级的专业投资评估。
                   </p>
                 </div>
+
+                {generationError && (
+                  <div className="mt-2 max-w-md rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-left">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                      <div>
+                        <h4 className="text-xs font-semibold text-rose-300">报告生成失败</h4>
+                        <p className="text-xs text-rose-200/80 mt-1 leading-relaxed">{generationError}</p>
+                      </div>
+                    </div>
+                    {sourceStatuses.length > 0 && (
+                      <div className="mt-3 grid grid-cols-1 gap-1.5 text-[10px] font-mono">
+                        {sourceStatuses.map(status => (
+                          <div key={status.key} className="flex justify-between gap-3 rounded bg-black/20 px-2 py-1 text-neutral-400">
+                            <span>{status.label}</span>
+                            <span className="text-right">{sourceStatusText(status)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </motion.div>
             )}
 

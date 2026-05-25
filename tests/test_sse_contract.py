@@ -55,6 +55,61 @@ async def test_status_event_has_type_and_mode(client):
     events = _parse_sse_events(resp.text)
     assert events[0]["type"] == "status"
     assert events[0]["mode"] == "deep"
+    assert events[0]["data"]["conversation_id"] == "test-conv-id"
+
+
+@pytest.mark.anyio
+async def test_status_event_uses_existing_conversation_id(client):
+    """status event 续聊时必须回传已有 conversation_id"""
+    mock_orch = _mock_orchestrator(
+        {"mode": "free", "content": "x", "evidence": [], "agents": {}}
+    )
+
+    with patch(
+        "backend.ai_assistant.orchestrator.ChatOrchestrator", return_value=mock_orch
+    ):
+        resp = await client.post(
+            "/api/chat/stream",
+            json={"message": "hi", "conversation_id": "existing-conv-id"},
+        )
+
+    events = _parse_sse_events(resp.text)
+    assert events[0]["type"] == "status"
+    assert events[0]["data"]["conversation_id"] == "existing-conv-id"
+    mock_orch.new_conversation.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_implicit_mode_keeps_auto_routing(client):
+    """未显式传 mode 时不能覆盖 orchestrator 自动路由"""
+    mock_orch = _mock_orchestrator(
+        {"mode": "deep", "content": "x", "evidence": [], "agents": {}}
+    )
+
+    with patch(
+        "backend.ai_assistant.orchestrator.ChatOrchestrator", return_value=mock_orch
+    ):
+        await client.post("/api/chat/stream", json={"message": "hi"})
+
+    assert mock_orch.send_message.call_args.kwargs["mode_override"] is None
+
+
+@pytest.mark.anyio
+async def test_explicit_mode_overrides_auto_routing(client):
+    """显式传 mode 时才跳过自动路由"""
+    mock_orch = _mock_orchestrator(
+        {"mode": "standard", "content": "x", "evidence": [], "agents": {}}
+    )
+
+    with patch(
+        "backend.ai_assistant.orchestrator.ChatOrchestrator", return_value=mock_orch
+    ):
+        await client.post(
+            "/api/chat/stream",
+            json={"message": "hi", "mode": "standard"},
+        )
+
+    assert mock_orch.send_message.call_args.kwargs["mode_override"] == "standard"
 
 
 @pytest.mark.anyio
@@ -197,6 +252,7 @@ async def test_orchestrator_failure_returns_json_not_sse():
             resp = await client.post("/api/chat/stream", json={"message": "hi"})
 
     assert resp.status_code == 500
+    assert "text/event-stream" not in resp.headers.get("content-type", "")
     data = resp.json()
     assert data["success"] is False
     assert "error" in data

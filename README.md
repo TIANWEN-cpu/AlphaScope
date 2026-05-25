@@ -1,390 +1,322 @@
-# AI-Finance: Multi-Agent Financial Analysis Workbench
+# AI-Finance｜面向中国投资者的 AI 投研工作台
 
 [![CI](https://github.com/TIANWEN-cpu/AI--FINANCE/actions/workflows/ci.yml/badge.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
-[![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/Dockerfile)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/TIANWEN-cpu/AI--FINANCE/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-793%20passed-brightgreen)](https://github.com/TIANWEN-cpu/AI--FINANCE/tree/main/tests)
-[![Release](https://img.shields.io/badge/release-v1.3-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases/tag/v1.3)
+[![Frontend](https://img.shields.io/badge/frontend-Vite%20%2B%20React%2019-646CFF)](apps/web/package.json)
+[![FastAPI](https://img.shields.io/badge/FastAPI-113%20APIs-009688)](docs/api.md)
+[![Tests](https://img.shields.io/badge/tests-802%20passed-brightgreen)](tests)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/badge/release-v1.4.0-blue)](https://github.com/TIANWEN-cpu/AI--FINANCE/releases)
 
-A production-grade engineering workbench that orchestrates heterogeneous LLM agents to analyze Chinese and global equities. Built to answer a specific question: **can a multi-model ensemble produce investment research that's more reliable than any single model?**
+AI-Finance 是一个专为 **A 股、港股、基金、定投和中文投研场景** 打造的本地化 AI 金融研究平台。它不是简单的聊天机器人，而是把行情、新闻、公告、K 线、多 Agent 分析、证据链、研究报告、量化回测和基金组合管理整合到一个可运行、可验证、可扩展的投研工作台中。
 
-## The Problem
+> 重要说明：本项目用于研究、学习和辅助分析，不构成任何投资建议。所有输出都应结合真实数据源、个人风险偏好和专业判断独立核验。
 
-Single-LLM financial analysis has three failure modes:
+## 为什么适合中国用户
 
-1. **Homogeneous bias** — the same model family produces correlated errors. When GPT misreads a sentiment signal, Claude often misreads it the same way.
-2. **No self-correction** — a solo agent has no mechanism to challenge its own conclusions.
-3. **Opaque reasoning** — users see a final verdict but can't trace which data points drove it, making it impossible to calibrate trust.
+### 1. 聚焦中文金融语境
 
-This project tackles all three through architectural choices: heterogeneous models, a critic layer, and evidence-driven output.
+- 支持 A 股代码、中文股票名、公告、新闻、资金流、技术指标、基金和定投等高频中文投研场景。
+- 前端交互、状态提示和错误说明均以中文为主，适合国内用户直接使用。
+- Provider 架构覆盖 CNInfo、AkShare、Tushare、财联社、HKEX、SEC、FRED 等数据源，既能做本土市场研究，也能扩展到港股和全球宏观数据。
 
-## Architecture
+### 2. 多 Agent 协同，而不是单模型拍脑袋
 
-```
+单一大模型容易出现同质化偏差、过度自信和证据不可追踪。AI-Finance 采用多角色协同：
+
+- 基本面 Agent：关注估值、盈利质量、现金流和财务结构。
+- 技术面 Agent：关注 K 线、均线、MACD、RSI、支撑压力等量价信号。
+- 舆情 Agent：关注新闻、公告、事件和市场情绪。
+- 风控 Agent：关注波动、回撤、集中度、异常数据和风险边界。
+- Critic/Chairman 层：检查证据质量、矛盾点和过度自信，降低单模型幻觉风险。
+
+### 3. 证据链优先，减少“黑盒结论”
+
+平台强调可追溯研究流程：
+
+- 每条分析尽量关联数据来源、新闻、公告、行情或指标。
+- 报告生成会显示后端数据源成功、失败、为空的真实状态。
+- 资讯、日历、演示样本和未接入能力都会明确标注，不把本地模板包装成真实 AI 结论。
+
+### 4. 本地可控，密钥安全
+
+- 支持本地运行 FastAPI + Vite React 前端，敏感配置保存在本机。
+- Provider API Key 由后端加密保存，前端只显示脱敏占位，不回显明文。
+- 保存 Provider 配置时不会在响应中返回 plaintext `api_key`。
+- 日志和错误信息经过脱敏处理，适合个人研究和团队内网部署。
+
+### 5. 工程化程度高，可二次开发
+
+- FastAPI 后端提供 113 个接口，覆盖聊天、SSE、行情、新闻、公告、报告、Agent、设置、量化、基金等模块。
+- Vite + React 19 前端工作台包含对话式研究、多 Agent 网络、组合风控、数据源聚合、K 线多模态、报告生成、证据链、量化回测、基金定投等视图。
+- 测试体系覆盖后端契约、SSE、设置安全、运行时编排、数据处理等关键路径，当前验证状态为 `802 passed, 2 skipped`。
+
+## v1.4.0 重点更新
+
+v1.4.0 聚焦“前端真实可用”和“状态诚实可见”，修复了一批此前容易让用户误解或交互无响应的问题。
+
+### 新版前端工作台
+
+- 从旧前端迁移到 Vite React 工作台，启动更快，交互更顺滑。
+- 顶部股票搜索会同步更新工作台、K 线、新闻、报告、组合、回测等相关模块。
+- 股票代码纯数字搜索不会再混用上一个股票名称。
+- K 线页默认展示当前标的相关视图，演示样本与当前标的明确分离。
+
+### 对话式研究与 SSE 契约修复
+
+- `/api/chat/stream` SSE 状态事件携带 `conversation_id`。
+- Orchestrator 异常时返回 JSON 500，不再伪装成成功 SSE。
+- 未显式选择模式时不强行覆盖自动路由，保留后端智能调度能力。
+- 前端能正确显示流式错误、状态和 Agent 输出。
+
+### 设置中心安全修复
+
+- Provider 增删改查、连接测试、模型列表拉取接入真实后端。
+- API Key 不回显明文，保存接口响应也不会泄露密钥。
+- 空 API Key 更新不会误清空已保存密钥。
+- 未接入的设置页签明确显示“暂未开放”，不伪装成企业版能力。
+
+### 多 Agent 管理闭环
+
+- 前端启用/禁用 Agent 会持久化到 `/api/manage/agents`。
+- 后端运行时会读取托管 Agent 配置。
+- Standard、Deep、Auto 模式都会排除已禁用 Agent，避免前端配置和实际执行不一致。
+
+### 新闻、报告、回测、基金模块更真实
+
+- 新闻聚合不再把本地样本当作真实后端数据；新闻、公告、详情、搜索失败都会显示明确状态。
+- 市场 ticker 和财经日历中的静态内容会标注为演示或参考。
+- 报告生成会显示数据源成功、失败和为空状态；数据不足时不会生成伪完整报告。
+- 回测区分“本地演示曲线”和“后端完成结果”，策略参数会真实传给后端。
+- 基金定投的本地模板、规则和沙盒能力都有清晰标注，不冒充后端 AI。
+
+## 功能总览
+
+| 模块 | 能力 |
+|------|------|
+| 对话式研究 | 支持标准、深度、自动模式；SSE 流式输出；多 Agent 协同分析 |
+| 股票工作台 | 行情、新闻、资金流、因子、基本面、图表和研究摘要聚合 |
+| 多 Agent 网络 | Agent 配置查看、启用/禁用、运行时托管配置同步 |
+| 数据源终端 | 新闻、公告、事件、市场参考 ticker、财经日历状态展示 |
+| K 线/多模态 | K 线、均线、成交量、MACD/RSI、图片上传诊断 |
+| 研究报告 | 按数据源质量生成报告，显示证据和缺失项 |
+| 证据链 | 追踪新闻、公告、行情、报告和 Agent 输出来源 |
+| 组合与风控 | 基金组合、持仓、风险指标、再平衡接口 |
+| 量化回测 | 策略列表、参数配置、回测执行、运行记录 |
+| 基金定投 | 基金搜索、净值、指标、定投模拟、计划管理 |
+| 设置中心 | Provider 管理、API Key 加密保存、连接测试、模型列表 |
+
+## 系统架构
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
-│                     Data Layer                               │
-│  Provider Plugins (20+ sources, auto-discovery, failover)   │
-│  CNInfo · SEC · HKEX · Tushare · CLS · OpenBB · AkShare    │
-│  + Finnhub · FRED · Reddit · Custom (user-extensible)       │
+│ 数据层                                                       │
+│ CNInfo / AkShare / Tushare / CLS / HKEX / SEC / FRED / 自定义 │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   Quality Layer                              │
-│  Deduplicator (fingerprint) + SourceRanker (S/A/B/C/D)      │
-│  Evidence Aggregator (cross-source validation)               │
-│  Anomaly Detector (price spikes, garbled text, dupes)       │
+│ 质量层                                                       │
+│ 去重、来源评级、证据聚合、异常数据检测、跨源校验              │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   Storage Layer                              │
-│  SQLite (20+ tables, thread-safe) + ChromaDB (optional RAG) │
+│ 存储层                                                       │
+│ SQLite、报告归档、运行记录、设置存储、可选 ChromaDB RAG       │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   Analysis Layer                             │
-│  5 Heterogeneous Agents (parallel) → Critic → Chairman      │
-│                                                             │
-│  Fundamentals (Claude)  ·  Technicals (GPT)                 │
-│  Sentiment (DeepSeek)   ·  Risk Control (SenseNova)         │
-│  Retail Behavior (Mimo)                                     │
-│                                                             │
-│  Any agent failure → automatic DeepSeek fallback            │
+│ 分析层                                                       │
+│ 多 Agent 并行分析 → Critic 质检 → Chairman 汇总               │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   Presentation Layer                         │
-│  Streamlit Dashboard (10 tabs) · FastAPI (113 endpoints)    │
-│  Next.js Frontend (13 views)                                │
+│ 服务层                                                       │
+│ FastAPI、SSE、任务队列、Provider 管理、量化/基金/报告 API     │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   Archive Layer                              │
-│  Markdown reports + JSON index + model combination metadata  │
+│ 展示层                                                       │
+│ Vite React 主前端、Streamlit 调试台、Docker/Windows 本地运行  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+## 快速开始
 
-### Prerequisites
+### 环境要求
 
-- Python 3.11 or 3.12
-- At least one LLM API key (DeepSeek recommended for starting)
+- Python 3.11 或 3.12
+- Node.js 20+
+- 至少一个可用的大模型 API Key，建议先配置 DeepSeek
+- Windows、Linux、macOS 均可运行；Windows 用户可优先使用脚本启动
 
-### Windows
+### 1. 克隆项目
 
 ```bash
 git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git
 cd AI--FINANCE
+```
+
+### 2. 安装后端依赖
+
+```bash
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with your API keys (at minimum DEEPSEEK_API_KEY)
-
-# 一键启动（推荐）
-scripts\start_local.bat
-
-# 或手动启动
-python -m streamlit run frontend/dashboard.py --server.port 8501
 ```
 
-### Linux / macOS
+然后编辑 `.env`，填入自己的模型和数据源 Key。至少建议配置：
 
-```bash
-git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git
-cd AI--FINANCE
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your API keys
-python -m streamlit run frontend/dashboard.py --server.port 8501
+```env
+DEEPSEEK_API_KEY=你的密钥
 ```
 
-### Docker
+### 3. 启动 FastAPI 后端
 
 ```bash
-git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git
-cd AI--FINANCE
-cp .env.example .env
-# Edit .env with your API keys
-docker-compose up -d
-# Streamlit: http://localhost:8501
-# FastAPI:   http://localhost:8000
-# Next.js:   http://localhost:3000
-```
-
-### FastAPI Backend (optional)
-
-```bash
-pip install -r requirements-api.txt
 uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
-# API docs at http://localhost:8000/docs
 ```
 
-### Windows .exe Installer (optional)
+启动后可访问：
+
+- 健康检查：`http://localhost:8000/health`
+- API 文档：`http://localhost:8000/docs`
+
+### 4. 启动 Vite React 前端
 
 ```bash
-pip install pyinstaller
-python build.py
-# Output: dist/AI-Finance/AI-Finance.exe
-# For installer: open installer/setup.iss with Inno Setup
+cd apps/web
+npm install
+npm run dev
 ```
 
-## Dependency Management
+默认访问：`http://localhost:3000`
 
-Dependencies are split into layers. Install only what you need:
-
-| File | Purpose | Contains |
-|------|---------|----------|
-| `requirements-core.txt` | Core runtime | Streamlit, pandas, akshare, openai, pydantic, etc. |
-| `requirements-api.txt` | FastAPI backend | fastapi, uvicorn (+ core) |
-| `requirements-rag.txt` | RAG/vector search | chromadb (optional, needs C++ Build Tools on Windows) |
-| `requirements-dev.txt` | Development | pytest, ruff (+ core) |
-| `requirements.txt` | Default install | core + api + dev (excludes RAG) |
+### 5. Windows 一键启动
 
 ```bash
-pip install -r requirements.txt           # Default: core + API + dev
-pip install -r requirements-core.txt      # Core only
-pip install -r requirements-rag.txt       # Add RAG support
-pip install -r requirements.txt -r requirements-rag.txt  # Everything
+scripts\start_local.bat
 ```
 
-## API Endpoints
-
-The FastAPI backend exposes 113 endpoints across 17 router modules:
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/api/chat/stream` | POST | SSE streaming chat |
-| `/api/analysis/run` | POST | Run agent analysis |
-| `/api/vision/analyze` | POST | Image/K-line chart analysis |
-| `/api/agents` | GET | List agent configurations |
-| `/api/teams` | GET | List expert teams |
-| `/api/models/providers` | GET | List model providers |
-| `/api/reports/{id}` | GET | Get analysis report |
-| `/api/settings/providers` | GET/POST | Provider 管理 |
-| `/api/settings/providers/{id}` | DELETE | 删除 Provider |
-| `/api/settings/providers/{id}/test` | POST | 测试连接 |
-| `/api/settings/export` | GET | 导出设置 |
-| `/api/settings/import` | POST | 导入设置 |
-| `/api/archive` | GET | 报告列表（支持筛选） |
-| `/api/archive/stats` | GET | 报告统计 |
-| `/api/archive/combo-stats` | GET | 模型组合统计 |
-| `/api/archive/{path}` | GET/DELETE | 读取/删除报告 |
-| `/api/tasks` | GET | 任务列表 |
-| `/api/tasks/{id}` | GET | 任务详情 |
-| `/api/tasks/{id}/cancel` | POST | 取消任务 |
-| `/api/analysis/async` | POST | 异步运行分析 |
-| `/api/manage/agents` | GET/POST | Agent 列表/创建 |
-| `/api/manage/agents/{id}` | DELETE | 删除 Agent |
-| `/api/manage/teams` | GET/POST | 专家团列表/创建 |
-| `/api/manage/teams/{id}` | DELETE | 删除专家团 |
-| `/api/files/upload` | POST | File upload |
-| `/api/templates` | GET | Research task templates |
-| `/api/costs` | GET | LLM cost statistics |
-| `/api/backtest/stats` | GET | Backtest performance |
-| `/api/quant/status` | GET | Jince 量化引擎状态 |
-| `/api/quant/strategies` | GET | 策略列表 |
-| `/api/quant/strategies/reload` | POST | 重载策略 |
-| `/api/quant/backtest` | POST | 发起回测 |
-| `/api/quant/live/start` | POST | 启动实盘 |
-| `/api/quant/live/stop` | POST | 停止实盘 |
-| `/api/quant/runs` | GET | 运行记录列表 |
-| `/api/quant/runs/{run_id}` | GET | 运行详情 |
-| `/api/funds/search` | GET | 基金搜索 |
-| `/api/funds/{code}` | GET | 基金信息 |
-| `/api/funds/{code}/nav` | GET | 基金净值历史 |
-| `/api/funds/{code}/metrics` | GET | 基金指标计算 |
-| `/api/fund-dca/simulate` | POST | 定投模拟 |
-| `/api/fund-dca/plans` | GET/POST | 定投计划 CRUD |
-| `/api/fund-portfolio` | GET/POST | 组合管理 CRUD |
-| `/api/fund-portfolio/{id}` | GET/PUT/DELETE | 组合详情/更新/删除 |
-| `/api/fund-portfolio/rebalance` | POST | 组合再平衡 |
-| `/api/fund-reports/generate` | POST | 基金报告生成 |
-
-Full API documentation available at `http://localhost:8000/docs` when the API server is running.
-
-## Design Decisions
-
-### Why a Provider plugin architecture?
-
-Financial data sources are unreliable. APIs change, rate limits hit, services go down. The Provider pattern gives us:
-
-- **Uniform interface** — every source returns `NewsItem`, `ResearchReport`, `Announcement`, etc. via Pydantic models.
-- **Priority-based routing** — CNInfo (official) beats AkShare (scraped) for announcements.
-- **Graceful degradation** — when Tushare's API is down, the system falls back to AkShare automatically.
-- **Extensible** — drop a Python file in `custom_providers/` and it's auto-discovered.
-
-### Adding Custom Data Sources
+### 6. Docker 启动
 
 ```bash
-python scripts/create_provider.py --name my_source --markets CN --types news --custom
-# Implement data fetching in custom_providers/my_source.py
-# Configure in config/data_sources.yaml
+cp .env.example .env
+docker-compose up -d
 ```
 
-### Why a Critic agent?
+默认服务：
 
-Without a critic, agents produce confident-sounding but occasionally hallucinated analysis. The Critic scores each agent's output 0-100 on evidence quality, flags contradictions, and calls out overconfidence.
+- FastAPI：`http://localhost:8000`
+- Vite 前端：`http://localhost:3000`
+- Streamlit 调试台：`http://localhost:8501`
 
-### Why heterogeneous models?
+## 依赖分层
 
-| Model | Role | Why |
-|-------|------|-----|
-| Claude Sonnet 4.5 | Fundamentals | Deep reasoning, Chinese fluency |
-| GPT-5.2 | Technicals | Pattern recognition on structured data |
-| DeepSeek Chat | Sentiment | Native Chinese, cost-effective |
-| SenseNova | Risk Control | Different reasoning engine |
-| Mimo | Retail Behavior | Genuinely different perspective |
-
-**Model diversity matters more than individual model quality.** A 5-model ensemble outperforms a single "excellent" model because correlated failures cancel out.
-
-### Why three analysis modes?
-
-| Mode | Agents | Models | Use Case |
-|------|--------|--------|----------|
-| Standard | 3 | DeepSeek | Quick screening, high throughput |
-| Deep | 5 + Critic + Chairman | Mixed | Full research with evidence |
-| Auto | Pre-screen → Deep if ambiguous | Dynamic | Balanced cost/quality |
-
-## Testing
+| 文件 | 用途 |
+|------|------|
+| `requirements-core.txt` | 核心运行依赖：Streamlit、pandas、akshare、openai、pydantic 等 |
+| `requirements-api.txt` | FastAPI 服务依赖 |
+| `requirements-rag.txt` | 可选 RAG / ChromaDB 依赖 |
+| `requirements-dev.txt` | 测试、格式化、开发工具 |
+| `requirements.txt` | 默认安装：core + api + dev，不包含可选 RAG |
 
 ```bash
-# Run all tests (793 tests, ~15s)
+pip install -r requirements.txt
+pip install -r requirements-rag.txt  # 如需向量检索能力再安装
+```
+
+## 常用开发命令
+
+### 后端测试和格式化
+
+```bash
 python -m pytest tests/ -v
-
-# Lint
-ruff check backend/ frontend/ tests/
-ruff format --check backend/ frontend/ tests/
-
-# Or use Make
-make test
-make lint
-make check    # lint + test
+ruff check backend frontend tests
+ruff format --check backend frontend tests
 ```
 
-## Project Structure
+### 前端类型检查和构建
 
+```bash
+npm --prefix "apps/web" run lint
+npm --prefix "apps/web" run build
 ```
+
+> 前端 lint 使用 TypeScript `tsc --noEmit`；不要用 Ruff 检查 `.ts` / `.tsx` 文件。
+
+## API 能力概览
+
+FastAPI 后端提供 113 个接口，主要包括：
+
+| 能力 | 代表接口 |
+|------|----------|
+| 健康检查 | `GET /health` |
+| SSE 对话 | `POST /api/chat/stream` |
+| 分析任务 | `POST /api/analysis/run`, `POST /api/analysis/async` |
+| 多模态分析 | `POST /api/vision/analyze` |
+| Agent 管理 | `GET /api/agents`, `GET/POST /api/manage/agents` |
+| Provider 设置 | `GET/POST /api/settings/providers`, `POST /api/settings/providers/{id}/test` |
+| 行情数据 | `GET /api/prices/{symbol}/latest`, `POST /api/prices/{symbol}/fetch` |
+| 新闻公告 | `GET /api/news`, `GET /api/news/announcements`, `GET /api/news/{id}` |
+| 报告归档 | `GET /api/archive`, `GET /api/archive/{path}` |
+| 量化回测 | `GET /api/quant/strategies`, `POST /api/quant/backtest`, `GET /api/quant/runs` |
+| 基金研究 | `GET /api/funds/search`, `GET /api/funds/{code}/nav`, `POST /api/fund-dca/simulate` |
+| 组合管理 | `GET/POST /api/fund-portfolio`, `POST /api/fund-portfolio/rebalance` |
+
+完整接口请启动服务后查看 `http://localhost:8000/docs`。
+
+## 项目结构
+
+```text
 backend/                # FastAPI 后端
-├── api/                # REST 端点 (113)
-├── agents/             # Agent 配置与执行
-├── teams/              # 专家团
-├── runtime/            # 工作流编排 (含 ToolRouter)
-├── providers/          # 20+ 数据源插件
-├── integrations/       # 外部引擎适配 (Jince)
-├── funds/              # 基金/定投/组合模块
-├── vision/             # 图片/K线分析
-├── storage/            # SQLite 数据库
-├── rag/                # ChromaDB (可选)
-├── security/           # Key vault, 脱敏
-├── schemas/            # Pydantic 模型
-└── settings_store.py   # 设置存储层
+├── api/                # REST / SSE 接口
+├── runtime/            # 多 Agent 编排与模式路由
+├── providers/          # 数据源插件
+├── agents/             # Agent 定义与提示词
+├── funds/              # 基金、定投、组合逻辑
+├── vision/             # 图片和 K 线分析
+├── storage/            # SQLite 存储
+├── security/           # 密钥加密、脱敏和安全工具
+└── settings_store.py   # Provider 设置持久化
 
+apps/web/               # Vite React 主前端
 frontend/               # Streamlit 调试台
-apps/web/               # Next.js 主前端
 config/                 # YAML 配置
 prompts/                # 提示词模板
-scripts/                # 启动/迁移/检查脚本
-tests/                  # 793 单元测试
-
-data/                   # 运行时数据 (gitignore)
-├── db/                 # SQLite 数据库
-├── cache/              # ChromaDB, 缓存
-├── reports/            # 分析报告
-├── uploads/            # 上传文件
-└── logs/               # 日志
+scripts/                # 启动、迁移、检查脚本
+tests/                  # 后端测试与契约测试
+docs/                   # 架构、API、部署和用户文档
+data/                   # 本地运行数据，默认 gitignore
 ```
 
-## Version History
+## 版本历史
 
-| Version | Date | Focus |
-|---------|------|-------|
-| v1.3 | 2026-05-23 | Jince 量化引擎适配、基金/定投/组合模块、ToolRouter 10 工具、113 API、793 tests |
-| v1.2 | 2026-05-23 | 前端功能补全: Settings CRUD(Provider/Agent/Team 增删改)、Expert 圆桌接通、TaskCenter 任务中心、成本统计结构化 UI、模型自动拉取、Streamlit 14 Tab |
-| v1.1 | 2026-05-22 | 前端完整重构: 深色工作台、K线SVG图、资讯/财务/资金流/因子四标签、SSE流式AI面板、存档/专家/健康/设置页面、资金流+因子 API |
-| v1.0.1 | 2026-05-22 | 性能优化 + 安全加固: async→sync 端点、YAML 缓存、并行 provider、SHA-256、React.memo、error boundary |
-| v1.0 | 2026-05-21 | Local 正式版: 一键启动、主工作台、专家团/K线/报告/备份、697 tests |
-| v0.90 | 2026-05-21 | Release Candidate: 功能冻结、全面测试、Next.js 构建、CI 全绿 |
-| v0.85 | 2026-05-21 | Windows 一键包: 启动器/依赖安装/快捷方式；v1.0.1 修复 PowerShell/npm/stop 脚本问题 |
-| v0.81 | 2026-05-21 | 用户手册: 安装、快速开始、模型/数据源、专家团、K线、报告、FAQ |
-| v0.70 | 2026-05-21 | Local RC: 稳定性/错误处理/诊断/降级/备份验收, 697 tests |
-| v0.69 | 2026-05-21 | 性能优化: TTLCache/重试退避/并发限制, 675 tests |
-| v0.68 | 2026-05-21 | 日志与诊断: diagnostics_store/诊断API 6端点/汇总统计, 656 tests |
-| v0.67 | 2026-05-21 | 合规输出: 禁用词扩展30+/风险级别免责声明/高风险标记, 644 tests |
-| v0.66 | 2026-05-21 | 本地安全加固: AES-GCM加密/日志脱敏, 644 tests |
-| v0.55 | 2026-05-21 | K线图视觉正式版: 结构化报告/市场推断/置信度门控/Vision API, 613 tests |
-| v0.54 | 2026-05-21 | 新闻/公告/事件分析: news_store, event_impact, 新闻 API, 602 tests |
-| v0.53 | 2026-05-21 | 基本面分析强化: 估值/盈利质量/现金流/资产负债/综合评分, 580 tests |
-| v0.52 | 2026-05-21 | 技术面分析强化: MA/MACD/RSI/KDJ/量比/支撑压力指标引擎, 559 tests |
-| v0.51 | 2026-05-21 | 行情数据标准化: price_store, 代码标准化, 数据校验, 526 tests |
-| v0.50 | 2026-05-21 | Local Beta: 8 个验收标准全部通过, 496 tests |
-| v0.49 | 2026-05-21 | 证据链引擎增强: 来源可信度/时间衰减/多源一致性/反方证据, 478 tests |
-| v0.48 | 2026-05-21 | 文件与知识库: file_store CRUD, 知识库 API, DocumentPipeline 修复, 451 tests |
-| v0.47 | 2026-05-21 | Agent/专家团编辑器: CRUD API, 431 tests |
-| v0.46 | 2026-05-21 | 主工作台重构: 会话列表、Agent 状态、证据链、lucide 图标、423 tests |
-| v0.45 | 2026-05-21 | Task Center: 后台任务队列、任务列表/取消/异步分析 API, 423 tests |
-| v0.44 | 2026-05-21 | Report Center: 报告列表/统计/读取/删除 API, 415 tests |
-| v0.43 | 2026-05-21 | 数据目录标准化：统一 data/ 目录、迁移脚本、406 tests |
-| v0.42 | 2026-05-21 | Settings Center: provider CRUD, connection test, export/import, 396 tests |
-| v0.41 | 2026-05-20 | Local Launcher: check_env, start/stop scripts, 387 tests |
-| v0.40.8 | 2026-05-20 | Smoke/SSE contract/degradation tests, contract docs, 376 tests |
-| v0.40.7 | 2026-05-20 | M8 Acceptance hardening: Docker Compose web service, docs update, 359 tests |
-| v0.40.6 | 2026-05-20 | M7 Integration testing: 359 tests, upload endpoint verification |
-| v0.40.5 | 2026-05-20 | M6 Next.js frontend: component decomposition, SSE streaming, useChat hook |
-| v0.40.4 | 2026-05-20 | M5 Vision: orchestrator integration, KlineAnalysisData, ticker parameter |
-| v0.40.3 | 2026-05-20 | M4 Data sources: DataSourceResult, provider health tracking, evidence context |
-| v0.40.2 | 2026-05-20 | M3 Agent standardization: Pydantic schemas, team_loader fix, 10-expert team |
-| v0.40.1 | 2026-05-20 | M2 FastAPI: ApiResponse wrapper, 25+ schemas, global error handling |
-| v0.40 | 2026-05-20 | M1 Engineering: split requirements, pyproject.toml, ChromaDB optional |
-| v0.38 | 2026-05-21 | Windows .exe packaging (PyInstaller + Inno Setup) |
-| v0.36 | 2026-05-21 | Async task queue, React/Next.js frontend skeleton |
-| v0.34 | 2026-05-21 | Database schema upgrade (20+ tables), model registry |
-| v0.32 | 2026-05-21 | Observability tracing, document pipeline, plugin system |
-| v0.30 | 2026-05-21 | Tool calling framework, hybrid RAG, scheduled monitoring |
-| v0.28 | 2026-05-21 | Vision cross-validation, cost tracker, 5 debate modes |
-| v0.26 | 2026-05-20 | Storage abstraction, cost tracking, JSONL logging |
-| v0.24 | 2026-05-20 | FastAPI service layer (25+ endpoints, SSE streaming) |
-| v0.22 | 2026-05-20 | Vision pipeline: K-line chart upload, 5th analysis mode |
-| v0.20 | 2026-05-20 | Configuration UI: Model Provider Manager, Agent Studio |
-| v0.18 | 2026-05-20 | Architecture restructure: modular backend decomposition |
-| v0.16 | 2026-05-20 | AI assistant page: multi-mode chat, report export |
-| v0.15 | 2026-05-20 | Extensible provider plugin system |
-| v0.14 | 2026-05-19 | News overhaul: datacenter API, concept sorting |
-| v0.13 | 2026-05-19 | Agent modes, 7 new providers, CI |
-| v0.12 | 2026-05-18 | Data pipeline, event extraction, factors |
-| v0.11 | 2026-05-18 | Provider plugin architecture, RAG |
-| v0.10 | 2026-05-17 | Topic search, concept matching |
-| v0.9 | 2026-05-17 | Critic agent, test scaffolding |
-| v0.5 | 2026-05-16 | 5-model heterogeneous architecture |
-| v0.1 | 2026-05-16 | Initial release |
+| 版本 | 日期 | 重点 |
+|------|------|------|
+| v1.4.0 | 2026-05-25 | Vite React 工作台、股票搜索联动、SSE 契约修复、Provider 密钥安全、多 Agent 托管配置、新闻/报告/回测真实状态标注 |
+| v1.3 | 2026-05-23 | 量化回测适配、基金/定投/组合模块、ToolRouter 10 工具、113 API、793 tests |
+| v1.2 | 2026-05-23 | 前端功能补全：Settings CRUD、Expert 圆桌、TaskCenter、成本统计、模型自动拉取 |
+| v1.1 | 2026-05-22 | 前端重构：深色工作台、K 线 SVG、资讯/财务/资金流/因子、SSE AI 面板 |
+| v1.0.1 | 2026-05-22 | 性能优化与安全加固：缓存、并行 provider、日志脱敏、error boundary |
+| v1.0 | 2026-05-21 | Local 正式版：一键启动、主工作台、专家团、K 线、报告、备份、697 tests |
 
-## Roadmap (v1.4)
+## 已知边界
 
-- 异步 SSE 流式: orchestrator 改为异步生成器，真正流式输出
-- Auth 认证: API Key 或 session token
-- 前端响应式布局: 移动端适配、可折叠面板
-- 虚拟列表: 长对话性能优化
-- DCA 计划持久化: 从内存列表迁移到 SQLite
-- Agent 自动调用工具: ToolRouter 与 orchestrator 深度集成
-- Playwright E2E 测试
-- API contract tests
+- 本项目是投研辅助工具，不提供确定性买卖建议。
+- 部分宏观日历、市场参考 ticker、模板问答属于演示或参考内容，界面会明确标注。
+- 部分外部数据源需要用户自行申请 Key，并受第三方接口稳定性、频率限制和数据授权影响。
+- DCA 计划等个别模块仍有后续持久化增强空间。
+- 建议发布前根据实际接入的数据源做一次端到端手测。
 
-## Known Tech Debt
+## 文档
 
-- **DCA plans 存储**: `backend/api/funds.py` 中 DCA plans 使用模块级内存列表，重启后丢失。需迁移到 SQLite。
-- **React Hook warnings**: `AIAgentPanel.tsx`、`ArchivePanel.tsx`、`KLinePanel.tsx` 各有一个 useEffect 依赖项缺失 warning，为 pre-existing 问题。
-- **ToolRouter asyncio.run()**: 量化/基金工具的 handler 使用 `asyncio.run()` 调用异步代码，在已有事件循环的上下文中会失败。需改为异步 handler 或使用同步包装。
-
-## Documentation
-
-- [Quick Start](docs/local-quickstart.md) — 本地快速启动指南
-- [User Manual](docs/user-manual/README.md) — 完整用户手册（8 章）
-- [Architecture](docs/architecture.md) — 系统架构与数据流
-- [API Reference](docs/api.md) — 113 个 REST 端点文档
-- [API Contract](docs/contract.md) — 前后端契约（ApiResponse/SSE/Upload 格式）
-- [Deployment](docs/deployment.md) — 部署指南（本地/Docker/Windows）
-- [Agent Design](docs/agent-design.md) — Agent 与专家团设计
-- [Security](docs/security.md) — 安全措施与合规
+- [本地快速开始](docs/local-quickstart.md)
+- [用户手册](docs/user-manual/README.md)
+- [系统架构](docs/architecture.md)
+- [API 文档](docs/api.md)
+- [前后端契约](docs/contract.md)
+- [部署指南](docs/deployment.md)
+- [Agent 设计](docs/agent-design.md)
+- [安全说明](docs/security.md)
 
 ## License
 

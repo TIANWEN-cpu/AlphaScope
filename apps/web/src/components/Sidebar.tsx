@@ -1,220 +1,219 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import {
-  BarChart3,
-  Brain,
-  GraduationCap,
-  MessageSquare,
-  MessageSquarePlus,
-  Microscope,
-  Search,
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  SquareDashedBottomCode, // Using as Logo
+  LayoutGrid, 
+  Newspaper, 
+  BarChart2, 
+  PieChart, 
+  LayoutTemplate, 
+  BrainCircuit, 
+  Bookmark, 
+  Users, 
+  ListTodo, 
+  LineChart, 
   Settings,
-  Trash2,
-  Zap,
-} from "lucide-react";
-import { listConversations, deleteConversation, type Conversation } from "@/lib/api";
-import { cn } from "@/lib/utils";
+  ChevronRight,
+  ChevronLeft,
+  Activity,
+  ShieldAlert,
+  FileText,
+  Image as ImageIcon,
+  Coins
+} from 'lucide-react';
+import { TabID } from '../types';
+import { cn } from '../lib/utils';
 
-export const MODES = [
-  { id: "free", name: "自由问答", icon: Search, desc: "快速解释概念、指标和报告" },
-  { id: "standard", name: "标准分析", icon: Zap, desc: "3 Agent 快速筛选" },
-  { id: "deep", name: "深度分析", icon: Microscope, desc: "5 Agent + Critic + 主席" },
-  { id: "expert", name: "专家团", icon: GraduationCap, desc: "10 位专家圆桌复盘" },
-  { id: "vision", name: "K线分析", icon: BarChart3, desc: "上传图表识别趋势" },
-];
+// Expanding TabID to support the user's apparent tabs if needed, 
+// for now we'll map them generically or just use 'workbench' as default focus.
 
 interface SidebarProps {
-  stockSymbol: string;
-  stockName: string;
-  mode: string;
-  conversationId: string | null;
-  onStockSymbolChange: (v: string) => void;
-  onStockNameChange: (v: string) => void;
-  onModeChange: (v: string) => void;
-  onClear: () => void;
-  onConversationSelect: (conv: Conversation) => void;
-  refreshKey: number;
+  currentTab: string;
+  setCurrentTab: (tab: string) => void;
 }
 
-export function Sidebar({
-  stockSymbol,
-  stockName,
-  mode,
-  conversationId,
-  onStockSymbolChange,
-  onStockNameChange,
-  onModeChange,
-  onClear,
-  onConversationSelect,
-  refreshKey,
-}: SidebarProps) {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(false);
+export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    listConversations(undefined, 50)
-      .then((data) => setConversations(data?.conversations ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [conversationId, refreshKey]);
-
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    try {
-      await deleteConversation(id);
-      setConversations((prev) => prev.filter((c) => c.id !== id));
-    } catch (err) {
-      console.error("删除对话失败:", err);
+  const menuGroups = [
+    { 
+      title: 'AI 投研体系',
+      items: [
+        { id: 'dashboard', label: '对话式研究', icon: LayoutGrid },
+        { id: 'agents', label: '多Agent网络', icon: BrainCircuit },
+        { id: 'market', label: '组合与风控', icon: ShieldAlert },
+        { id: 'news', label: '数据源终端聚合', icon: Newspaper },
+        { id: 'chart', label: 'K线/多模态解析', icon: ImageIcon },
+        { id: 'detailed', label: '研究报告生成', icon: FileText },
+        { id: 'saved', label: '投研逻辑证据链', icon: Bookmark },
+      ]
+    },
+    {
+      title: '量化回测实验室',
+      items: [
+        { id: 'tasks', label: '量化回测与执行', icon: Activity },
+        { id: 'fund_dca', label: '基金与定投研究室', icon: Coins },
+      ]
     }
-  };
+  ];
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col overflow-hidden rounded-[2rem] border border-white/5 bg-white/[0.02] text-white shadow-2xl shadow-black/20 backdrop-blur-xl">
-      <div className="border-b border-white/5 p-5">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-indigo-500 shadow-lg shadow-indigo-500/30">
-            <Brain className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="font-display text-lg font-bold tracking-tight">AI Finance</h1>
-            <p className="font-mono text-xs text-neutral-300">Local Research Workbench</p>
-          </div>
+    <motion.aside 
+      animate={{ width: isExpanded ? 220 : 72 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className="bg-black/20 border-r border-white-[0.02] backdrop-blur-3xl flex flex-col items-center py-6 h-full z-20 flex-shrink-0"
+    >
+      <div className="mb-6 relative group flex-shrink-0">
+        <div className="absolute inset-0 bg-indigo-500/20 rounded-xl blur-md group-hover:bg-indigo-500/40 transition-all duration-300"></div>
+        <div className="relative w-11 h-11 bg-gradient-to-tr from-indigo-600 to-indigo-400 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/30 border border-indigo-400/30">
+          <LineChart className="w-6 h-6 text-white" strokeWidth={2.5} />
         </div>
-        <button
-          onClick={onClear}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-neutral-950 transition hover:bg-indigo-500/10"
+      </div>
+
+      <div className="flex-1 w-full overflow-y-auto custom-scrollbar overflow-x-hidden">
+        {menuGroups.map((group, idx) => (
+          <div key={idx} className="mb-6">
+            <AnimatePresence>
+              {isExpanded && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="px-6 mb-3 text-[11px] font-mono text-neutral-500 font-medium tracking-wider whitespace-nowrap overflow-hidden"
+                >
+                  {group.title}
+                </motion.div>
+              )}
+            </AnimatePresence>
+            {!isExpanded && idx !== 0 && (
+              <div className="w-6 h-px bg-white/10 mx-auto mb-4"></div>
+            )}
+            
+            <nav className="flex flex-col gap-2 w-full px-3">
+              {group.items.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = currentTab === tab.id || (currentTab === 'workbench' && tab.id === 'dashboard');
+                return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setCurrentTab(tab.id)}
+                      className={cn(
+                        'h-11 flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
+                        isExpanded ? 'px-3 justify-start' : 'justify-center',
+                        isActive 
+                          ? 'text-indigo-400' 
+                          : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
+                      )}
+                      title={!isExpanded ? tab.label : undefined}
+                    >
+                      <div className="w-[22px] flex items-center justify-center flex-shrink-0 relative z-10">
+                        <Icon className={cn("w-[22px] h-[22px] transition-transform duration-300", isActive ? "scale-110" : "group-hover:scale-110")} strokeWidth={isActive ? 2.5 : 2} />
+                      </div>
+                      
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.span
+                            initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                            animate={{ opacity: 1, width: 'auto', marginLeft: 12 }}
+                            exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                            className="text-sm font-medium whitespace-nowrap overflow-hidden relative z-10"
+                          >
+                            {tab.label}
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+
+                      {isActive && (
+                        <motion.div 
+                          layoutId="sidebar-active"
+                          className="absolute inset-0 bg-indigo-500/10 rounded-xl border border-indigo-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
+                          initial={false}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        />
+                      )}
+                      {isActive && (
+                        <motion.div 
+                          layoutId="sidebar-indicator"
+                          className={cn(
+                            "absolute top-1/2 -translate-y-1/2 w-1.5 h-6 bg-indigo-500 rounded-r-full shadow-[0_0_10px_rgba(99,102,241,0.5)]",
+                            isExpanded ? "left-[-12px]" : "left-[-13px]"
+                          )}
+                          initial={false}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        />
+                      )}
+                    </button>
+                );
+              })}
+            </nav>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-auto pt-4 flex flex-col gap-2 w-full px-3 flex-shrink-0">
+        <button 
+          onClick={() => setCurrentTab('settings')}
+          className={cn(
+            'h-11 flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
+            isExpanded ? 'px-3 justify-start' : 'justify-center',
+            currentTab === 'settings'
+              ? 'text-indigo-400' 
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
+          )}
+          title={!isExpanded ? '属性设置' : undefined}
         >
-          <MessageSquarePlus className="h-4 w-4" />
-          新建研究会话
+          <div className="w-[22px] flex items-center justify-center flex-shrink-0 relative z-10">
+             <Settings className={cn("w-[22px] h-[22px] transition-transform duration-300", currentTab === 'settings' ? "scale-110" : "group-hover:scale-110")} strokeWidth={currentTab === 'settings' ? 2.5 : 2} />
+          </div>
+
+          <AnimatePresence>
+            {isExpanded && (
+              <motion.span
+                initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                animate={{ opacity: 1, width: 'auto', marginLeft: 12 }}
+                exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                className="text-sm font-medium whitespace-nowrap overflow-hidden relative z-10"
+              >
+                属性设置
+              </motion.span>
+            )}
+          </AnimatePresence>
+
+          {currentTab === 'settings' && (
+            <motion.div 
+              layoutId="sidebar-active"
+              className="absolute inset-0 bg-indigo-500/10 rounded-xl border border-indigo-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
+              initial={false}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            />
+          )}
+          {currentTab === 'settings' && (
+            <motion.div 
+              layoutId="sidebar-indicator"
+              className={cn(
+                "absolute top-1/2 -translate-y-1/2 w-1.5 h-6 bg-indigo-500 rounded-r-full shadow-[0_0_10px_rgba(99,102,241,0.5)]",
+                isExpanded ? "left-[-12px]" : "left-[-13px]"
+              )}
+              initial={false}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            />
+          )}
+        </button>
+
+        <button 
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={cn(
+            'h-11 flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0 text-neutral-500 hover:text-neutral-300 hover:bg-white/5',
+            isExpanded ? 'px-3 justify-end' : 'justify-center'
+          )}
+        >
+          {isExpanded ? (
+            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+          ) : (
+            <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+          )}
         </button>
       </div>
-
-      <div className="space-y-5 border-b border-white/5 p-5">
-        <div>
-          <div className="mb-3 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-neutral-400">
-            研究标的
-          </div>
-          <div className="space-y-3 rounded-3xl border border-white/5 bg-white/[0.02] p-3">
-            <label className="block">
-              <span className="font-mono text-xs text-neutral-300">股票代码</span>
-              <input
-                type="text"
-                value={stockSymbol}
-                onChange={(e) => onStockSymbolChange(e.target.value)}
-                placeholder="600519"
-                className="mt-1 w-full rounded-2xl border border-white/10 bg-neutral-950/50 px-3 py-2 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-indigo-400"
-              />
-            </label>
-            <label className="block">
-              <span className="font-mono text-xs text-neutral-300">股票名称</span>
-              <input
-                type="text"
-                value={stockName}
-                onChange={(e) => onStockNameChange(e.target.value)}
-                placeholder="贵州茅台"
-                className="mt-1 w-full rounded-2xl border border-white/10 bg-neutral-950/50 px-3 py-2 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-indigo-400"
-              />
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-3 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-neutral-400">
-            分析模式
-          </div>
-          <div className="space-y-2">
-            {MODES.map((m) => {
-              const Icon = m.icon;
-              const active = mode === m.id;
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => onModeChange(m.id)}
-                  className={cn(
-                    "w-full rounded-2xl border p-3 text-left transition",
-                    active
-                      ? "border-indigo-500/50 bg-indigo-500/10 shadow-lg shadow-indigo-500/10"
-                      : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]"
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "grid h-9 w-9 place-items-center rounded-xl",
-                        active
-                          ? "bg-indigo-500 text-white"
-                          : "bg-white/10 text-neutral-300"
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold">{m.name}</div>
-                      <div className="font-mono text-xs text-neutral-300">{m.desc}</div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-neutral-400">
-            历史会话
-          </div>
-          <span className="rounded-full bg-white/10 px-2 py-0.5 font-mono text-xs text-neutral-300">
-            {conversations.length}
-          </span>
-        </div>
-        {loading && conversations.length === 0 ? (
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-3 text-sm text-neutral-300">
-            加载中...
-          </div>
-        ) : conversations.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-4 text-sm text-neutral-300">
-            暂无历史。发送第一条研究问题后会自动保存。
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {conversations.map((conv) => (
-              <div
-                key={conv.id}
-                onClick={() => onConversationSelect(conv)}
-                className={cn(
-                  "group flex cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 text-sm transition",
-                  conversationId === conv.id
-                    ? "border-indigo-500/50 bg-indigo-500/10"
-                    : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]"
-                )}
-              >
-                <MessageSquare className="h-4 w-4 shrink-0 text-neutral-300" />
-                <span className="min-w-0 flex-1 truncate">{conv.title || "未命名会话"}</span>
-                <button
-                  onClick={(e) => handleDelete(e, conv.id)}
-                  className="rounded-lg p-1 text-neutral-400 opacity-0 transition hover:bg-rose-500/20 hover:text-rose-300 group-hover:opacity-100"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="border-t border-white/5 p-4 font-mono text-xs text-neutral-400">
-        <div className="flex items-center justify-between rounded-2xl bg-white/[0.02] px-3 py-2">
-          <span className="flex items-center gap-2">
-            <Settings className="h-3 w-3" />
-            本地正式版
-          </span>
-          <span>v1.0.1</span>
-        </div>
-      </div>
-    </aside>
+    </motion.aside>
   );
 }

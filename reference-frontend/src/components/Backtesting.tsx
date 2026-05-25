@@ -44,7 +44,7 @@ export function Backtesting() {
         <div>
           <h2 className="text-3xl font-display font-medium text-white flex items-center gap-3">
             <Cpu className="w-8 h-8 text-indigo-500" />
-            金策智算引擎 <span className="px-2 py-0.5 rounded text-[11px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono tracking-widest align-middle flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_5px_rgba(99,102,241,0.8)]"></span>CORE-V2</span>
+            量化回测实验室 <span className="px-2 py-0.5 rounded text-[11px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono tracking-widest align-middle flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_5px_rgba(99,102,241,0.8)]"></span>CORE-V2</span>
           </h2>
           <p className="text-sm font-mono text-neutral-400 mt-2 tracking-wide">量化策略验证与回测执行中枢 (Quant Strategy Execution & Backtesting Engine)</p>
         </div>

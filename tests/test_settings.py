@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from unittest.mock import patch
 
 import pytest
@@ -39,6 +40,11 @@ MOCK_PROVIDERS = [
 def client():
     transport = ASGITransport(app=app)
     return AsyncClient(transport=transport, base_url="http://test")
+
+
+class _MemoryDatabase:
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
 
 
 @pytest.mark.anyio
@@ -80,6 +86,39 @@ async def test_save_provider(client):
     data = resp.json()
     assert data["success"] is True
     assert data["data"]["id"] == "test-provider"
+    assert "api_key" not in data["data"]
+    assert data["data"]["api_key_masked"] == "sk-t...6789"
+
+
+@pytest.mark.anyio
+async def test_save_provider_response_does_not_leak_plaintext_key(client):
+    """POST /api/settings/providers 响应不回显明文 API Key"""
+    saved = {
+        "id": "test-provider",
+        "name": "Test",
+        "type": "openai_compatible",
+        "base_url": "https://api.test.com/v1",
+        "api_key": "sk-secret-plaintext",
+        "api_key_masked": "sk-s...text",
+        "enabled": True,
+        "config_json": "{}",
+    }
+    with patch("backend.settings_store.save_provider", return_value=saved):
+        resp = await client.post(
+            "/api/settings/providers",
+            json={
+                "id": "test-provider",
+                "name": "Test",
+                "base_url": "https://api.test.com/v1",
+                "api_key": "sk-secret-plaintext",
+            },
+        )
+
+    data = resp.json()
+    assert data["success"] is True
+    assert "api_key" not in data["data"]
+    assert "sk-secret-plaintext" not in resp.text
+    assert data["data"]["api_key_masked"] == "sk-s...text"
 
 
 @pytest.mark.anyio
@@ -144,6 +183,38 @@ async def test_masked_key_in_response(client):
         assert "..." in p["api_key_masked"]
         # 不应包含完整 key
         assert "api_key" not in p or p.get("api_key", "") == ""
+
+
+def test_save_provider_empty_key_preserves_existing_key():
+    """更新已有 provider 时空 API Key 不清空旧密钥"""
+    from backend import settings_store
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch("backend.settings_store._sync_to_gateway"),
+    ):
+        settings_store.save_provider(
+            provider_id="keep-key",
+            name="Keep Key",
+            base_url="https://old.example.com/v1",
+            api_key="sk-original-key",
+            enabled=True,
+        )
+        settings_store.save_provider(
+            provider_id="keep-key",
+            name="Keep Key Updated",
+            base_url="https://new.example.com/v1",
+            api_key="",
+            enabled=True,
+        )
+        provider = settings_store.get_provider("keep-key")
+
+    assert provider is not None
+    assert provider["api_key"] == "sk-original-key"
+    assert provider["base_url"] == "https://new.example.com/v1"
 
 
 @pytest.mark.anyio

@@ -90,7 +90,7 @@ export function Settings() {
                     <Key className="w-5 h-5 text-indigo-400" />
                     API 密钥管理
                   </h3>
-                  <p className="text-sm text-neutral-400">配置金策智算分析引擎及外部数据供应商所需的环境变量与受保护配置。</p>
+                  <p className="text-sm text-neutral-400">配置分析引擎及外部数据供应商所需的环境变量与受保护配置。</p>
                 </div>
 
                 <div className="space-y-6">
@@ -103,7 +103,7 @@ export function Settings() {
                     <div className="relative flex items-center">
                       <input 
                         type="password" 
-                        defaultValue="sk-wind-datasource-208f23j3j00..."
+                        placeholder="已保存密钥，前端不显示明文"
                         readOnly
                         className="w-full bg-white/[0.03] border border-white/10 rounded-lg pl-4 pr-24 py-2.5 text-sm text-neutral-400 font-mono shadow-inner outline-none"
                       />

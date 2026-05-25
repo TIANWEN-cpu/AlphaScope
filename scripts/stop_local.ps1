@@ -57,16 +57,16 @@ foreach ($port in @(3000, 8000, 8501)) {
     Stop-PortProcess $port
 }
 
-Write-Host "尝试清理残留 Next.js 进程..." -ForegroundColor Gray
+Write-Host "尝试清理残留 Vite 前端进程..." -ForegroundColor Gray
 $webPath = Join-Path $ProjectRoot "apps\web"
-$nextProcesses = Get-CimInstance Win32_Process | Where-Object {
+$viteProcesses = Get-CimInstance Win32_Process | Where-Object {
     $_.CommandLine -and $_.CommandLine.Contains($webPath) -and (
-        $_.CommandLine.Contains("next") -or $_.CommandLine.Contains("start-server.js")
+        $_.CommandLine.Contains("vite") -or $_.CommandLine.Contains("npm")
     )
 }
-foreach ($nextProcess in $nextProcesses) {
-    if (Stop-ProcessTree $nextProcess.ProcessId) {
-        Write-Host "  停止 Next.js 残留进程 (PID: $($nextProcess.ProcessId))" -ForegroundColor Gray
+foreach ($viteProcess in $viteProcesses) {
+    if (Stop-ProcessTree $viteProcess.ProcessId) {
+        Write-Host "  停止 Vite 残留进程 (PID: $($viteProcess.ProcessId))" -ForegroundColor Gray
     }
 }
 

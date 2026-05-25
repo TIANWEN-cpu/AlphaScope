@@ -239,9 +239,16 @@ if HAS_FASTAPI:
 
     # ============== 对话流式 API (SSE) ==============
 
-    async def _sse_generator(result: dict) -> AsyncGenerator[str, None]:
+    async def _sse_generator(
+        result: dict, conversation_id: str
+    ) -> AsyncGenerator[str, None]:
         """将分析结果转为 SSE 事件流"""
-        yield f"data: {json.dumps({'type': 'status', 'mode': result.get('mode', 'free')})}\n\n"
+        status_event = {
+            "type": "status",
+            "mode": result.get("mode", "free"),
+            "data": {"conversation_id": conversation_id},
+        }
+        yield f"data: {json.dumps(status_event)}\n\n"
 
         content = result.get("content", "")
         chunk_size = 20
@@ -263,31 +270,45 @@ if HAS_FASTAPI:
     @app.post("/api/chat/stream")
     def chat_stream(req: ChatRequest):
         """对话流式输出 (SSE)"""
-        from backend.ai_assistant.orchestrator import ChatOrchestrator
+        from backend.ai_assistant.orchestrator import (
+            AnalysisMode as ChatAnalysisMode,
+            ChatOrchestrator,
+        )
 
         orch = ChatOrchestrator()
+        mode_was_explicit = "mode" in req.model_fields_set
+        try:
+            requested_mode = ChatAnalysisMode(req.mode)
+        except ValueError:
+            requested_mode = ChatAnalysisMode.FREE
+        mode_override = requested_mode.value if mode_was_explicit else None
 
         conv_id = req.conversation_id
         if not conv_id:
             conv_id = orch.new_conversation(
                 stock_symbol=req.stock_symbol or "",
                 stock_name=req.stock_name or "",
-                mode=req.mode,
+                mode=requested_mode,
             )
 
         stock_data = None
         if req.stock_symbol:
             stock_data = {"symbol": req.stock_symbol, "name": req.stock_name or ""}
 
-        result = orch.send_message(
-            conversation_id=conv_id,
-            user_input=req.message,
-            stock_data=stock_data,
-            expert_team_id=req.expert_team_id,
-        )
+        try:
+            result = orch.send_message(
+                conversation_id=conv_id,
+                user_input=req.message,
+                stock_data=stock_data,
+                expert_team_id=req.expert_team_id,
+                mode_override=mode_override,
+            )
+        except Exception as e:
+            logger.exception("Chat stream failed: %s", e)
+            raise HTTPException(status_code=500, detail="内部服务器错误") from e
 
         return StreamingResponse(
-            _sse_generator(result),
+            _sse_generator(result, conv_id),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

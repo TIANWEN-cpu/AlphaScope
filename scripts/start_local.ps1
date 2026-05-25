@@ -69,13 +69,13 @@ $apiProc = Start-Process -FilePath "python" -ArgumentList "-m", "uvicorn", "back
 $pids["api"] = $apiProc.Id
 Write-Host "  PID: $($apiProc.Id)" -ForegroundColor Gray
 
-# Next.js
-Write-Host "启动 Next.js (端口 3000)..." -ForegroundColor Green
+# Vite frontend
+Write-Host "启动 Vite 前端 (端口 3000)..." -ForegroundColor Green
 $webDir = Join-Path $ProjectRoot "apps\web"
-$nextCacheDir = Join-Path $webDir ".next"
-if (Test-Path $nextCacheDir) {
-    Remove-Item $nextCacheDir -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "  已清理 Next.js 缓存" -ForegroundColor Gray
+$distDir = Join-Path $webDir "dist"
+if (Test-Path $distDir) {
+    Remove-Item $distDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "  已清理 Vite 构建缓存" -ForegroundColor Gray
 }
 $npmCmd = (Get-Command "npm.cmd" -ErrorAction SilentlyContinue).Source
 if (-not $npmCmd) {
@@ -116,7 +116,7 @@ function Wait-ForService($url, $name, $maxWait = 30) {
 }
 
 $apiReady = Wait-ForService "http://localhost:8000/health" "FastAPI"
-$webReady = Wait-ForService "http://localhost:3000" "Next.js"
+$webReady = Wait-ForService "http://localhost:3000" "Vite 前端"
 
 # 7. 打开浏览器
 if ($apiReady -or $webReady) {
@@ -126,7 +126,7 @@ if ($apiReady -or $webReady) {
 
 Write-Host "`n启动完成！" -ForegroundColor Green
 Write-Host "  FastAPI:   http://localhost:8000" -ForegroundColor White
-Write-Host "  Next.js:   http://localhost:3000" -ForegroundColor White
+Write-Host "  Frontend:  http://localhost:3000" -ForegroundColor White
 if ($WithStreamlit) {
     Write-Host "  Streamlit: http://localhost:8501" -ForegroundColor White
 }
