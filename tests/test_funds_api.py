@@ -285,6 +285,28 @@ class TestFundReport:
         assert "total_return" in data["data"]["metrics"]
 
     @pytest.mark.anyio
+    async def test_generate_report_with_unbounded_sharpe_ratio(self, client):
+        mock_provider = AsyncMock()
+        mock_provider.get_info.return_value = {
+            "code": "000001",
+            "name": "stable growth",
+            "fund_type": "stock",
+        }
+        mock_provider.get_nav_history.return_value = [
+            {"date": f"2024-01-{i:02d}", "nav": float(2**i)} for i in range(1, 31)
+        ]
+        with patch("backend.api.funds.get_provider", return_value=mock_provider):
+            resp = await client.post(
+                "/api/fund-reports/generate",
+                json={"fund_code": "000001", "include_metrics": True},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["data"]["metrics"]["sharpe_ratio"] is None
+        assert "N/A" in data["data"]["content"]
+
+    @pytest.mark.anyio
     async def test_report_fund_not_found(self, client):
         mock_provider = AsyncMock()
         mock_provider.get_info.return_value = None
