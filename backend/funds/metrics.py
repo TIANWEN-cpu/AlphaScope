@@ -66,10 +66,11 @@ def calc_sharpe_ratio(returns: list[float], risk_free_rate: float = 0.03) -> flo
     if len(returns) < 2:
         return 0.0
     vol = calc_volatility(returns, annualize=True)
-    if vol <= 0:
-        return 0.0
     annual_return = sum(returns) / len(returns) * 252
-    return (annual_return - risk_free_rate) / vol
+    excess_return = annual_return - risk_free_rate
+    if vol <= 0:
+        return excess_return
+    return excess_return / vol
 
 
 def calc_calmar_ratio(total_return: float, max_drawdown: float) -> float:
