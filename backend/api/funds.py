@@ -37,6 +37,17 @@ def set_portfolio_mgr(mgr: PortfolioManager):
     _portfolio_mgr = mgr
 
 
+class _MetricNA:
+    def __format__(self, spec: str) -> str:
+        return "N/A"
+
+
+class _ReportMetrics(dict[str, Any]):
+    def get(self, key: str, default: Any = None) -> Any:
+        value = super().get(key, default)
+        return _MetricNA() if value is None else value
+
+
 # ============================================================
 # 请求模型
 # ============================================================
@@ -425,16 +436,17 @@ async def generate_fund_report(body: FundReportBody):
             "",
         ]
 
+        report_metrics = _ReportMetrics(metrics)
         if body.include_metrics and metrics:
             lines.extend(
                 [
                     "## 核心指标",
-                    f"- 总收益率: {metrics.get('total_return', 0):.2%}",
-                    f"- 年化收益率: {metrics.get('annualized_return', 0):.2%}",
-                    f"- 夏普比率: {metrics.get('sharpe_ratio', 0):.4f}",
-                    f"- 最大回撤: {metrics.get('max_drawdown', 0):.2%}",
-                    f"- 波动率: {metrics.get('volatility', 0):.2%}",
-                    f"- 胜率: {metrics.get('win_rate', 0):.2%}",
+                    f"- 总收益率: {report_metrics.get('total_return', 0):.2%}",
+                    f"- 年化收益率: {report_metrics.get('annualized_return', 0):.2%}",
+                    f"- 夏普比率: {report_metrics.get('sharpe_ratio', 0):.4f}",
+                    f"- 最大回撤: {report_metrics.get('max_drawdown', 0):.2%}",
+                    f"- 波动率: {report_metrics.get('volatility', 0):.2%}",
+                    f"- 胜率: {report_metrics.get('win_rate', 0):.2%}",
                     "",
                 ]
             )

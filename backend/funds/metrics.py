@@ -92,6 +92,12 @@ def calc_win_rate(returns: list[float]) -> float:
     return positive / len(returns)
 
 
+def _round_json_float(value: float, digits: int) -> float | None:
+    if not math.isfinite(value):
+        return None
+    return round(value, digits)
+
+
 def calc_fund_metrics(
     navs: list[float],
     risk_free_rate: float = 0.03,
@@ -120,12 +126,12 @@ def calc_fund_metrics(
     win = calc_win_rate(returns)
 
     return {
-        "total_return": round(total_return, 6),
-        "annualized_return": round(annualized_return, 6),
-        "volatility": round(volatility, 6),
-        "max_drawdown": round(max_drawdown, 6),
-        "sharpe_ratio": round(sharpe, 4),
-        "calmar_ratio": round(calmar, 4),
-        "win_rate": round(win, 4),
+        "total_return": _round_json_float(total_return, 6),
+        "annualized_return": _round_json_float(annualized_return, 6),
+        "volatility": _round_json_float(volatility, 6),
+        "max_drawdown": _round_json_float(max_drawdown, 6),
+        "sharpe_ratio": _round_json_float(sharpe, 4),
+        "calmar_ratio": _round_json_float(calmar, 4),
+        "win_rate": _round_json_float(win, 4),
         "data_points": len(navs),
     }
