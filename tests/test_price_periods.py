@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from backend.price_periods import aggregate_price_bars, normalize_frequency
+import pandas as pd
+
+from backend.price_periods import (
+    _is_cn_trading_minute,
+    aggregate_price_bars,
+    fetch_intraday_prices,
+    normalize_frequency,
+)
 
 
 def test_normalize_frequency_aliases():
@@ -105,3 +112,83 @@ def test_aggregate_monthly_bars_groups_by_calendar_month():
     assert result[1]["low"] == 9
     assert result[1]["close"] == 14
     assert result[1]["volume"] == 300
+
+
+def test_cn_trading_minute_filter():
+    from datetime import datetime
+
+    assert _is_cn_trading_minute(datetime(2026, 5, 25, 9, 30))
+    assert _is_cn_trading_minute(datetime(2026, 5, 25, 11, 30))
+    assert _is_cn_trading_minute(datetime(2026, 5, 25, 13, 0))
+    assert _is_cn_trading_minute(datetime(2026, 5, 25, 15, 0))
+    assert not _is_cn_trading_minute(datetime(2026, 5, 25, 9, 29))
+    assert not _is_cn_trading_minute(datetime(2026, 5, 25, 11, 45))
+    assert not _is_cn_trading_minute(datetime(2026, 5, 25, 15, 1))
+
+
+def test_fetch_intraday_prices_keeps_latest_trade_day_and_previous_close(monkeypatch):
+    rows = pd.DataFrame(
+        [
+            {
+                "day": "2026-05-24 15:00:00",
+                "open": 9.8,
+                "high": 10.0,
+                "low": 9.7,
+                "close": 9.9,
+                "volume": 10,
+            },
+            {
+                "day": "2026-05-25 09:29:00",
+                "open": 10.0,
+                "high": 10.0,
+                "low": 10.0,
+                "close": 10.0,
+                "volume": 20,
+            },
+            {
+                "day": "2026-05-25 09:30:00",
+                "open": 10.0,
+                "high": 10.4,
+                "low": 9.9,
+                "close": 10.2,
+                "volume": 100,
+            },
+            {
+                "day": "2026-05-25 11:45:00",
+                "open": 10.2,
+                "high": 10.3,
+                "low": 10.1,
+                "close": 10.2,
+                "volume": 50,
+            },
+            {
+                "day": "2026-05-25 13:00:00",
+                "open": 10.2,
+                "high": 10.6,
+                "low": 10.1,
+                "close": 10.5,
+                "volume": 120,
+            },
+        ]
+    )
+
+    class FakeAkshare:
+        @staticmethod
+        def stock_zh_a_minute(**kwargs):
+            return rows
+
+    monkeypatch.setattr("backend.price_periods.get_market", lambda symbol: "CN")
+    monkeypatch.setattr(
+        "backend.price_periods._previous_daily_close", lambda symbol, before=None: 10.0
+    )
+    monkeypatch.setitem(__import__("sys").modules, "akshare", FakeAkshare)
+
+    result = fetch_intraday_prices("600519", limit=240)
+
+    assert [item["date"] for item in result] == [
+        "2026-05-25 09:30",
+        "2026-05-25 13:00",
+    ]
+    assert all(item["previous_close"] == 10.0 for item in result)
+    assert result[0]["change_pct"] == 2.0
+    assert result[1]["change_pct"] == 5.0

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 
 from backend.price_store import get_market, normalize_symbol
@@ -159,6 +159,39 @@ def _clean_intraday_datetime(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _is_cn_trading_minute(dt: datetime) -> bool:
+    current = dt.time()
+    return (
+        time(9, 30) <= current <= time(11, 30)
+        or time(13, 0) <= current <= time(15, 0)
+    )
+
+
+def _previous_daily_close(symbol: str, before: datetime | None = None) -> float:
+    try:
+        from backend.price_store import get_prices
+
+        end_date = before.strftime("%Y-%m-%d") if before else None
+        daily = get_prices(
+            symbol=symbol,
+            frequency="1d",
+            end_date=end_date,
+            limit=2,
+        )
+        dated = [
+            (dt, bar)
+            for bar in daily
+            if (dt := _parse_bar_datetime(bar.get("date"))) is not None
+            and (before is None or dt.date() < before.date())
+        ]
+        dated.sort(key=lambda item: item[0], reverse=True)
+        if dated:
+            return _as_number(dated[0][1].get("close"))
+    except Exception as exc:
+        logger.debug("previous close lookup failed for %s: %s", symbol, exc)
+    return 0.0
+
+
 def fetch_intraday_prices(
     symbol: str, limit: int = 240, period: str = "1"
 ) -> list[dict[str, Any]]:
@@ -180,7 +213,7 @@ def fetch_intraday_prices(
     if df is None or len(df) == 0:
         return []
 
-    df = df.tail(max(1, min(limit, 1500))).copy()
+    df = df.tail(max(1, min(max(limit * 3, limit + 60), 1500))).copy()
     columns = {str(col).strip().lower(): col for col in df.columns}
 
     def col(*names: str):
@@ -201,23 +234,48 @@ def fetch_intraday_prices(
     volume_col = col("volume", "成交量")
     amount_col = col("amount", "成交额")
 
-    results: list[dict[str, Any]] = []
-    previous_close = 0.0
+    rows: list[tuple[datetime, Any]] = []
     for _, row in df.iterrows():
+        raw_date = (
+            row.get(date_col) if date_col else datetime.now().strftime("%Y-%m-%d %H:%M")
+        )
+        dt = _parse_bar_datetime(raw_date)
+        if not dt or not _is_cn_trading_minute(dt):
+            continue
+        rows.append((dt, row))
+
+    if not rows:
+        return []
+
+    latest_trade_date = max(dt.date() for dt, _ in rows)
+    rows = [(dt, row) for dt, row in rows if dt.date() == latest_trade_date]
+    rows.sort(key=lambda item: item[0])
+    rows = rows[-max(1, min(limit, 1500)) :]
+
+    previous_close = _previous_daily_close(code, rows[0][0])
+    if previous_close <= 0:
+        first_row = rows[0][1]
+        previous_close = (
+            _as_number(first_row.get(open_col)) if open_col else 0.0
+        ) or (
+            _as_number(first_row.get(close_col)) if close_col else 0.0
+        )
+
+    results: list[dict[str, Any]] = []
+    last_close = previous_close
+    for dt, row in rows:
         open_price = _as_number(row.get(open_col)) if open_col else 0.0
         close = _as_number(row.get(close_col)) if close_col else open_price
         high = _as_number(row.get(high_col)) if high_col else max(open_price, close)
         low = _as_number(row.get(low_col)) if low_col else min(open_price, close)
-        base = previous_close or open_price or close
+        base = previous_close or last_close or open_price or close
         change_pct = ((close - base) / base * 100) if base else 0.0
-        previous_close = close
-        raw_date = (
-            row.get(date_col) if date_col else datetime.now().strftime("%Y-%m-%d %H:%M")
-        )
+        amplitude = ((high - low) / base * 100) if base else 0.0
+        last_close = close
         results.append(
             {
                 "symbol": code,
-                "date": _clean_intraday_datetime(raw_date),
+                "date": dt.strftime("%Y-%m-%d %H:%M"),
                 "market": "CN",
                 "frequency": "intraday",
                 "open": open_price,
@@ -227,8 +285,9 @@ def fetch_intraday_prices(
                 "volume": _as_number(row.get(volume_col)) if volume_col else 0.0,
                 "amount": _as_number(row.get(amount_col)) if amount_col else 0.0,
                 "turnover": 0.0,
-                "amplitude": round(((high - low) / base * 100), 4) if base else 0.0,
+                "amplitude": round(amplitude, 4),
                 "change_pct": round(change_pct, 4),
+                "previous_close": previous_close,
                 "adjust": "",
                 "source": "akshare_intraday",
                 "fetched_at": datetime.now().timestamp(),

@@ -308,10 +308,15 @@ async def test_fetch_prices_passes_symbol_to_provider(client):
 @pytest.mark.anyio
 async def test_get_latest_price_not_found(client):
     """GET /api/prices/{symbol}/latest 无数据"""
-    with patch("backend.price_store.get_latest_price", return_value=None):
+    with (
+        patch("backend.price_store.get_prices", return_value=[]),
+        patch("backend.price_store.get_latest_price", return_value=None),
+        patch("backend.api.prices.fetch_prices") as mock_fetch,
+    ):
         resp = await client.get("/api/prices/600519/latest")
     assert resp.status_code == 200
     assert resp.json()["success"] is False
+    mock_fetch.assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -326,11 +331,16 @@ async def test_get_latest_price_found(client):
         "close": 103,
         "volume": 1000,
     }
-    with patch("backend.price_store.get_latest_price", return_value=mock_bar):
+    with (
+        patch("backend.price_store.get_prices", return_value=[]),
+        patch("backend.price_store.get_latest_price", return_value=mock_bar),
+        patch("backend.api.prices.fetch_prices") as mock_fetch,
+    ):
         resp = await client.get("/api/prices/600519/latest")
     assert resp.status_code == 200
     assert resp.json()["success"] is True
     assert resp.json()["data"]["close"] == 103
+    mock_fetch.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -410,3 +420,39 @@ async def test_get_prices_intraday_uses_intraday_fetcher(client):
     assert data["bars"][0]["date"] == "2026-05-25 09:31"
     mock_fetch_intraday.assert_called_once()
     mock_get_prices.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_get_latest_price_prefers_daily_bar(client):
+    """GET /api/prices/{symbol}/latest 不用周/月聚合数据污染顶部行情"""
+    daily = {
+        "symbol": "600519",
+        "date": "2026-05-25",
+        "open": 10,
+        "high": 11,
+        "low": 9,
+        "close": 10.5,
+        "change_pct": 5.0,
+        "frequency": "1d",
+    }
+    monthly = {
+        "symbol": "600519",
+        "date": "2026-05-25",
+        "open": 4,
+        "high": 11,
+        "low": 4,
+        "close": 10.5,
+        "change_pct": 160.0,
+        "frequency": "1mo",
+    }
+    with (
+        patch("backend.price_store.get_prices", return_value=[daily]) as mock_get_prices,
+        patch("backend.price_store.get_latest_price", return_value=monthly),
+    ):
+        resp = await client.get("/api/prices/600519/latest")
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["frequency"] == "1d"
+    assert data["change_pct"] == 5.0
+    mock_get_prices.assert_called_once_with(symbol="600519", frequency="1d", limit=1)

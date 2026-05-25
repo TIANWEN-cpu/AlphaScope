@@ -16,6 +16,8 @@ export interface PriceBar {
   amount?: number;
   turnover?: number;
   change_pct?: number;
+  previous_close?: number;
+  prev_close?: number;
   frequency?: string;
   source?: string;
 }

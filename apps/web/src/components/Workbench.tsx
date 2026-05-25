@@ -18,6 +18,8 @@ type ChartPoint = {
   high: number;
   low: number;
   close: number;
+  avgPrice: number | null;
+  referencePrice: number | null;
   volume: number;
   amount: number;
   changePct: number;
@@ -61,21 +63,54 @@ const formatChartLabel = (date: string, frequency: PriceFrequency) => {
 
 const toChartData = (bars: PriceBar[], frequency: PriceFrequency): ChartPoint[] => {
   const sorted = [...bars].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  return sorted.map((bar, index, arr) => ({
-    date: String(bar.date || ''),
-    label: formatChartLabel(String(bar.date || ''), frequency) || `${index + 1}`,
-    open: Number(bar.open || bar.close || 0),
-    high: Number(bar.high || bar.close || 0),
-    low: Number(bar.low || bar.close || 0),
-    close: Number(bar.close || 0),
-    ma5: averageClose(arr, index, 5),
-    ma10: averageClose(arr, index, 10),
-    ma20: averageClose(arr, index, 20),
-    volume: Number(bar.volume || 0),
-    amount: Number(bar.amount || 0),
-    changePct: Number(bar.change_pct || 0),
-    up: Number(bar.close || 0) >= Number(bar.open || bar.close || 0),
-  }));
+  const intradayReference = frequency === 'intraday'
+    ? Number(
+        sorted.find(bar => Number(bar.previous_close || 0) > 0)?.previous_close ||
+        sorted.find(bar => Number(bar.prev_close || 0) > 0)?.prev_close ||
+        sorted[0]?.open ||
+        sorted[0]?.close ||
+        0
+      )
+    : null;
+  let cumulativePriceVolume = 0;
+  let cumulativeVolume = 0;
+
+  return sorted.map((bar, index, arr) => {
+    const open = Number(bar.open || bar.close || 0);
+    const high = Number(bar.high || bar.close || 0);
+    const low = Number(bar.low || bar.close || 0);
+    const close = Number(bar.close || 0);
+    const volume = Number(bar.volume || 0);
+    if (frequency === 'intraday') {
+      const weight = volume > 0 ? volume : 1;
+      cumulativePriceVolume += close * weight;
+      cumulativeVolume += weight;
+    }
+    const referencePrice = frequency === 'intraday' && intradayReference && Number.isFinite(intradayReference)
+      ? intradayReference
+      : null;
+    const changePct = referencePrice
+      ? ((close - referencePrice) / referencePrice) * 100
+      : Number(bar.change_pct || 0);
+
+    return {
+      date: String(bar.date || ''),
+      label: formatChartLabel(String(bar.date || ''), frequency) || `${index + 1}`,
+      open,
+      high,
+      low,
+      close,
+      avgPrice: frequency === 'intraday' && cumulativeVolume > 0 ? cumulativePriceVolume / cumulativeVolume : null,
+      referencePrice,
+      ma5: averageClose(arr, index, 5),
+      ma10: averageClose(arr, index, 10),
+      ma20: averageClose(arr, index, 20),
+      volume,
+      amount: Number(bar.amount || 0),
+      changePct,
+      up: close >= (referencePrice || open || close),
+    };
+  });
 };
 
 const EMPTY_FINANCE: FinanceItem[] = [
@@ -317,10 +352,12 @@ function MarketChart({
     return null;
   }
 
-  const priceValues = visible.flatMap(item => [item.high, item.low, item.ma5 || 0, item.ma10 || 0, item.ma20 || 0]).filter(value => Number.isFinite(value) && value > 0);
+  const priceValues = frequency === 'intraday'
+    ? visible.flatMap(item => [item.close, item.avgPrice || 0, item.referencePrice || 0]).filter(value => Number.isFinite(value) && value > 0)
+    : visible.flatMap(item => [item.high, item.low, item.ma5 || 0, item.ma10 || 0, item.ma20 || 0]).filter(value => Number.isFinite(value) && value > 0);
   const minPrice = Math.min(...priceValues);
   const maxPrice = Math.max(...priceValues);
-  const padding = Math.max((maxPrice - minPrice) * 0.08, maxPrice * 0.005, 0.01);
+  const padding = Math.max((maxPrice - minPrice) * 0.08, maxPrice * (frequency === 'intraday' ? 0.0015 : 0.005), 0.01);
   const yMin = minPrice - padding;
   const yMax = maxPrice + padding;
   const xStep = visible.length > 1 ? plotWidth / (visible.length - 1) : plotWidth;
@@ -333,7 +370,7 @@ function MarketChart({
   const xFor = (index: number) => pad.left + index * xStep;
   const yFor = (value: number) => pad.top + (yMax - value) / (yMax - yMin) * plotHeight;
   const volumeY = (value: number) => volumeTop + volumePlotHeight - (value / maxVolume) * volumePlotHeight;
-  const linePath = (key: 'ma5' | 'ma10' | 'ma20' | 'close') => {
+  const linePath = (key: 'ma5' | 'ma10' | 'ma20' | 'close' | 'avgPrice') => {
     let started = false;
     return visible
       .map((item, index) => {
@@ -347,10 +384,16 @@ function MarketChart({
       .join(' ');
   };
   const intradayPath = linePath('close');
+  const intradayAvgPath = linePath('avgPrice');
   const tickIndexes = Array.from(new Set([0, Math.floor(visible.length * 0.25), Math.floor(visible.length * 0.5), Math.floor(visible.length * 0.75), visible.length - 1]))
     .filter(index => index >= 0 && index < visible.length);
   const priceTicks = [yMax, yMax - (yMax - yMin) / 3, yMax - (yMax - yMin) * 2 / 3, yMin];
   const hoverX = xFor(currentIndex);
+  const hoverY = yFor(frequency === 'intraday' ? current.close : current.up ? current.high : current.low);
+  const tooltipWidth = frequency === 'intraday' ? 250 : 270;
+  const tooltipX = clamp(hoverX - tooltipWidth / 2, pad.left + 8, width - pad.right - tooltipWidth - 8);
+  const tooltipY = clamp(hoverY - 76, pad.top + 6, priceHeight - 118);
+  const previousClose = current.referencePrice;
 
   return (
     <div className="relative h-full w-full">
@@ -367,7 +410,21 @@ function MarketChart({
 
         {frequency === 'intraday' ? (
           <>
+            {previousClose && (
+              <line
+                x1={pad.left}
+                x2={width - pad.right}
+                y1={yFor(previousClose)}
+                y2={yFor(previousClose)}
+                stroke="#737373"
+                strokeOpacity={0.55}
+                strokeDasharray="6 4"
+              />
+            )}
             <path d={intradayPath} fill="none" stroke="#eab308" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
+            {intradayAvgPath && (
+              <path d={intradayAvgPath} fill="none" stroke="#a78bfa" strokeWidth="1.5" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
+            )}
             <path d={`${intradayPath} L ${xFor(visible.length - 1)} ${priceHeight - pad.bottom} L ${xFor(0)} ${priceHeight - pad.bottom} Z`} fill="#eab308" fillOpacity="0.08" />
           </>
         ) : (
@@ -411,6 +468,14 @@ function MarketChart({
         ))}
 
         <line x1={hoverX} x2={hoverX} y1={pad.top} y2={volumeTop + volumePlotHeight} stroke="#ffffff" strokeOpacity={0.16} strokeDasharray="3 3" />
+        <circle
+          cx={hoverX}
+          cy={frequency === 'intraday' ? yFor(current.close) : yFor(current.close)}
+          r={3}
+          fill={frequency === 'intraday' ? '#eab308' : current.up ? '#f43f5e' : '#10b981'}
+          stroke="#0a0a0a"
+          strokeWidth={1.5}
+        />
         <rect
           x={pad.left}
           y={pad.top}
@@ -426,7 +491,14 @@ function MarketChart({
         />
       </svg>
 
-      <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-white/10 bg-black/70 px-3 py-2 text-[11px] text-neutral-300 shadow-xl backdrop-blur">
+      <div
+        className="pointer-events-none absolute rounded-lg border border-white/10 bg-black/75 px-3 py-2 text-[11px] text-neutral-300 shadow-xl backdrop-blur"
+        style={{
+          left: `${tooltipX / width * 100}%`,
+          top: `${tooltipY / (priceHeight + volumeHeight + 34) * 100}%`,
+          width: tooltipWidth,
+        }}
+      >
         <div className="mb-1 flex items-center gap-2">
           <span className="font-mono text-neutral-500">{current.date}</span>
           <span className={cn("font-mono", current.up ? "text-rose-400" : "text-emerald-400")}>{current.changePct >= 0 ? '+' : ''}{current.changePct.toFixed(2)}%</span>
@@ -438,7 +510,11 @@ function MarketChart({
           <span>低 {displayNumber(current.low)}</span>
           <span>收 {displayNumber(current.close)}</span>
         </div>
-        <div className="mt-1 font-mono text-neutral-500">量 {formatVolume(current.volume)}</div>
+        <div className="mt-1 flex gap-3 font-mono text-neutral-500">
+          <span>量 {formatVolume(current.volume)}</span>
+          {frequency === 'intraday' && current.avgPrice ? <span>均 {displayNumber(current.avgPrice)}</span> : null}
+          {frequency === 'intraday' && current.referencePrice ? <span>昨收 {displayNumber(current.referencePrice)}</span> : null}
+        </div>
       </div>
     </div>
   );
@@ -863,14 +939,14 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
   const currentMode = ANALYSIS_MODES.find(item => item.id === selectedMode) || ANALYSIS_MODES[1];
   const latestChartPoint = chartData[chartData.length - 1];
-  const chartValues = chartData.flatMap(point => [Number(point.high || 0), Number(point.low || 0), Number(point.ma5 || 0), Number(point.ma10 || 0), Number(point.ma20 || 0)]).filter(value => Number.isFinite(value) && value > 0);
-  const chartHigh = chartValues.length ? Math.max(...chartValues) : 0;
-  const chartLow = chartValues.length ? Math.min(...chartValues) : 0;
+  const activeFrequency = getPeriodConfig(activePeriod).frequency;
   const hasPriceData = Boolean(latestPrice || latestChartPoint);
   const currentClose = latestPrice?.close || latestChartPoint?.close || latestChartPoint?.ma20 || 0;
-  const currentChange = latestChartPoint?.changePct ?? latestPrice?.change_pct ?? 0;
+  const currentChange = latestPrice?.change_pct ?? latestChartPoint?.changePct ?? 0;
   const isPriceUp = Number(currentChange) >= 0;
-  const activeFrequency = getPeriodConfig(activePeriod).frequency;
+  const periodDataHint = priceBars.length
+    ? `${activePeriod} ${priceBars.length} 条${activeFrequency === '1mo' && priceBars.length < 5 ? '，样本偏少' : ''}${activeFrequency === '1w' && priceBars.length < 8 ? '，样本偏少' : ''}`
+    : '等待后端行情';
 
   return (
     <motion.div 
@@ -951,7 +1027,11 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
             <div className="px-6 py-3 flex items-center gap-8 text-[11px] font-mono whitespace-nowrap bg-black/20 border-b border-white/5">
                {activeFrequency === 'intraday' ? (
-                 <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>分时价: {latestChartPoint ? displayNumber(Number(latestChartPoint.close || 0)) : '--'}</span>
+                 <>
+                   <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>分时价: {latestChartPoint ? displayNumber(Number(latestChartPoint.close || 0)) : '--'}</span>
+                   <span className="text-violet-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-violet-400/90"></div>均价: {latestChartPoint?.avgPrice ? displayNumber(Number(latestChartPoint.avgPrice)) : '--'}</span>
+                   <span className="text-neutral-500 flex items-center gap-2"><div className="w-2 h-0.5 border-t border-dashed border-neutral-500"></div>昨收: {latestChartPoint?.referencePrice ? displayNumber(Number(latestChartPoint.referencePrice)) : '--'}</span>
+                 </>
                ) : (
                  <>
                    <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>MA5: {latestChartPoint?.ma5 ? displayNumber(Number(latestChartPoint.ma5)) : '--'}</span>
@@ -959,13 +1039,11 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                    <span className="text-emerald-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-emerald-400/90"></div>MA20: {latestChartPoint?.ma20 ? displayNumber(Number(latestChartPoint.ma20)) : '--'}</span>
                  </>
                )}
-               <span className="text-neutral-500 ml-auto">{priceBars.length ? `VOL: ${formatVolume(Number(latestChartPoint?.volume || 0))}` : '等待后端行情'}</span>
+               <span className="text-neutral-500 ml-auto">{priceBars.length ? `VOL: ${formatVolume(Number(latestChartPoint?.volume || 0))} · ${periodDataHint}` : '等待后端行情'}</span>
             </div>
 
              {/* Chart Area */}
              <div className="flex-1 p-5 bg-black/40 relative">
-                <div className="absolute right-6 top-6 text-[10px] font-mono text-neutral-600">{displayNumber(chartHigh)}</div>
-                <div className="absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{displayNumber(chartLow)}</div>
                {chartData.length === 0 && marketState !== 'ready' && (
                  <div className="absolute inset-0 z-10 flex items-center justify-center text-center text-xs text-neutral-500 bg-black/20">
                    {marketState === 'loading'

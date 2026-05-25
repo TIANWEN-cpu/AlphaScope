@@ -30,12 +30,14 @@ async def normalize_symbol(symbol: str):
 @router.get("/{symbol}/latest")
 async def get_latest_price(symbol: str):
     """获取最新价格"""
-    from backend.price_store import get_latest_price as _latest
+    from backend.price_store import get_latest_price as _latest, get_prices as _get
 
-    bar = _latest(symbol)
+    daily_bars = _get(symbol=symbol, frequency="1d", limit=1)
+    bar = daily_bars[0] if daily_bars else _latest(symbol)
     if not bar:
         await fetch_prices(symbol, days=120)
-        bar = _latest(symbol)
+        daily_bars = _get(symbol=symbol, frequency="1d", limit=1)
+        bar = daily_bars[0] if daily_bars else _latest(symbol)
     if not bar:
         return ApiResponse(success=False, error="无价格数据")
     return ApiResponse(success=True, data=bar)
