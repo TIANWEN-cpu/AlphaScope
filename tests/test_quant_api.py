@@ -81,8 +81,11 @@ class TestQuantStatus:
             resp = await client.get("/api/quant/status")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["success"] is False
+        assert data["success"] is True
         assert data["data"]["connected"] is False
+        assert data["data"]["degraded"] is True
+        assert data["data"]["source_status"] == "unavailable"
+        assert data["error_code"] == "JINCE_DISCONNECTED"
 
 
 # ========== GET /api/quant/strategies ==========

@@ -14,9 +14,15 @@ from backend.api.main import app
 
 
 @pytest.fixture(autouse=True)
-def clear_resolver_cache():
+def clear_resolver_cache(tmp_path, monkeypatch):
+    from backend import stock_resolver
     from backend.stock_resolver import clear_stock_name_cache
 
+    monkeypatch.setattr(
+        stock_resolver,
+        "STOCK_NAME_CACHE_FILE",
+        tmp_path / "stock_names_a_share.json",
+    )
     clear_stock_name_cache()
     yield
     clear_stock_name_cache()
@@ -98,6 +104,28 @@ def test_resolve_stock_retries_after_transient_name_table_failure():
     assert second["resolved"] is True
     assert third["name"] == "华兴源创"
     assert mock_fetch.call_count == 2
+
+
+def test_resolve_stock_uses_persisted_name_map_when_source_fails():
+    from backend.stock_resolver import resolve_stock
+
+    with (
+        patch(
+            "backend.stock_resolver._load_persisted_a_share_name_map",
+            return_value={"688001": "华兴源创"},
+        ),
+        patch(
+            "backend.stock_resolver._fetch_a_share_code_name",
+            side_effect=RuntimeError("offline"),
+        ) as mock_fetch,
+    ):
+        result = resolve_stock("688001")
+
+    assert result["symbol"] == "688001"
+    assert result["name"] == "华兴源创"
+    assert result["resolved"] is True
+    assert result["source"] == "local_stock_name_cache"
+    mock_fetch.assert_not_called()
 
 
 @pytest.mark.anyio

@@ -40,12 +40,42 @@ async def list_announcements(
 ):
     """公告列表"""
     from backend.news_store import list_announcements as _list
+    from backend.news_store import list_news as _list_news
 
     items = _list(symbol=symbol, category=category, limit=limit)
+    attempted_provider_fetch = False
     if not items and symbol:
+        attempted_provider_fetch = True
         await _fetch_and_store_announcements(symbol=symbol, limit=limit)
         items = _list(symbol=symbol, category=category, limit=limit)
-    return ApiResponse(success=True, data={"announcements": items, "total": len(items)})
+
+    related_news = []
+    if not items and symbol:
+        related_news = _list_news(symbol=symbol, limit=min(limit, 5))
+
+    degraded = not items and bool(symbol)
+    source_status = "ok"
+    if degraded and related_news:
+        source_status = "fallback_related_news"
+    elif degraded and attempted_provider_fetch:
+        source_status = "empty"
+    elif degraded:
+        source_status = "local_empty"
+
+    return ApiResponse(
+        success=True,
+        data={
+            "announcements": items,
+            "total": len(items),
+            "degraded": degraded,
+            "source": "local_store+provider_registry",
+            "source_status": source_status,
+            "related_news": related_news,
+            "fallback_sources": ["local_announcements", "provider_registry", "local_news"],
+        },
+        error="No announcements available from configured sources" if degraded else None,
+        error_code="ANNOUNCEMENTS_DEGRADED" if degraded else None,
+    )
 
 
 @router.get("/events/{symbol}")

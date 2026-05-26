@@ -48,6 +48,15 @@ class _ReportMetrics(dict[str, Any]):
         return _MetricNA() if value is None else value
 
 
+def _normalize_fund_search_item(info: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "code": str(info.get("code", "")).strip(),
+        "name": str(info.get("name", "")).strip(),
+        "fund_type": str(info.get("fund_type", "")).strip(),
+        "company": str(info.get("company", info.get("manager", ""))).strip(),
+    }
+
+
 # ============================================================
 # 请求模型
 # ============================================================
@@ -89,18 +98,65 @@ class PortfolioUpdateBody(BaseModel):
 @router.get("/api/funds/search")
 async def search_funds(keyword: str = ""):
     """搜索基金"""
-    if not keyword.strip():
+    keyword = keyword.strip()
+    if not keyword:
         return ApiResponse(success=True, data={"funds": [], "total": 0})
     provider = get_provider()
     try:
-        funds = await provider.search(keyword)
-        return ApiResponse(success=True, data={"funds": funds, "total": len(funds)})
+        degraded = False
+        source_status = "ok"
+        funds: list[dict[str, Any]] = []
+        seen_codes: set[str] = set()
+
+        if keyword.isdigit() and len(keyword) == 6:
+            try:
+                info = await provider.get_info(keyword)
+            except Exception:
+                info = None
+            if info:
+                item = _normalize_fund_search_item(info)
+                if item["code"]:
+                    funds.append(item)
+                    seen_codes.add(item["code"])
+                    source_status = "code_lookup"
+
+        search_results = await provider.search(keyword)
+        for item in search_results:
+            code = str(item.get("code", "")).strip()
+            if code and code in seen_codes:
+                continue
+            funds.append(item)
+            if code:
+                seen_codes.add(code)
+
+        if keyword.isdigit() and len(keyword) == 6 and not funds:
+            degraded = True
+            source_status = "empty"
+
+        return ApiResponse(
+            success=True,
+            data={
+                "funds": funds,
+                "total": len(funds),
+                "degraded": degraded,
+                "source": "fund_provider",
+                "source_status": source_status,
+            },
+            error="No fund matched by code or keyword" if degraded else None,
+            error_code="FUND_SEARCH_DEGRADED" if degraded else None,
+        )
     except Exception as e:
         return ApiResponse(
-            success=False,
+            success=True,
             error=str(e),
-            error_code="FUND_SEARCH_ERROR",
-            data={"funds": [], "total": 0},
+            error_code="FUND_SEARCH_DEGRADED",
+            data={
+                "funds": [],
+                "total": 0,
+                "degraded": True,
+                "source": "fund_provider",
+                "source_status": "unavailable",
+            },
         )
 
 
