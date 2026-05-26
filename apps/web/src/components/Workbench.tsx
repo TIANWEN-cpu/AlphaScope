@@ -340,17 +340,18 @@ function MarketChart({
 }) {
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
   const width = 960;
-  const priceHeight = 242;
-  const volumeHeight = 70;
-  const axisHeight = 46;
+  const priceHeight = 236;
+  const volumeHeight = 64;
+  const axisHeight = 58;
   const totalHeight = priceHeight + volumeHeight + axisHeight;
   const pad = { top: 18, right: 54, bottom: 16, left: 12 };
   const plotWidth = width - pad.left - pad.right;
   const plotHeight = priceHeight - pad.top - pad.bottom;
-  const volumeTop = priceHeight + 14;
-  const volumePlotHeight = volumeHeight - 14;
+  const volumeTop = priceHeight + 12;
+  const volumePlotHeight = volumeHeight - 16;
   const volumeBaseline = volumeTop + volumePlotHeight;
-  const xAxisY = volumeBaseline + 30;
+  const xAxisY = volumeBaseline + 22;
+  const xAxisTickBottom = volumeBaseline + 8;
   const visible = data.filter(item => item.close > 0);
 
   if (!visible.length) {
@@ -473,8 +474,8 @@ function MarketChart({
 
         {tickIndexes.map(index => (
           <g key={`x-${index}`}>
-            <line x1={xFor(index)} x2={xFor(index)} y1={volumeBaseline + 5} y2={volumeBaseline + 10} stroke="#737373" strokeOpacity={0.22} />
-            <text x={xFor(index)} y={xAxisY} fill="#737373" fillOpacity={0.82} fontSize="11" fontFamily="monospace" textAnchor={index === 0 ? 'start' : index === visible.length - 1 ? 'end' : 'middle'} dominantBaseline="middle">
+            <line x1={xFor(index)} x2={xFor(index)} y1={volumeBaseline + 3} y2={xAxisTickBottom} stroke="#737373" strokeOpacity={0.22} />
+            <text x={xFor(index)} y={xAxisY} fill="#737373" fillOpacity={0.9} fontSize="10.5" fontFamily="monospace" textAnchor={index === 0 ? 'start' : index === visible.length - 1 ? 'end' : 'middle'} dominantBaseline="middle">
               {visible[index].label}
             </text>
           </g>

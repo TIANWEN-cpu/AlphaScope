@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from backend.price_periods import (
+    _compatible_previous_close,
     _is_cn_trading_minute,
     aggregate_price_bars,
     fetch_intraday_prices,
@@ -124,6 +125,11 @@ def test_cn_trading_minute_filter():
     assert not _is_cn_trading_minute(datetime(2026, 5, 25, 9, 29))
     assert not _is_cn_trading_minute(datetime(2026, 5, 25, 11, 45))
     assert not _is_cn_trading_minute(datetime(2026, 5, 25, 15, 1))
+
+
+def test_incompatible_intraday_previous_close_is_discarded():
+    assert _compatible_previous_close(7926.11, 1270.69) == 0.0
+    assert _compatible_previous_close(1268.0, 1270.69) == 1268.0
 
 
 def test_fetch_intraday_prices_keeps_latest_trade_day_and_previous_close(monkeypatch):

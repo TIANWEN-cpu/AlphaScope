@@ -192,6 +192,21 @@ def _previous_daily_close(symbol: str, before: datetime | None = None) -> float:
     return 0.0
 
 
+def _compatible_previous_close(previous_close: float, current_price: float) -> float:
+    if previous_close <= 0 or current_price <= 0:
+        return 0.0
+    ratio = previous_close / current_price
+    if 0.5 <= ratio <= 1.5:
+        return previous_close
+    logger.debug(
+        "discard incompatible intraday previous close: previous=%s current=%s ratio=%s",
+        previous_close,
+        current_price,
+        ratio,
+    )
+    return 0.0
+
+
 def fetch_intraday_prices(
     symbol: str, limit: int = 240, period: str = "1"
 ) -> list[dict[str, Any]]:
@@ -252,14 +267,16 @@ def fetch_intraday_prices(
     rows.sort(key=lambda item: item[0])
     rows = rows[-max(1, min(limit, 1500)) :]
 
-    previous_close = _previous_daily_close(code, rows[0][0])
+    first_row = rows[0][1]
+    first_open = _as_number(first_row.get(open_col)) if open_col else 0.0
+    first_close = _as_number(first_row.get(close_col)) if close_col else 0.0
+    first_price = first_open or first_close
+    previous_close = _compatible_previous_close(
+        _previous_daily_close(code, rows[0][0]),
+        first_price,
+    )
     if previous_close <= 0:
-        first_row = rows[0][1]
-        previous_close = (
-            _as_number(first_row.get(open_col)) if open_col else 0.0
-        ) or (
-            _as_number(first_row.get(close_col)) if close_col else 0.0
-        )
+        previous_close = first_price
 
     results: list[dict[str, Any]] = []
     last_close = previous_close
