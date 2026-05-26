@@ -249,4 +249,5 @@ def test_akshare_prices_fall_back_to_tencent_when_primary_empty():
     assert result[0]["symbol"] == "600519"
     assert result[0]["date"] == "2026-05-22"
     assert result[0]["close"] == 1285.0
+    assert result[0]["adjust"] == ""
     assert result[0]["source"] == "tencent"

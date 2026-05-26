@@ -323,6 +323,30 @@ const formatVolume = (value: number) => {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
+const parseTimeMinutes = (date: string) => {
+  const match = String(date || '').match(/(\d{2}):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+const cnTradingMinuteOffset = (date: string) => {
+  const minutes = parseTimeMinutes(date);
+  if (minutes === null) return null;
+  const morningStart = 9 * 60 + 30;
+  const morningEnd = 11 * 60 + 30;
+  const afternoonStart = 13 * 60;
+  const afternoonEnd = 15 * 60;
+  if (minutes >= morningStart && minutes <= morningEnd) {
+    return minutes - morningStart;
+  }
+  if (minutes >= afternoonStart && minutes <= afternoonEnd) {
+    return morningEnd - morningStart + 2 + (minutes - afternoonStart);
+  }
+  return null;
+};
+
+const cnTradingMinuteTotal = 242;
+
 function MarketChart({
   data,
   frequency,
@@ -366,35 +390,86 @@ function MarketChart({
   const padding = Math.max((maxPrice - minPrice) * 0.08, maxPrice * (frequency === 'intraday' ? 0.0015 : 0.005), 0.01);
   const yMin = minPrice - padding;
   const yMax = maxPrice + padding;
+  const intradayOffsets = frequency === 'intraday'
+    ? visible.map(item => cnTradingMinuteOffset(item.date))
+    : [];
+  const intradayMinutes = frequency === 'intraday'
+    ? visible.map(item => parseTimeMinutes(item.date))
+    : [];
+  const hasIntradayTimeAxis = frequency === 'intraday' && intradayOffsets.some(offset => offset !== null);
   const xStep = visible.length > 1 ? plotWidth / (visible.length - 1) : plotWidth;
-  const candleSlot = visible.length > 0 ? plotWidth / visible.length : plotWidth;
+  const xFor = (index: number) => {
+    if (hasIntradayTimeAxis) {
+      const offset = intradayOffsets[index];
+      if (offset !== null && offset !== undefined) {
+        return pad.left + (offset / cnTradingMinuteTotal) * plotWidth;
+      }
+    }
+    return pad.left + index * xStep;
+  };
+  const slotCount = hasIntradayTimeAxis ? cnTradingMinuteTotal : visible.length;
+  const candleSlot = visible.length > 0 ? plotWidth / slotCount : plotWidth;
   const candleWidth = frequency === 'intraday' ? clamp(candleSlot * 0.58, 1.4, 4.2) : clamp(candleSlot * 0.54, 3, 13);
   const maxVolume = Math.max(...visible.map(item => item.volume || 0), 1);
   const isHovering = pointer !== null && hoveredIndex !== null;
   const currentIndex = isHovering && hoveredIndex < visible.length ? hoveredIndex : visible.length - 1;
   const current = visible[currentIndex];
 
-  const xFor = (index: number) => pad.left + index * xStep;
   const yFor = (value: number) => pad.top + (yMax - value) / (yMax - yMin) * plotHeight;
   const volumeY = (value: number) => volumeTop + volumePlotHeight - (value / maxVolume) * volumePlotHeight;
+  const startsNewIntradaySegment = (index: number) => {
+    if (!hasIntradayTimeAxis || index <= 0) return false;
+    const minute = intradayMinutes[index];
+    const previousMinute = intradayMinutes[index - 1];
+    return minute !== null && previousMinute !== null && minute - previousMinute > 8;
+  };
   const linePath = (key: 'ma5' | 'ma10' | 'ma20' | 'close' | 'avgPrice') => {
     let started = false;
     return visible
       .map((item, index) => {
         const raw = key === 'close' ? item.close : item[key];
         if (!raw) return '';
-        const command = started ? 'L' : 'M';
+        const command = started && !startsNewIntradaySegment(index) ? 'L' : 'M';
         started = true;
         return `${command} ${xFor(index).toFixed(2)} ${yFor(raw).toFixed(2)}`;
       })
       .filter(Boolean)
       .join(' ');
   };
+  const areaPaths = () => {
+    const segments: string[][] = [];
+    let currentSegment: string[] = [];
+    visible.forEach((item, index) => {
+      if (!item.close) return;
+      const point = `${xFor(index).toFixed(2)} ${yFor(item.close).toFixed(2)}`;
+      if (!currentSegment.length || !startsNewIntradaySegment(index)) {
+        currentSegment.push(point);
+      } else {
+        segments.push(currentSegment);
+        currentSegment = [point];
+      }
+    });
+    if (currentSegment.length) segments.push(currentSegment);
+    return segments.map((segment) => {
+      const first = segment[0].split(' ')[0];
+      const last = segment[segment.length - 1].split(' ')[0];
+      return `M ${first} ${areaBaseline} L ${segment.join(' L ')} L ${last} ${areaBaseline} Z`;
+    });
+  };
   const intradayPath = linePath('close');
   const intradayAvgPath = linePath('avgPrice');
   const areaBaseline = priceHeight - pad.bottom;
+  const intradayAreaPaths = frequency === 'intraday' ? areaPaths() : [];
   const tickIndexes = Array.from(new Set([0, Math.floor(visible.length * 0.25), Math.floor(visible.length * 0.5), Math.floor(visible.length * 0.75), visible.length - 1]))
     .filter(index => index >= 0 && index < visible.length);
+  const intradayTicks = [
+    { label: '09:30', offset: 0, anchor: 'start', labelOffset: 0 },
+    { label: '10:30', offset: 60, anchor: 'middle', labelOffset: 0 },
+    { label: '11:30', offset: 120, anchor: 'end', labelOffset: -8 },
+    { label: '13:00', offset: 122, anchor: 'start', labelOffset: 8 },
+    { label: '14:00', offset: 182, anchor: 'middle', labelOffset: 0 },
+    { label: '15:00', offset: 242, anchor: 'end', labelOffset: 0 },
+  ];
   const priceTicks = [yMax, yMax - (yMax - yMin) / 3, yMax - (yMax - yMin) * 2 / 3, yMin];
   const hoverX = xFor(currentIndex);
   const selectedY = yFor(current.close);
@@ -405,6 +480,7 @@ function MarketChart({
   const tooltipX = clamp(tooltipSourceX - tooltipWidth / 2, pad.left + 8, width - pad.right - tooltipWidth - 8);
   const tooltipY = clamp(tooltipSourceY - tooltipHeight - 18, -tooltipHeight + 6, volumeBaseline - tooltipHeight - 8);
   const previousClose = current.referencePrice;
+  const intradayBreakX = pad.left + (121 / cnTradingMinuteTotal) * plotWidth;
 
   return (
     <div className="relative h-full w-full">
@@ -421,7 +497,19 @@ function MarketChart({
 
         {frequency === 'intraday' ? (
           <>
-            <path d={`${intradayPath} L ${xFor(visible.length - 1)} ${areaBaseline} L ${xFor(0)} ${areaBaseline} Z`} fill="#eab308" fillOpacity="0.035" />
+            {intradayAreaPaths.map((path, index) => (
+              <path key={`intraday-area-${index}`} d={path} fill="#eab308" fillOpacity="0.035" />
+            ))}
+            {hasIntradayTimeAxis && (
+              <rect
+                x={intradayBreakX}
+                y={pad.top}
+                width={1}
+                height={volumeBaseline - pad.top}
+                fill="#ffffff"
+                opacity={0.08}
+              />
+            )}
             {previousClose && (
               <line
                 x1={pad.left}
@@ -472,7 +560,21 @@ function MarketChart({
           );
         })}
 
-        {tickIndexes.map(index => (
+        {hasIntradayTimeAxis ? (
+          <>
+            {intradayTicks.map((tick, index) => {
+              const x = pad.left + (tick.offset / cnTradingMinuteTotal) * plotWidth;
+              return (
+                <g key={`x-intraday-${tick.label}-${index}`}>
+                  <line x1={x} x2={x} y1={volumeBaseline + 3} y2={xAxisTickBottom} stroke="#737373" strokeOpacity={0.18} />
+                  <text x={x + tick.labelOffset} y={xAxisY} fill="#737373" fillOpacity={0.9} fontSize="10.5" fontFamily="monospace" textAnchor={tick.anchor as 'start' | 'middle' | 'end'} dominantBaseline="middle">
+                    {tick.label}
+                  </text>
+                </g>
+              );
+            })}
+          </>
+        ) : tickIndexes.map(index => (
           <g key={`x-${index}`}>
             <line x1={xFor(index)} x2={xFor(index)} y1={volumeBaseline + 3} y2={xAxisTickBottom} stroke="#737373" strokeOpacity={0.22} />
             <text x={xFor(index)} y={xAxisY} fill="#737373" fillOpacity={0.9} fontSize="10.5" fontFamily="monospace" textAnchor={index === 0 ? 'start' : index === visible.length - 1 ? 'end' : 'middle'} dominantBaseline="middle">
@@ -508,7 +610,17 @@ function MarketChart({
               x: pad.left + ratioX * plotWidth,
               y: pad.top + ratioY * (volumeBaseline - pad.top),
             });
-            onHover(Math.round(ratioX * (visible.length - 1)));
+            if (hasIntradayTimeAxis) {
+              const targetOffset = ratioX * cnTradingMinuteTotal;
+              const nearest = intradayOffsets.reduce((best, offset, index) => {
+                if (offset === null) return best;
+                const distance = Math.abs(offset - targetOffset);
+                return distance < best.distance ? { index, distance } : best;
+              }, { index: currentIndex, distance: Number.POSITIVE_INFINITY });
+              onHover(nearest.index);
+            } else {
+              onHover(Math.round(ratioX * (visible.length - 1)));
+            }
           }}
           onMouseLeave={() => {
             setPointer(null);
@@ -591,10 +703,14 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const [financeItems, setFinanceItems] = useState(EMPTY_FINANCE);
   const [fundItems, setFundItems] = useState(EMPTY_FUNDS);
   const [newsItems, setNewsItems] = useState<ReturnType<typeof mapBackendNews>>([]);
-  const [factorPanel, setFactorPanel] = useState<FactorPanelData>(EMPTY_FACTOR_PANEL);
-  const [dataStatus, setDataStatus] = useState('后端数据待同步');
-  const [marketState, setMarketState] = useState<LoadState>('idle');
-  const [newsState, setNewsState] = useState<LoadState>('idle');
+  const [factorPanel, setFactorPanel] = useState<FactorPanelData>({
+    ...EMPTY_FACTOR_PANEL,
+    state: 'loading',
+    message: `正在计算 ${stockName} (${symbol}) 量化因子...`,
+  });
+  const [dataStatus, setDataStatus] = useState(() => `正在同步 ${stockName} (${symbol}) 后端行情...`);
+  const [marketState, setMarketState] = useState<LoadState>('loading');
+  const [newsState, setNewsState] = useState<LoadState>('loading');
   const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [selectedMode, setSelectedMode] = useState<AnalysisMode>('standard');
@@ -637,62 +753,38 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     setFinanceItems(EMPTY_FINANCE);
     setFundItems(EMPTY_FUNDS);
     setFactorPanel({ ...EMPTY_FACTOR_PANEL, state: 'loading', message: `正在计算 ${stockName} (${symbol}) 量化因子...` });
+    setDataStatus(`正在同步 ${stockName} (${symbol}) 后端行情...`);
 
-    async function loadWorkbenchData() {
-      setDataStatus(`正在同步 ${stockName} (${symbol}) 后端行情、财务、新闻与因子...`);
-      const periodConfig = getPeriodConfig(activePeriodRef.current);
-      const [pricesResult, latestResult, fundamentalsResult, newsResult, fundFlowResult, factorsResult] = await Promise.allSettled([
-        api.prices(symbol, periodConfig.limit, periodConfig.frequency, { signal: controller.signal }),
-        api.latestPrice(symbol, { signal: controller.signal }),
-        api.fundamentals(symbol, { signal: controller.signal }),
-        api.news(symbol, 8, { signal: controller.signal }),
-        api.fundFlow(symbol, 30, { signal: controller.signal }),
-        api.factors(symbol, stockName, 60, { signal: controller.signal }),
-      ]);
-
+    async function loadFundamentals() {
+      const result = await api.fundamentals(symbol, { signal: controller.signal });
       if (!isCurrent()) return;
-      const shouldApplyPriceResult = activePeriodRef.current === periodConfig.label;
-
-      if (shouldApplyPriceResult && pricesResult.status === 'fulfilled' && pricesResult.value.success && pricesResult.value.data?.bars?.length) {
-        const bars = pricesResult.value.data.bars;
-        setPriceBars(bars);
-        setChartData(toChartData(bars, periodConfig.frequency));
-        setMarketState('ready');
-      } else if (shouldApplyPriceResult && pricesResult.status === 'fulfilled' && pricesResult.value.success) {
-        setPriceBars([]);
-        setChartData([]);
-        setMarketState('empty');
-      } else if (shouldApplyPriceResult) {
-        setPriceBars([]);
-        setChartData([]);
-        setMarketState('error');
-      }
-
-      if (latestResult.status === 'fulfilled' && latestResult.value.success && latestResult.value.data) {
-        setLatestPrice(latestResult.value.data);
-      } else if (pricesResult.status !== 'fulfilled' || !pricesResult.value.success || !pricesResult.value.data?.bars?.length) {
-        setLatestPrice(null);
-      }
-
-      if (fundamentalsResult.status === 'fulfilled' && fundamentalsResult.value.success && fundamentalsResult.value.data) {
-        const data = fundamentalsResult.value.data;
+      if (result.success && result.data) {
+        const data = result.data;
         setFinanceItems(buildFinanceItems(data));
       }
+    }
 
-      if (newsResult.status === 'fulfilled' && newsResult.value.success && newsResult.value.data?.news?.length) {
-        setNewsItems(mapBackendNews(newsResult.value.data.news));
+    async function loadNews() {
+      const result = await api.news(symbol, 8, { signal: controller.signal });
+      if (!isCurrent()) return;
+      if (result.success && result.data?.news?.length) {
+        setNewsItems(mapBackendNews(result.data.news));
         setNewsState('ready');
-      } else if (newsResult.status === 'fulfilled' && newsResult.value.success) {
+      } else if (result.success) {
         setNewsItems([]);
         setNewsState('empty');
       } else {
         setNewsItems([]);
         setNewsState('error');
       }
+    }
 
-      if (fundFlowResult.status === 'fulfilled' && fundFlowResult.value.success && fundFlowResult.value.data) {
-        const summary = (fundFlowResult.value.data.summary || {}) as Record<string, unknown>;
-        const records = Array.isArray(fundFlowResult.value.data.records) ? fundFlowResult.value.data.records as Record<string, unknown>[] : [];
+    async function loadFundFlow() {
+      const result = await api.fundFlow(symbol, 30, { signal: controller.signal });
+      if (!isCurrent()) return;
+      if (result.success && result.data) {
+        const summary = (result.data.summary || {}) as Record<string, unknown>;
+        const records = Array.isArray(result.data.records) ? result.data.records as Record<string, unknown>[] : [];
         const latestRecord = records[records.length - 1] || {};
         setFundItems([
           { label: '主力净流入', value: formatYi(summary.main_net_yi ?? latestRecord.main_net_yi), color: Number(summary.main_net_yi ?? latestRecord.main_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
@@ -700,27 +792,29 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
           { label: '大单', value: formatYi(summary.large_net_yi ?? latestRecord.large_net_yi), color: Number(summary.large_net_yi ?? latestRecord.large_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
           { label: '中单', value: formatYi(summary.medium_net_yi ?? latestRecord.medium_net_yi), color: Number(summary.medium_net_yi ?? latestRecord.medium_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
         ]);
+      } else {
+        setFundItems(EMPTY_FUNDS);
       }
+    }
 
-      if (factorsResult.status === 'fulfilled' && factorsResult.value.success && factorsResult.value.data) {
-        setFactorPanel(buildFactorPanel(factorsResult.value.data));
+    async function loadFactors() {
+      const result = await api.factors(symbol, stockName, 60, { signal: controller.signal });
+      if (!isCurrent()) return;
+      if (result.success && result.data) {
+        setFactorPanel(buildFactorPanel(result.data));
       } else {
         setFactorPanel({
           ...EMPTY_FACTOR_PANEL,
-          state: factorsResult.status === 'fulfilled' ? 'empty' : 'error',
+          state: result.success ? 'empty' : 'error',
           message: '后端因子接口暂不可用，请检查 /api/factors 数据源。',
         });
       }
-
-      const syncedParts = [
-        pricesResult.status === 'fulfilled' && pricesResult.value.success && pricesResult.value.data?.bars?.length ? '行情' : '',
-        newsResult.status === 'fulfilled' && newsResult.value.success && newsResult.value.data?.news?.length ? '新闻' : '',
-        fundamentalsResult.status === 'fulfilled' && fundamentalsResult.value.success ? '财务' : '',
-      ].filter(Boolean);
-      setDataStatus(syncedParts.length ? `已同步 ${syncedParts.join('、')} 数据` : `暂无 ${stockName} (${symbol}) 后端数据`);
     }
 
-    loadWorkbenchData();
+    void loadFundamentals();
+    void loadNews();
+    void loadFundFlow();
+    void loadFactors();
     setMessages([
       {
         id: `${symbol}-system`,
@@ -749,6 +843,9 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     setMarketState('loading');
     setDataStatus(`正在切换到 ${periodConfig.label} 数据...`);
     setHoveredChartIndex(null);
+    setChartData([]);
+    setPriceBars([]);
+    setLatestPrice(null);
 
     api.prices(symbol, periodConfig.limit, periodConfig.frequency, { signal: controller.signal }).then((result) => {
       if (!isCurrent()) return;

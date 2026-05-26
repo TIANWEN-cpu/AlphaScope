@@ -33,19 +33,35 @@ def test_resolve_stock_uses_akshare_code_name_table():
 
     df = pd.DataFrame(
         [
-            {"code": "301666", "name": "大普微-UW"},
+            {"code": "301667", "name": "测试股份"},
             {"code": "600519", "name": "贵州茅台"},
         ]
     )
 
     with patch("backend.stock_resolver._fetch_a_share_code_name", return_value=df):
+        result = resolve_stock("301667")
+
+    assert result["symbol"] == "301667"
+    assert result["name"] == "测试股份"
+    assert result["exchange"] == "SZ"
+    assert result["resolved"] is True
+    assert result["source"] == "akshare_stock_info_a_code_name"
+
+
+def test_resolve_stock_known_alias_does_not_wait_for_akshare_table():
+    from backend.stock_resolver import resolve_stock
+
+    with patch(
+        "backend.stock_resolver._fetch_a_share_code_name",
+        side_effect=TimeoutError("slow upstream"),
+    ) as mock_fetch:
         result = resolve_stock("301666")
 
     assert result["symbol"] == "301666"
     assert result["name"] == "大普微-UW"
-    assert result["exchange"] == "SZ"
     assert result["resolved"] is True
-    assert result["source"] == "akshare_stock_info_a_code_name"
+    assert result["source"] == "fallback_alias"
+    mock_fetch.assert_not_called()
 
 
 def test_resolve_stock_falls_back_to_safe_display_name_when_source_fails():
@@ -65,13 +81,13 @@ def test_resolve_stock_falls_back_to_safe_display_name_when_source_fails():
 
 @pytest.mark.anyio
 async def test_resolve_stock_endpoint(client):
-    df = pd.DataFrame([{"code": "301666", "name": "大普微-UW"}])
+    df = pd.DataFrame([{"code": "301667", "name": "测试股份"}])
 
     with patch("backend.stock_resolver._fetch_a_share_code_name", return_value=df):
-        resp = await client.get("/api/stocks/resolve?q=301666")
+        resp = await client.get("/api/stocks/resolve?q=301667")
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
-    assert data["data"]["symbol"] == "301666"
-    assert data["data"]["name"] == "大普微-UW"
+    assert data["data"]["symbol"] == "301667"
+    assert data["data"]["name"] == "测试股份"

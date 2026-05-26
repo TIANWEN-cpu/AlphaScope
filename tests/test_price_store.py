@@ -302,6 +302,7 @@ async def test_fetch_prices_passes_symbol_to_provider(client):
     assert resp.json()["success"] is True
     kwargs = mock_registry.get.call_args.kwargs
     assert kwargs["symbol"] == "600519"
+    assert kwargs["adjust"] == ""
     assert "query" not in kwargs
 
 
@@ -332,7 +333,7 @@ async def test_get_latest_price_found(client):
         "volume": 1000,
     }
     with (
-        patch("backend.price_store.get_prices", return_value=[]),
+        patch("backend.price_store.get_prices", return_value=[mock_bar]),
         patch("backend.price_store.get_latest_price", return_value=mock_bar),
         patch("backend.api.prices.fetch_prices") as mock_fetch,
     ):
@@ -455,4 +456,6 @@ async def test_get_latest_price_prefers_daily_bar(client):
     data = resp.json()["data"]
     assert data["frequency"] == "1d"
     assert data["change_pct"] == 5.0
-    mock_get_prices.assert_called_once_with(symbol="600519", frequency="1d", limit=1)
+    mock_get_prices.assert_called_once_with(
+        symbol="600519", frequency="1d", limit=20, include_incompatible=True
+    )

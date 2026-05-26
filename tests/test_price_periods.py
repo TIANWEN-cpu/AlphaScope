@@ -7,8 +7,10 @@ from backend.price_periods import (
     _is_cn_trading_minute,
     aggregate_price_bars,
     fetch_intraday_prices,
+    latest_bar_date,
     normalize_frequency,
 )
+from backend.price_quality import filter_incompatible_price_bars
 
 
 def test_normalize_frequency_aliases():
@@ -130,6 +132,27 @@ def test_cn_trading_minute_filter():
 def test_incompatible_intraday_previous_close_is_discarded():
     assert _compatible_previous_close(7926.11, 1270.69) == 0.0
     assert _compatible_previous_close(1268.0, 1270.69) == 1268.0
+
+
+def test_filter_incompatible_price_bars_drops_mixed_adjustment_spike():
+    bars = [
+        {"date": "2026-05-26", "close": 7846.51},
+        {"date": "2026-05-25", "close": 1285.88},
+        {"date": "2026-05-22", "close": 1290.20},
+    ]
+
+    result = filter_incompatible_price_bars(bars)
+
+    assert [item["date"] for item in result] == ["2026-05-25", "2026-05-22"]
+
+
+def test_latest_bar_date_uses_calendar_date():
+    bars = [
+        {"date": "2026-05-25 09:31"},
+        {"date": "2026-05-26"},
+    ]
+
+    assert latest_bar_date(bars).isoformat() == "2026-05-26"
 
 
 def test_fetch_intraday_prices_keeps_latest_trade_day_and_previous_close(monkeypatch):
