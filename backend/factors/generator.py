@@ -391,17 +391,15 @@ class FactorGenerator:
         include_signals: bool,
     ) -> None:
         """价格动量因子: 涨跌幅 + 成交量变化"""
-        from backend.storage.db import Database
+        from backend.price_store import get_prices
 
-        db = Database()
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
-        rows = db.conn.execute(
-            """SELECT date, close, volume, change_pct
-               FROM price_bars
-               WHERE symbol = ? AND date >= ?
-               ORDER BY date ASC""",
-            (symbol, cutoff),
-        ).fetchall()
+        rows = [
+            row
+            for row in get_prices(symbol, frequency="1d", limit=max(days * 2, 30))
+            if str(row.get("date", "")) >= cutoff
+        ]
+        rows.sort(key=lambda row: str(row.get("date", "")))
 
         if len(rows) < 2:
             return
@@ -409,21 +407,23 @@ class FactorGenerator:
         # 短期动量: 近5日涨跌幅
         recent = rows[-5:] if len(rows) >= 5 else rows
         short_return = 0.0
-        if recent[0]["close"] and recent[0]["close"] > 0:
-            short_return = (recent[-1]["close"] - recent[0]["close"]) / recent[0][
-                "close"
-            ]
+        recent_first_close = float(recent[0].get("close") or 0)
+        recent_last_close = float(recent[-1].get("close") or 0)
+        if recent_first_close > 0:
+            short_return = (recent_last_close - recent_first_close) / recent_first_close
 
         # 中期动量: 全周期涨跌幅
         mid_return = 0.0
-        if rows[0]["close"] and rows[0]["close"] > 0:
-            mid_return = (rows[-1]["close"] - rows[0]["close"]) / rows[0]["close"]
+        first_close = float(rows[0].get("close") or 0)
+        last_close = float(rows[-1].get("close") or 0)
+        if first_close > 0:
+            mid_return = (last_close - first_close) / first_close
 
         # 成交量变化: 近期 vs 前期
         vol_score = 0.0
         if len(rows) >= 10:
-            early_vol = sum(r["volume"] or 0 for r in rows[: len(rows) // 2])
-            late_vol = sum(r["volume"] or 0 for r in rows[len(rows) // 2 :])
+            early_vol = sum(float(r.get("volume") or 0) for r in rows[: len(rows) // 2])
+            late_vol = sum(float(r.get("volume") or 0) for r in rows[len(rows) // 2 :])
             if early_vol > 0:
                 vol_change = (late_vol - early_vol) / early_vol
                 vol_score = max(-1.0, min(1.0, vol_change))

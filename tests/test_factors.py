@@ -118,7 +118,10 @@ class TestFactorGenerator:
         gen = FactorGenerator()
 
         mock_db = self._make_db_mock()
-        with patch("backend.storage.db.Database", return_value=mock_db):
+        with (
+            patch("backend.storage.db.Database", return_value=mock_db),
+            patch("backend.price_store.get_prices", return_value=[]),
+        ):
             report = gen.generate("600519", "贵州茅台", days=30)
 
         assert report.symbol == "600519"
@@ -150,7 +153,10 @@ class TestFactorGenerator:
         ]
 
         mock_db = self._make_db_mock(news_rows=news_rows)
-        with patch("backend.storage.db.Database", return_value=mock_db):
+        with (
+            patch("backend.storage.db.Database", return_value=mock_db),
+            patch("backend.price_store.get_prices", return_value=[]),
+        ):
             report = gen.generate("600519", "贵州茅台")
 
         assert report.news_count == 2
@@ -171,7 +177,10 @@ class TestFactorGenerator:
         ]
 
         mock_db = self._make_db_mock(announcement_rows=ann_rows)
-        with patch("backend.storage.db.Database", return_value=mock_db):
+        with (
+            patch("backend.storage.db.Database", return_value=mock_db),
+            patch("backend.price_store.get_prices", return_value=[]),
+        ):
             report = gen.generate("000001", "平安银行")
 
         assert report.event_count == 1
@@ -200,7 +209,10 @@ class TestFactorGenerator:
         ]
 
         mock_db = self._make_db_mock(report_rows=report_rows)
-        with patch("backend.storage.db.Database", return_value=mock_db):
+        with (
+            patch("backend.storage.db.Database", return_value=mock_db),
+            patch("backend.price_store.get_prices", return_value=[]),
+        ):
             report = gen.generate("600519", "贵州茅台")
 
         assert report.report_count == 2
@@ -223,13 +235,38 @@ class TestFactorGenerator:
         assert -1.0 <= composite <= 1.0
         assert composite > 0  # all positive factors → positive composite
 
+    def test_momentum_uses_clean_price_store_data(self):
+        from backend.factors.generator import FactorGenerator, FactorReport
+
+        gen = FactorGenerator()
+        report = FactorReport(symbol="600519")
+        clean_rows = [
+            {"date": "2026-05-21", "close": 1296.0, "volume": 10},
+            {"date": "2026-05-22", "close": 1290.0, "volume": 12},
+            {"date": "2026-05-25", "close": 1286.0, "volume": 14},
+            {"date": "2026-05-26", "close": 1273.0, "volume": 16},
+        ]
+
+        with patch("backend.price_store.get_prices", return_value=clean_rows) as mock_get_prices:
+            gen._compute_momentum(report, "600519", days=30, include_signals=True)
+
+        mock_get_prices.assert_called_once_with("600519", frequency="1d", limit=60)
+        signal = report.signals[-1]
+        assert signal["type"] == "momentum"
+        assert -5 < signal["short_return_pct"] < 0
+        assert -5 < signal["mid_return_pct"] < 0
+        assert report.momentum < 0
+
     def test_generate_batch(self):
         from backend.factors.generator import FactorGenerator
 
         gen = FactorGenerator()
 
         mock_db = self._make_db_mock()
-        with patch("backend.storage.db.Database", return_value=mock_db):
+        with (
+            patch("backend.storage.db.Database", return_value=mock_db),
+            patch("backend.price_store.get_prices", return_value=[]),
+        ):
             reports = gen.generate_batch(
                 ["600519", "000001"], {"600519": "贵州茅台", "000001": "平安银行"}
             )

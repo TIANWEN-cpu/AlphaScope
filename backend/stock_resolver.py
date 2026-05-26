@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+import queue
 import re
+import threading
 from functools import lru_cache
 from typing import Any
 
 from backend.price_store import get_market, normalize_symbol
 
 logger = logging.getLogger(__name__)
+
+A_SHARE_NAME_FETCH_TIMEOUT_SECONDS = 2.0
 
 FALLBACK_STOCKS: dict[str, dict[str, str]] = {
     "600519": {"name": "贵州茅台", "exchange": "SH", "market": "CN"},
@@ -66,6 +70,31 @@ def _fetch_a_share_code_name():
     return ak.stock_info_a_code_name()
 
 
+def _fetch_a_share_code_name_with_timeout(timeout: float = A_SHARE_NAME_FETCH_TIMEOUT_SECONDS):
+    """Fetch AkShare's code-name table without letting UI requests hang indefinitely."""
+
+    result_queue: queue.Queue[tuple[bool, Any]] = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            result_queue.put((True, _fetch_a_share_code_name()), block=False)
+        except Exception as exc:
+            try:
+                result_queue.put((False, exc), block=False)
+            except queue.Full:
+                pass
+
+    thread = threading.Thread(target=worker, name="stock-name-resolver", daemon=True)
+    thread.start()
+    try:
+        ok, payload = result_queue.get(timeout=timeout)
+    except queue.Empty as exc:
+        raise TimeoutError("stock_info_a_code_name timed out") from exc
+    if ok:
+        return payload
+    raise payload
+
+
 def _find_column(columns: list[Any], candidates: tuple[str, ...]) -> Any | None:
     normalized = {str(col).strip().lower(): col for col in columns}
     for candidate in candidates:
@@ -83,7 +112,7 @@ def _find_column(columns: list[Any], candidates: tuple[str, ...]) -> Any | None:
 def _a_share_name_map() -> dict[str, str]:
     """读取 AkShare A 股代码名称表，并缓存到进程内。"""
     try:
-        df = _fetch_a_share_code_name()
+        df = _fetch_a_share_code_name_with_timeout()
     except Exception as exc:
         logger.warning("stock_info_a_code_name failed: %s", exc)
         return {}
@@ -135,11 +164,9 @@ def resolve_stock(query: str) -> dict[str, Any]:
 
     if code:
         if code in FALLBACK_STOCKS:
-            result = _fallback_result(code, raw_query)
-            result["source"] = "fallback_alias"
-        else:
-            result = _fallback_result(code, raw_query)
+            return _fallback_result(code, raw_query)
 
+        result = _fallback_result(code, raw_query)
         if get_market(code) == "CN":
             name = _a_share_name_map().get(code)
             if name:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Any
 
 from backend.price_store import get_market, normalize_symbol
@@ -131,7 +131,7 @@ def aggregate_price_bars(
                 "turnover": 0.0,
                 "amplitude": round(amplitude, 4),
                 "change_pct": round(change_pct, 4),
-                "adjust": last_bar.get("adjust") or first_bar.get("adjust") or "hfq",
+                "adjust": last_bar.get("adjust") or first_bar.get("adjust") or "",
                 "source": f"aggregate:{last_bar.get('source') or first_bar.get('source') or '1d'}",
                 "fetched_at": last_bar.get("fetched_at")
                 or first_bar.get("fetched_at")
@@ -321,3 +321,14 @@ def default_daily_window_days(limit: int, frequency: str) -> int:
     if normalized == "1w":
         return max(limit * 10, 180)
     return max(limit * 2, 30)
+
+
+def latest_bar_date(bars: list[dict[str, Any]]) -> date | None:
+    """Return the latest calendar date found in a bar list."""
+
+    dates = [
+        dt.date()
+        for bar in bars
+        if (dt := _parse_bar_datetime(bar.get("date"))) is not None
+    ]
+    return max(dates) if dates else None

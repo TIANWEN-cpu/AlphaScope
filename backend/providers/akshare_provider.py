@@ -237,7 +237,7 @@ class AkShareProvider(BaseProvider):
             start_date = (datetime.now() - timedelta(days=max(limit * 2, 30))).strftime(
                 "%Y%m%d"
             )
-        adjust = query.get("adjust", "hfq")
+        adjust = query.get("adjust", "")
 
         try:
             df = _safe(
@@ -266,6 +266,7 @@ class AkShareProvider(BaseProvider):
                         "turnover": _float_value(row.get("换手率", 0)),
                         "amplitude": _float_value(row.get("振幅", 0)),
                         "change_pct": _float_value(row.get("涨跌幅", 0)),
+                        "adjust": adjust,
                         "frequency": {"weekly": "1w", "monthly": "1mo"}.get(
                             str(period), "1d"
                         ),
@@ -289,7 +290,7 @@ class AkShareProvider(BaseProvider):
                 symbol=_to_tx_symbol(symbol),
                 start_date=start_date.replace("-", ""),
                 end_date=end_date.replace("-", ""),
-                adjust="qfq",
+                adjust="",
             )
             if df is None or len(df) == 0:
                 return []
@@ -320,6 +321,7 @@ class AkShareProvider(BaseProvider):
                         "turnover": 0.0,
                         "amplitude": round(amplitude, 4),
                         "change_pct": round(change_pct, 4),
+                        "adjust": "",
                         "source": "tencent",
                     }
                 )
