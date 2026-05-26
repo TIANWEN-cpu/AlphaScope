@@ -86,9 +86,12 @@ async def get_status():
     """获取 Jince 服务状态"""
     svc = _get_service()
     status = await svc.get_status()
+    data = status.model_dump()
+    data["degraded"] = not status.connected
+    data["source_status"] = "ok" if status.connected else "unavailable"
     return ApiResponse(
-        success=status.connected,
-        data=status.model_dump(),
+        success=True,
+        data=data,
         error=status.error if not status.connected else None,
         error_code="JINCE_DISCONNECTED" if not status.connected else None,
     )

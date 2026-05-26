@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import re
@@ -9,10 +10,12 @@ import threading
 from typing import Any
 
 from backend.price_store import get_market, normalize_symbol
+from backend.project_paths import CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
 A_SHARE_NAME_FETCH_TIMEOUT_SECONDS = 2.0
+STOCK_NAME_CACHE_FILE = CACHE_DIR / "stock_names_a_share.json"
 _A_SHARE_NAME_CACHE: dict[str, str] | None = None
 _A_SHARE_NAME_CACHE_LOCK = threading.Lock()
 
@@ -71,6 +74,36 @@ def _fetch_a_share_code_name():
     return ak.stock_info_a_code_name()
 
 
+def _load_persisted_a_share_name_map() -> dict[str, str]:
+    try:
+        if not STOCK_NAME_CACHE_FILE.exists():
+            return {}
+        raw = json.loads(STOCK_NAME_CACHE_FILE.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            _coerce_a_share_code(code): _clean_name(name)
+            for code, name in raw.items()
+            if _coerce_a_share_code(code) and _clean_name(name)
+        }
+    except Exception as exc:
+        logger.warning("failed to load persisted stock name cache: %s", exc)
+        return {}
+
+
+def _save_persisted_a_share_name_map(name_map: dict[str, str]) -> None:
+    if not name_map:
+        return
+    try:
+        STOCK_NAME_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STOCK_NAME_CACHE_FILE.write_text(
+            json.dumps(name_map, ensure_ascii=False, sort_keys=True),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        logger.warning("failed to persist stock name cache: %s", exc)
+
+
 def _fetch_a_share_code_name_with_timeout(timeout: float = A_SHARE_NAME_FETCH_TIMEOUT_SECONDS):
     """Fetch AkShare's code-name table without letting UI requests hang indefinitely."""
 
@@ -123,7 +156,30 @@ def _a_share_name_map() -> dict[str, str]:
         loaded = _load_a_share_name_map()
         if loaded:
             _A_SHARE_NAME_CACHE = loaded
-        return loaded
+            _save_persisted_a_share_name_map(loaded)
+            return loaded
+        return _load_persisted_a_share_name_map()
+
+
+def _process_a_share_name_map() -> dict[str, str]:
+    return _A_SHARE_NAME_CACHE or {}
+
+
+def _resolved_a_share_result(
+    raw_query: str,
+    code: str,
+    name: str,
+    source: str,
+) -> dict[str, Any]:
+    return {
+        "query": raw_query,
+        "symbol": code,
+        "name": name,
+        "market": "CN",
+        "exchange": infer_exchange(code),
+        "resolved": True,
+        "source": source,
+    }
 
 
 def _load_a_share_name_map() -> dict[str, str]:
@@ -186,16 +242,29 @@ def resolve_stock(query: str) -> dict[str, Any]:
 
         result = _fallback_result(code, raw_query)
         if get_market(code) == "CN":
+            cached_name = _process_a_share_name_map().get(code)
+            if cached_name:
+                return _resolved_a_share_result(
+                    raw_query,
+                    code,
+                    cached_name,
+                    "akshare_stock_info_a_code_name",
+                )
+            persisted_name = _load_persisted_a_share_name_map().get(code)
+            if persisted_name:
+                return _resolved_a_share_result(
+                    raw_query,
+                    code,
+                    persisted_name,
+                    "local_stock_name_cache",
+                )
             name = _a_share_name_map().get(code)
             if name:
-                result.update(
-                    {
-                        "name": name,
-                        "market": "CN",
-                        "exchange": infer_exchange(code),
-                        "resolved": True,
-                        "source": "akshare_stock_info_a_code_name",
-                    }
+                return _resolved_a_share_result(
+                    raw_query,
+                    code,
+                    name,
+                    "akshare_stock_info_a_code_name",
                 )
         return result
 
@@ -212,17 +281,32 @@ def resolve_stock(query: str) -> dict[str, Any]:
                 "source": "fallback_alias",
             }
 
+    for symbol, name in _process_a_share_name_map().items():
+        if cleaned and (cleaned in name.upper() or name.upper() in cleaned):
+            return _resolved_a_share_result(
+                raw_query,
+                symbol,
+                name,
+                "akshare_stock_info_a_code_name",
+            )
+
+    for symbol, name in _load_persisted_a_share_name_map().items():
+        if cleaned and (cleaned in name.upper() or name.upper() in cleaned):
+            return _resolved_a_share_result(
+                raw_query,
+                symbol,
+                name,
+                "local_stock_name_cache",
+            )
+
     for symbol, name in _a_share_name_map().items():
         if cleaned and (cleaned in name.upper() or name.upper() in cleaned):
-            return {
-                "query": raw_query,
-                "symbol": symbol,
-                "name": name,
-                "market": "CN",
-                "exchange": infer_exchange(symbol),
-                "resolved": True,
-                "source": "akshare_stock_info_a_code_name",
-            }
+            return _resolved_a_share_result(
+                raw_query,
+                symbol,
+                name,
+                "akshare_stock_info_a_code_name",
+            )
 
     return {
         "query": raw_query,

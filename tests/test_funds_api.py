@@ -47,6 +47,26 @@ class TestFundSearch:
         assert data["success"] is True
         assert data["data"]["total"] == 1
 
+    @pytest.mark.anyio
+    async def test_search_code_falls_back_to_info(self, client):
+        mock_provider = AsyncMock()
+        mock_provider.get_info.return_value = {
+            "code": "000001",
+            "name": "华夏成长混合",
+            "fund_type": "混合型",
+            "company": "华夏基金",
+        }
+        mock_provider.search.return_value = []
+        with patch("backend.api.funds.get_provider", return_value=mock_provider):
+            resp = await client.get("/api/funds/search?keyword=000001")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["data"]["total"] == 1
+        assert data["data"]["funds"][0]["code"] == "000001"
+        assert data["data"]["funds"][0]["name"] == "华夏成长混合"
+        assert data["data"]["source_status"] == "code_lookup"
+
 
 # ========== 基金信息 ==========
 
