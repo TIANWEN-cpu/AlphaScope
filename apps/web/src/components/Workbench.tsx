@@ -338,14 +338,19 @@ function MarketChart({
   onHover: (index: number | null) => void;
   onLeave: () => void;
 }) {
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
   const width = 960;
-  const priceHeight = 250;
-  const volumeHeight = 78;
-  const pad = { top: 18, right: 54, bottom: 22, left: 12 };
+  const priceHeight = 242;
+  const volumeHeight = 70;
+  const axisHeight = 46;
+  const totalHeight = priceHeight + volumeHeight + axisHeight;
+  const pad = { top: 18, right: 54, bottom: 16, left: 12 };
   const plotWidth = width - pad.left - pad.right;
   const plotHeight = priceHeight - pad.top - pad.bottom;
-  const volumeTop = priceHeight + 18;
-  const volumePlotHeight = volumeHeight - 20;
+  const volumeTop = priceHeight + 14;
+  const volumePlotHeight = volumeHeight - 14;
+  const volumeBaseline = volumeTop + volumePlotHeight;
+  const xAxisY = volumeBaseline + 30;
   const visible = data.filter(item => item.close > 0);
 
   if (!visible.length) {
@@ -362,9 +367,10 @@ function MarketChart({
   const yMax = maxPrice + padding;
   const xStep = visible.length > 1 ? plotWidth / (visible.length - 1) : plotWidth;
   const candleSlot = visible.length > 0 ? plotWidth / visible.length : plotWidth;
-  const candleWidth = frequency === 'intraday' ? 2 : clamp(candleSlot * 0.54, 3, 13);
+  const candleWidth = frequency === 'intraday' ? clamp(candleSlot * 0.58, 1.4, 4.2) : clamp(candleSlot * 0.54, 3, 13);
   const maxVolume = Math.max(...visible.map(item => item.volume || 0), 1);
-  const currentIndex = hoveredIndex !== null && hoveredIndex < visible.length ? hoveredIndex : visible.length - 1;
+  const isHovering = pointer !== null && hoveredIndex !== null;
+  const currentIndex = isHovering && hoveredIndex < visible.length ? hoveredIndex : visible.length - 1;
   const current = visible[currentIndex];
 
   const xFor = (index: number) => pad.left + index * xStep;
@@ -385,20 +391,24 @@ function MarketChart({
   };
   const intradayPath = linePath('close');
   const intradayAvgPath = linePath('avgPrice');
+  const areaBaseline = priceHeight - pad.bottom;
   const tickIndexes = Array.from(new Set([0, Math.floor(visible.length * 0.25), Math.floor(visible.length * 0.5), Math.floor(visible.length * 0.75), visible.length - 1]))
     .filter(index => index >= 0 && index < visible.length);
   const priceTicks = [yMax, yMax - (yMax - yMin) / 3, yMax - (yMax - yMin) * 2 / 3, yMin];
   const hoverX = xFor(currentIndex);
-  const hoverY = yFor(frequency === 'intraday' ? current.close : current.up ? current.high : current.low);
-  const tooltipWidth = frequency === 'intraday' ? 250 : 270;
-  const tooltipX = clamp(hoverX - tooltipWidth / 2, pad.left + 8, width - pad.right - tooltipWidth - 8);
-  const tooltipY = clamp(hoverY - 76, pad.top + 6, priceHeight - 118);
+  const selectedY = yFor(current.close);
+  const tooltipWidth = frequency === 'intraday' ? 252 : 268;
+  const tooltipHeight = frequency === 'intraday' ? 76 : 72;
+  const tooltipSourceX = pointer?.x ?? hoverX;
+  const tooltipSourceY = pointer?.y ?? selectedY;
+  const tooltipX = clamp(tooltipSourceX - tooltipWidth / 2, pad.left + 8, width - pad.right - tooltipWidth - 8);
+  const tooltipY = clamp(tooltipSourceY - tooltipHeight - 18, -tooltipHeight + 6, volumeBaseline - tooltipHeight - 8);
   const previousClose = current.referencePrice;
 
   return (
     <div className="relative h-full w-full">
-      <svg viewBox={`0 0 ${width} ${priceHeight + volumeHeight + 34}`} preserveAspectRatio="none" className="h-full w-full">
-        <rect x={0} y={0} width={width} height={priceHeight + volumeHeight + 34} fill="transparent" />
+      <svg viewBox={`0 0 ${width} ${totalHeight}`} preserveAspectRatio="none" className="h-full w-full overflow-visible">
+        <rect x={0} y={0} width={width} height={totalHeight} fill="transparent" />
         {priceTicks.map((tick, index) => (
           <g key={`tick-${index}`}>
             <line x1={pad.left} x2={width - pad.right} y1={yFor(tick)} y2={yFor(tick)} stroke="#ffffff" strokeOpacity={0.05} strokeDasharray="4 4" />
@@ -410,6 +420,7 @@ function MarketChart({
 
         {frequency === 'intraday' ? (
           <>
+            <path d={`${intradayPath} L ${xFor(visible.length - 1)} ${areaBaseline} L ${xFor(0)} ${areaBaseline} Z`} fill="#eab308" fillOpacity="0.035" />
             {previousClose && (
               <line
                 x1={pad.left}
@@ -425,7 +436,6 @@ function MarketChart({
             {intradayAvgPath && (
               <path d={intradayAvgPath} fill="none" stroke="#a78bfa" strokeWidth="1.5" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
             )}
-            <path d={`${intradayPath} L ${xFor(visible.length - 1)} ${priceHeight - pad.bottom} L ${xFor(0)} ${priceHeight - pad.bottom} Z`} fill="#eab308" fillOpacity="0.08" />
           </>
         ) : (
           <>
@@ -451,71 +461,88 @@ function MarketChart({
           </>
         )}
 
-        <line x1={pad.left} x2={width - pad.right} y1={volumeTop + volumePlotHeight} y2={volumeTop + volumePlotHeight} stroke="#ffffff" strokeOpacity={0.07} />
+        <line x1={pad.left} x2={width - pad.right} y1={volumeBaseline} y2={volumeBaseline} stroke="#ffffff" strokeOpacity={0.07} />
         {visible.map((item, index) => {
           const x = xFor(index);
           const y = volumeY(item.volume || 0);
           const color = item.up ? '#f43f5e' : '#10b981';
           return (
-            <rect key={`vol-${item.date}-${index}`} x={x - Math.max(candleWidth, 2) / 2} y={y} width={Math.max(candleWidth, 2)} height={volumeTop + volumePlotHeight - y} fill={color} fillOpacity={0.35} rx={1} />
+            <rect key={`vol-${item.date}-${index}`} x={x - Math.max(candleWidth, 2) / 2} y={y} width={Math.max(candleWidth, 2)} height={volumeBaseline - y} fill={color} fillOpacity={0.35} rx={1} />
           );
         })}
 
         {tickIndexes.map(index => (
-          <text key={`x-${index}`} x={xFor(index)} y={priceHeight + volumeHeight + 24} fill="#525252" fontSize="10" fontFamily="monospace" textAnchor={index === 0 ? 'start' : index === visible.length - 1 ? 'end' : 'middle'}>
-            {visible[index].label}
-          </text>
+          <g key={`x-${index}`}>
+            <line x1={xFor(index)} x2={xFor(index)} y1={volumeBaseline + 5} y2={volumeBaseline + 10} stroke="#737373" strokeOpacity={0.22} />
+            <text x={xFor(index)} y={xAxisY} fill="#737373" fillOpacity={0.82} fontSize="11" fontFamily="monospace" textAnchor={index === 0 ? 'start' : index === visible.length - 1 ? 'end' : 'middle'} dominantBaseline="middle">
+              {visible[index].label}
+            </text>
+          </g>
         ))}
 
-        <line x1={hoverX} x2={hoverX} y1={pad.top} y2={volumeTop + volumePlotHeight} stroke="#ffffff" strokeOpacity={0.16} strokeDasharray="3 3" />
-        <circle
-          cx={hoverX}
-          cy={frequency === 'intraday' ? yFor(current.close) : yFor(current.close)}
-          r={3}
-          fill={frequency === 'intraday' ? '#eab308' : current.up ? '#f43f5e' : '#10b981'}
-          stroke="#0a0a0a"
-          strokeWidth={1.5}
-        />
+        {isHovering && (
+          <>
+            <line x1={hoverX} x2={hoverX} y1={pad.top} y2={volumeBaseline} stroke="#ffffff" strokeOpacity={0.16} strokeDasharray="3 3" />
+            <circle
+              cx={hoverX}
+              cy={selectedY}
+              r={3}
+              fill={frequency === 'intraday' ? '#eab308' : current.up ? '#f43f5e' : '#10b981'}
+              stroke="#0a0a0a"
+              strokeWidth={1.5}
+            />
+          </>
+        )}
         <rect
           x={pad.left}
           y={pad.top}
           width={plotWidth}
-          height={volumeTop + volumePlotHeight - pad.top}
+          height={volumeBaseline - pad.top}
           fill="transparent"
           onMouseMove={(event) => {
             const box = event.currentTarget.getBoundingClientRect();
-            const ratio = clamp((event.clientX - box.left) / box.width, 0, 1);
-            onHover(Math.round(ratio * (visible.length - 1)));
+            const ratioX = clamp((event.clientX - box.left) / box.width, 0, 1);
+            const ratioY = clamp((event.clientY - box.top) / box.height, 0, 1);
+            setPointer({
+              x: pad.left + ratioX * plotWidth,
+              y: pad.top + ratioY * (volumeBaseline - pad.top),
+            });
+            onHover(Math.round(ratioX * (visible.length - 1)));
           }}
-          onMouseLeave={onLeave}
+          onMouseLeave={() => {
+            setPointer(null);
+            onLeave();
+          }}
         />
       </svg>
 
-      <div
-        className="pointer-events-none absolute rounded-lg border border-white/10 bg-black/75 px-3 py-2 text-[11px] text-neutral-300 shadow-xl backdrop-blur"
-        style={{
-          left: `${tooltipX / width * 100}%`,
-          top: `${tooltipY / (priceHeight + volumeHeight + 34) * 100}%`,
-          width: tooltipWidth,
-        }}
-      >
-        <div className="mb-1 flex items-center gap-2">
-          <span className="font-mono text-neutral-500">{current.date}</span>
-          <span className={cn("font-mono", current.up ? "text-rose-400" : "text-emerald-400")}>{current.changePct >= 0 ? '+' : ''}{current.changePct.toFixed(2)}%</span>
-          <span className="text-neutral-600">{activePeriod}</span>
+      {isHovering && (
+        <div
+          className="pointer-events-none absolute rounded-lg border border-white/10 bg-black/78 px-3 py-2 text-[11px] text-neutral-300 shadow-xl backdrop-blur-md"
+          style={{
+            left: `${tooltipX / width * 100}%`,
+            top: `${tooltipY / totalHeight * 100}%`,
+            width: tooltipWidth,
+          }}
+        >
+          <div className="mb-1 flex items-center gap-2">
+            <span className="font-mono text-neutral-500">{current.date}</span>
+            <span className={cn("font-mono", current.up ? "text-rose-400" : "text-emerald-400")}>{current.changePct >= 0 ? '+' : ''}{current.changePct.toFixed(2)}%</span>
+            <span className="text-neutral-600">{activePeriod}</span>
+          </div>
+          <div className="grid grid-cols-4 gap-x-3 gap-y-1 font-mono">
+            <span>开 {displayNumber(current.open)}</span>
+            <span>高 {displayNumber(current.high)}</span>
+            <span>低 {displayNumber(current.low)}</span>
+            <span>收 {displayNumber(current.close)}</span>
+          </div>
+          <div className="mt-1 flex gap-3 font-mono text-neutral-500">
+            <span>量 {formatVolume(current.volume)}</span>
+            {frequency === 'intraday' && current.avgPrice ? <span>均 {displayNumber(current.avgPrice)}</span> : null}
+            {frequency === 'intraday' && current.referencePrice ? <span>昨收 {displayNumber(current.referencePrice)}</span> : null}
+          </div>
         </div>
-        <div className="grid grid-cols-4 gap-x-3 gap-y-1 font-mono">
-          <span>开 {displayNumber(current.open)}</span>
-          <span>高 {displayNumber(current.high)}</span>
-          <span>低 {displayNumber(current.low)}</span>
-          <span>收 {displayNumber(current.close)}</span>
-        </div>
-        <div className="mt-1 flex gap-3 font-mono text-neutral-500">
-          <span>量 {formatVolume(current.volume)}</span>
-          {frequency === 'intraday' && current.avgPrice ? <span>均 {displayNumber(current.avgPrice)}</span> : null}
-          {frequency === 'intraday' && current.referencePrice ? <span>昨收 {displayNumber(current.referencePrice)}</span> : null}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
