@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, 
@@ -71,6 +71,22 @@ const emptyStatus = (key: ReportSourceKey): SourceStatus => ({
 const hasObjectData = (value: unknown) =>
   Boolean(value && typeof value === 'object' && Object.keys(value as Record<string, unknown>).length);
 
+const isDegradedData = (value: unknown) =>
+  Boolean(value && typeof value === 'object' && (value as Record<string, unknown>).degraded === true);
+
+const buildFactorSummary = (factorsData: Record<string, unknown>) => {
+  const factors = (factorsData.factors || {}) as Record<string, unknown>;
+  const sampleCounts = (factorsData.sample_counts || {}) as Record<string, unknown>;
+  const missing = Array.isArray(factorsData.missing_dimensions) ? factorsData.missing_dimensions : [];
+  const degraded = Array.isArray(factorsData.degraded_inputs) ? factorsData.degraded_inputs : [];
+  return [
+    `综合因子=${factors.composite ?? '--'}，动量=${factors.momentum ?? '--'}，资金流=${factors.fund_flow ?? '--'}。`,
+    `样本覆盖：新闻 ${sampleCounts.news ?? 0} 条，事件 ${sampleCounts.events ?? 0} 条，研报 ${sampleCounts.reports ?? 0} 条。`,
+    missing.length ? `缺失维度：${missing.join('、')}。` : '主要因子维度已返回。',
+    degraded.length ? `降级输入：${degraded.join('、')}。` : '',
+  ].filter(Boolean).join('');
+};
+
 const hasUsableFactorData = (value: unknown) => {
   if (!value || typeof value !== 'object') return false;
   const record = value as Record<string, unknown>;
@@ -118,6 +134,12 @@ function readSource<T>(
   if (!hasData(data)) {
     return { data, status: emptyStatus(key) };
   }
+  if (isDegradedData(data)) {
+    return {
+      data,
+      status: { key, label: SOURCE_LABELS[key], ok: false, empty: false, error: '数据源降级' },
+    };
+  }
   return { data, status: { key, label: SOURCE_LABELS[key], ok: true, empty: false } };
 }
 
@@ -139,6 +161,12 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
   const reportDate = formatLocalDate(new Date());
   const reportId = `${targetSymbol}-AI-${reportDate.replace(/-/g, '')}`;
   const selectedTemplateName = REPORT_TEMPLATES.find(item => item.id === selectedTemplate)?.name || selectedTemplate;
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSectionId(sectionId);
+    sectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
     setSelectedStock(`${stockName} (${symbol})`);
@@ -229,8 +257,13 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
     const periods = Array.isArray(fundamentals.financial_periods) ? fundamentals.financial_periods as Record<string, unknown>[] : [];
     const latest = periods[0] || {};
     const valuation = (fundamentals.valuation || {}) as Record<string, unknown>;
-    const factorText = factorsSource.status.ok ? JSON.stringify(factors, null, 2).slice(0, 900) : '因子接口无可用数据，本节仅保留缺口披露。';
+    const factorText = factorsSource.status.ok ? buildFactorSummary(factors as Record<string, unknown>) : '因子接口无可用数据，本节仅保留缺口披露。';
     const flowSummary = (fundFlow.summary || {}) as Record<string, unknown>;
+    const fundFlowDegraded = Boolean(fundFlow.degraded);
+    const flowMain = flowSummary.last_main_yi ?? flowSummary.main_total_yi ?? '--';
+    const flowSuper = flowSummary.super_total_yi ?? '--';
+    const flowLarge = flowSummary.large_total_yi ?? '--';
+    const flowNote = fundFlowDegraded ? '资金流数据源降级，当前不应解读为真实净流入。' : '';
     const missingNote = statuses.some(status => !status.ok)
       ? `数据缺口：${statuses.filter(status => !status.ok).map(status => `${status.label}${status.error ? `失败(${status.error})` : '为空'}`).join('；')}。`
       : '全部后端数据源均返回可用数据。';
@@ -240,18 +273,18 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
         { id: 'summary', title: '一、 核心投资摘要 (Executive Summary)', content: `本报告对 ${selectedStock} 展开后端数据驱动的投研整合。当前评级设定为 ${rating}。估值侧 PE=${valuation.pe || valuation.pe_ttm || '--'}，PB=${valuation.pb || '--'}；系统同步到 ${newsItems.length} 条相关新闻/公告与 ${archives.length} 条历史归档报告。${missingNote}` },
         { id: 'fundamentals', title: '二、 深度基本面多维透视 (Fundamentals Analysis)', content: `基本面接口返回最近财务期：${latest.period || latest.report_date || '--'}。毛利率=${latest.gross_margin_pct || '--'}，净利润同比=${latest.yoy_net_profit_pct || '--'}，ROE=${latest.roe_pct || '--'}。` },
         { id: 'quant', title: '三、 金策量化多因子测绘 (Quantitative Factor Evaluation)', content: factorText },
-        { id: 'risk', title: '四、 舆情、资金流与风控披露 (Risk Assessment & Disclosure)', content: `近端资金流摘要：主力净流入=${flowSummary.main_net_yi ?? '--'}亿，超大单=${flowSummary.super_net_yi ?? '--'}亿，大单=${flowSummary.large_net_yi ?? '--'}亿。最新新闻要点：${newsItems.map(item => item.title).slice(0, 4).join('；') || '暂无后端新闻'}。` },
+        { id: 'risk', title: '四、 舆情、资金流与风控披露 (Risk Assessment & Disclosure)', content: `近端资金流摘要：主力净流入=${flowMain}亿，超大单=${flowSuper}亿，大单=${flowLarge}亿。${flowNote}最新新闻要点：${newsItems.map(item => item.title).slice(0, 4).join('；') || '暂无后端新闻'}。` },
       ],
       macro: [
         { id: 'summary', title: '一、 行业及产业链跟踪摘要', content: `${selectedStock} 当前评级为 ${rating}。本模板优先关注产业链、资金流和历史归档交叉验证。${missingNote}` },
         { id: 'fundamentals', title: '二、 估值与财务上下文', content: `估值侧 PE=${valuation.pe || valuation.pe_ttm || '--'}，PB=${valuation.pb || '--'}；最近财务期=${latest.period || latest.report_date || '--'}。` },
-        { id: 'quant', title: '三、 资金流与因子联动', content: `资金流摘要：主力=${flowSummary.main_net_yi ?? '--'}亿，超大单=${flowSummary.super_net_yi ?? '--'}亿。因子片段：${factorText}` },
+        { id: 'quant', title: '三、 资金流与因子联动', content: `资金流摘要：主力=${flowMain}亿，超大单=${flowSuper}亿。${flowNote}因子摘要：${factorText}` },
         { id: 'risk', title: '四、 新闻与归档跟踪', content: `新闻要点：${newsItems.map(item => item.title).slice(0, 5).join('；') || '暂无后端新闻'}。历史报告数量：${archives.length}。` },
       ],
       risk: [
         { id: 'summary', title: '一、 风险摘要与评级约束', content: `${selectedStock} 当前评级为 ${rating}。本模板优先披露不可用数据源与尾部风险。${missingNote}` },
         { id: 'fundamentals', title: '二、 财务红旗扫描', content: `毛利率=${latest.gross_margin_pct || '--'}，净利润同比=${latest.yoy_net_profit_pct || '--'}，ROE=${latest.roe_pct || '--'}。缺失字段应视为后续人工复核重点。` },
-        { id: 'quant', title: '三、 因子与资金压力测试', content: `资金流：主力=${flowSummary.main_net_yi ?? '--'}亿，大单=${flowSummary.large_net_yi ?? '--'}亿。因子风险片段：${factorText}` },
+        { id: 'quant', title: '三、 因子与资金压力测试', content: `资金流：主力=${flowMain}亿，大单=${flowLarge}亿。${flowNote}因子风险摘要：${factorText}` },
         { id: 'risk', title: '四、 舆情与历史归档预警', content: `新闻风险线索：${newsItems.map(item => item.title).slice(0, 4).join('；') || '暂无后端新闻'}。历史归档报告：${archives.length} 条。` },
       ],
     };
@@ -477,7 +510,7 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
                     {reportSections.map(sec => (
                       <button
                         key={sec.id}
-                        onClick={() => setActiveSectionId(sec.id)}
+                        onClick={() => scrollToSection(sec.id)}
                         className={cn(
                           "w-full text-left p-2.5 rounded-lg text-xs leading-normal transition-all cursor-pointer font-sans limit-text-1",
                           activeSectionId === sec.id 
@@ -592,8 +625,9 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
                         {reportSections.map(sec => {
                           const isFocused = sec.id === activeSectionId;
                           return (
-                            <div 
-                              key={sec.id} 
+                            <div
+                              key={sec.id}
+                              ref={element => { sectionRefs.current[sec.id] = element; }}
                               className={cn(
                                 "p-4.5 rounded-xl transition-all border",
                                 isFocused 
