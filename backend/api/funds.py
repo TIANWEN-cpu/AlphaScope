@@ -120,7 +120,23 @@ async def search_funds(keyword: str = ""):
                     seen_codes.add(item["code"])
                     source_status = "code_lookup"
 
-        search_results = await provider.search(keyword)
+        try:
+            search_results = await provider.search(keyword)
+        except Exception as e:
+            if funds:
+                return ApiResponse(
+                    success=True,
+                    error=str(e),
+                    error_code="FUND_SEARCH_DEGRADED",
+                    data={
+                        "funds": funds,
+                        "total": len(funds),
+                        "degraded": True,
+                        "source": "fund_provider",
+                        "source_status": "code_lookup_search_unavailable",
+                    },
+                )
+            raise
         for item in search_results:
             code = str(item.get("code", "")).strip()
             if code and code in seen_codes:

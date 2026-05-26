@@ -48,7 +48,7 @@ class TestFundSearch:
         assert data["data"]["total"] == 1
 
     @pytest.mark.anyio
-    async def test_search_code_falls_back_to_info(self, client):
+    async def test_search_code_keeps_info_result_when_keyword_search_fails(self, client):
         mock_provider = AsyncMock()
         mock_provider.get_info.return_value = {
             "code": "000001",
@@ -56,16 +56,18 @@ class TestFundSearch:
             "fund_type": "混合型",
             "company": "华夏基金",
         }
-        mock_provider.search.return_value = []
+        mock_provider.search.side_effect = RuntimeError("search upstream down")
         with patch("backend.api.funds.get_provider", return_value=mock_provider):
             resp = await client.get("/api/funds/search?keyword=000001")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
+        assert data["error_code"] == "FUND_SEARCH_DEGRADED"
         assert data["data"]["total"] == 1
         assert data["data"]["funds"][0]["code"] == "000001"
         assert data["data"]["funds"][0]["name"] == "华夏成长混合"
-        assert data["data"]["source_status"] == "code_lookup"
+        assert data["data"]["degraded"] is True
+        assert data["data"]["source_status"] == "code_lookup_search_unavailable"
 
 
 # ========== 基金信息 ==========
