@@ -6,7 +6,6 @@ import logging
 import queue
 import re
 import threading
-from functools import lru_cache
 from typing import Any
 
 from backend.price_store import get_market, normalize_symbol
@@ -14,6 +13,8 @@ from backend.price_store import get_market, normalize_symbol
 logger = logging.getLogger(__name__)
 
 A_SHARE_NAME_FETCH_TIMEOUT_SECONDS = 2.0
+_A_SHARE_NAME_CACHE: dict[str, str] | None = None
+_A_SHARE_NAME_CACHE_LOCK = threading.Lock()
 
 FALLBACK_STOCKS: dict[str, dict[str, str]] = {
     "600519": {"name": "贵州茅台", "exchange": "SH", "market": "CN"},
@@ -108,9 +109,24 @@ def _find_column(columns: list[Any], candidates: tuple[str, ...]) -> Any | None:
     return None
 
 
-@lru_cache(maxsize=1)
 def _a_share_name_map() -> dict[str, str]:
-    """读取 AkShare A 股代码名称表，并缓存到进程内。"""
+    """读取 AkShare A 股代码名称表，并只缓存成功结果。"""
+    global _A_SHARE_NAME_CACHE
+
+    if _A_SHARE_NAME_CACHE is not None:
+        return _A_SHARE_NAME_CACHE
+
+    with _A_SHARE_NAME_CACHE_LOCK:
+        if _A_SHARE_NAME_CACHE is not None:
+            return _A_SHARE_NAME_CACHE
+
+        loaded = _load_a_share_name_map()
+        if loaded:
+            _A_SHARE_NAME_CACHE = loaded
+        return loaded
+
+
+def _load_a_share_name_map() -> dict[str, str]:
     try:
         df = _fetch_a_share_code_name_with_timeout()
     except Exception as exc:
@@ -139,7 +155,9 @@ def _a_share_name_map() -> dict[str, str]:
 
 def clear_stock_name_cache() -> None:
     """测试和手动刷新时清空进程内股票名称缓存。"""
-    _a_share_name_map.cache_clear()
+    global _A_SHARE_NAME_CACHE
+    with _A_SHARE_NAME_CACHE_LOCK:
+        _A_SHARE_NAME_CACHE = None
 
 
 def _fallback_result(symbol: str, query: str) -> dict[str, Any]:

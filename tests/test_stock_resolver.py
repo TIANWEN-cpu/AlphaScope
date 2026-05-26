@@ -79,6 +79,27 @@ def test_resolve_stock_falls_back_to_safe_display_name_when_source_fails():
     assert result["resolved"] is False
 
 
+def test_resolve_stock_retries_after_transient_name_table_failure():
+    from backend.stock_resolver import resolve_stock
+
+    df = pd.DataFrame([{"code": "688001", "name": "华兴源创"}])
+
+    with patch(
+        "backend.stock_resolver._fetch_a_share_code_name",
+        side_effect=[RuntimeError("offline"), df],
+    ) as mock_fetch:
+        first = resolve_stock("688001")
+        second = resolve_stock("688001")
+        third = resolve_stock("688001")
+
+    assert first["name"] == "股票代码 688001"
+    assert first["resolved"] is False
+    assert second["name"] == "华兴源创"
+    assert second["resolved"] is True
+    assert third["name"] == "华兴源创"
+    assert mock_fetch.call_count == 2
+
+
 @pytest.mark.anyio
 async def test_resolve_stock_endpoint(client):
     df = pd.DataFrame([{"code": "301667", "name": "测试股份"}])
