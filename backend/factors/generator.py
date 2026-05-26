@@ -87,6 +87,10 @@ class FactorReport:
     event_count: int = 0
     report_count: int = 0
 
+    # 数据质量
+    degraded_inputs: list[str] = field(default_factory=list)
+    missing_dimensions: list[str] = field(default_factory=list)
+
     # 详细信号
     signals: list[dict] = field(default_factory=list)
 
@@ -112,6 +116,8 @@ class FactorReport:
                 "events": self.event_count,
                 "reports": self.report_count,
             },
+            "degraded_inputs": self.degraded_inputs,
+            "missing_dimensions": self.missing_dimensions,
             "signals": self.signals[:20],  # 最多返回 20 条信号
         }
 
@@ -340,10 +346,33 @@ class FactorGenerator:
     ) -> None:
         """资金流向因子: 主力净流入趋势"""
         try:
-            from backend.fund_flow import summarize_fund_flow
+            from backend.fund_flow import fetch_individual_fund_flow, summarize_fund_flow
 
-            summary = summarize_fund_flow(symbol, days=5)
-        except Exception:
+            df = fetch_individual_fund_flow(symbol, days=5)
+            if df is None or len(df) == 0:
+                report.degraded_inputs.append("fund_flow")
+                report.missing_dimensions.append("fund_flow")
+                if include_signals:
+                    report.signals.append(
+                        {
+                            "type": "fund_flow",
+                            "degraded": True,
+                            "reason": "fund-flow provider returned no data",
+                        }
+                    )
+                return
+            summary = summarize_fund_flow(df, recent_days=5)
+        except Exception as exc:
+            report.degraded_inputs.append("fund_flow")
+            report.missing_dimensions.append("fund_flow")
+            if include_signals:
+                report.signals.append(
+                    {
+                        "type": "fund_flow",
+                        "degraded": True,
+                        "reason": str(exc),
+                    }
+                )
             return
 
         if not summary:

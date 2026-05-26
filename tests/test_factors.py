@@ -235,6 +235,32 @@ class TestFactorGenerator:
         assert -1.0 <= composite <= 1.0
         assert composite > 0  # all positive factors → positive composite
 
+    def test_fund_flow_uses_fetched_dataframe_for_summary(self):
+        from backend.factors.generator import FactorGenerator, FactorReport
+
+        gen = FactorGenerator()
+        report = FactorReport(symbol="600519")
+        fake_df = MagicMock()
+        fake_df.__len__.return_value = 5
+        summary = {
+            "main_total_yi": 2.5,
+            "last_main_yi": 1.25,
+            "inflow_days": 4,
+            "outflow_days": 1,
+        }
+
+        with (
+            patch("backend.fund_flow.fetch_individual_fund_flow", return_value=fake_df) as mock_fetch,
+            patch("backend.fund_flow.summarize_fund_flow", return_value=summary) as mock_summary,
+        ):
+            gen._compute_fund_flow(report, "600519", include_signals=True)
+
+        mock_fetch.assert_called_once_with("600519", days=5)
+        mock_summary.assert_called_once_with(fake_df, recent_days=5)
+        assert report.fund_flow > 0
+        assert report.signals[-1]["type"] == "fund_flow"
+        assert report.signals[-1]["last_main_yi"] == 1.25
+
     def test_momentum_uses_clean_price_store_data(self):
         from backend.factors.generator import FactorGenerator, FactorReport
 
