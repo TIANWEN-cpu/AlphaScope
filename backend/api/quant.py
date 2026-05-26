@@ -17,18 +17,27 @@ router = APIRouter(prefix="/api/quant", tags=["quant"])
 _service: Optional[JinceService] = None
 
 
-def _jince_failure_response(error: JinceError, data: dict[str, Any] | None = None):
+def _jince_failure_response(
+    error: JinceError,
+    data: dict[str, Any] | None = None,
+    *,
+    degraded_success: bool = False,
+):
     """Return a structured API response for unavailable Jince operations."""
     error_code = (
         "JINCE_DISCONNECTED"
         if isinstance(error, JinceConnectionError)
         else getattr(error, "code", "JINCE_ERROR")
     )
+    payload = data or {}
+    if degraded_success:
+        payload["degraded"] = True
+        payload["source_status"] = "unavailable"
     return ApiResponse(
-        success=False,
+        success=degraded_success,
         error=str(error),
         error_code=error_code,
-        data=data,
+        data=payload,
     )
 
 
@@ -108,7 +117,7 @@ async def list_strategies():
             data={"strategies": [s.model_dump() for s in strategies]},
         )
     except JinceError as e:
-        return _jince_failure_response(e, data={"strategies": []})
+        return _jince_failure_response(e, data={"strategies": []}, degraded_success=True)
 
 
 @router.post("/strategies/reload")
@@ -184,7 +193,7 @@ async def list_runs():
             data={"runs": [r.model_dump() for r in runs]},
         )
     except JinceError as e:
-        return _jince_failure_response(e, data={"runs": []})
+        return _jince_failure_response(e, data={"runs": []}, degraded_success=True)
 
 
 @router.get("/runs/{run_id}")
