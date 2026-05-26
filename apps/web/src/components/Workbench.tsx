@@ -786,11 +786,20 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
         const summary = (result.data.summary || {}) as Record<string, unknown>;
         const records = Array.isArray(result.data.records) ? result.data.records as Record<string, unknown>[] : [];
         const latestRecord = records[records.length - 1] || {};
+        const degraded = Boolean(result.data.degraded);
+        const mainValue = summary.last_main_yi ?? summary.main_total_yi ?? latestRecord.main_net_yi;
+        const superValue = summary.super_total_yi ?? latestRecord.super_net_yi;
+        const largeValue = summary.large_total_yi ?? latestRecord.large_net_yi;
+        const mediumValue = summary.medium_total_yi ?? latestRecord.medium_net_yi;
         setFundItems([
-          { label: '主力净流入', value: formatYi(summary.main_net_yi ?? latestRecord.main_net_yi), color: Number(summary.main_net_yi ?? latestRecord.main_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
-          { label: '超大单', value: formatYi(summary.super_net_yi ?? latestRecord.super_net_yi), color: Number(summary.super_net_yi ?? latestRecord.super_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
-          { label: '大单', value: formatYi(summary.large_net_yi ?? latestRecord.large_net_yi), color: Number(summary.large_net_yi ?? latestRecord.large_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
-          { label: '中单', value: formatYi(summary.medium_net_yi ?? latestRecord.medium_net_yi), color: Number(summary.medium_net_yi ?? latestRecord.medium_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
+          {
+            label: degraded ? '主力净流入(降级)' : '主力净流入',
+            value: degraded ? '数据源降级' : formatYi(mainValue),
+            color: degraded ? 'text-amber-400' : Number(mainValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500',
+          },
+          { label: '超大单', value: degraded ? '--' : formatYi(superValue), color: Number(superValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
+          { label: '大单', value: degraded ? '--' : formatYi(largeValue), color: Number(largeValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
+          { label: '中单', value: degraded ? '--' : formatYi(mediumValue), color: Number(mediumValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
         ]);
       } else {
         setFundItems(EMPTY_FUNDS);
