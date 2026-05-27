@@ -461,9 +461,10 @@ export const api = {
   quantStatus: () => request<Record<string, unknown>>("/api/quant/status"),
   quantStrategies: async () => {
     const result = await request<QuantStrategy[] | { strategies: QuantStrategy[] }>("/api/quant/strategies");
-    const raw = result.data;
+    const raw = result.data as QuantStrategy[] | ({ strategies: QuantStrategy[] } & Record<string, unknown>) | null | undefined;
     const strategies = Array.isArray(raw) ? raw : raw?.strategies || [];
-    return { ...result, data: { strategies } };
+    const meta = !Array.isArray(raw) && raw ? raw : {};
+    return { ...result, data: { ...meta, strategies } };
   },
   quantRuns: () => request<{ runs: QuantRun[] }>("/api/quant/runs"),
   quantReloadStrategies: () =>

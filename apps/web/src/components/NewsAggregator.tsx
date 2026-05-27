@@ -45,11 +45,23 @@ interface NewsAggregatorProps {
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 
-const categoryFromEventType = (eventType?: string): NewsItem['category'] => {
+const includesAny = (value: string, keywords: string[]) =>
+  keywords.some(keyword => value.includes(keyword.toLowerCase()));
+
+const categoryFromEventType = (
+  eventType?: string,
+  title = '',
+  summary = '',
+  source = '',
+): NewsItem['category'] => {
   const value = (eventType || '').toLowerCase();
   if (value.includes('announce') || value.includes('公告') || value.includes('report')) return 'announcement';
   if (value.includes('risk') || value.includes('风险')) return 'risk';
   if (value.includes('fund') || value.includes('flow') || value.includes('资金')) return 'funds';
+  const text = `${title} ${summary} ${source}`.toLowerCase();
+  if (includesAny(text, ['公告', '披露', '续签', '股东', '董事会', '监事会', '回购', '分红', '业绩', '商标许可', '权益变动', '停复牌'])) return 'announcement';
+  if (includesAny(text, ['主力', '资金', '净流入', '净流出', '大单', '超大单', '北向', '南向', '融资融券', '出逃'])) return 'funds';
+  if (includesAny(text, ['风险', '下跌', '减持', '处罚', '亏损', '预亏', '诉讼', '监管', '违约', '退市', '暴跌', '出逃'])) return 'risk';
   return 'macro';
 };
 
@@ -109,7 +121,7 @@ const mapNewsRecord = (item: NewsRecord): NewsItem => ({
   id: item.id,
   time: displayTime(item.published_at),
   title: item.title,
-  category: categoryFromEventType(item.event_type),
+  category: categoryFromEventType(item.event_type, item.title, item.summary || '', item.source || ''),
   source: item.source || '数据源',
   severity: severityFromImportance(item.importance),
   sentiment: sentimentFromScore(item.sentiment),

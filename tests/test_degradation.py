@@ -123,6 +123,61 @@ def test_get_configured_provider_respects_configured_preference(monkeypatch):
     )
 
 
+def test_get_configured_provider_prefers_saved_custom_provider(monkeypatch):
+    """Saved UI providers should be usable even when their ID is arbitrary."""
+    from backend.models import provider_gateway
+
+    monkeypatch.setattr(
+        provider_gateway, "_sync_persisted_providers_once", lambda: None
+    )
+    monkeypatch.delenv("AI_CHAT_PROVIDER", raising=False)
+    monkeypatch.delenv("DEFAULT_LLM_PROVIDER", raising=False)
+    monkeypatch.setattr(
+        provider_gateway,
+        "VENDORS",
+        {
+            "deepseek": {"api_key": "", "base_url": "https://api.deepseek.com/v1"},
+            "1223": {
+                "api_key": "sk-test",
+                "base_url": "https://token.sensenova.cn/v1",
+                "label": "商汤",
+                "config_json": '{"models":["sensenova-6.7-flash-lite","deepseek-v4-flash"]}',
+            },
+        },
+    )
+
+    assert provider_gateway.get_configured_provider() == (
+        "1223",
+        "deepseek-v4-flash",
+    )
+
+
+def test_get_configured_provider_infers_sensenova_model_for_custom_url(monkeypatch):
+    """Custom SenseNova-compatible endpoints should not fall back to deepseek-chat."""
+    from backend.models import provider_gateway
+
+    monkeypatch.setattr(
+        provider_gateway, "_sync_persisted_providers_once", lambda: None
+    )
+    monkeypatch.setattr(
+        provider_gateway,
+        "VENDORS",
+        {
+            "deepseek": {"api_key": "", "base_url": "https://api.deepseek.com/v1"},
+            "custom": {
+                "api_key": "sk-test",
+                "base_url": "https://token.sensenova.cn/v1",
+                "label": "商汤",
+            },
+        },
+    )
+
+    assert provider_gateway.get_configured_provider() == (
+        "custom",
+        "deepseek-v4-flash",
+    )
+
+
 @pytest.mark.anyio
 async def test_no_api_keys_app_starts(client):
     """无 API Key 时应用正常启动，health 端点正常"""
