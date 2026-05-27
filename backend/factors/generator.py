@@ -374,7 +374,10 @@ class FactorGenerator:
     ) -> None:
         """资金流向因子: 主力净流入趋势"""
         try:
-            from backend.fund_flow import fetch_individual_fund_flow, summarize_fund_flow
+            from backend.fund_flow import (
+                fetch_individual_fund_flow,
+                summarize_fund_flow,
+            )
 
             df = _call_with_timeout(
                 lambda: fetch_individual_fund_flow(symbol, days=5),

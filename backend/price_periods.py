@@ -161,9 +161,8 @@ def _clean_intraday_datetime(value: Any) -> str:
 
 def _is_cn_trading_minute(dt: datetime) -> bool:
     current = dt.time()
-    return (
-        time(9, 30) <= current <= time(11, 30)
-        or time(13, 0) <= current <= time(15, 0)
+    return time(9, 30) <= current <= time(11, 30) or time(13, 0) <= current <= time(
+        15, 0
     )
 
 

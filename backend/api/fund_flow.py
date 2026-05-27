@@ -16,7 +16,9 @@ _T = TypeVar("_T")
 FUND_FLOW_TIMEOUT_SECONDS = 8.0
 
 
-def _call_with_timeout(fn: Callable[[], _T], timeout: float = FUND_FLOW_TIMEOUT_SECONDS) -> _T:
+def _call_with_timeout(
+    fn: Callable[[], _T], timeout: float = FUND_FLOW_TIMEOUT_SECONDS
+) -> _T:
     """Run a blocking provider call without letting a request hang indefinitely."""
 
     result_queue: queue.Queue[tuple[bool, Any]] = queue.Queue(maxsize=1)
@@ -71,7 +73,9 @@ def _degraded_response(
             "error": error,
         }
     )
-    return ApiResponse(success=True, data=payload, error=error, error_code="FUND_FLOW_DEGRADED")
+    return ApiResponse(
+        success=True, data=payload, error=error, error_code="FUND_FLOW_DEGRADED"
+    )
 
 
 def _source_meta(df, default_source: str = "eastmoney") -> dict[str, Any]:

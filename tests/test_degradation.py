@@ -75,7 +75,9 @@ def test_get_configured_provider_prefers_available_vendor(monkeypatch):
     """默认 LLM 路由应跳过未配置 key 的 DeepSeek，使用可用 provider。"""
     from backend.models import provider_gateway
 
-    monkeypatch.setattr(provider_gateway, "_sync_persisted_providers_once", lambda: None)
+    monkeypatch.setattr(
+        provider_gateway, "_sync_persisted_providers_once", lambda: None
+    )
     monkeypatch.delenv("AI_CHAT_PROVIDER", raising=False)
     monkeypatch.delenv("DEFAULT_LLM_PROVIDER", raising=False)
     monkeypatch.setattr(
@@ -100,7 +102,9 @@ def test_get_configured_provider_respects_configured_preference(monkeypatch):
     """显式 provider 已配置时应优先使用显式配置。"""
     from backend.models import provider_gateway
 
-    monkeypatch.setattr(provider_gateway, "_sync_persisted_providers_once", lambda: None)
+    monkeypatch.setattr(
+        provider_gateway, "_sync_persisted_providers_once", lambda: None
+    )
     monkeypatch.setattr(
         provider_gateway,
         "VENDORS",

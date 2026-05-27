@@ -258,8 +258,12 @@ class TestFactorGenerator:
         }
 
         with (
-            patch("backend.fund_flow.fetch_individual_fund_flow", return_value=fake_df) as mock_fetch,
-            patch("backend.fund_flow.summarize_fund_flow", return_value=summary) as mock_summary,
+            patch(
+                "backend.fund_flow.fetch_individual_fund_flow", return_value=fake_df
+            ) as mock_fetch,
+            patch(
+                "backend.fund_flow.summarize_fund_flow", return_value=summary
+            ) as mock_summary,
         ):
             gen._compute_fund_flow(report, "600519", include_signals=True)
 
@@ -306,7 +310,9 @@ class TestFactorGenerator:
             {"date": "2026-05-26", "close": 1273.0, "volume": 16},
         ]
 
-        with patch("backend.price_store.get_prices", return_value=clean_rows) as mock_get_prices:
+        with patch(
+            "backend.price_store.get_prices", return_value=clean_rows
+        ) as mock_get_prices:
             gen._compute_momentum(report, "600519", days=30, include_signals=True)
 
         mock_get_prices.assert_called_once_with("600519", frequency="1d", limit=60)

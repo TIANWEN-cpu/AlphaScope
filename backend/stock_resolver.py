@@ -104,7 +104,9 @@ def _save_persisted_a_share_name_map(name_map: dict[str, str]) -> None:
         logger.warning("failed to persist stock name cache: %s", exc)
 
 
-def _fetch_a_share_code_name_with_timeout(timeout: float = A_SHARE_NAME_FETCH_TIMEOUT_SECONDS):
+def _fetch_a_share_code_name_with_timeout(
+    timeout: float = A_SHARE_NAME_FETCH_TIMEOUT_SECONDS,
+):
     """Fetch AkShare's code-name table without letting UI requests hang indefinitely."""
 
     result_queue: queue.Queue[tuple[bool, Any]] = queue.Queue(maxsize=1)
