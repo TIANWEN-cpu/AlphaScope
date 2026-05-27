@@ -408,7 +408,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                   </button>
                 </div>
                 <div className="flex-1 p-5 font-mono text-sm leading-relaxed bg-[#050505] text-indigo-300 relative">
-                  <div className="absolute top-0 right-0 bottom-0 left-10 pointer-events-none opacity-[0.03] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+                  <div className="absolute top-0 right-0 bottom-0 left-10 pointer-events-none opacity-[0.03] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.35)_1px,transparent_1px)] bg-[length:18px_18px]"></div>
                   <div className="absolute left-0 top-0 bottom-0 w-12 bg-black border-r border-white/5 flex flex-col items-center py-5 text-neutral-700 text-xs gap-3">
                     {Array.from({length: 12}).map((_, i) => <span key={i}>{i+1}</span>)}
                   </div>

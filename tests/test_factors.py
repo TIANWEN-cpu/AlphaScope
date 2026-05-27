@@ -2,6 +2,14 @@
 
 from unittest.mock import patch, MagicMock
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _disable_real_fund_flow_provider():
+    with patch("backend.fund_flow.fetch_individual_fund_flow", return_value=None):
+        yield
+
 
 class TestFactorReport:
     """FactorReport 数据类测试"""
