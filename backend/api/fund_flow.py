@@ -66,12 +66,22 @@ def _degraded_response(
     payload.update(
         {
             "degraded": True,
-            "source": "akshare",
+            "source": payload.get("source") or "eastmoney",
             "source_status": source_status,
             "error": error,
         }
     )
     return ApiResponse(success=True, data=payload, error=error, error_code="FUND_FLOW_DEGRADED")
+
+
+def _source_meta(df, default_source: str = "eastmoney") -> dict[str, Any]:
+    return {
+        "degraded": bool(getattr(df, "attrs", {}).get("degraded")),
+        "source": getattr(df, "attrs", {}).get("source") or default_source,
+        "source_status": getattr(df, "attrs", {}).get("source_status") or "ok",
+        "error": getattr(df, "attrs", {}).get("error") or "",
+        "cached_at": getattr(df, "attrs", {}).get("cached_at") or "",
+    }
 
 
 def _as_float(value: Any) -> float:
@@ -94,7 +104,7 @@ def get_fund_flow(symbol: str, days: int = 30):
         "summary": _empty_summary(),
         "records": [],
         "degraded": False,
-        "source": "akshare",
+        "source": "eastmoney",
         "source_status": "ok",
     }
 
@@ -122,6 +132,7 @@ def get_fund_flow(symbol: str, days: int = 30):
 
     try:
         summary = summarize_fund_flow(df, recent_days=5) or _empty_summary()
+        meta = _source_meta(df, default_source="eastmoney")
         records = []
         for _, row in df.iterrows():
             raw_date = row.get("日期")
@@ -153,10 +164,14 @@ def get_fund_flow(symbol: str, days: int = 30):
             "symbol": symbol,
             "summary": summary,
             "records": records,
-            "degraded": False,
-            "source": "akshare",
-            "source_status": "ok",
+            "degraded": meta["degraded"],
+            "source": meta["source"],
+            "source_status": meta["source_status"],
+            "error": meta["error"],
+            "cached_at": meta["cached_at"],
         },
+        error=meta["error"] or None,
+        error_code="FUND_FLOW_DEGRADED" if meta["degraded"] else None,
     )
 
 
@@ -197,6 +212,7 @@ def get_market_fund_flow(days: int = 30):
 
     try:
         summary = summarize_fund_flow(df, recent_days=5) or _empty_summary()
+        meta = _source_meta(df, default_source="akshare")
         records = []
         for _, row in df.iterrows():
             raw_date = row.get("日期")
@@ -221,8 +237,12 @@ def get_market_fund_flow(days: int = 30):
         data={
             "summary": summary,
             "records": records,
-            "degraded": False,
-            "source": "akshare",
-            "source_status": "ok",
+            "degraded": meta["degraded"],
+            "source": meta["source"],
+            "source_status": meta["source_status"],
+            "error": meta["error"],
+            "cached_at": meta["cached_at"],
         },
+        error=meta["error"] or None,
+        error_code="FUND_FLOW_DEGRADED" if meta["degraded"] else None,
     )

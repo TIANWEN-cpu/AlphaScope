@@ -585,7 +585,7 @@ Run:
 
 ```powershell
 git -C "D:/AI-Finance/AI--FINANCE-v1.4" status --short
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" grep -n "sk-5cqumX9ZcyoNnldvgkB6j36E9dX6gidG" -- . ':!artifacts' ':!data' ':!.venv' ':!apps/web/node_modules'
+git -C "D:/AI-Finance/AI--FINANCE-v1.4" grep -n "sk-<redacted-test-key>" -- . ':!artifacts' ':!data' ':!.venv' ':!apps/web/node_modules'
 ```
 
 Expected: status only includes intended tracked changes or `?? artifacts/`; grep finds nothing.

@@ -269,6 +269,31 @@ class TestFactorGenerator:
         assert report.signals[-1]["type"] == "fund_flow"
         assert report.signals[-1]["last_main_yi"] == 1.25
 
+    def test_fund_flow_cached_dataframe_is_degraded_not_missing(self):
+        from backend.factors.generator import FactorGenerator, FactorReport
+
+        gen = FactorGenerator()
+        report = FactorReport(symbol="600519")
+        fake_df = MagicMock()
+        fake_df.__len__.return_value = 5
+        fake_df.attrs = {"degraded": True, "source_status": "cache"}
+        summary = {
+            "main_total_yi": 2.5,
+            "last_main_yi": 1.25,
+            "inflow_days": 4,
+            "outflow_days": 1,
+        }
+
+        with (
+            patch("backend.fund_flow.fetch_individual_fund_flow", return_value=fake_df),
+            patch("backend.fund_flow.summarize_fund_flow", return_value=summary),
+        ):
+            gen._compute_fund_flow(report, "600519", include_signals=True)
+
+        assert report.fund_flow > 0
+        assert report.degraded_inputs == ["fund_flow"]
+        assert report.missing_dimensions == []
+
     def test_momentum_uses_clean_price_store_data(self):
         from backend.factors.generator import FactorGenerator, FactorReport
 

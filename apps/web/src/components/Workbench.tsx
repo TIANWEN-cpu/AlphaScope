@@ -293,10 +293,14 @@ const buildFactorPanel = (data: Record<string, unknown>): FactorPanelData => {
   const factors = (data.factors || {}) as Record<string, unknown>;
   const counts = (data.sample_counts || {}) as Record<string, unknown>;
   const signals = Array.isArray(data.signals) ? data.signals as Record<string, unknown>[] : [];
+  const degradedInputs = Array.isArray(data.degraded_inputs) ? data.degraded_inputs.map(String) : [];
+  const fundFlowDetail = degradedInputs.includes('fund_flow')
+    ? '资金流使用缓存或降级源'
+    : '主力资金近况归一化';
   const cards: QuantCard[] = [
     { label: '综合因子', value: formatFactorScore(factors.composite), tone: factorTone(factors.composite), detail: '加权汇总新闻、事件、研报、资金与动量' },
     { label: '新闻情绪', value: formatFactorScore(factors.news_sentiment), tone: factorTone(factors.news_sentiment), detail: `新闻样本 ${counts.news ?? 0} 条` },
-    { label: '资金流', value: formatFactorScore(factors.fund_flow), tone: factorTone(factors.fund_flow), detail: '主力资金近况归一化' },
+    { label: '资金流', value: formatFactorScore(factors.fund_flow), tone: factorTone(factors.fund_flow), detail: fundFlowDetail },
     { label: '价格动量', value: formatFactorScore(factors.momentum), tone: factorTone(factors.momentum), detail: '短中期涨跌与量能变化' },
   ];
 
@@ -788,6 +792,8 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
         const records = Array.isArray(result.data.records) ? result.data.records as Record<string, unknown>[] : [];
         const latestRecord = records[records.length - 1] || {};
         const degraded = Boolean(result.data.degraded);
+        const sourceStatus = String(result.data.source_status || '');
+        const hasCachedValues = degraded && sourceStatus === 'cache' && records.length > 0;
         if (degraded && attempt < 1) {
           await delay(1200);
           if (isCurrent()) await loadFundFlow(attempt + 1);
@@ -799,13 +805,13 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
         const mediumValue = summary.medium_total_yi ?? latestRecord.medium_net_yi;
         setFundItems([
           {
-            label: degraded ? '主力净流入(降级)' : '主力净流入',
-            value: degraded ? '数据源降级' : formatYi(mainValue),
-            color: degraded ? 'text-amber-400' : Number(mainValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500',
+            label: hasCachedValues ? '主力净流入(缓存)' : degraded ? '主力净流入(降级)' : '主力净流入',
+            value: degraded && !hasCachedValues ? '数据源降级' : formatYi(mainValue),
+            color: degraded && !hasCachedValues ? 'text-amber-400' : Number(mainValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500',
           },
-          { label: '超大单', value: degraded ? '--' : formatYi(superValue), color: Number(superValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
-          { label: '大单', value: degraded ? '--' : formatYi(largeValue), color: Number(largeValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
-          { label: '中单', value: degraded ? '--' : formatYi(mediumValue), color: Number(mediumValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
+          { label: '超大单', value: degraded && !hasCachedValues ? '--' : formatYi(superValue), color: Number(superValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
+          { label: '大单', value: degraded && !hasCachedValues ? '--' : formatYi(largeValue), color: Number(largeValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
+          { label: '中单', value: degraded && !hasCachedValues ? '--' : formatYi(mediumValue), color: Number(mediumValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
         ]);
       } else {
         setFundItems(EMPTY_FUNDS);

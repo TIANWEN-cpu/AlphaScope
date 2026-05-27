@@ -162,10 +162,19 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
   const reportId = `${targetSymbol}-AI-${reportDate.replace(/-/g, '')}`;
   const selectedTemplateName = REPORT_TEMPLATES.find(item => item.id === selectedTemplate)?.name || selectedTemplate;
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const reportScrollRef = useRef<HTMLDivElement | null>(null);
 
   const scrollToSection = (sectionId: string) => {
     setActiveSectionId(sectionId);
-    sectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const container = reportScrollRef.current;
+    const target = sectionRefs.current[sectionId];
+    if (!container || !target) return;
+    const containerTop = container.getBoundingClientRect().top;
+    const targetTop = target.getBoundingClientRect().top;
+    container.scrollTo({
+      top: container.scrollTop + targetTop - containerTop - 16,
+      behavior: 'smooth',
+    });
   };
 
   useEffect(() => {
@@ -181,7 +190,7 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
     { label: '多源信息收集', desc: '基本面 Agent 正从多方财经终端与交易所爬取财报与经营指标...' },
     { label: '历史量化回验', desc: '量化 Agent 计算因子协方差矩阵并回测多头溢价敞口波动...' },
     { label: '舆情与风险过滤', desc: '合规与舆情 Agent 分析全网社交、券商评级及政策变焦偏差...' },
-    { label: '智能排版与终审', desc: '专家圆桌交叉纠偏，渲染专业排版并输出投资逻辑评估报告面...' }
+    { label: '智能排版与终审', desc: '专家圆桌交叉纠偏，渲染专业排版并输出投资逻辑评估报告...' }
   ];
 
   const fallbackReportSections: ReportSection[] = [
@@ -362,7 +371,7 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
           
           {/* Target Stock Select */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-neutral-400 select-none">研究对像 (Target Stock)</label>
+            <label className="text-xs font-medium text-neutral-400 select-none">研究对象 (Target Stock)</label>
             <select 
               value={selectedStock}
               onChange={e => setSelectedStock(e.target.value)}
@@ -552,17 +561,17 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
                     </div>
 
                     <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-400">
-                      <button onClick={downloadReport} className="p-1 px-2 flex items-center gap-1 bg-white/5 border border-white-5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
-                        <Download className="w-3 h-3" /> 下载源
+                      <button onClick={downloadReport} className="p-1 px-2 flex items-center gap-1 bg-white/5 border border-white/5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
+                        <Download className="w-3 h-3" /> 下载 Markdown
                       </button>
-                      <button onClick={() => window.print()} className="p-1 px-2 flex items-center gap-1 bg-white/5 border border-white-5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
+                      <button onClick={() => window.print()} className="p-1 px-2 flex items-center gap-1 bg-white/5 border border-white/5 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
                         <Printer className="w-3 h-3" /> 打印格式
                       </button>
                     </div>
                   </div>
 
                   {/* Elegant Formal Paper Canvas */}
-                  <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white/[0.015] leading-relaxed relative min-h-0">
+                  <div ref={reportScrollRef} className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white/[0.015] leading-relaxed relative min-h-0">
                     <div className="max-w-2xl mx-auto space-y-6">
                       
                       {/* Paper Emblem */}
@@ -579,7 +588,7 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
                       {/* Header block details */}
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 bg-black/30 border border-white/5 rounded-xl p-4 font-mono text-[10px]">
                         <div>
-                          <span className="text-neutral-500 block">评定对像 (Ticker):</span>
+                          <span className="text-neutral-500 block">评定对象 (Ticker):</span>
                           <span className="text-neutral-200 font-bold">{selectedStock}</span>
                         </div>
                         <div>

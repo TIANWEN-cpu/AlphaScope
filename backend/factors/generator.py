@@ -392,6 +392,8 @@ class FactorGenerator:
                         }
                     )
                 return
+            if getattr(df, "attrs", {}).get("degraded"):
+                report.degraded_inputs.append("fund_flow")
             summary = summarize_fund_flow(df, recent_days=5)
         except Exception as exc:
             report.degraded_inputs.append("fund_flow")
