@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import Any, Optional
@@ -25,6 +26,24 @@ CREATE TABLE IF NOT EXISTS model_providers (
     updated_at REAL NOT NULL
 )
 """
+
+_MODEL_PREFERENCE_HINTS = (
+    "deepseek",
+    "sensenova",
+    "flash",
+    "chat",
+    "gpt",
+    "moonshot",
+)
+
+
+def _preferred_model_id(model_ids: list[str]) -> str:
+    """Pick a likely chat model from a provider model listing."""
+    for hint in _MODEL_PREFERENCE_HINTS:
+        for model_id in model_ids:
+            if hint in model_id.lower():
+                return model_id
+    return model_ids[0] if model_ids else ""
 
 
 def _ensure_table(conn) -> None:
@@ -88,14 +107,17 @@ def save_provider(
     base_url: str,
     api_key: str = "",
     enabled: bool = True,
-    config_json: str = "{}",
+    config_json: Optional[str] = None,
 ) -> dict[str, Any]:
     """添加或更新 provider"""
     conn = _get_conn()
     now = time.time()
     existing = conn.execute(
-        "SELECT id FROM model_providers WHERE id = ?", (provider_id,)
+        "SELECT id, config_json FROM model_providers WHERE id = ?", (provider_id,)
     ).fetchone()
+    next_config_json = config_json
+    if next_config_json is None:
+        next_config_json = (existing["config_json"] if existing else None) or "{}"
     if existing:
         if api_key:
             conn.execute(
@@ -105,7 +127,7 @@ def save_provider(
                     base_url,
                     encrypt_key(api_key),
                     int(enabled),
-                    config_json,
+                    next_config_json,
                     now,
                     provider_id,
                 ),
@@ -113,7 +135,7 @@ def save_provider(
         else:
             conn.execute(
                 "UPDATE model_providers SET name=?, base_url=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
-                (name, base_url, int(enabled), config_json, now, provider_id),
+                (name, base_url, int(enabled), next_config_json, now, provider_id),
             )
     else:
         encrypted = encrypt_key(api_key) if api_key else ""
@@ -126,7 +148,7 @@ def save_provider(
                 base_url,
                 encrypted,
                 int(enabled),
-                config_json,
+                next_config_json,
                 now,
                 now,
             ),
@@ -171,6 +193,23 @@ def test_connection(provider_id: str) -> dict[str, Any]:
         )
         models = client.models.list()
         model_ids = [m.id for m in (models.data or [])][:10]
+        if model_ids:
+            try:
+                existing = json.loads(provider.get("config_json") or "{}")
+                if not isinstance(existing, dict):
+                    existing = {}
+            except Exception:
+                existing = {}
+            existing["models"] = model_ids
+            existing["default_model"] = _preferred_model_id(model_ids)
+            save_provider(
+                provider_id=provider["id"],
+                name=provider["name"],
+                base_url=provider["base_url"],
+                api_key="",
+                enabled=provider.get("enabled", True),
+                config_json=json.dumps(existing, ensure_ascii=False),
+            )
         return {
             "success": True,
             "models": model_ids,
@@ -223,27 +262,35 @@ def import_settings(data: dict[str, Any]) -> dict[str, Any]:
 def _sync_to_gateway() -> None:
     """将 DB 配置同步到 provider_gateway 的 VENDORS dict"""
     try:
-        from backend.models.provider_gateway import VENDORS, clear_client_cache
+        from backend.models.provider_gateway import (
+            VENDORS,
+            _models_from_config_json,
+            clear_client_cache,
+        )
 
         providers = list_providers()
         for p in providers:
             pid = p["id"]
+            provider_full = get_provider(pid)
+            if not provider_full:
+                continue
+            patch = {
+                "base_url": p["base_url"],
+                "supports_json_mode": True,
+                "label": p["name"],
+                "config_json": provider_full.get("config_json") or "{}",
+                "models": _models_from_config_json(provider_full.get("config_json")),
+            }
+            if provider_full["api_key"]:
+                patch["api_key"] = provider_full["api_key"]
             if pid in VENDORS:
                 # 更新已有 vendor
-                if p["base_url"]:
-                    VENDORS[pid]["base_url"] = p["base_url"]
-                # api_key 需要解密后更新
-                provider_full = get_provider(pid)
-                if provider_full and provider_full["api_key"]:
-                    VENDORS[pid]["api_key"] = provider_full["api_key"]
+                VENDORS[pid].update(patch)
             else:
                 # 新增 vendor
-                provider_full = get_provider(pid)
                 VENDORS[pid] = {
-                    "api_key": provider_full["api_key"] if provider_full else "",
-                    "base_url": p["base_url"],
-                    "supports_json_mode": True,
-                    "label": p["name"],
+                    "api_key": provider_full["api_key"],
+                    **patch,
                 }
         clear_client_cache()
     except Exception as e:

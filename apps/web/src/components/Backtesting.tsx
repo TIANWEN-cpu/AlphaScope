@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Play, Settings2, Download, TrendingUp, History, Flag, ShieldAlert, BarChart, XCircle, Activity, Code2, Layers, Cpu, CheckCircle } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { api, QuantRun, QuantStrategy, QuantStrategyParam } from '../lib/api';
@@ -16,6 +16,14 @@ const EQUITY_CURVE = Array.from({ length: 40 }).map((_, i) => ({
   strategy: 10000 * Math.pow(1.015, i) * (1 + (Math.random() * 0.1 - 0.03)),
 }));
 
+interface BacktestMetrics {
+  total_return: number;
+  max_drawdown: number;
+  win_rate: number;
+  sharpe_ratio: number;
+  trade_count: number;
+}
+
 const pct = (value: unknown) => {
   const num = Number(value || 0);
   const normalized = Math.abs(num) <= 1 ? num * 100 : num;
@@ -27,8 +35,14 @@ const formatPct = (value: unknown, digits = 1) => {
   return `${normalized >= 0 ? '+' : ''}${normalized.toFixed(digits)}%`;
 };
 
+const formatMetricPct = (metrics: BacktestMetrics | null, key: keyof Pick<BacktestMetrics, 'total_return' | 'max_drawdown' | 'win_rate'>) =>
+  metrics ? formatPct(metrics[key]) : '--';
+
+const formatSharpe = (metrics: BacktestMetrics | null) =>
+  metrics ? Number(metrics.sharpe_ratio || 0).toFixed(2) : '--';
+
 const normalizeCurve = (curve: unknown, initialCapital: number) => {
-  if (!Array.isArray(curve) || !curve.length) return EQUITY_CURVE;
+  if (!Array.isArray(curve) || !curve.length) return [];
   return curve.map((point: Record<string, unknown>, index) => {
     const strategy = Number(point.value ?? point.equity ?? point.nav ?? point.strategy ?? initialCapital);
     return {
@@ -70,19 +84,21 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
   const [startDate, setStartDate] = useState('2023-01-01');
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [initialCapital, setInitialCapital] = useState(1000000);
-  const [equityCurve, setEquityCurve] = useState(EQUITY_CURVE);
-  const [metrics, setMetrics] = useState({
-    total_return: 0.425,
-    max_drawdown: -0.124,
-    win_rate: 0.64,
-    sharpe_ratio: 1.82,
-    trade_count: 128,
-  });
+  const [equityCurve, setEquityCurve] = useState<typeof EQUITY_CURVE>([]);
+  const [metrics, setMetrics] = useState<BacktestMetrics | null>(null);
   const [hasBacktestResult, setHasBacktestResult] = useState(false);
+  const [quantConnected, setQuantConnected] = useState<boolean | null>(null);
+  const [strategySource, setStrategySource] = useState<'backend' | 'local-template'>('local-template');
 
   const selectedStrategy = strategies.find(strategy => String(strategy.id || strategy.name) === selectedStrategyId);
   const selectedParams = selectedStrategy?.params || [];
-  const resultStateLabel = hasBacktestResult ? '后端回测结果' : '本地演示，待回测更新';
+  const quantUnavailable = quantConnected === false;
+  const canRunBacktest = quantConnected === true && !running;
+  const resultStateLabel = hasBacktestResult
+    ? '后端回测结果'
+    : quantUnavailable
+      ? 'Jince 离线，暂无回测结果'
+      : '等待后端回测';
 
   useEffect(() => {
     setStrategyParams(buildDefaultParams(selectedStrategy));
@@ -94,7 +110,9 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
       setStrategies(result.data.strategies);
       const nextStrategy = result.data.strategies[0];
       setSelectedStrategyId(String(nextStrategy.id || nextStrategy.name || 'macd_momentum'));
-      setStatusText(`已加载 ${result.data.strategies.length} 个后端策略`);
+      const degraded = Boolean((result.data as Record<string, unknown>).degraded);
+      setStrategySource(degraded ? 'local-template' : 'backend');
+      setStatusText(degraded ? `Jince 离线，已加载 ${result.data.strategies.length} 个本地策略模板` : `已加载 ${result.data.strategies.length} 个后端策略`);
     } else {
       setStatusText(result.error || '策略列表加载失败');
     }
@@ -125,13 +143,25 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
       if (statusResult.status === 'fulfilled') {
         const status = statusResult.value;
         const data = status.data || {};
-        setStatusText(status.success ? `Jince 已连接，策略 ${data.strategy_count || 0} 个，活跃运行 ${data.active_runs || 0} 个` : status.error || 'Jince 服务未连接，回测会返回后端错误');
+        const connected = status.success && Boolean(data.connected) && !Boolean(data.degraded);
+        setQuantConnected(connected);
+        setStatusText(
+          connected
+            ? `Jince 已连接，策略 ${data.strategy_count || 0} 个，活跃运行 ${data.active_runs || 0} 个`
+            : status.error || 'Jince 服务离线：回测执行已暂停，仅显示本地策略模板。',
+        );
+      } else {
+        setQuantConnected(false);
+        setStatusText('Jince 状态接口不可用：回测执行已暂停，仅显示本地策略模板。');
       }
 
       if (strategiesResult.status === 'fulfilled' && strategiesResult.value.data?.strategies?.length) {
-        setStrategies(strategiesResult.value.data.strategies);
-        setSelectedStrategyId(String(strategiesResult.value.data.strategies[0].id || strategiesResult.value.data.strategies[0].name || 'macd_momentum'));
+        const strategyData = strategiesResult.value.data as { strategies: QuantStrategy[]; degraded?: boolean };
+        setStrategies(strategyData.strategies);
+        setStrategySource(strategyData.degraded ? 'local-template' : 'backend');
+        setSelectedStrategyId(String(strategyData.strategies[0].id || strategyData.strategies[0].name || 'macd_momentum'));
       } else {
+        setStrategySource('local-template');
         setStrategies([
           { id: 'macd_momentum', name: 'MACD Momentum (Long)', description: '本地默认策略占位，后端连接后自动替换。' },
           { id: 'mean_reversion', name: 'Mean Reversion Volatility', description: '本地默认策略占位，后端连接后自动替换。' },
@@ -171,6 +201,10 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
   };
 
   const runTest = async () => {
+    if (!quantConnected) {
+      setStatusText('Jince 量化引擎未连接，已阻止回测执行；请启动服务后再运行。');
+      return;
+    }
     setRunning(true);
     setStatusText(`正在提交 ${stockName} (${symbol}) 回测任务...`);
     const result = await api.quantBacktest({
@@ -186,7 +220,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
       const businessStatus = String(result.data.status || '').toLowerCase();
       if (businessStatus && businessStatus !== 'completed') {
         const error = String(result.data.error || `回测状态为 ${businessStatus}`);
-        setStatusText(`回测未完成：${error}，已保留当前${hasBacktestResult ? '后端回测' : '本地演示'}曲线`);
+        setStatusText(`回测未完成：${error}${hasBacktestResult ? '，已保留当前后端回测曲线' : ''}`);
       } else {
         const responseMetrics = (result.data.metrics || {}) as Record<string, unknown>;
         setMetrics({
@@ -201,7 +235,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
         setStatusText(`回测完成：${String(result.data.run_id || '无运行ID')}`);
       }
     } else {
-      setStatusText(result.error || `后端回测失败，保留当前${hasBacktestResult ? '后端回测' : '本地演示'}曲线`);
+      setStatusText(result.error || `后端回测失败${hasBacktestResult ? '，已保留当前后端回测曲线' : ''}`);
     }
     setRunning(false);
   };
@@ -285,11 +319,11 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                   </button>
                   <button 
                     onClick={runTest}
-                    disabled={running}
+                    disabled={!canRunBacktest}
                     className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white border border-indigo-500/50 rounded-lg flex items-center gap-2 text-xs font-mono uppercase font-medium transition-all shadow-[0_0_20px_rgba(99,102,241,0.2)]"
                   >
                     {running ? <Activity className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
-                    {running ? '引擎计算中...' : '启动单票/组合回测'}
+                    {running ? '引擎计算中...' : quantUnavailable ? 'Jince 离线，无法回测' : '启动单票/组合回测'}
                   </button>
                 </div>
               </div>
@@ -301,7 +335,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                     <p className="text-[10px] font-mono tracking-widest uppercase font-medium text-neutral-400">Total Return</p>
                     <TrendingUp className="w-4 h-4 text-rose-500 group-hover:scale-110 transition-transform" />
                   </div>
-                  <h3 className="text-3xl font-mono font-medium text-white drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]">{formatPct(metrics.total_return)}</h3>
+                  <h3 className="text-3xl font-mono font-medium text-white drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]">{formatMetricPct(metrics, 'total_return')}</h3>
                   <p className="text-[11px] font-mono text-rose-400 mt-2">{resultStateLabel} · 标的：{stockName} ({symbol})</p>
                 </div>
                 <div className="bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-2xl p-6 shadow-xl hover:-translate-y-1 transition-transform group">
@@ -309,24 +343,24 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                     <p className="text-[10px] font-mono tracking-widest uppercase font-medium text-neutral-400">Max Drawdown</p>
                     <ShieldAlert className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
                   </div>
-                  <h3 className="text-3xl font-mono font-medium text-white">{formatPct(metrics.max_drawdown)}</h3>
-                  <p className="text-[11px] font-mono text-emerald-400 mt-2">{hasBacktestResult ? '后端指标' : '本地演示指标'} · 阈值 -15%</p>
+                  <h3 className="text-3xl font-mono font-medium text-white">{formatMetricPct(metrics, 'max_drawdown')}</h3>
+                  <p className="text-[11px] font-mono text-emerald-400 mt-2">{hasBacktestResult ? '后端指标' : '等待后端回测'} · 阈值 -15%</p>
                 </div>
                 <div className="bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-2xl p-6 shadow-xl hover:-translate-y-1 transition-transform group">
                   <div className="flex justify-between items-center mb-4">
                     <p className="text-[10px] font-mono tracking-widest uppercase font-medium text-neutral-400">Win Rate</p>
                     <Flag className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
                   </div>
-                  <h3 className="text-3xl font-mono font-medium text-white drop-shadow-[0_0_10px_rgba(129,140,248,0.3)]">{formatPct(metrics.win_rate)}</h3>
-                  <p className="text-[11px] font-mono text-neutral-500 mt-2">{hasBacktestResult ? '后端回测' : '本地演示'} · {metrics.trade_count || 0} 笔交易</p>
+                  <h3 className="text-3xl font-mono font-medium text-white drop-shadow-[0_0_10px_rgba(129,140,248,0.3)]">{formatMetricPct(metrics, 'win_rate')}</h3>
+                  <p className="text-[11px] font-mono text-neutral-500 mt-2">{hasBacktestResult ? '后端回测' : '暂无结果'} · {metrics?.trade_count ?? 0} 笔交易</p>
                 </div>
                 <div className="bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-2xl p-6 shadow-xl hover:-translate-y-1 transition-transform group">
                   <div className="flex justify-between items-center mb-4">
                     <p className="text-[10px] font-mono tracking-widest uppercase font-medium text-neutral-400">Sharpe Ratio</p>
                     <BarChart className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
                   </div>
-                  <h3 className="text-3xl font-mono font-medium text-white">{Number(metrics.sharpe_ratio || 0).toFixed(2)}</h3>
-                  <p className="text-[11px] font-mono text-neutral-500 mt-2">{hasBacktestResult ? '后端回测指标' : '本地演示指标'}</p>
+                  <h3 className="text-3xl font-mono font-medium text-white">{formatSharpe(metrics)}</h3>
+                  <p className="text-[11px] font-mono text-neutral-500 mt-2">{hasBacktestResult ? '后端回测指标' : '等待后端回测'}</p>
                 </div>
               </div>
 
@@ -334,29 +368,42 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                 <div className="xl:col-span-2 bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-2xl p-6 shadow-xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-[80px] pointer-events-none"></div>
                   <h3 className="text-xs font-mono uppercase tracking-widest text-neutral-400 mb-6 flex items-center gap-2 pb-3 border-b border-white/5">
-                    收益率曲线（{hasBacktestResult ? '后端回测路径' : '本地演示曲线'}）
-                    {!hasBacktestResult && <span className="ml-auto text-[10px] px-2 py-0.5 rounded bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 font-mono">待回测更新</span>}
+                    收益率曲线（{hasBacktestResult ? '后端回测路径' : '暂无可用回测'}）
+                    {!hasBacktestResult && <span className="ml-auto text-[10px] px-2 py-0.5 rounded bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 font-mono">{quantUnavailable ? 'Jince 离线' : '待回测更新'}</span>}
                   </h3>
-                  <div className="h-80 w-full -ml-3 relative z-10">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={equityCurve}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                        <XAxis dataKey="month" stroke="#737373" fontSize={11} fontFamily="monospace" tickLine={false} />
-                        <YAxis stroke="#737373" fontSize={11} fontFamily="monospace" tickLine={false} tickFormatter={(val) => `¥${(val/1000).toFixed(0)}k`} />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px', fontFamily: 'monospace', boxShadow: '0 8px 30px rgba(0,0,0,0.4)' }}
-                        />
-                        <Line type="monotone" dataKey="strategy" name="策略收益" stroke="#f43f5e" strokeWidth={2.5} dot={false} activeDot={{r: 4}} style={{ filter: 'drop-shadow(0 0 8px rgba(244,63,94,0.4))' }} />
-                        <Line type="monotone" dataKey="base" name="沪深300基准" stroke="#737373" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                  <div className="h-80 w-full -ml-3 relative z-10 min-w-0">
+                    {equityCurve.length ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={equityCurve}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                          <XAxis dataKey="month" stroke="#737373" fontSize={11} fontFamily="monospace" tickLine={false} />
+                          <YAxis stroke="#737373" fontSize={11} fontFamily="monospace" tickLine={false} tickFormatter={(val) => `¥${(val/1000).toFixed(0)}k`} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px', fontFamily: 'monospace', boxShadow: '0 8px 30px rgba(0,0,0,0.4)' }}
+                          />
+                          <Line type="monotone" dataKey="strategy" name="策略收益" stroke="#f43f5e" strokeWidth={2.5} dot={false} activeDot={{r: 4}} style={{ filter: 'drop-shadow(0 0 8px rgba(244,63,94,0.4))' }} />
+                          <Line type="monotone" dataKey="base" name="沪深300基准" stroke="#737373" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex h-full items-center justify-center rounded-xl border border-white/5 bg-black/20 px-6 text-center">
+                        <div>
+                          <p className="text-sm font-medium text-neutral-300">{quantUnavailable ? 'Jince 量化引擎未连接' : '尚未运行回测'}</p>
+                          <p className="mt-2 text-xs leading-relaxed text-neutral-500">
+                            {quantUnavailable
+                              ? '当前不会展示本地演示收益曲线，避免把模板数据误认为真实回测结果。'
+                              : '提交回测后，这里将显示后端返回的权益曲线。'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-2xl p-0 overflow-hidden flex flex-col shadow-xl">
                   <div className="p-5 border-b border-white/5 flex justify-between items-center bg-black/40">
                     <h3 className="text-xs font-mono uppercase tracking-widest text-neutral-400 flex items-center gap-2">风控审核与信号体系</h3>
-                    <span className="text-[10px] font-mono uppercase font-medium text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded shadow-inner">SIMULATION</span>
+                    <span className="text-[10px] font-mono uppercase font-medium text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded shadow-inner">{strategySource === 'backend' ? 'RULES ONLY' : 'LOCAL TEMPLATE'}</span>
                   </div>
                   <div className="p-5 flex-1 space-y-4">
                     <div className="border border-red-900/40 bg-red-950/20 rounded-xl p-4 relative overflow-hidden transition-colors hover:bg-red-950/30">

@@ -700,6 +700,7 @@ const ANALYSIS_MODES: Array<{ id: AnalysisMode; label: string; description: stri
 
 export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: WorkbenchProps) {
   const [activePeriod, setActivePeriod] = useState('日K');
+  const [chartPeriod, setChartPeriod] = useState('日K');
   const [activePanelTab, setActivePanelTab] = useState('news');
   const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [priceBars, setPriceBars] = useState<PriceBar[]>([]);
@@ -752,6 +753,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     setIsRefreshingPrices(false);
     setChartData([]);
     setPriceBars([]);
+    setChartPeriod(activePeriodRef.current);
     setLatestPrice(null);
     setHoveredChartIndex(null);
     setNewsItems([]);
@@ -869,28 +871,31 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     priceRefreshRequestRef.current = requestId;
     const controller = new AbortController();
     const periodConfig = getPeriodConfig(activePeriod);
+    const requestedPeriod = activePeriod;
     const refreshSymbol = symbol;
     const isCurrent = () => priceRefreshRequestRef.current === requestId && activeSymbolRef.current === refreshSymbol && !controller.signal.aborted;
 
     setMarketState('loading');
-    setDataStatus(`正在切换到 ${periodConfig.label} 数据...`);
+    setDataStatus(periodConfig.frequency === 'intraday'
+      ? '正在拉取分钟级分时数据，已保留上一周期图表...'
+      : `正在切换到 ${periodConfig.label} 数据，已保留上一周期图表...`);
     setHoveredChartIndex(null);
-    setChartData([]);
-    setPriceBars([]);
-    setLatestPrice(null);
 
     api.prices(symbol, periodConfig.limit, periodConfig.frequency, { signal: controller.signal }).then((result) => {
       if (!isCurrent()) return;
       if (result.success && result.data?.bars?.length) {
         setPriceBars(result.data.bars);
         setChartData(toChartData(result.data.bars, periodConfig.frequency));
+        setChartPeriod(requestedPeriod);
         setMarketState('ready');
         setDataStatus(`已同步 ${periodConfig.label} 行情数据`);
       } else {
         setPriceBars([]);
         setChartData([]);
         setMarketState(result.success ? 'empty' : 'error');
-        setDataStatus(result.success ? `${periodConfig.label} 暂无可用数据` : result.error || `${periodConfig.label} 行情接口暂不可用`);
+        setDataStatus(result.success
+          ? `${periodConfig.label} 暂无可用数据`
+          : result.error || `${periodConfig.label} 行情接口暂不可用`);
       }
     });
 
@@ -913,7 +918,9 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     const isCurrent = () => priceRefreshRequestRef.current === requestId && activeSymbolRef.current === refreshSymbol;
     setIsRefreshingPrices(true);
     setMarketState('loading');
-    setDataStatus(`正在刷新 ${stockName} ${periodConfig.label} 行情...`);
+    setDataStatus(periodConfig.frequency === 'intraday'
+      ? `正在刷新 ${stockName} 分钟级分时行情...`
+      : `正在刷新 ${stockName} ${periodConfig.label} 行情...`);
     const fetched = periodConfig.frequency === 'intraday'
       ? { success: true, data: { fetched: 0 }, error: null }
       : await api.priceFetch(symbol, 120);
@@ -932,10 +939,9 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     if (pricesResult.success && pricesResult.data?.bars?.length) {
       setPriceBars(pricesResult.data.bars);
       setChartData(toChartData(pricesResult.data.bars, periodConfig.frequency));
+      setChartPeriod(activePeriodRef.current);
       setMarketState('ready');
     } else {
-      setPriceBars([]);
-      setChartData([]);
       setMarketState(pricesResult.success ? 'empty' : 'error');
     }
     if (latestResult.success && latestResult.data) {
@@ -1097,12 +1103,14 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const currentMode = ANALYSIS_MODES.find(item => item.id === selectedMode) || ANALYSIS_MODES[1];
   const latestChartPoint = chartData[chartData.length - 1];
   const activeFrequency = getPeriodConfig(activePeriod).frequency;
+  const chartFrequency = getPeriodConfig(chartPeriod).frequency;
+  const isMarketLoadingWithData = marketState === 'loading' && chartData.length > 0;
   const hasPriceData = Boolean(latestPrice || latestChartPoint);
   const currentClose = latestPrice?.close || latestChartPoint?.close || latestChartPoint?.ma20 || 0;
   const currentChange = latestPrice?.change_pct ?? latestChartPoint?.changePct ?? 0;
   const isPriceUp = Number(currentChange) >= 0;
   const periodDataHint = priceBars.length
-    ? `${activePeriod} ${priceBars.length} 条${activeFrequency === '1mo' && priceBars.length < 5 ? '，样本偏少' : ''}${activeFrequency === '1w' && priceBars.length < 8 ? '，样本偏少' : ''}`
+    ? `${chartPeriod} ${priceBars.length} 条${chartFrequency === '1mo' && priceBars.length < 5 ? '，样本偏少' : ''}${chartFrequency === '1w' && priceBars.length < 8 ? '，样本偏少' : ''}`
     : '等待后端行情';
 
   return (
@@ -1183,7 +1191,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
             </div>
 
             <div className="px-6 py-3 flex items-center gap-8 text-[11px] font-mono whitespace-nowrap bg-black/20 border-b border-white/5">
-               {activeFrequency === 'intraday' ? (
+               {chartFrequency === 'intraday' ? (
                  <>
                    <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>分时价: {latestChartPoint ? displayNumber(Number(latestChartPoint.close || 0)) : '--'}</span>
                    <span className="text-violet-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-violet-400/90"></div>均价: {latestChartPoint?.avgPrice ? displayNumber(Number(latestChartPoint.avgPrice)) : '--'}</span>
@@ -1196,7 +1204,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                    <span className="text-emerald-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-emerald-400/90"></div>MA20: {latestChartPoint?.ma20 ? displayNumber(Number(latestChartPoint.ma20)) : '--'}</span>
                  </>
                )}
-               <span className="text-neutral-500 ml-auto">{priceBars.length ? `VOL: ${formatVolume(Number(latestChartPoint?.volume || 0))} · ${periodDataHint}` : '等待后端行情'}</span>
+               <span className="text-neutral-500 ml-auto">{isMarketLoadingWithData ? `正在加载 ${activePeriod}，当前显示 ${chartPeriod}` : priceBars.length ? `VOL: ${formatVolume(Number(latestChartPoint?.volume || 0))} · ${periodDataHint}` : '等待后端行情'}</span>
             </div>
 
              {/* Chart Area */}
@@ -1213,12 +1221,23 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                {chartData.length > 0 && (
                  <MarketChart
                    data={chartData}
-                   frequency={activeFrequency}
-                   activePeriod={activePeriod}
+                   frequency={chartFrequency}
+                   activePeriod={chartPeriod}
                    hoveredIndex={hoveredChartIndex}
                    onHover={setHoveredChartIndex}
                    onLeave={() => setHoveredChartIndex(null)}
                  />
+               )}
+               {isMarketLoadingWithData && (
+                 <div className="absolute inset-5 z-10 flex items-center justify-center rounded-xl bg-black/35 text-center backdrop-blur-[2px]">
+                   <div className="rounded-xl border border-white/10 bg-black/60 px-4 py-3 shadow-xl">
+                     <div className="mb-2 flex items-center justify-center gap-2 text-xs font-mono text-indigo-300">
+                       <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                       {activeFrequency === 'intraday' ? '同步分钟级分时数据' : `同步 ${activePeriod} 数据`}
+                     </div>
+                     <p className="text-[11px] text-neutral-500">保留上一周期图表，避免切换时闪空。</p>
+                   </div>
+                 </div>
                )}
           </div>
         </div>

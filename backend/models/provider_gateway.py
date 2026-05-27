@@ -52,6 +52,24 @@ DEFAULT_PROVIDER_MODELS = {
     "sensenova": "deepseek-v4-flash",
 }
 
+KNOWN_PROVIDER_ORDER = [
+    "deepseek",
+    "sensenova",
+    "kimi",
+    "gpt",
+    "claude",
+    "mimo",
+]
+
+MODEL_PREFERENCE_HINTS = (
+    "deepseek",
+    "sensenova",
+    "flash",
+    "chat",
+    "gpt",
+    "moonshot",
+)
+
 
 # ============== Provider 配置加载 ==============
 
@@ -208,8 +226,77 @@ if _PROVIDER_CONFIG:
                 "base_url": cfg["base_url"],
                 "supports_json_mode": cfg.get("supports_json_mode", True),
                 "label": cfg.get("label", prov_id),
+                "models": cfg.get("models", {}),
             }
             print(f"[Provider] 已加载: {prov_id} -> {cfg['base_url']}")
+
+
+def _models_from_config_json(config_json: Any) -> list[str]:
+    """Extract model IDs from a provider config_json payload."""
+    if not config_json:
+        return []
+    try:
+        parsed = json.loads(config_json) if isinstance(config_json, str) else config_json
+    except Exception:
+        return []
+    if not isinstance(parsed, dict):
+        return []
+    raw_models = parsed.get("models") or []
+    model_ids: list[str] = []
+    if isinstance(raw_models, dict):
+        raw_models = list(raw_models.keys())
+    if isinstance(raw_models, list):
+        for item in raw_models:
+            if isinstance(item, str):
+                model_id = item
+            elif isinstance(item, dict):
+                model_id = str(item.get("id") or "").strip()
+            else:
+                model_id = ""
+            if model_id:
+                model_ids.append(model_id)
+    default_model = str(parsed.get("default_model") or "").strip()
+    if default_model and default_model not in model_ids:
+        model_ids.insert(0, default_model)
+    return model_ids
+
+
+def _model_from_provider_config(provider: str, cfg: dict[str, Any]) -> str:
+    """Choose a likely chat model for built-in or user-saved providers."""
+    if provider in DEFAULT_PROVIDER_MODELS:
+        return DEFAULT_PROVIDER_MODELS[provider]
+
+    model_ids = _models_from_config_json(cfg.get("config_json"))
+    raw_models = cfg.get("models")
+    if isinstance(raw_models, dict):
+        model_ids.extend([str(model_id) for model_id in raw_models.keys()])
+    elif isinstance(raw_models, list):
+        model_ids.extend([str(model_id) for model_id in raw_models if model_id])
+
+    deduped: list[str] = []
+    seen_models: set[str] = set()
+    for model_id in model_ids:
+        normalized = str(model_id).strip()
+        if normalized and normalized not in seen_models:
+            deduped.append(normalized)
+            seen_models.add(normalized)
+
+    for hint in MODEL_PREFERENCE_HINTS:
+        for model_id in deduped:
+            if hint in model_id.lower():
+                return model_id
+    if deduped:
+        return deduped[0]
+
+    base_url = str(cfg.get("base_url") or "").lower()
+    label = str(cfg.get("label") or provider).lower()
+    if "sensenova" in base_url or "sensenova" in label or "商汤" in label:
+        return DEFAULT_PROVIDER_MODELS["sensenova"]
+    if "moonshot" in base_url or "kimi" in base_url or "kimi" in label:
+        return DEFAULT_PROVIDER_MODELS["kimi"]
+    if "openai" in base_url or "gpt" in label:
+        return DEFAULT_PROVIDER_MODELS["gpt"]
+    return "deepseek-chat"
 
 
 def _sync_persisted_providers_once() -> None:
@@ -239,6 +326,8 @@ def _sync_persisted_providers_once() -> None:
                 "base_url": base_url,
                 "supports_json_mode": True,
                 "label": full_provider.get("name") or provider_id,
+                "config_json": full_provider.get("config_json") or "{}",
+                "models": _models_from_config_json(full_provider.get("config_json")),
             }
     except Exception as exc:
         logger.debug("failed to sync persisted providers: %s", exc)
@@ -278,16 +367,20 @@ def get_vendor_config(
 def get_configured_provider(preferred: Optional[str] = None) -> tuple[str, str]:
     """Return a configured provider/model, preferring explicit and env defaults."""
     _sync_persisted_providers_once()
+    configured_custom = [
+        provider
+        for provider, cfg in VENDORS.items()
+        if provider not in KNOWN_PROVIDER_ORDER
+        and cfg
+        and cfg.get("api_key")
+        and cfg.get("base_url")
+    ]
     candidates = [
         preferred,
         os.getenv("AI_CHAT_PROVIDER"),
         os.getenv("DEFAULT_LLM_PROVIDER"),
-        "deepseek",
-        "sensenova",
-        "kimi",
-        "gpt",
-        "claude",
-        "mimo",
+        *configured_custom,
+        *KNOWN_PROVIDER_ORDER,
     ]
     seen: set[str] = set()
     for candidate in candidates:
@@ -303,10 +396,11 @@ def get_configured_provider(preferred: Optional[str] = None) -> tuple[str, str]:
             if provider == (os.getenv("AI_CHAT_PROVIDER") or "").strip()
             else ""
         )
-        model = model or DEFAULT_PROVIDER_MODELS.get(provider) or "deepseek-chat"
+        model = model or _model_from_provider_config(provider, cfg)
         return provider, model
     fallback = (preferred or os.getenv("AI_CHAT_PROVIDER") or "deepseek").strip()
-    return fallback, DEFAULT_PROVIDER_MODELS.get(fallback, "deepseek-chat")
+    cfg = VENDORS.get(fallback) or {}
+    return fallback, _model_from_provider_config(fallback, cfg)
 
 
 def create_client(
