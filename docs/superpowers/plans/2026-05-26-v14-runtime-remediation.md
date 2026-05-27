@@ -150,7 +150,7 @@ git -C "D:/AI-Finance/AI--FINANCE-v1.4" add backend/factors/generator.py tests/t
 git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
 fix: compute fund-flow factor from fetched data
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+Co-Authored-By: SuLi <3508137206@qq.com>
 '@
 ```
 
@@ -258,7 +258,7 @@ git -C "D:/AI-Finance/AI--FINANCE-v1.4" add backend/api/quant.py tests/test_quan
 git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
 fix: degrade quant list endpoints when Jince is offline
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+Co-Authored-By: SuLi <3508137206@qq.com>
 '@
 ```
 
@@ -312,7 +312,7 @@ git -C "D:/AI-Finance/AI--FINANCE-v1.4" add apps/web/src/components/Workbench.ts
 git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
 fix: show degraded fund-flow state in workbench
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+Co-Authored-By: SuLi <3508137206@qq.com>
 '@
 ```
 
@@ -440,7 +440,7 @@ git -C "D:/AI-Finance/AI--FINANCE-v1.4" add apps/web/src/components/ReportGenera
 git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
 fix: improve report factor summaries and navigation
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+Co-Authored-By: SuLi <3508137206@qq.com>
 '@
 ```
 
@@ -521,7 +521,7 @@ git -C "D:/AI-Finance/AI--FINANCE-v1.4" add apps/web/src/App.tsx apps/web/src/co
 git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
 fix: label demo data and remove broken noise asset
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+Co-Authored-By: SuLi <3508137206@qq.com>
 '@
 ```
 
