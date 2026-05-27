@@ -67,7 +67,7 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "momentum": 0.15,
 }
 
-FUND_FLOW_FACTOR_TIMEOUT_SECONDS = 3.0
+FUND_FLOW_FACTOR_TIMEOUT_SECONDS = 6.0
 
 
 def _call_with_timeout(fn, timeout: float):

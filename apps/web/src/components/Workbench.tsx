@@ -322,6 +322,7 @@ const formatVolume = (value: number) => {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const delay = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
 
 const parseTimeMinutes = (date: string) => {
   const match = String(date || '').match(/(\d{2}):(\d{2})/);
@@ -779,7 +780,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
       }
     }
 
-    async function loadFundFlow() {
+    async function loadFundFlow(attempt = 0): Promise<void> {
       const result = await api.fundFlow(symbol, 30, { signal: controller.signal });
       if (!isCurrent()) return;
       if (result.success && result.data) {
@@ -787,6 +788,11 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
         const records = Array.isArray(result.data.records) ? result.data.records as Record<string, unknown>[] : [];
         const latestRecord = records[records.length - 1] || {};
         const degraded = Boolean(result.data.degraded);
+        if (degraded && attempt < 1) {
+          await delay(1200);
+          if (isCurrent()) await loadFundFlow(attempt + 1);
+          return;
+        }
         const mainValue = summary.last_main_yi ?? summary.main_total_yi ?? latestRecord.main_net_yi;
         const superValue = summary.super_total_yi ?? latestRecord.super_net_yi;
         const largeValue = summary.large_total_yi ?? latestRecord.large_net_yi;
@@ -806,10 +812,20 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
       }
     }
 
-    async function loadFactors() {
+    async function loadFactors(afterFundFlow?: Promise<void>, attempt = 0): Promise<void> {
+      await afterFundFlow?.catch(() => undefined);
+      if (!isCurrent()) return;
       const result = await api.factors(symbol, stockName, 60, { signal: controller.signal });
       if (!isCurrent()) return;
       if (result.success && result.data) {
+        const degradedInputs = Array.isArray(result.data.degraded_inputs) ? result.data.degraded_inputs : [];
+        const missingDimensions = Array.isArray(result.data.missing_dimensions) ? result.data.missing_dimensions : [];
+        const fundFlowUnavailable = degradedInputs.includes('fund_flow') || missingDimensions.includes('fund_flow');
+        if (fundFlowUnavailable && attempt < 1) {
+          await delay(1200);
+          if (isCurrent()) await loadFactors(undefined, attempt + 1);
+          return;
+        }
         setFactorPanel(buildFactorPanel(result.data));
       } else {
         setFactorPanel({
@@ -822,8 +838,9 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
     void loadFundamentals();
     void loadNews();
-    void loadFundFlow();
-    void loadFactors();
+    const fundFlowPromise = loadFundFlow();
+    void fundFlowPromise;
+    void loadFactors(fundFlowPromise);
     setMessages([
       {
         id: `${symbol}-system`,

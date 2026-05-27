@@ -43,6 +43,15 @@ load_dotenv(ENV_FILE)
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_PROVIDER_MODELS = {
+    "deepseek": "deepseek-chat",
+    "kimi": "moonshot-v1-32k",
+    "claude": "claude-sonnet-4-5",
+    "gpt": "gpt-5.2",
+    "mimo": "mimo-v2.5-pro",
+    "sensenova": "deepseek-v4-flash",
+}
+
 
 # ============== Provider 配置加载 ==============
 
@@ -140,6 +149,8 @@ def load_providers(config_path: Optional[str] = None) -> Dict[str, Any]:
 
 # 加载 Provider 配置（如果存在）
 _PROVIDER_CONFIG = load_providers()
+_PERSISTED_PROVIDERS_SYNCED = False
+_PERSISTED_PROVIDERS_SYNCING = False
 
 
 # ============== 供应商配置（向后兼容）=============
@@ -201,6 +212,41 @@ if _PROVIDER_CONFIG:
             print(f"[Provider] 已加载: {prov_id} -> {cfg['base_url']}")
 
 
+def _sync_persisted_providers_once() -> None:
+    """Load providers saved via the settings UI after a backend restart."""
+    global _PERSISTED_PROVIDERS_SYNCED, _PERSISTED_PROVIDERS_SYNCING
+    if _PERSISTED_PROVIDERS_SYNCED or _PERSISTED_PROVIDERS_SYNCING:
+        return
+    _PERSISTED_PROVIDERS_SYNCING = True
+    try:
+        from backend.settings_store import get_provider, list_providers
+
+        for public_provider in list_providers():
+            if public_provider.get("enabled") is False:
+                continue
+            provider_id = str(public_provider.get("id") or "").strip()
+            if not provider_id:
+                continue
+            full_provider = get_provider(provider_id)
+            if not full_provider:
+                continue
+            api_key = full_provider.get("api_key") or ""
+            base_url = normalize_openai_base_url(full_provider.get("base_url") or "")
+            if not api_key or not base_url:
+                continue
+            VENDORS[provider_id] = {
+                "api_key": api_key,
+                "base_url": base_url,
+                "supports_json_mode": True,
+                "label": full_provider.get("name") or provider_id,
+            }
+    except Exception as exc:
+        logger.debug("failed to sync persisted providers: %s", exc)
+    finally:
+        _PERSISTED_PROVIDERS_SYNCING = False
+        _PERSISTED_PROVIDERS_SYNCED = True
+
+
 # ============== 客户端管理 ==============
 
 
@@ -211,6 +257,7 @@ def get_vendor_config(
     获取供应商配置。
     如果提供了 api_key/base_url，则创建临时配置（细粒度 Key / 自定义 OpenAI-compatible Base URL）。
     """
+    _sync_persisted_providers_once()
     base = VENDORS.get(vendor) or VENDORS.get("deepseek")
     if not base:
         return None
@@ -226,6 +273,40 @@ def get_vendor_config(
             "base_url": normalized_base_url,
         }
     return base
+
+
+def get_configured_provider(preferred: Optional[str] = None) -> tuple[str, str]:
+    """Return a configured provider/model, preferring explicit and env defaults."""
+    _sync_persisted_providers_once()
+    candidates = [
+        preferred,
+        os.getenv("AI_CHAT_PROVIDER"),
+        os.getenv("DEFAULT_LLM_PROVIDER"),
+        "deepseek",
+        "sensenova",
+        "kimi",
+        "gpt",
+        "claude",
+        "mimo",
+    ]
+    seen: set[str] = set()
+    for candidate in candidates:
+        provider = (candidate or "").strip()
+        if not provider or provider in seen:
+            continue
+        seen.add(provider)
+        cfg = VENDORS.get(provider)
+        if not cfg or not cfg.get("api_key") or not cfg.get("base_url"):
+            continue
+        model = (
+            os.getenv("AI_CHAT_MODEL")
+            if provider == (os.getenv("AI_CHAT_PROVIDER") or "").strip()
+            else ""
+        )
+        model = model or DEFAULT_PROVIDER_MODELS.get(provider) or "deepseek-chat"
+        return provider, model
+    fallback = (preferred or os.getenv("AI_CHAT_PROVIDER") or "deepseek").strip()
+    return fallback, DEFAULT_PROVIDER_MODELS.get(fallback, "deepseek-chat")
 
 
 def create_client(

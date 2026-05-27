@@ -511,6 +511,8 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
                       <button
                         key={sec.id}
                         onClick={() => scrollToSection(sec.id)}
+                        title={`跳转到${sec.title}`}
+                        aria-label={`跳转到${sec.title}`}
                         className={cn(
                           "w-full text-left p-2.5 rounded-lg text-xs leading-normal transition-all cursor-pointer font-sans limit-text-1",
                           activeSectionId === sec.id 
