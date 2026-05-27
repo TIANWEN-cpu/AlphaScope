@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import logging
+import queue
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
@@ -64,6 +66,32 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "fund_flow": 0.15,
     "momentum": 0.15,
 }
+
+FUND_FLOW_FACTOR_TIMEOUT_SECONDS = 3.0
+
+
+def _call_with_timeout(fn, timeout: float):
+    """Run a blocking factor input provider without stalling the whole report."""
+    result_queue: queue.Queue[tuple[bool, object]] = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            result_queue.put((True, fn()), block=False)
+        except Exception as exc:
+            try:
+                result_queue.put((False, exc), block=False)
+            except queue.Full:
+                pass
+
+    thread = threading.Thread(target=worker, name="factor-provider", daemon=True)
+    thread.start()
+    try:
+        ok, payload = result_queue.get(timeout=timeout)
+    except queue.Empty as exc:
+        raise TimeoutError("factor provider timed out") from exc
+    if ok:
+        return payload
+    raise payload
 
 
 @dataclass
@@ -348,7 +376,10 @@ class FactorGenerator:
         try:
             from backend.fund_flow import fetch_individual_fund_flow, summarize_fund_flow
 
-            df = fetch_individual_fund_flow(symbol, days=5)
+            df = _call_with_timeout(
+                lambda: fetch_individual_fund_flow(symbol, days=5),
+                FUND_FLOW_FACTOR_TIMEOUT_SECONDS,
+            )
             if df is None or len(df) == 0:
                 report.degraded_inputs.append("fund_flow")
                 report.missing_dimensions.append("fund_flow")
