@@ -21,7 +21,9 @@ from typing import Dict, Any, Optional
 from backend.project_paths import CACHE_DIR
 
 FUND_FLOW_CACHE_DIR = CACHE_DIR / "fund_flow"
-EASTMONEY_FUND_FLOW_URL = "http://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
+EASTMONEY_FUND_FLOW_URL = (
+    "http://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
+)
 EASTMONEY_FUND_FLOW_TIMEOUT = (2.0, 6.0)
 EASTMONEY_HEADERS = {
     "Accept": "application/json,text/plain,*/*",
@@ -135,7 +137,12 @@ def _read_flow_cache(kind: str, key: str, days: int) -> Optional[pd.DataFrame]:
 def _eastmoney_get(url: str, params: dict[str, str]):
     session = requests.Session()
     session.trust_env = False
-    return session.get(url, params=params, headers=EASTMONEY_HEADERS, timeout=EASTMONEY_FUND_FLOW_TIMEOUT)
+    return session.get(
+        url,
+        params=params,
+        headers=EASTMONEY_HEADERS,
+        timeout=EASTMONEY_FUND_FLOW_TIMEOUT,
+    )
 
 
 def _fetch_individual_fund_flow_eastmoney(symbol: str) -> Optional[pd.DataFrame]:

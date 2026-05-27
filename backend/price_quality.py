@@ -81,11 +81,17 @@ def filter_incompatible_price_bars(
             if pos < len(indexed) - 1
             else 0.0
         )
-        prev_bad = prev_close > 0 and _ratio_too_large(close, prev_close, max_adjacent_ratio)
-        next_bad = next_close > 0 and _ratio_too_large(close, next_close, max_adjacent_ratio)
+        prev_bad = prev_close > 0 and _ratio_too_large(
+            close, prev_close, max_adjacent_ratio
+        )
+        next_bad = next_close > 0 and _ratio_too_large(
+            close, next_close, max_adjacent_ratio
+        )
 
-        if (prev_bad and next_bad) or (pos == 0 and next_bad) or (
-            pos == len(indexed) - 1 and prev_bad
+        if (
+            (prev_bad and next_bad)
+            or (pos == 0 and next_bad)
+            or (pos == len(indexed) - 1 and prev_bad)
         ):
             drop_indexes.add(original_index)
 

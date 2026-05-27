@@ -32,7 +32,9 @@ def client():
 
 @pytest.mark.anyio
 async def test_fund_flow_timeout_returns_degraded_success(client):
-    with patch("backend.api.fund_flow._call_with_timeout", side_effect=TimeoutError("slow")):
+    with patch(
+        "backend.api.fund_flow._call_with_timeout", side_effect=TimeoutError("slow")
+    ):
         resp = await client.get("/api/fund-flow/600519?days=30")
 
     assert resp.status_code == 200
@@ -60,7 +62,10 @@ def test_eastmoney_individual_fund_flow_parses_standard_columns(tmp_path):
 
     with (
         patch.object(fund_flow, "FUND_FLOW_CACHE_DIR", tmp_path),
-        patch("backend.fund_flow._eastmoney_get", return_value=FakeEastmoneyResponse(payload)) as mock_get,
+        patch(
+            "backend.fund_flow._eastmoney_get",
+            return_value=FakeEastmoneyResponse(payload),
+        ) as mock_get,
         patch("backend.fund_flow.ak.stock_individual_fund_flow") as mock_ak,
     ):
         df = fund_flow.fetch_individual_fund_flow("600519", days=1)
@@ -96,14 +101,20 @@ async def test_fund_flow_uses_cached_records_when_provider_empty(client, tmp_pat
 
     with (
         patch.object(fund_flow, "FUND_FLOW_CACHE_DIR", tmp_path),
-        patch("backend.fund_flow._fetch_individual_fund_flow_eastmoney", return_value=fresh_df),
+        patch(
+            "backend.fund_flow._fetch_individual_fund_flow_eastmoney",
+            return_value=fresh_df,
+        ),
     ):
         seeded = fund_flow.fetch_individual_fund_flow("600519", days=30)
     assert seeded is not None
 
     with (
         patch.object(fund_flow, "FUND_FLOW_CACHE_DIR", tmp_path),
-        patch("backend.fund_flow._fetch_individual_fund_flow_eastmoney", return_value=pd.DataFrame()),
+        patch(
+            "backend.fund_flow._fetch_individual_fund_flow_eastmoney",
+            return_value=pd.DataFrame(),
+        ),
     ):
         resp = await client.get("/api/fund-flow/600519?days=30")
 

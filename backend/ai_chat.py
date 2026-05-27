@@ -283,7 +283,11 @@ def send_message(session: ChatSession, user_msg: str) -> ChatSession:
             )
             # Streamlit 热重载时 call_llm 可能仍指向旧函数签名，不接受 api_key。
             # 用签名检查兼容旧函数，避免 TypeError 字符串匹配掩盖真实错误。
-            key_override = (getattr(session, "api_key", "") or None) if (vd, md) == primary else None
+            key_override = (
+                (getattr(session, "api_key", "") or None)
+                if (vd, md) == primary
+                else None
+            )
             reply = _call_llm_compat(payload, api_key=key_override)
             if reply and reply.strip():
                 if (vd, md) != primary:

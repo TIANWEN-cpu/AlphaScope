@@ -71,9 +71,15 @@ async def list_announcements(
             "source": "local_store+provider_registry",
             "source_status": source_status,
             "related_news": related_news,
-            "fallback_sources": ["local_announcements", "provider_registry", "local_news"],
+            "fallback_sources": [
+                "local_announcements",
+                "provider_registry",
+                "local_news",
+            ],
         },
-        error="No announcements available from configured sources" if degraded else None,
+        error="No announcements available from configured sources"
+        if degraded
+        else None,
         error_code="ANNOUNCEMENTS_DEGRADED" if degraded else None,
     )
 

@@ -115,7 +115,8 @@ class TestQuantStrategies:
         data = resp.json()
         assert data["success"] is True
         assert data["error_code"] == "JINCE_DISCONNECTED"
-        assert data["data"]["strategies"] == []
+        names = [strategy["name"] for strategy in data["data"]["strategies"]]
+        assert "macd_momentum" in names
         assert data["data"]["degraded"] is True
         assert data["data"]["source_status"] == "unavailable"
 
@@ -131,7 +132,8 @@ class TestQuantStrategies:
         data = resp.json()
         assert data["success"] is True
         assert data["error_code"] == "JINCE_HTTP_ERROR"
-        assert data["data"]["strategies"] == []
+        names = [strategy["name"] for strategy in data["data"]["strategies"]]
+        assert "macd_momentum" in names
         assert data["data"]["degraded"] is True
         assert data["data"]["source_status"] == "unavailable"
 

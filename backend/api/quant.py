@@ -123,7 +123,10 @@ async def list_strategies():
             data={"strategies": [s.model_dump() for s in strategies]},
         )
     except JinceError as e:
-        return _jince_failure_response(e, data={"strategies": []}, degraded_success=True)
+        fallback_strategies = _builtin_strategy_data()
+        return _jince_failure_response(
+            e, data={"strategies": fallback_strategies}, degraded_success=True
+        )
 
 
 @router.get("/strategies/{strategy_name}")

@@ -66,6 +66,8 @@ def summarize_with_chairman(
                 api_key=key_override,
             )
         except Exception as e:
-            last = f"主席总结生成失败 ({VENDORS.get(vd, {}).get('label', vd)}/{md}): {e}"
+            last = (
+                f"主席总结生成失败 ({VENDORS.get(vd, {}).get('label', vd)}/{md}): {e}"
+            )
             continue
     return last

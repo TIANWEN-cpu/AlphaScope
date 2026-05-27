@@ -447,7 +447,9 @@ async def test_get_latest_price_prefers_daily_bar(client):
         "frequency": "1mo",
     }
     with (
-        patch("backend.price_store.get_prices", return_value=[daily]) as mock_get_prices,
+        patch(
+            "backend.price_store.get_prices", return_value=[daily]
+        ) as mock_get_prices,
         patch("backend.price_store.get_latest_price", return_value=monthly),
     ):
         resp = await client.get("/api/prices/600519/latest")
