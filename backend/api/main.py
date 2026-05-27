@@ -83,6 +83,7 @@ if HAS_FASTAPI:
     from backend.api.funds import router as funds_router
     from backend.api.portfolio_new import router as portfolio_router
     from backend.api.report_gen import router as report_gen_router
+    from backend.api.stocks import router as stocks_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -102,6 +103,7 @@ if HAS_FASTAPI:
     app.include_router(funds_router)
     app.include_router(portfolio_router)
     app.include_router(report_gen_router)
+    app.include_router(stocks_router)
 
     # ============== 全局错误处理 ==============
 
@@ -188,11 +190,21 @@ if HAS_FASTAPI:
         from backend.storage.db import Database
 
         store = ConversationStore(db=Database())
+        provider = ""
+        model = ""
+        try:
+            from backend.models.provider_gateway import get_configured_provider
+
+            provider, model = get_configured_provider()
+        except Exception:
+            provider, model = "deepseek", "deepseek-chat"
         conv_id = store.create_conversation(
             title=req.title,
             stock_symbol=req.stock_symbol or "",
             stock_name=req.stock_name or "",
             mode=req.mode,
+            provider=provider,
+            model=model,
         )
         return ApiResponse(
             success=True,

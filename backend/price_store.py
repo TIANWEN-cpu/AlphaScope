@@ -127,7 +127,7 @@ def save_price_bar(bar: dict) -> None:
             bar.get("turnover", 0),
             bar.get("amplitude", 0),
             bar.get("change_pct", 0),
-            bar.get("adjust", "hfq"),
+            bar.get("adjust", ""),
             bar.get("source", "akshare"),
             bar.get("fetched_at", time.time()),
         ),
@@ -160,7 +160,7 @@ def save_price_bars(bars: list[dict]) -> int:
                 bar.get("turnover", 0),
                 bar.get("amplitude", 0),
                 bar.get("change_pct", 0),
-                bar.get("adjust", "hfq"),
+                bar.get("adjust", ""),
                 bar.get("source", "akshare"),
                 bar.get("fetched_at", time.time()),
             ),
@@ -176,6 +176,7 @@ def get_prices(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     limit: int = 250,
+    include_incompatible: bool = False,
 ) -> list[dict[str, Any]]:
     """查询 K 线数据。"""
     conn = _get_conn()
@@ -196,13 +197,32 @@ def get_prices(
         f"SELECT * FROM price_bars WHERE {where} ORDER BY date DESC LIMIT ?",
         params,
     ).fetchall()
-    return [_row_to_bar(r) for r in rows]
+    bars = [_row_to_bar(r) for r in rows]
+    if include_incompatible or frequency == "intraday":
+        return bars
+
+    from backend.price_quality import filter_incompatible_price_bars
+
+    return filter_incompatible_price_bars(bars)
 
 
 def get_latest_price(symbol: str) -> Optional[dict[str, Any]]:
     """获取最新一条 K 线。"""
     conn = _get_conn()
     sym = normalize_symbol(symbol)
+    rows = conn.execute(
+        "SELECT * FROM price_bars WHERE symbol=? AND frequency='1d' "
+        "ORDER BY date DESC LIMIT 20",
+        (sym,),
+    ).fetchall()
+    bars = [_row_to_bar(row) for row in rows]
+    if bars:
+        from backend.price_quality import filter_incompatible_price_bars
+
+        filtered = filter_incompatible_price_bars(bars)
+        if filtered:
+            return filtered[0]
+
     row = conn.execute(
         "SELECT * FROM price_bars WHERE symbol=? ORDER BY date DESC LIMIT 1",
         (sym,),
@@ -240,7 +260,7 @@ def _row_to_bar(row) -> dict[str, Any]:
         "turnover": row["turnover"] or 0,
         "amplitude": row["amplitude"] or 0,
         "change_pct": row["change_pct"] or 0,
-        "adjust": row["adjust"] or "hfq",
+        "adjust": row["adjust"] or "",
         "source": row["source"] or "akshare",
         "fetched_at": row["fetched_at"] or 0,
     }

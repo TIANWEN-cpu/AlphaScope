@@ -8,9 +8,43 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+import json
+import re
+import time
+from datetime import datetime
+
 import akshare as ak
 import pandas as pd
+import requests
 from typing import Dict, Any, Optional
+
+from backend.project_paths import CACHE_DIR
+
+FUND_FLOW_CACHE_DIR = CACHE_DIR / "fund_flow"
+EASTMONEY_FUND_FLOW_URL = "http://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
+EASTMONEY_FUND_FLOW_TIMEOUT = (2.0, 6.0)
+EASTMONEY_HEADERS = {
+    "Accept": "application/json,text/plain,*/*",
+    "Referer": "https://quote.eastmoney.com/",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+    ),
+}
+FLOW_NUMERIC_COLUMNS = [
+    "主力净流入-净额",
+    "小单净流入-净额",
+    "中单净流入-净额",
+    "大单净流入-净额",
+    "超大单净流入-净额",
+    "主力净流入-净占比",
+    "小单净流入-净占比",
+    "中单净流入-净占比",
+    "大单净流入-净占比",
+    "超大单净流入-净占比",
+    "收盘价",
+    "涨跌幅",
+]
 
 
 def infer_market(symbol: str) -> str:
@@ -31,15 +65,147 @@ def _safe(fn, *args, **kwargs):
         return None
 
 
-def fetch_individual_fund_flow(symbol: str, days: int = 30) -> Optional[pd.DataFrame]:
-    """个股每日资金流向（akshare 默认返回近 120 日）"""
-    market = infer_market(symbol)
-    df = _safe(ak.stock_individual_fund_flow, stock=symbol, market=market)
-    if df is None or len(df) == 0:
-        return None
+def _cache_key(value: str) -> str:
+    return re.sub(r"[^0-9A-Za-z_.-]+", "_", str(value or "").strip()) or "unknown"
+
+
+def _cache_path(kind: str, key: str):
+    return FUND_FLOW_CACHE_DIR / f"{kind}_{_cache_key(key)}.json"
+
+
+def _symbol_code(symbol: str) -> str:
+    match = re.search(r"\d{6}", str(symbol or ""))
+    return match.group(0) if match else str(symbol or "").strip()
+
+
+def _normalize_flow_frame(df: pd.DataFrame, days: int) -> pd.DataFrame:
     df = df.copy()
-    df["日期"] = pd.to_datetime(df["日期"])
-    df = df.sort_values("日期").tail(days).reset_index(drop=True)
+    if "日期" in df.columns:
+        df["日期"] = pd.to_datetime(df["日期"], errors="coerce")
+        df = df.sort_values("日期")
+    return df.tail(days).reset_index(drop=True)
+
+
+def _write_flow_cache(kind: str, key: str, df: pd.DataFrame) -> None:
+    if df is None or len(df) == 0:
+        return
+    try:
+        out = df.copy()
+        for col in out.columns:
+            if pd.api.types.is_datetime64_any_dtype(out[col]):
+                out[col] = out[col].dt.strftime("%Y-%m-%d")
+        out = out.astype(object).where(pd.notnull(out), None)
+        payload = {
+            "saved_at": datetime.now().isoformat(),
+            "source": getattr(df, "attrs", {}).get("source")
+            or ("akshare" if kind == "market" else "eastmoney"),
+            "columns": list(out.columns),
+            "records": out.to_dict(orient="records"),
+        }
+        FUND_FLOW_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _cache_path(kind, key).write_text(
+            json.dumps(payload, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _read_flow_cache(kind: str, key: str, days: int) -> Optional[pd.DataFrame]:
+    try:
+        path = _cache_path(kind, key)
+        if not path.exists():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        records = payload.get("records") or []
+        if not records:
+            return None
+        df = pd.DataFrame(records, columns=payload.get("columns") or None)
+        df = _normalize_flow_frame(df, days)
+        df.attrs["source"] = payload.get("source") or "cache"
+        df.attrs["degraded"] = True
+        df.attrs["source_status"] = "cache"
+        df.attrs["error"] = "Using cached fund-flow data; provider unavailable"
+        df.attrs["cached_at"] = payload.get("saved_at", "")
+        return df
+    except Exception:
+        return None
+
+
+def _eastmoney_get(url: str, params: dict[str, str]):
+    session = requests.Session()
+    session.trust_env = False
+    return session.get(url, params=params, headers=EASTMONEY_HEADERS, timeout=EASTMONEY_FUND_FLOW_TIMEOUT)
+
+
+def _fetch_individual_fund_flow_eastmoney(symbol: str) -> Optional[pd.DataFrame]:
+    """Fetch individual fund flow directly from Eastmoney with bounded network time."""
+
+    code = _symbol_code(symbol)
+    market = infer_market(code)
+    market_map = {"sh": "1", "sz": "0", "bj": "0"}
+    params = {
+        "lmt": "0",
+        "klt": "101",
+        "secid": f"{market_map.get(market, '1')}.{code}",
+        "fields1": "f1,f2,f3,f7",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65",
+        "ut": "b2884a393a59ad64002292a3e90d46a5",
+        "_": str(int(time.time() * 1000)),
+    }
+    resp = _eastmoney_get(EASTMONEY_FUND_FLOW_URL, params)
+    resp.raise_for_status()
+    payload = resp.json()
+    klines = (payload.get("data") or {}).get("klines") or []
+    if not klines:
+        return None
+
+    rows = []
+    for line in klines:
+        parts = str(line).split(",")
+        if len(parts) < 13:
+            continue
+        rows.append(
+            {
+                "日期": parts[0],
+                "主力净流入-净额": parts[1],
+                "小单净流入-净额": parts[2],
+                "中单净流入-净额": parts[3],
+                "大单净流入-净额": parts[4],
+                "超大单净流入-净额": parts[5],
+                "主力净流入-净占比": parts[6],
+                "小单净流入-净占比": parts[7],
+                "中单净流入-净占比": parts[8],
+                "大单净流入-净占比": parts[9],
+                "超大单净流入-净占比": parts[10],
+                "收盘价": parts[11],
+                "涨跌幅": parts[12],
+            }
+        )
+    if not rows:
+        return None
+
+    df = pd.DataFrame(rows)
+    df["日期"] = pd.to_datetime(df["日期"], errors="coerce")
+    for col in FLOW_NUMERIC_COLUMNS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["日期"])
+    if len(df) == 0:
+        return None
+    df.attrs["source"] = "eastmoney"
+    return df
+
+
+def fetch_individual_fund_flow(symbol: str, days: int = 30) -> Optional[pd.DataFrame]:
+    """个股每日资金流向（东方财富 HTTP 源，失败时读取本地缓存）"""
+    code = _symbol_code(symbol)
+    df = _safe(_fetch_individual_fund_flow_eastmoney, code)
+    if df is None or len(df) == 0:
+        return _read_flow_cache("individual", code, days)
+    df = _normalize_flow_frame(df, days)
+    df.attrs["source"] = getattr(df, "attrs", {}).get("source") or "eastmoney"
+    _write_flow_cache("individual", code, df)
     return df
 
 
@@ -47,10 +213,10 @@ def fetch_market_fund_flow(days: int = 30) -> Optional[pd.DataFrame]:
     """大盘资金流向"""
     df = _safe(ak.stock_market_fund_flow)
     if df is None or len(df) == 0:
-        return None
-    df = df.copy()
-    df["日期"] = pd.to_datetime(df["日期"])
-    df = df.sort_values("日期").tail(days).reset_index(drop=True)
+        return _read_flow_cache("market", "overview", days)
+    df = _normalize_flow_frame(df, days)
+    df.attrs["source"] = getattr(df, "attrs", {}).get("source") or "akshare"
+    _write_flow_cache("market", "overview", df)
     return df
 
 

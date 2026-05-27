@@ -268,20 +268,56 @@ async def test_normalize_endpoint(client):
 @pytest.mark.anyio
 async def test_get_prices(client):
     """GET /api/prices/{symbol}"""
-    with patch("backend.price_store.get_prices", return_value=[]):
+    with (
+        patch("backend.price_store.get_prices", return_value=[]),
+        patch("backend.api.prices.fetch_prices") as mock_fetch,
+    ):
         resp = await client.get("/api/prices/600519")
     assert resp.status_code == 200
     assert resp.json()["success"] is True
     assert resp.json()["data"]["total"] == 0
+    mock_fetch.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_fetch_prices_passes_symbol_to_provider(client):
+    """POST /api/prices/{symbol}/fetch 使用 symbol 参数调用 Provider"""
+    mock_registry = MagicMock()
+    mock_registry.get.return_value = [
+        {
+            "symbol": "600519",
+            "date": "2026-05-25",
+            "open": 1287,
+            "high": 1304,
+            "low": 1277,
+            "close": 1285,
+        }
+    ]
+    with (
+        patch("backend.providers.registry.get_registry", return_value=mock_registry),
+        patch("backend.price_store.save_price_bars", return_value=1),
+    ):
+        resp = await client.post("/api/prices/600519/fetch?days=30")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+    kwargs = mock_registry.get.call_args.kwargs
+    assert kwargs["symbol"] == "600519"
+    assert kwargs["adjust"] == ""
+    assert "query" not in kwargs
 
 
 @pytest.mark.anyio
 async def test_get_latest_price_not_found(client):
     """GET /api/prices/{symbol}/latest 无数据"""
-    with patch("backend.price_store.get_latest_price", return_value=None):
+    with (
+        patch("backend.price_store.get_prices", return_value=[]),
+        patch("backend.price_store.get_latest_price", return_value=None),
+        patch("backend.api.prices.fetch_prices") as mock_fetch,
+    ):
         resp = await client.get("/api/prices/600519/latest")
     assert resp.status_code == 200
     assert resp.json()["success"] is False
+    mock_fetch.assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -296,11 +332,16 @@ async def test_get_latest_price_found(client):
         "close": 103,
         "volume": 1000,
     }
-    with patch("backend.price_store.get_latest_price", return_value=mock_bar):
+    with (
+        patch("backend.price_store.get_prices", return_value=[mock_bar]),
+        patch("backend.price_store.get_latest_price", return_value=mock_bar),
+        patch("backend.api.prices.fetch_prices") as mock_fetch,
+    ):
         resp = await client.get("/api/prices/600519/latest")
     assert resp.status_code == 200
     assert resp.json()["success"] is True
     assert resp.json()["data"]["close"] == 103
+    mock_fetch.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -310,3 +351,111 @@ async def test_fetch_prices_invalid_symbol(client):
         resp = await client.post("/api/prices/INVALID/fetch")
     assert resp.status_code == 200
     assert resp.json()["success"] is False
+
+
+@pytest.mark.anyio
+async def test_get_prices_weekly_aggregates_daily_bars(client):
+    """GET /api/prices/{symbol}?frequency=1w 返回按周聚合的 K 线"""
+    daily = [
+        {
+            "symbol": "600519",
+            "date": "2026-05-04",
+            "open": 10,
+            "high": 13,
+            "low": 9,
+            "close": 12,
+            "volume": 100,
+            "amount": 1000,
+        },
+        {
+            "symbol": "600519",
+            "date": "2026-05-05",
+            "open": 12,
+            "high": 15,
+            "low": 11,
+            "close": 14,
+            "volume": 200,
+            "amount": 2000,
+        },
+    ]
+    with patch("backend.price_store.get_prices", return_value=daily):
+        resp = await client.get("/api/prices/600519?frequency=1w&limit=5")
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["frequency"] == "1w"
+    assert data["total"] == 1
+    assert data["bars"][0]["open"] == 10
+    assert data["bars"][0]["high"] == 15
+    assert data["bars"][0]["low"] == 9
+    assert data["bars"][0]["close"] == 14
+
+
+@pytest.mark.anyio
+async def test_get_prices_intraday_uses_intraday_fetcher(client):
+    """GET /api/prices/{symbol}?frequency=intraday 不用日线冒充分时"""
+    intraday = [
+        {
+            "symbol": "600519",
+            "date": "2026-05-25 09:31",
+            "open": 10,
+            "high": 10.2,
+            "low": 9.9,
+            "close": 10.1,
+            "volume": 100,
+            "frequency": "intraday",
+        }
+    ]
+    with (
+        patch(
+            "backend.price_periods.fetch_intraday_prices", return_value=intraday
+        ) as mock_fetch_intraday,
+        patch("backend.price_store.get_prices") as mock_get_prices,
+    ):
+        resp = await client.get("/api/prices/600519?frequency=intraday&limit=240")
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["frequency"] == "intraday"
+    assert data["total"] == 1
+    assert data["bars"][0]["date"] == "2026-05-25 09:31"
+    mock_fetch_intraday.assert_called_once()
+    mock_get_prices.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_get_latest_price_prefers_daily_bar(client):
+    """GET /api/prices/{symbol}/latest 不用周/月聚合数据污染顶部行情"""
+    daily = {
+        "symbol": "600519",
+        "date": "2026-05-25",
+        "open": 10,
+        "high": 11,
+        "low": 9,
+        "close": 10.5,
+        "change_pct": 5.0,
+        "frequency": "1d",
+    }
+    monthly = {
+        "symbol": "600519",
+        "date": "2026-05-25",
+        "open": 4,
+        "high": 11,
+        "low": 4,
+        "close": 10.5,
+        "change_pct": 160.0,
+        "frequency": "1mo",
+    }
+    with (
+        patch("backend.price_store.get_prices", return_value=[daily]) as mock_get_prices,
+        patch("backend.price_store.get_latest_price", return_value=monthly),
+    ):
+        resp = await client.get("/api/prices/600519/latest")
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["frequency"] == "1d"
+    assert data["change_pct"] == 5.0
+    mock_get_prices.assert_called_once_with(
+        symbol="600519", frequency="1d", limit=20, include_incompatible=True
+    )

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Newspaper, 
@@ -42,6 +42,8 @@ interface NewsAggregatorProps {
   symbol?: string;
   stockName?: string;
 }
+
+type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 
 const categoryFromEventType = (eventType?: string): NewsItem['category'] => {
   const value = (eventType || '').toLowerCase();
@@ -155,24 +157,38 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
   const [isAiExpanded, setIsAiExpanded] = useState<boolean>(true);
   const [isCalendarExpanded, setIsCalendarExpanded] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [newsState, setNewsState] = useState<LoadState>('idle');
+  const [priceState, setPriceState] = useState<LoadState>('idle');
   const [refreshTick, setRefreshTick] = useState(0);
   const [dataStatus, setDataStatus] = useState('等待同步后端资讯');
   const [latestPrice, setLatestPrice] = useState<PriceBar | null>(null);
   const [priceStatus, setPriceStatus] = useState('行情待同步');
+  const newsRequestRef = useRef(0);
+  const priceRequestRef = useRef(0);
+  const searchRequestRef = useRef(0);
+  const detailRequestRef = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
+    const requestId = newsRequestRef.current + 1;
+    newsRequestRef.current = requestId;
+    searchRequestRef.current += 1;
+    detailRequestRef.current += 1;
+    const controller = new AbortController();
+    const isCurrent = () => newsRequestRef.current === requestId && !controller.signal.aborted;
 
     async function loadNews() {
       setIsLoading(true);
+      setNewsState('loading');
+      setNews([]);
+      setSelectedArticle(null);
       setDataStatus(`正在同步 ${stockName} (${symbol}) 新闻与公告...`);
       try {
         const [newsResult, announcementResult] = await Promise.allSettled([
-          api.news(symbol, 30),
-          api.announcements(symbol, 12),
+          api.news(symbol, 30, { signal: controller.signal }),
+          api.announcements(symbol, 12, { signal: controller.signal }),
         ]);
 
-        if (cancelled) return;
+        if (!isCurrent()) return;
 
         const failures = [
           getApiFailure('新闻', newsResult),
@@ -194,9 +210,11 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
               ? `已接入 ${nextItems.length} 条后端新闻/公告；部分通道异常：${failures.join('；')}`
               : `已接入 ${nextItems.length} 条后端新闻/公告`,
           );
+          setNewsState('ready');
         } else {
           setNews([]);
           setSelectedArticle(null);
+          setNewsState(failures.length ? 'error' : 'empty');
           setDataStatus(
             failures.length
               ? `后端资讯同步失败：${failures.join('；')}`
@@ -204,41 +222,49 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
           );
         }
       } catch (error) {
-        if (!cancelled) {
+        if (isCurrent()) {
           setNews([]);
           setSelectedArticle(null);
+          setNewsState('error');
           setDataStatus(error instanceof Error ? `后端资讯同步异常：${error.message}` : '后端资讯同步异常');
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (isCurrent()) setIsLoading(false);
       }
     }
 
     loadNews();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [symbol, stockName, refreshTick]);
 
   useEffect(() => {
-    let cancelled = false;
+    const requestId = priceRequestRef.current + 1;
+    priceRequestRef.current = requestId;
+    const controller = new AbortController();
+    const isCurrent = () => priceRequestRef.current === requestId && !controller.signal.aborted;
 
     async function loadLatestPrice() {
+      setPriceState('loading');
+      setLatestPrice(null);
       setPriceStatus(`正在同步 ${stockName} (${symbol}) 最新行情...`);
-      const result = await api.latestPrice(symbol);
-      if (cancelled) return;
+      const result = await api.latestPrice(symbol, { signal: controller.signal });
+      if (!isCurrent()) return;
       if (result.success && result.data) {
         setLatestPrice(result.data);
         setPriceStatus(`行情已同步：${result.data.date || result.data.source || symbol}`);
+        setPriceState('ready');
       } else {
         setLatestPrice(null);
+        setPriceState(result.success ? 'empty' : 'error');
         setPriceStatus(result.error || `暂无 ${stockName} (${symbol}) 最新行情`);
       }
     }
 
     loadLatestPrice();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [symbol, stockName, refreshTick]);
 
@@ -248,6 +274,8 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
   };
 
   const selectArticle = async (item: NewsItem) => {
+    const requestId = detailRequestRef.current + 1;
+    detailRequestRef.current = requestId;
     setSelectedArticle(item);
     if (item.category === 'announcement') {
       setDataStatus(`已选择公告：${item.title}`);
@@ -256,6 +284,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
 
     setDataStatus(`正在加载新闻详情：${item.title}`);
     const detail = await api.newsDetail(item.id);
+    if (detailRequestRef.current !== requestId) return;
     if (detail.success && detail.data) {
       const mapped = mapNewsRecord(detail.data);
       setSelectedArticle(mapped);
@@ -267,6 +296,10 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
   };
 
   const runSearch = async () => {
+    newsRequestRef.current += 1;
+    detailRequestRef.current += 1;
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
     const query = searchQuery.trim();
     if (!query) {
       setRefreshTick(tick => tick + 1);
@@ -274,25 +307,30 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
     }
 
     setIsLoading(true);
+    setNewsState('loading');
     setDataStatus(`正在后端全文检索：${query}`);
     try {
       const result = await api.newsSearch(query, 30);
+      if (searchRequestRef.current !== requestId) return;
       if (result.success && result.data?.results?.length) {
         const nextItems = result.data.results.map(mapNewsRecord);
         setNews(nextItems);
         setSelectedArticle(nextItems[0]);
         setSelectedCategory('all');
+        setNewsState('ready');
         setDataStatus(`检索完成：${nextItems.length} 条匹配资讯`);
       } else if (result.success) {
         setNews([]);
         setSelectedArticle(null);
         setSelectedCategory('all');
+        setNewsState('empty');
         setDataStatus(`后端未检索到 "${query}" 的匹配资讯`);
       } else {
+        setNewsState(news.length ? 'ready' : 'error');
         setDataStatus(result.error || `后端全文检索失败："${query}"，当前列表未更新`);
       }
     } finally {
-      setIsLoading(false);
+      if (searchRequestRef.current === requestId) setIsLoading(false);
     }
   };
 
@@ -311,6 +349,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                           item.source.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+  const sourceCount = new Set(news.map(item => item.source).filter(Boolean)).size;
 
   return (
     <motion.div 
@@ -357,7 +396,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                   </span>
                 </>
               ) : (
-                <span className="text-neutral-500">暂无后端行情</span>
+                <span className="text-neutral-500">{priceState === 'loading' ? '正在同步行情' : '暂无后端行情'}</span>
               )}
             </span>
           </div>
@@ -380,7 +419,17 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                 <Newspaper className="w-6.5 h-6.5 text-indigo-400" />
                 数据源终端聚合
               </h2>
-              <p className="text-xs text-neutral-500 mt-1.5 font-mono">{dataStatus}</p>
+              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                <p className="text-xs text-neutral-500 font-mono">{dataStatus}</p>
+                <span className={cn(
+                  "text-[10px] font-mono px-2 py-0.5 rounded border",
+                  sourceCount > 0
+                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                    : "bg-white/[0.03] border-white/10 text-neutral-500"
+                )}>
+                  后端信源 {sourceCount}
+                </span>
+              </div>
             </div>
 
             {/* Simple Search */}
@@ -449,9 +498,13 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                   className="h-full flex flex-col justify-center items-center text-center p-8 text-neutral-500 font-mono text-xs gap-3"
                 >
                   <Filter className="w-10 h-10 text-neutral-600 animate-pulse" />
-                  {news.length === 0
-                    ? `后端暂无 ${stockName} (${symbol}) 新闻或公告。`
-                    : `未能检索到包含关键字 "${searchQuery}" 的核心公告或数据，请重置过滤项。`}
+                  {newsState === 'loading'
+                    ? `正在同步 ${stockName} (${symbol}) 新闻与公告...`
+                    : newsState === 'error'
+                      ? '后端资讯接口暂不可用，请稍后刷新重试。'
+                      : news.length === 0
+                        ? `后端暂无 ${stockName} (${symbol}) 新闻或公告。`
+                        : `未能检索到包含关键字 "${searchQuery}" 的核心公告或数据，请重置过滤项。`}
                 </motion.div>
               ) : (
                 filteredNews.map((item, idx) => {

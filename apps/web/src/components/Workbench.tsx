@@ -1,61 +1,669 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Bot, Maximize2, RefreshCw, Send, Zap, Clock, LineChart as LineChartIcon, Settings2, Sparkles, ChevronDown, ImagePlus } from 'lucide-react';
-import { ResponsiveContainer, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Cell } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
 import { api, NewsRecord, PriceBar } from '../lib/api';
 
-const generateKlineData = (points: number, basePrice: number = 1500) => {
-  let currentPrice = basePrice;
-  return Array.from({ length: points }).map((_, i) => {
-    currentPrice += (Math.random() * 20 - 10);
+type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
+type MetricTone = 'up' | 'down' | 'neutral';
+type FinanceItem = { label: string; value: string; trend: MetricTone };
+type QuantCard = { label: string; value: string; tone: MetricTone; detail: string };
+type QuantSignal = { type: string; title: string; meta: string };
+type PriceFrequency = 'intraday' | '1d' | '1w' | '1mo';
+type ChartPoint = {
+  date: string;
+  label: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  avgPrice: number | null;
+  referencePrice: number | null;
+  volume: number;
+  amount: number;
+  changePct: number;
+  ma5: number | null;
+  ma10: number | null;
+  ma20: number | null;
+  up: boolean;
+};
+type FactorPanelData = {
+  state: LoadState;
+  cards: QuantCard[];
+  counts: Array<{ label: string; value: string }>;
+  signals: QuantSignal[];
+  computedAt?: string;
+  message?: string;
+};
+
+const PERIOD_CONFIG: Record<string, { frequency: PriceFrequency; limit: number; label: string }> = {
+  分时: { frequency: 'intraday', limit: 240, label: '分时' },
+  日K: { frequency: '1d', limit: 120, label: '日K' },
+  周K: { frequency: '1w', limit: 80, label: '周K' },
+  月K: { frequency: '1mo', limit: 60, label: '月K' },
+};
+
+const getPeriodConfig = (period: string) => PERIOD_CONFIG[period] || PERIOD_CONFIG['日K'];
+
+const averageClose = (bars: PriceBar[], index: number, window: number): number | null => {
+  const start = Math.max(0, index - window + 1);
+  const slice = bars.slice(start, index + 1);
+  if (slice.length < window) return null;
+  const total = slice.reduce((sum, bar) => sum + Number(bar.close || 0), 0);
+  return slice.length ? total / slice.length : null;
+};
+
+const formatChartLabel = (date: string, frequency: PriceFrequency) => {
+  if (!date) return '';
+  if (frequency === 'intraday') return date.slice(11, 16) || date.slice(-5);
+  if (frequency === '1mo') return date.slice(0, 7);
+  return date.slice(5);
+};
+
+const toChartData = (bars: PriceBar[], frequency: PriceFrequency): ChartPoint[] => {
+  const sorted = [...bars].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const intradayReference = frequency === 'intraday'
+    ? Number(
+        sorted.find(bar => Number(bar.previous_close || 0) > 0)?.previous_close ||
+        sorted.find(bar => Number(bar.prev_close || 0) > 0)?.prev_close ||
+        sorted[0]?.open ||
+        sorted[0]?.close ||
+        0
+      )
+    : null;
+  let cumulativePriceVolume = 0;
+  let cumulativeVolume = 0;
+
+  return sorted.map((bar, index, arr) => {
+    const open = Number(bar.open || bar.close || 0);
+    const high = Number(bar.high || bar.close || 0);
+    const low = Number(bar.low || bar.close || 0);
+    const close = Number(bar.close || 0);
+    const volume = Number(bar.volume || 0);
+    if (frequency === 'intraday') {
+      const weight = volume > 0 ? volume : 1;
+      cumulativePriceVolume += close * weight;
+      cumulativeVolume += weight;
+    }
+    const referencePrice = frequency === 'intraday' && intradayReference && Number.isFinite(intradayReference)
+      ? intradayReference
+      : null;
+    const changePct = referencePrice
+      ? ((close - referencePrice) / referencePrice) * 100
+      : Number(bar.change_pct || 0);
+
     return {
-      date: `05-${String(10 + Math.floor(i / 2)).padStart(2, '0')}`,
-      ma5: currentPrice + 5,
-      ma10: currentPrice,
-      ma20: currentPrice - 10,
-      volume: 400000 + Math.random() * 800000,
-      up: Math.random() > 0.48,
+      date: String(bar.date || ''),
+      label: formatChartLabel(String(bar.date || ''), frequency) || `${index + 1}`,
+      open,
+      high,
+      low,
+      close,
+      avgPrice: frequency === 'intraday' && cumulativeVolume > 0 ? cumulativePriceVolume / cumulativeVolume : null,
+      referencePrice,
+      ma5: averageClose(arr, index, 5),
+      ma10: averageClose(arr, index, 10),
+      ma20: averageClose(arr, index, 20),
+      volume,
+      amount: Number(bar.amount || 0),
+      changePct,
+      up: close >= (referencePrice || open || close),
     };
   });
 };
 
-const periodToPoints = (period: string) => {
-  if (period === '分时') return 60;
-  if (period === '周K') return 30;
-  if (period === '月K') return 20;
-  return 40;
-};
+const EMPTY_FINANCE: FinanceItem[] = [
+  { label: '市盈率(TTM)', value: '--', trend: 'up' },
+  { label: '市净率(MRQ)', value: '--', trend: 'down' },
+  { label: '毛利率', value: '--', trend: 'up' },
+  { label: '净利润同比', value: '--', trend: 'up' },
+];
 
-const averageClose = (bars: PriceBar[], index: number, window: number) => {
-  const start = Math.max(0, index - window + 1);
-  const slice = bars.slice(start, index + 1);
-  const total = slice.reduce((sum, bar) => sum + Number(bar.close || 0), 0);
-  return slice.length ? total / slice.length : Number(bars[index]?.close || 0);
-};
+const EMPTY_FUNDS = [
+  { label: '主力净流入', value: '--', color: 'text-neutral-400' },
+  { label: '超大单', value: '--', color: 'text-neutral-400' },
+  { label: '大单', value: '--', color: 'text-neutral-400' },
+  { label: '中单', value: '--', color: 'text-neutral-400' },
+];
 
-const toChartData = (bars: PriceBar[], points = 40) => {
-  const sorted = [...bars].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  return sorted.slice(-points).map((bar, index, arr) => ({
-    date: String(bar.date || '').slice(5) || `${index + 1}`,
-    ma5: averageClose(arr, index, 5),
-    ma10: averageClose(arr, index, 10),
-    ma20: averageClose(arr, index, 20),
-    volume: Number(bar.volume || 0),
-    up: Number(bar.close || 0) >= Number(bar.open || bar.close || 0),
-    close: Number(bar.close || 0),
-  }));
+const EMPTY_FACTOR_PANEL: FactorPanelData = {
+  state: 'idle',
+  cards: [
+    { label: '综合因子', value: '--', tone: 'neutral', detail: '等待后端计算' },
+    { label: '新闻情绪', value: '--', tone: 'neutral', detail: '新闻样本待同步' },
+    { label: '资金流', value: '--', tone: 'neutral', detail: '资金流样本待同步' },
+    { label: '价格动量', value: '--', tone: 'neutral', detail: '行情样本待同步' },
+  ],
+  counts: [
+    { label: '新闻', value: '--' },
+    { label: '事件', value: '--' },
+    { label: '研报', value: '--' },
+  ],
+  signals: [],
+  message: '多因子 Alpha 模型等待后端计算...',
 };
 
 const displayNumber = (value: number, digits = 2) =>
   Number.isFinite(value) ? value.toLocaleString('zh-CN', { maximumFractionDigits: digits, minimumFractionDigits: digits }) : '--';
+
+const toFiniteNumber = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+const isUsefulNumber = (value: unknown, allowZero = false) => {
+  const num = toFiniteNumber(value);
+  if (num === null) return false;
+  return allowZero || num !== 0;
+};
+
+const formatPlainNumber = (value: unknown, digits = 2, allowZero = false) => {
+  const num = toFiniteNumber(value);
+  if (num === null || (!allowZero && num === 0)) return '--';
+  return num.toLocaleString('zh-CN', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+};
+
+const formatPercentMetric = (value: unknown, signed = false, allowZero = false) => {
+  const num = toFiniteNumber(value);
+  if (num === null || (!allowZero && num === 0)) return '--';
+  const prefix = signed && num >= 0 ? '+' : '';
+  return `${prefix}${num.toFixed(1)}%`;
+};
+
+const formatYiMetric = (value: unknown, signed = false, allowZero = false) => {
+  const num = toFiniteNumber(value);
+  if (num === null || (!allowZero && num === 0)) return '--';
+  const prefix = signed && num >= 0 ? '+' : '';
+  return `${prefix}${num.toFixed(1)}亿`;
+};
 
 const formatYi = (value: unknown) => {
   const num = Number(value || 0);
   if (!Number.isFinite(num)) return '--';
   return `${num >= 0 ? '+' : ''}${num.toFixed(1)}亿`;
 };
+
+const metricTone = (value: unknown, inverse = false): MetricTone => {
+  const num = toFiniteNumber(value);
+  if (num === null || num === 0) return 'neutral';
+  const positive = num > 0;
+  if (inverse) return positive ? 'down' : 'up';
+  return positive ? 'up' : 'down';
+};
+
+const toneTextClass = (tone: MetricTone) => cn(
+  tone === 'up' && 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]',
+  tone === 'down' && 'text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]',
+  tone === 'neutral' && 'text-neutral-300',
+);
+
+const buildFinanceItems = (data: Record<string, unknown>): FinanceItem[] => {
+  const periods = Array.isArray(data.financial_periods) ? data.financial_periods as Record<string, unknown>[] : [];
+  const latest = periods[0] || {};
+  const valuation = (data.valuation || {}) as Record<string, unknown>;
+  const score = (data.fundamental_score || {}) as Record<string, unknown>;
+
+  const candidates: Array<FinanceItem | null> = [
+    isUsefulNumber(valuation.pe ?? valuation.pe_ttm)
+      ? { label: '市盈率(TTM)', value: formatPlainNumber(valuation.pe ?? valuation.pe_ttm), trend: metricTone(valuation.pe ?? valuation.pe_ttm, true) }
+      : null,
+    isUsefulNumber(valuation.pb)
+      ? { label: '市净率(MRQ)', value: formatPlainNumber(valuation.pb), trend: metricTone(valuation.pb, true) }
+      : null,
+    isUsefulNumber(latest.revenue_yi)
+      ? { label: '营收(最新)', value: formatYiMetric(latest.revenue_yi), trend: 'neutral' }
+      : null,
+    isUsefulNumber(latest.net_profit_yi)
+      ? { label: '归母净利', value: formatYiMetric(latest.net_profit_yi), trend: metricTone(latest.net_profit_yi) }
+      : null,
+    isUsefulNumber(latest.gross_margin_pct)
+      ? { label: '毛利率', value: formatPercentMetric(latest.gross_margin_pct), trend: metricTone(latest.gross_margin_pct) }
+      : null,
+    isUsefulNumber(latest.roe_pct)
+      ? { label: 'ROE', value: formatPercentMetric(latest.roe_pct), trend: metricTone(latest.roe_pct) }
+      : null,
+    isUsefulNumber(latest.debt_ratio_pct)
+      ? { label: '资产负债率', value: formatPercentMetric(latest.debt_ratio_pct), trend: metricTone(latest.debt_ratio_pct, true) }
+      : null,
+    isUsefulNumber(latest.yoy_net_profit_pct, true)
+      ? { label: '净利润同比', value: formatPercentMetric(latest.yoy_net_profit_pct, true, true), trend: metricTone(latest.yoy_net_profit_pct) }
+      : null,
+    isUsefulNumber(latest.yoy_revenue_pct, true)
+      ? { label: '营收同比', value: formatPercentMetric(latest.yoy_revenue_pct, true, true), trend: metricTone(latest.yoy_revenue_pct) }
+      : null,
+    isUsefulNumber(score.total_score)
+      ? { label: `基本面评分${score.grade ? ` ${score.grade}` : ''}`, value: formatPlainNumber(score.total_score, 1), trend: 'neutral' }
+      : null,
+  ];
+
+  const items = candidates.filter(Boolean) as FinanceItem[];
+  return [...items, ...EMPTY_FINANCE].slice(0, 4);
+};
+
+const factorTone = (value: unknown): MetricTone => {
+  const num = toFiniteNumber(value);
+  if (num === null || Math.abs(num) < 0.05) return 'neutral';
+  return num > 0 ? 'up' : 'down';
+};
+
+const formatFactorScore = (value: unknown) => {
+  const num = toFiniteNumber(value);
+  if (num === null) return '--';
+  return `${num >= 0 ? '+' : ''}${num.toFixed(2)}`;
+};
+
+const signalLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    news: '新闻',
+    event: '公告',
+    analyst: '研报',
+    fund_flow: '资金',
+    momentum: '动量',
+  };
+  return labels[type] || '信号';
+};
+
+const formatFactorSignal = (signal: Record<string, unknown>): QuantSignal => {
+  const type = String(signal.type || '');
+  if (type === 'fund_flow') {
+    return {
+      type: signalLabel(type),
+      title: `主力净流入 ${formatYiMetric(signal.last_main_yi, true, true)}`,
+      meta: `近段合计 ${formatYiMetric(signal.main_total_yi, true, true)} / 流入 ${signal.inflow_days ?? 0} 天`,
+    };
+  }
+  if (type === 'momentum') {
+    return {
+      type: signalLabel(type),
+      title: `短期涨跌 ${formatPercentMetric(signal.short_return_pct, true, true)}`,
+      meta: `中期 ${formatPercentMetric(signal.mid_return_pct, true, true)} / 量能 ${formatPercentMetric(signal.volume_change_pct, true, true)}`,
+    };
+  }
+  const score = signal.sentiment ?? signal.score ?? signal.rating_score;
+  return {
+    type: signalLabel(type),
+    title: String(signal.title || '暂无标题'),
+    meta: score !== undefined ? `信号值 ${formatFactorScore(score)}` : String(signal.institution || signal.category || ''),
+  };
+};
+
+const buildFactorPanel = (data: Record<string, unknown>): FactorPanelData => {
+  const factors = (data.factors || {}) as Record<string, unknown>;
+  const counts = (data.sample_counts || {}) as Record<string, unknown>;
+  const signals = Array.isArray(data.signals) ? data.signals as Record<string, unknown>[] : [];
+  const degradedInputs = Array.isArray(data.degraded_inputs) ? data.degraded_inputs.map(String) : [];
+  const fundFlowDetail = degradedInputs.includes('fund_flow')
+    ? '资金流使用缓存或降级源'
+    : '主力资金近况归一化';
+  const cards: QuantCard[] = [
+    { label: '综合因子', value: formatFactorScore(factors.composite), tone: factorTone(factors.composite), detail: '加权汇总新闻、事件、研报、资金与动量' },
+    { label: '新闻情绪', value: formatFactorScore(factors.news_sentiment), tone: factorTone(factors.news_sentiment), detail: `新闻样本 ${counts.news ?? 0} 条` },
+    { label: '资金流', value: formatFactorScore(factors.fund_flow), tone: factorTone(factors.fund_flow), detail: fundFlowDetail },
+    { label: '价格动量', value: formatFactorScore(factors.momentum), tone: factorTone(factors.momentum), detail: '短中期涨跌与量能变化' },
+  ];
+
+  return {
+    state: 'ready',
+    cards,
+    counts: [
+      { label: '新闻', value: String(counts.news ?? 0) },
+      { label: '事件', value: String(counts.events ?? 0) },
+      { label: '研报', value: String(counts.reports ?? 0) },
+    ],
+    signals: signals.slice(0, 5).map(formatFactorSignal),
+    computedAt: String(data.computed_at || ''),
+    message: '因子计算完成',
+  };
+};
+
+const formatVolume = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return '--';
+  if (value >= 100000000) return `${(value / 100000000).toFixed(2)}亿`;
+  if (value >= 10000) return `${(value / 10000).toFixed(1)}万`;
+  return value.toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+};
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const delay = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
+
+const parseTimeMinutes = (date: string) => {
+  const match = String(date || '').match(/(\d{2}):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+const cnTradingMinuteOffset = (date: string) => {
+  const minutes = parseTimeMinutes(date);
+  if (minutes === null) return null;
+  const morningStart = 9 * 60 + 30;
+  const morningEnd = 11 * 60 + 30;
+  const afternoonStart = 13 * 60;
+  const afternoonEnd = 15 * 60;
+  if (minutes >= morningStart && minutes <= morningEnd) {
+    return minutes - morningStart;
+  }
+  if (minutes >= afternoonStart && minutes <= afternoonEnd) {
+    return morningEnd - morningStart + 2 + (minutes - afternoonStart);
+  }
+  return null;
+};
+
+const cnTradingMinuteTotal = 242;
+
+function MarketChart({
+  data,
+  frequency,
+  activePeriod,
+  hoveredIndex,
+  onHover,
+  onLeave,
+}: {
+  data: ChartPoint[];
+  frequency: PriceFrequency;
+  activePeriod: string;
+  hoveredIndex: number | null;
+  onHover: (index: number | null) => void;
+  onLeave: () => void;
+}) {
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  const width = 960;
+  const priceHeight = 236;
+  const volumeHeight = 64;
+  const axisHeight = 58;
+  const totalHeight = priceHeight + volumeHeight + axisHeight;
+  const pad = { top: 18, right: 54, bottom: 16, left: 12 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = priceHeight - pad.top - pad.bottom;
+  const volumeTop = priceHeight + 12;
+  const volumePlotHeight = volumeHeight - 16;
+  const volumeBaseline = volumeTop + volumePlotHeight;
+  const xAxisY = volumeBaseline + 22;
+  const xAxisTickBottom = volumeBaseline + 8;
+  const visible = data.filter(item => item.close > 0);
+
+  if (!visible.length) {
+    return null;
+  }
+
+  const priceValues = frequency === 'intraday'
+    ? visible.flatMap(item => [item.close, item.avgPrice || 0, item.referencePrice || 0]).filter(value => Number.isFinite(value) && value > 0)
+    : visible.flatMap(item => [item.high, item.low, item.ma5 || 0, item.ma10 || 0, item.ma20 || 0]).filter(value => Number.isFinite(value) && value > 0);
+  const minPrice = Math.min(...priceValues);
+  const maxPrice = Math.max(...priceValues);
+  const padding = Math.max((maxPrice - minPrice) * 0.08, maxPrice * (frequency === 'intraday' ? 0.0015 : 0.005), 0.01);
+  const yMin = minPrice - padding;
+  const yMax = maxPrice + padding;
+  const intradayOffsets = frequency === 'intraday'
+    ? visible.map(item => cnTradingMinuteOffset(item.date))
+    : [];
+  const intradayMinutes = frequency === 'intraday'
+    ? visible.map(item => parseTimeMinutes(item.date))
+    : [];
+  const hasIntradayTimeAxis = frequency === 'intraday' && intradayOffsets.some(offset => offset !== null);
+  const xStep = visible.length > 1 ? plotWidth / (visible.length - 1) : plotWidth;
+  const xFor = (index: number) => {
+    if (hasIntradayTimeAxis) {
+      const offset = intradayOffsets[index];
+      if (offset !== null && offset !== undefined) {
+        return pad.left + (offset / cnTradingMinuteTotal) * plotWidth;
+      }
+    }
+    return pad.left + index * xStep;
+  };
+  const slotCount = hasIntradayTimeAxis ? cnTradingMinuteTotal : visible.length;
+  const candleSlot = visible.length > 0 ? plotWidth / slotCount : plotWidth;
+  const candleWidth = frequency === 'intraday' ? clamp(candleSlot * 0.58, 1.4, 4.2) : clamp(candleSlot * 0.54, 3, 13);
+  const maxVolume = Math.max(...visible.map(item => item.volume || 0), 1);
+  const isHovering = pointer !== null && hoveredIndex !== null;
+  const currentIndex = isHovering && hoveredIndex < visible.length ? hoveredIndex : visible.length - 1;
+  const current = visible[currentIndex];
+
+  const yFor = (value: number) => pad.top + (yMax - value) / (yMax - yMin) * plotHeight;
+  const volumeY = (value: number) => volumeTop + volumePlotHeight - (value / maxVolume) * volumePlotHeight;
+  const startsNewIntradaySegment = (index: number) => {
+    if (!hasIntradayTimeAxis || index <= 0) return false;
+    const minute = intradayMinutes[index];
+    const previousMinute = intradayMinutes[index - 1];
+    return minute !== null && previousMinute !== null && minute - previousMinute > 8;
+  };
+  const linePath = (key: 'ma5' | 'ma10' | 'ma20' | 'close' | 'avgPrice') => {
+    let started = false;
+    return visible
+      .map((item, index) => {
+        const raw = key === 'close' ? item.close : item[key];
+        if (!raw) return '';
+        const command = started && !startsNewIntradaySegment(index) ? 'L' : 'M';
+        started = true;
+        return `${command} ${xFor(index).toFixed(2)} ${yFor(raw).toFixed(2)}`;
+      })
+      .filter(Boolean)
+      .join(' ');
+  };
+  const areaPaths = () => {
+    const segments: string[][] = [];
+    let currentSegment: string[] = [];
+    visible.forEach((item, index) => {
+      if (!item.close) return;
+      const point = `${xFor(index).toFixed(2)} ${yFor(item.close).toFixed(2)}`;
+      if (!currentSegment.length || !startsNewIntradaySegment(index)) {
+        currentSegment.push(point);
+      } else {
+        segments.push(currentSegment);
+        currentSegment = [point];
+      }
+    });
+    if (currentSegment.length) segments.push(currentSegment);
+    return segments.map((segment) => {
+      const first = segment[0].split(' ')[0];
+      const last = segment[segment.length - 1].split(' ')[0];
+      return `M ${first} ${areaBaseline} L ${segment.join(' L ')} L ${last} ${areaBaseline} Z`;
+    });
+  };
+  const intradayPath = linePath('close');
+  const intradayAvgPath = linePath('avgPrice');
+  const areaBaseline = priceHeight - pad.bottom;
+  const intradayAreaPaths = frequency === 'intraday' ? areaPaths() : [];
+  const tickIndexes = Array.from(new Set([0, Math.floor(visible.length * 0.25), Math.floor(visible.length * 0.5), Math.floor(visible.length * 0.75), visible.length - 1]))
+    .filter(index => index >= 0 && index < visible.length);
+  const intradayTicks = [
+    { label: '09:30', offset: 0, anchor: 'start', labelOffset: 0 },
+    { label: '10:30', offset: 60, anchor: 'middle', labelOffset: 0 },
+    { label: '11:30', offset: 120, anchor: 'end', labelOffset: -8 },
+    { label: '13:00', offset: 122, anchor: 'start', labelOffset: 8 },
+    { label: '14:00', offset: 182, anchor: 'middle', labelOffset: 0 },
+    { label: '15:00', offset: 242, anchor: 'end', labelOffset: 0 },
+  ];
+  const priceTicks = [yMax, yMax - (yMax - yMin) / 3, yMax - (yMax - yMin) * 2 / 3, yMin];
+  const hoverX = xFor(currentIndex);
+  const selectedY = yFor(current.close);
+  const tooltipWidth = frequency === 'intraday' ? 252 : 268;
+  const tooltipHeight = frequency === 'intraday' ? 76 : 72;
+  const tooltipSourceX = pointer?.x ?? hoverX;
+  const tooltipSourceY = pointer?.y ?? selectedY;
+  const tooltipX = clamp(tooltipSourceX - tooltipWidth / 2, pad.left + 8, width - pad.right - tooltipWidth - 8);
+  const tooltipY = clamp(tooltipSourceY - tooltipHeight - 18, -tooltipHeight + 6, volumeBaseline - tooltipHeight - 8);
+  const previousClose = current.referencePrice;
+  const intradayBreakX = pad.left + (121 / cnTradingMinuteTotal) * plotWidth;
+
+  return (
+    <div className="relative h-full w-full">
+      <svg viewBox={`0 0 ${width} ${totalHeight}`} preserveAspectRatio="none" className="h-full w-full overflow-visible">
+        <rect x={0} y={0} width={width} height={totalHeight} fill="transparent" />
+        {priceTicks.map((tick, index) => (
+          <g key={`tick-${index}`}>
+            <line x1={pad.left} x2={width - pad.right} y1={yFor(tick)} y2={yFor(tick)} stroke="#ffffff" strokeOpacity={0.05} strokeDasharray="4 4" />
+            <text x={width - pad.right + 8} y={yFor(tick) + 4} fill="#525252" fontSize="10" fontFamily="monospace">
+              {displayNumber(tick)}
+            </text>
+          </g>
+        ))}
+
+        {frequency === 'intraday' ? (
+          <>
+            {intradayAreaPaths.map((path, index) => (
+              <path key={`intraday-area-${index}`} d={path} fill="#eab308" fillOpacity="0.035" />
+            ))}
+            {hasIntradayTimeAxis && (
+              <rect
+                x={intradayBreakX}
+                y={pad.top}
+                width={1}
+                height={volumeBaseline - pad.top}
+                fill="#ffffff"
+                opacity={0.08}
+              />
+            )}
+            {previousClose && (
+              <line
+                x1={pad.left}
+                x2={width - pad.right}
+                y1={yFor(previousClose)}
+                y2={yFor(previousClose)}
+                stroke="#737373"
+                strokeOpacity={0.55}
+                strokeDasharray="6 4"
+              />
+            )}
+            <path d={intradayPath} fill="none" stroke="#eab308" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
+            {intradayAvgPath && (
+              <path d={intradayAvgPath} fill="none" stroke="#a78bfa" strokeWidth="1.5" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
+            )}
+          </>
+        ) : (
+          <>
+            <path d={linePath('ma5')} fill="none" stroke="#eab308" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+            <path d={linePath('ma10')} fill="none" stroke="#818cf8" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+            <path d={linePath('ma20')} fill="none" stroke="#34d399" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+            {visible.map((item, index) => {
+              const x = xFor(index);
+              const openY = yFor(item.open);
+              const closeY = yFor(item.close);
+              const highY = yFor(item.high);
+              const lowY = yFor(item.low);
+              const color = item.up ? '#f43f5e' : '#10b981';
+              const bodyY = Math.min(openY, closeY);
+              const bodyHeight = Math.max(Math.abs(closeY - openY), 1.5);
+              return (
+                <g key={`${item.date}-${index}`}>
+                  <line x1={x} x2={x} y1={highY} y2={lowY} stroke={color} strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+                  <rect x={x - candleWidth / 2} y={bodyY} width={candleWidth} height={bodyHeight} fill={color} fillOpacity={item.up ? 0.9 : 0.78} rx={0.8} />
+                </g>
+              );
+            })}
+          </>
+        )}
+
+        <line x1={pad.left} x2={width - pad.right} y1={volumeBaseline} y2={volumeBaseline} stroke="#ffffff" strokeOpacity={0.07} />
+        {visible.map((item, index) => {
+          const x = xFor(index);
+          const y = volumeY(item.volume || 0);
+          const color = item.up ? '#f43f5e' : '#10b981';
+          return (
+            <rect key={`vol-${item.date}-${index}`} x={x - Math.max(candleWidth, 2) / 2} y={y} width={Math.max(candleWidth, 2)} height={volumeBaseline - y} fill={color} fillOpacity={0.35} rx={1} />
+          );
+        })}
+
+        {hasIntradayTimeAxis ? (
+          <>
+            {intradayTicks.map((tick, index) => {
+              const x = pad.left + (tick.offset / cnTradingMinuteTotal) * plotWidth;
+              return (
+                <g key={`x-intraday-${tick.label}-${index}`}>
+                  <line x1={x} x2={x} y1={volumeBaseline + 3} y2={xAxisTickBottom} stroke="#737373" strokeOpacity={0.18} />
+                  <text x={x + tick.labelOffset} y={xAxisY} fill="#737373" fillOpacity={0.9} fontSize="10.5" fontFamily="monospace" textAnchor={tick.anchor as 'start' | 'middle' | 'end'} dominantBaseline="middle">
+                    {tick.label}
+                  </text>
+                </g>
+              );
+            })}
+          </>
+        ) : tickIndexes.map(index => (
+          <g key={`x-${index}`}>
+            <line x1={xFor(index)} x2={xFor(index)} y1={volumeBaseline + 3} y2={xAxisTickBottom} stroke="#737373" strokeOpacity={0.22} />
+            <text x={xFor(index)} y={xAxisY} fill="#737373" fillOpacity={0.9} fontSize="10.5" fontFamily="monospace" textAnchor={index === 0 ? 'start' : index === visible.length - 1 ? 'end' : 'middle'} dominantBaseline="middle">
+              {visible[index].label}
+            </text>
+          </g>
+        ))}
+
+        {isHovering && (
+          <>
+            <line x1={hoverX} x2={hoverX} y1={pad.top} y2={volumeBaseline} stroke="#ffffff" strokeOpacity={0.16} strokeDasharray="3 3" />
+            <circle
+              cx={hoverX}
+              cy={selectedY}
+              r={3}
+              fill={frequency === 'intraday' ? '#eab308' : current.up ? '#f43f5e' : '#10b981'}
+              stroke="#0a0a0a"
+              strokeWidth={1.5}
+            />
+          </>
+        )}
+        <rect
+          x={pad.left}
+          y={pad.top}
+          width={plotWidth}
+          height={volumeBaseline - pad.top}
+          fill="transparent"
+          onMouseMove={(event) => {
+            const box = event.currentTarget.getBoundingClientRect();
+            const ratioX = clamp((event.clientX - box.left) / box.width, 0, 1);
+            const ratioY = clamp((event.clientY - box.top) / box.height, 0, 1);
+            setPointer({
+              x: pad.left + ratioX * plotWidth,
+              y: pad.top + ratioY * (volumeBaseline - pad.top),
+            });
+            if (hasIntradayTimeAxis) {
+              const targetOffset = ratioX * cnTradingMinuteTotal;
+              const nearest = intradayOffsets.reduce((best, offset, index) => {
+                if (offset === null) return best;
+                const distance = Math.abs(offset - targetOffset);
+                return distance < best.distance ? { index, distance } : best;
+              }, { index: currentIndex, distance: Number.POSITIVE_INFINITY });
+              onHover(nearest.index);
+            } else {
+              onHover(Math.round(ratioX * (visible.length - 1)));
+            }
+          }}
+          onMouseLeave={() => {
+            setPointer(null);
+            onLeave();
+          }}
+        />
+      </svg>
+
+      {isHovering && (
+        <div
+          className="pointer-events-none absolute rounded-lg border border-white/10 bg-black/78 px-3 py-2 text-[11px] text-neutral-300 shadow-xl backdrop-blur-md"
+          style={{
+            left: `${tooltipX / width * 100}%`,
+            top: `${tooltipY / totalHeight * 100}%`,
+            width: tooltipWidth,
+          }}
+        >
+          <div className="mb-1 flex items-center gap-2">
+            <span className="font-mono text-neutral-500">{current.date}</span>
+            <span className={cn("font-mono", current.up ? "text-rose-400" : "text-emerald-400")}>{current.changePct >= 0 ? '+' : ''}{current.changePct.toFixed(2)}%</span>
+            <span className="text-neutral-600">{activePeriod}</span>
+          </div>
+          <div className="grid grid-cols-4 gap-x-3 gap-y-1 font-mono">
+            <span>开 {displayNumber(current.open)}</span>
+            <span>高 {displayNumber(current.high)}</span>
+            <span>低 {displayNumber(current.low)}</span>
+            <span>收 {displayNumber(current.close)}</span>
+          </div>
+          <div className="mt-1 flex gap-3 font-mono text-neutral-500">
+            <span>量 {formatVolume(current.volume)}</span>
+            {frequency === 'intraday' && current.avgPrice ? <span>均 {displayNumber(current.avgPrice)}</span> : null}
+            {frequency === 'intraday' && current.referencePrice ? <span>昨收 {displayNumber(current.referencePrice)}</span> : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const mapBackendNews = (items: NewsRecord[]) =>
   items.slice(0, 6).map((item) => ({
@@ -75,32 +683,12 @@ const renderMessageHtml = (content: string) =>
     .replace(/\*\*(.*?)\*\*/g, '<span class="text-white font-medium">$1</span>')
     .replace(/\n/g, '<br/>');
 
-const MOCK_NEWS = [
-  { time: "22:13", title: "市场定价显示，交易员已完全预期到2026年底美联储将加息25个基点。", source: "财联社", sourceUrl: "" },
-  { time: "22:12", title: "财联社5月22日电，美联储官员沃勒表示，4月份消费者价格上涨的范围令人担忧...", source: "财联社", sourceUrl: "" },
-  { time: "22:04", title: "港股IPO：融泰药业递表港交所", desc: "广东融泰药业股份有限公司向港交所提交上市申请书，独家保荐人为中信证券。", source: "公告", sourceUrl: "" }
-];
-
-const MOCK_FINANCE = [
-  { label: '市盈率(TTM)', value: '28.45', trend: 'up' },
-  { label: '市净率(MRQ)', value: '6.12', trend: 'down' },
-  { label: '毛利率', value: '91.8%', trend: 'up' },
-  { label: '净利润同增', value: '+19.1%', trend: 'up' },
-];
-
-const MOCK_FUNDS = [
-  { label: '主力净流入', value: '+3.2亿', color: 'text-rose-500' },
-  { label: '超大单', value: '+4.5亿', color: 'text-rose-500' },
-  { label: '大单', value: '-1.3亿', color: 'text-emerald-500' },
-  { label: '中单', value: '-2.1亿', color: 'text-emerald-500' },
-];
+type AnalysisMode = 'free' | 'standard' | 'deep' | 'expert' | 'vision';
 
 interface WorkbenchProps {
   symbol?: string;
   stockName?: string;
 }
-
-type AnalysisMode = 'free' | 'standard' | 'deep' | 'expert' | 'vision';
 
 const ANALYSIS_MODES: Array<{ id: AnalysisMode; label: string; description: string }> = [
   { id: 'free', label: '自由问答', description: '轻量聊天，不强制股票分析链路' },
@@ -113,14 +701,22 @@ const ANALYSIS_MODES: Array<{ id: AnalysisMode; label: string; description: stri
 export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: WorkbenchProps) {
   const [activePeriod, setActivePeriod] = useState('日K');
   const [activePanelTab, setActivePanelTab] = useState('news');
-  const [chartData, setChartData] = useState(() => generateKlineData(40));
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [priceBars, setPriceBars] = useState<PriceBar[]>([]);
   const [latestPrice, setLatestPrice] = useState<PriceBar | null>(null);
-  const [financeItems, setFinanceItems] = useState(MOCK_FINANCE);
-  const [fundItems, setFundItems] = useState(MOCK_FUNDS);
-  const [newsItems, setNewsItems] = useState(MOCK_NEWS);
-  const [factorSummary, setFactorSummary] = useState('多因子Alpha模型等待后端计算...');
-  const [dataStatus, setDataStatus] = useState('后端数据待同步');
+  const [hoveredChartIndex, setHoveredChartIndex] = useState<number | null>(null);
+  const [financeItems, setFinanceItems] = useState(EMPTY_FINANCE);
+  const [fundItems, setFundItems] = useState(EMPTY_FUNDS);
+  const [newsItems, setNewsItems] = useState<ReturnType<typeof mapBackendNews>>([]);
+  const [factorPanel, setFactorPanel] = useState<FactorPanelData>({
+    ...EMPTY_FACTOR_PANEL,
+    state: 'loading',
+    message: `正在计算 ${stockName} (${symbol}) 量化因子...`,
+  });
+  const [dataStatus, setDataStatus] = useState(() => `正在同步 ${stockName} (${symbol}) 后端行情...`);
+  const [marketState, setMarketState] = useState<LoadState>('loading');
+  const [newsState, setNewsState] = useState<LoadState>('loading');
+  const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [selectedMode, setSelectedMode] = useState<AnalysisMode>('standard');
   const [showModeMenu, setShowModeMenu] = useState(false);
@@ -129,6 +725,10 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const [isSending, setIsSending] = useState(false);
   const [chatError, setChatError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const workbenchRequestRef = useRef(0);
+  const priceRefreshRequestRef = useRef(0);
+  const activeSymbolRef = useRef(symbol);
+  const activePeriodRef = useRef(activePeriod);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -141,75 +741,112 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const [input, setInput] = useState('');
 
   useEffect(() => {
-    let cancelled = false;
-    const fallbackBasePrice = symbol === '301666' ? 28 : symbol.startsWith('3') ? 80 : symbol.startsWith('6') ? 1500 : 300;
-    setChartData(generateKlineData(40, fallbackBasePrice));
+    const requestId = workbenchRequestRef.current + 1;
+    workbenchRequestRef.current = requestId;
+    priceRefreshRequestRef.current += 1;
+    activeSymbolRef.current = symbol;
+    const controller = new AbortController();
+    const isCurrent = () => workbenchRequestRef.current === requestId && !controller.signal.aborted;
+    setMarketState('loading');
+    setNewsState('loading');
+    setIsRefreshingPrices(false);
+    setChartData([]);
     setPriceBars([]);
     setLatestPrice(null);
+    setHoveredChartIndex(null);
+    setNewsItems([]);
+    setFinanceItems(EMPTY_FINANCE);
+    setFundItems(EMPTY_FUNDS);
+    setFactorPanel({ ...EMPTY_FACTOR_PANEL, state: 'loading', message: `正在计算 ${stockName} (${symbol}) 量化因子...` });
+    setDataStatus(`正在同步 ${stockName} (${symbol}) 后端行情...`);
 
-    async function loadWorkbenchData() {
-      setDataStatus(`正在同步 ${stockName} (${symbol}) 后端行情、财务、新闻与因子...`);
-      const [pricesResult, latestResult, fundamentalsResult, newsResult, fundFlowResult, factorsResult] = await Promise.allSettled([
-        api.prices(symbol, 90),
-        api.latestPrice(symbol),
-        api.fundamentals(symbol),
-        api.news(symbol, 8),
-        api.fundFlow(symbol, 30),
-        api.factors(symbol, stockName, 60),
-      ]);
-
-      if (cancelled) return;
-
-      if (pricesResult.status === 'fulfilled' && pricesResult.value.success && pricesResult.value.data?.bars?.length) {
-        const bars = pricesResult.value.data.bars;
-        setPriceBars(bars);
-        setChartData(toChartData(bars, periodToPoints(activePeriod)));
+    async function loadFundamentals() {
+      const result = await api.fundamentals(symbol, { signal: controller.signal });
+      if (!isCurrent()) return;
+      if (result.success && result.data) {
+        const data = result.data;
+        setFinanceItems(buildFinanceItems(data));
       }
-
-      if (latestResult.status === 'fulfilled' && latestResult.value.success && latestResult.value.data) {
-        setLatestPrice(latestResult.value.data);
-      }
-
-      if (fundamentalsResult.status === 'fulfilled' && fundamentalsResult.value.success && fundamentalsResult.value.data) {
-        const data = fundamentalsResult.value.data;
-        const periods = Array.isArray(data.financial_periods) ? data.financial_periods as Record<string, unknown>[] : [];
-        const latest = periods[0] || {};
-        const valuation = (data.valuation || {}) as Record<string, unknown>;
-        setFinanceItems([
-          { label: '市盈率(TTM)', value: String(valuation.pe || valuation.pe_ttm || '--'), trend: 'up' },
-          { label: '市净率(MRQ)', value: String(valuation.pb || '--'), trend: 'down' },
-          { label: '毛利率', value: latest.gross_margin_pct ? `${Number(latest.gross_margin_pct).toFixed(1)}%` : '--', trend: 'up' },
-          { label: '净利润同比', value: latest.yoy_net_profit_pct ? `${Number(latest.yoy_net_profit_pct) >= 0 ? '+' : ''}${Number(latest.yoy_net_profit_pct).toFixed(1)}%` : '--', trend: 'up' },
-        ]);
-      }
-
-      if (newsResult.status === 'fulfilled' && newsResult.value.success && newsResult.value.data?.news?.length) {
-        setNewsItems(mapBackendNews(newsResult.value.data.news));
-      }
-
-      if (fundFlowResult.status === 'fulfilled' && fundFlowResult.value.success && fundFlowResult.value.data) {
-        const summary = (fundFlowResult.value.data.summary || {}) as Record<string, unknown>;
-        const records = Array.isArray(fundFlowResult.value.data.records) ? fundFlowResult.value.data.records as Record<string, unknown>[] : [];
-        const latestRecord = records[records.length - 1] || {};
-        setFundItems([
-          { label: '主力净流入', value: formatYi(summary.main_net_yi ?? latestRecord.main_net_yi), color: Number(summary.main_net_yi ?? latestRecord.main_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
-          { label: '超大单', value: formatYi(summary.super_net_yi ?? latestRecord.super_net_yi), color: Number(summary.super_net_yi ?? latestRecord.super_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
-          { label: '大单', value: formatYi(summary.large_net_yi ?? latestRecord.large_net_yi), color: Number(summary.large_net_yi ?? latestRecord.large_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
-          { label: '中单', value: formatYi(summary.medium_net_yi ?? latestRecord.medium_net_yi), color: Number(summary.medium_net_yi ?? latestRecord.medium_net_yi ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
-        ]);
-      }
-
-      if (factorsResult.status === 'fulfilled' && factorsResult.value.success && factorsResult.value.data) {
-        const factorText = JSON.stringify(factorsResult.value.data, null, 2).slice(0, 500);
-        setFactorSummary(factorText || '后端因子接口已返回，但内容为空。');
-      } else {
-        setFactorSummary('后端因子接口暂不可用，请检查 /api/factors 数据源。');
-      }
-
-      setDataStatus(`已同步 ${stockName} (${symbol}) 数据`);
     }
 
-    loadWorkbenchData();
+    async function loadNews() {
+      const result = await api.news(symbol, 8, { signal: controller.signal });
+      if (!isCurrent()) return;
+      if (result.success && result.data?.news?.length) {
+        setNewsItems(mapBackendNews(result.data.news));
+        setNewsState('ready');
+      } else if (result.success) {
+        setNewsItems([]);
+        setNewsState('empty');
+      } else {
+        setNewsItems([]);
+        setNewsState('error');
+      }
+    }
+
+    async function loadFundFlow(attempt = 0): Promise<void> {
+      const result = await api.fundFlow(symbol, 30, { signal: controller.signal });
+      if (!isCurrent()) return;
+      if (result.success && result.data) {
+        const summary = (result.data.summary || {}) as Record<string, unknown>;
+        const records = Array.isArray(result.data.records) ? result.data.records as Record<string, unknown>[] : [];
+        const latestRecord = records[records.length - 1] || {};
+        const degraded = Boolean(result.data.degraded);
+        const sourceStatus = String(result.data.source_status || '');
+        const hasCachedValues = degraded && sourceStatus === 'cache' && records.length > 0;
+        if (degraded && attempt < 1) {
+          await delay(1200);
+          if (isCurrent()) await loadFundFlow(attempt + 1);
+          return;
+        }
+        const mainValue = summary.last_main_yi ?? summary.main_total_yi ?? latestRecord.main_net_yi;
+        const superValue = summary.super_total_yi ?? latestRecord.super_net_yi;
+        const largeValue = summary.large_total_yi ?? latestRecord.large_net_yi;
+        const mediumValue = summary.medium_total_yi ?? latestRecord.medium_net_yi;
+        setFundItems([
+          {
+            label: hasCachedValues ? '主力净流入(缓存)' : degraded ? '主力净流入(降级)' : '主力净流入',
+            value: degraded && !hasCachedValues ? '数据源降级' : formatYi(mainValue),
+            color: degraded && !hasCachedValues ? 'text-amber-400' : Number(mainValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500',
+          },
+          { label: '超大单', value: degraded && !hasCachedValues ? '--' : formatYi(superValue), color: Number(superValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
+          { label: '大单', value: degraded && !hasCachedValues ? '--' : formatYi(largeValue), color: Number(largeValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
+          { label: '中单', value: degraded && !hasCachedValues ? '--' : formatYi(mediumValue), color: Number(mediumValue ?? 0) >= 0 ? 'text-rose-500' : 'text-emerald-500' },
+        ]);
+      } else {
+        setFundItems(EMPTY_FUNDS);
+      }
+    }
+
+    async function loadFactors(afterFundFlow?: Promise<void>, attempt = 0): Promise<void> {
+      await afterFundFlow?.catch(() => undefined);
+      if (!isCurrent()) return;
+      const result = await api.factors(symbol, stockName, 60, { signal: controller.signal });
+      if (!isCurrent()) return;
+      if (result.success && result.data) {
+        const degradedInputs = Array.isArray(result.data.degraded_inputs) ? result.data.degraded_inputs : [];
+        const missingDimensions = Array.isArray(result.data.missing_dimensions) ? result.data.missing_dimensions : [];
+        const fundFlowUnavailable = degradedInputs.includes('fund_flow') || missingDimensions.includes('fund_flow');
+        if (fundFlowUnavailable && attempt < 1) {
+          await delay(1200);
+          if (isCurrent()) await loadFactors(undefined, attempt + 1);
+          return;
+        }
+        setFactorPanel(buildFactorPanel(result.data));
+      } else {
+        setFactorPanel({
+          ...EMPTY_FACTOR_PANEL,
+          state: result.success ? 'empty' : 'error',
+          message: '后端因子接口暂不可用，请检查 /api/factors 数据源。',
+        });
+      }
+    }
+
+    void loadFundamentals();
+    void loadNews();
+    const fundFlowPromise = loadFundFlow();
+    void fundFlowPromise;
+    void loadFactors(fundFlowPromise);
     setMessages([
       {
         id: `${symbol}-system`,
@@ -223,32 +860,91 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
     setChatError('');
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [symbol, stockName]);
 
+  useEffect(() => {
+    const requestId = priceRefreshRequestRef.current + 1;
+    priceRefreshRequestRef.current = requestId;
+    const controller = new AbortController();
+    const periodConfig = getPeriodConfig(activePeriod);
+    const refreshSymbol = symbol;
+    const isCurrent = () => priceRefreshRequestRef.current === requestId && activeSymbolRef.current === refreshSymbol && !controller.signal.aborted;
+
+    setMarketState('loading');
+    setDataStatus(`正在切换到 ${periodConfig.label} 数据...`);
+    setHoveredChartIndex(null);
+    setChartData([]);
+    setPriceBars([]);
+    setLatestPrice(null);
+
+    api.prices(symbol, periodConfig.limit, periodConfig.frequency, { signal: controller.signal }).then((result) => {
+      if (!isCurrent()) return;
+      if (result.success && result.data?.bars?.length) {
+        setPriceBars(result.data.bars);
+        setChartData(toChartData(result.data.bars, periodConfig.frequency));
+        setMarketState('ready');
+        setDataStatus(`已同步 ${periodConfig.label} 行情数据`);
+      } else {
+        setPriceBars([]);
+        setChartData([]);
+        setMarketState(result.success ? 'empty' : 'error');
+        setDataStatus(result.success ? `${periodConfig.label} 暂无可用数据` : result.error || `${periodConfig.label} 行情接口暂不可用`);
+      }
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [activePeriod, symbol]);
+
   const handlePeriodChange = (period: string) => {
+    activePeriodRef.current = period;
     setActivePeriod(period);
-    const points = periodToPoints(period);
-    setChartData(priceBars.length ? toChartData(priceBars, points) : generateKlineData(points));
+    setHoveredChartIndex(null);
   };
 
   const refreshPrices = async () => {
-    setDataStatus(`正在刷新 ${stockName} 行情...`);
-    const fetched = await api.priceFetch(symbol, 120);
-    if (!fetched.success) {
+    const requestId = priceRefreshRequestRef.current + 1;
+    priceRefreshRequestRef.current = requestId;
+    const refreshSymbol = symbol;
+    const periodConfig = getPeriodConfig(activePeriodRef.current);
+    const isCurrent = () => priceRefreshRequestRef.current === requestId && activeSymbolRef.current === refreshSymbol;
+    setIsRefreshingPrices(true);
+    setMarketState('loading');
+    setDataStatus(`正在刷新 ${stockName} ${periodConfig.label} 行情...`);
+    const fetched = periodConfig.frequency === 'intraday'
+      ? { success: true, data: { fetched: 0 }, error: null }
+      : await api.priceFetch(symbol, 120);
+    if (!isCurrent()) return;
+    if (!fetched.success && periodConfig.frequency !== 'intraday') {
       setDataStatus(fetched.error || '行情刷新失败');
+      setMarketState(priceBars.length ? 'ready' : 'error');
+      setIsRefreshingPrices(false);
       return;
     }
-    const [pricesResult, latestResult] = await Promise.all([api.prices(symbol, 120), api.latestPrice(symbol)]);
+    const [pricesResult, latestResult] = await Promise.all([
+      api.prices(symbol, periodConfig.limit, periodConfig.frequency),
+      api.latestPrice(symbol),
+    ]);
+    if (!isCurrent()) return;
     if (pricesResult.success && pricesResult.data?.bars?.length) {
       setPriceBars(pricesResult.data.bars);
-      setChartData(toChartData(pricesResult.data.bars, periodToPoints(activePeriod)));
+      setChartData(toChartData(pricesResult.data.bars, periodConfig.frequency));
+      setMarketState('ready');
+    } else {
+      setPriceBars([]);
+      setChartData([]);
+      setMarketState(pricesResult.success ? 'empty' : 'error');
     }
     if (latestResult.success && latestResult.data) {
       setLatestPrice(latestResult.data);
+    } else {
+      setLatestPrice(null);
     }
-    setDataStatus(`行情刷新完成：${fetched.data?.fetched || 0} 条`);
+    setDataStatus(periodConfig.frequency === 'intraday' ? '分时行情刷新完成' : `行情刷新完成：${fetched.data?.fetched || 0} 条`);
+    setIsRefreshingPrices(false);
   };
 
   const toggleFullscreen = async () => {
@@ -400,11 +1096,14 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
 
   const currentMode = ANALYSIS_MODES.find(item => item.id === selectedMode) || ANALYSIS_MODES[1];
   const latestChartPoint = chartData[chartData.length - 1];
-  const chartHigh = Math.max(...chartData.flatMap(point => [Number(point.ma5 || 0), Number(point.ma10 || 0), Number(point.ma20 || 0)]));
-  const chartLow = Math.min(...chartData.flatMap(point => [Number(point.ma5 || 0), Number(point.ma10 || 0), Number(point.ma20 || 0)]).filter(Number.isFinite));
+  const activeFrequency = getPeriodConfig(activePeriod).frequency;
+  const hasPriceData = Boolean(latestPrice || latestChartPoint);
   const currentClose = latestPrice?.close || latestChartPoint?.close || latestChartPoint?.ma20 || 0;
-  const currentChange = latestPrice?.change_pct ?? 0;
+  const currentChange = latestPrice?.change_pct ?? latestChartPoint?.changePct ?? 0;
   const isPriceUp = Number(currentChange) >= 0;
+  const periodDataHint = priceBars.length
+    ? `${activePeriod} ${priceBars.length} 条${activeFrequency === '1mo' && priceBars.length < 5 ? '，样本偏少' : ''}${activeFrequency === '1w' && priceBars.length < 8 ? '，样本偏少' : ''}`
+    : '等待后端行情';
 
   return (
     <motion.div 
@@ -422,12 +1121,16 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
             <span className="text-xs font-mono font-medium text-neutral-400 bg-white/[0.03] px-2.5 py-1 rounded border border-white/5 tracking-wider">{symbol}</span>
           </h1>
           <div className={cn("flex items-baseline gap-4", isPriceUp ? "text-rose-500" : "text-emerald-500")}>
-            <span className="text-4xl font-mono font-medium tracking-tight drop-shadow-[0_0_15px_rgba(244,63,94,0.3)]">{displayNumber(Number(currentClose))}</span>
+            <span className="text-4xl font-mono font-medium tracking-tight drop-shadow-[0_0_15px_rgba(244,63,94,0.3)]">{hasPriceData ? displayNumber(Number(currentClose)) : '--'}</span>
             <span className={cn(
               "text-sm font-mono font-medium flex items-center px-2 py-0.5 rounded border",
-              isPriceUp ? "bg-rose-500/10 border-rose-500/20 text-rose-500" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+              !hasPriceData ? "bg-white/5 border-white/10 text-neutral-500" : isPriceUp ? "bg-rose-500/10 border-rose-500/20 text-rose-500" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
             )}>
-              <span className="rotate-45 mr-1 text-lg leading-none">{isPriceUp ? '↗' : '↙'}</span>{Number(currentChange) >= 0 ? '+' : ''}{Number(currentChange).toFixed(2)}%
+              {hasPriceData ? (
+                <>
+                  <span className="rotate-45 mr-1 text-lg leading-none">{isPriceUp ? '↗' : '↙'}</span>{Number(currentChange) >= 0 ? '+' : ''}{Number(currentChange).toFixed(2)}%
+                </>
+              ) : '等待行情'}
             </span>
           </div>
         </div>
@@ -436,7 +1139,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
           {financeItems.slice(0, 4).map((item, i) => (
             <div key={i} className="bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-xl px-5 py-3.5 flex flex-col min-w-[120px] shadow-sm transform transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.04]">
               <span className="text-xs text-neutral-500 mb-1.5">{item.label}</span>
-              <span className={cn("text-sm font-mono font-medium tracking-wide", item.trend === 'up' ? 'text-rose-500' : 'text-emerald-500')}>
+              <span className={cn("text-sm font-mono font-medium tracking-wide", toneTextClass(item.trend))}>
                 {item.value}
               </span>
             </div>
@@ -470,57 +1173,53 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                 ))}
                 <button
                   onClick={refreshPrices}
+                  disabled={isRefreshingPrices}
                   title="刷新后端行情"
-                  className="px-3 py-1.5 text-xs rounded-md font-medium transition-all cursor-pointer text-neutral-500 hover:text-indigo-300 border border-transparent"
+                  className="px-3 py-1.5 text-xs rounded-md font-medium transition-all cursor-pointer text-neutral-500 hover:text-indigo-300 border border-transparent disabled:opacity-50"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className={cn("w-3.5 h-3.5", isRefreshingPrices && "animate-spin text-indigo-300")} />
                 </button>
               </div>
             </div>
 
             <div className="px-6 py-3 flex items-center gap-8 text-[11px] font-mono whitespace-nowrap bg-black/20 border-b border-white/5">
-               <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>MA5: {displayNumber(Number(latestChartPoint?.ma5 || 0))}</span>
-               <span className="text-indigo-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-indigo-400/90"></div>MA10: {displayNumber(Number(latestChartPoint?.ma10 || 0))}</span>
-               <span className="text-emerald-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-emerald-400/90"></div>MA20: {displayNumber(Number(latestChartPoint?.ma20 || 0))}</span>
-               <span className="text-neutral-500 ml-auto">{priceBars.length ? `VOL: ${Number(latestChartPoint?.volume || 0).toLocaleString('zh-CN')}` : '本地演示曲线'}</span>
+               {activeFrequency === 'intraday' ? (
+                 <>
+                   <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>分时价: {latestChartPoint ? displayNumber(Number(latestChartPoint.close || 0)) : '--'}</span>
+                   <span className="text-violet-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-violet-400/90"></div>均价: {latestChartPoint?.avgPrice ? displayNumber(Number(latestChartPoint.avgPrice)) : '--'}</span>
+                   <span className="text-neutral-500 flex items-center gap-2"><div className="w-2 h-0.5 border-t border-dashed border-neutral-500"></div>昨收: {latestChartPoint?.referencePrice ? displayNumber(Number(latestChartPoint.referencePrice)) : '--'}</span>
+                 </>
+               ) : (
+                 <>
+                   <span className="text-yellow-500/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-yellow-500/90"></div>MA5: {latestChartPoint?.ma5 ? displayNumber(Number(latestChartPoint.ma5)) : '--'}</span>
+                   <span className="text-indigo-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-indigo-400/90"></div>MA10: {latestChartPoint?.ma10 ? displayNumber(Number(latestChartPoint.ma10)) : '--'}</span>
+                   <span className="text-emerald-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-emerald-400/90"></div>MA20: {latestChartPoint?.ma20 ? displayNumber(Number(latestChartPoint.ma20)) : '--'}</span>
+                 </>
+               )}
+               <span className="text-neutral-500 ml-auto">{priceBars.length ? `VOL: ${formatVolume(Number(latestChartPoint?.volume || 0))} · ${periodDataHint}` : '等待后端行情'}</span>
             </div>
 
-            {/* Chart Area */}
-            <div className="flex-1 p-5 bg-black/40 relative">
-               <div className="absolute right-6 top-6 text-[10px] font-mono text-neutral-600">{displayNumber(chartHigh)}</div>
-               <div className="absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{displayNumber(chartLow)}</div>
-             
-             <ResponsiveContainer width="100%" height="80%">
-               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                 <defs>
-                   <linearGradient id="colorMa5" x1="0" y1="0" x2="0" y2="1">
-                     <stop offset="5%" stopColor="#eab308" stopOpacity={0.4}/>
-                     <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
-                   </linearGradient>
-                 </defs>
-                 <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
-                 <YAxis domain={['auto', 'auto']} hide />
-                 <Area type="monotone" dataKey="ma5" stroke="#eab308" strokeWidth={2} fillOpacity={1} fill="url(#colorMa5)" />
-                 <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} />
-                 <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} />
-                 {/* Fake Candlesticks using Bar */}
-                 <Bar dataKey="ma5" barSize={4}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
-                    ))}
-                 </Bar>
-               </ComposedChart>
-             </ResponsiveContainer>
-             
-             <ResponsiveContainer width="100%" height="20%">
-               <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                 <Bar dataKey="volume" barSize={4} radius={[2, 2, 0, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-vol-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} fillOpacity={0.4} />
-                    ))}
-                 </Bar>
-               </ComposedChart>
-             </ResponsiveContainer>
+             {/* Chart Area */}
+             <div className="flex-1 p-5 bg-black/40 relative">
+               {chartData.length === 0 && marketState !== 'ready' && (
+                 <div className="absolute inset-0 z-10 flex items-center justify-center text-center text-xs text-neutral-500 bg-black/20">
+                   {marketState === 'loading'
+                     ? `正在同步 ${stockName} (${symbol}) 行情...`
+                     : marketState === 'error'
+                       ? '行情接口暂不可用，请点击刷新或稍后重试。'
+                       : '暂无后端行情数据，请点击刷新或稍后重试。'}
+                 </div>
+               )}
+               {chartData.length > 0 && (
+                 <MarketChart
+                   data={chartData}
+                   frequency={activeFrequency}
+                   activePeriod={activePeriod}
+                   hoveredIndex={hoveredChartIndex}
+                   onHover={setHoveredChartIndex}
+                   onLeave={() => setHoveredChartIndex(null)}
+                 />
+               )}
           </div>
         </div>
 
@@ -557,11 +1256,19 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                  <motion.div 
                    key="news"
                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                 >
-                   {newsItems.map((news, i) => (
-                     <div
-                       key={i}
-                       onClick={() => news.sourceUrl && window.open(news.sourceUrl, '_blank', 'noopener,noreferrer')}
+                  >
+                    {newsItems.length === 0 ? (
+                      <div className="h-full min-h-[220px] flex items-center justify-center text-center text-xs text-neutral-500">
+                        {newsState === 'loading'
+                          ? `正在同步 ${stockName} (${symbol}) 新闻...`
+                          : newsState === 'error'
+                            ? '新闻接口暂不可用，请点击刷新或稍后重试。'
+                            : '暂无后端新闻数据，请点击刷新或稍后重试。'}
+                      </div>
+                    ) : newsItems.map((news, i) => (
+                      <div
+                        key={i}
+                        onClick={() => news.sourceUrl && window.open(news.sourceUrl, '_blank', 'noopener,noreferrer')}
                        className="px-4 py-3 border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer group"
                      >
                        <div className="flex gap-4">
@@ -578,19 +1285,19 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                            <h4 className="text-sm text-neutral-200 font-medium leading-relaxed group-hover:text-indigo-300 transition-colors">{news.title}</h4>
                            {news.sourceUrl && <span className="text-[10px] text-indigo-400 mt-1 inline-block">打开原文 ↗</span>}
                            {news.desc && <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">{news.desc}</p>}
-                         </div>
-                       </div>
-                     </div>
-                   ))}
-                 </motion.div>
-               )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
 
                {activePanelTab === 'finance' && (
                  <motion.div key="finance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
                    {financeItems.map((item, i) => (
                      <div key={i} className="bg-white/[0.03] border border-white/5 p-4 rounded-xl flex flex-col justify-center hover:bg-white/[0.05] transition-colors">
                        <span className="text-xs text-neutral-500 mb-2">{item.label}</span>
-                       <span className={cn("text-2xl font-mono font-medium", item.trend === 'up' ? 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]' : 'text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]')}>
+                       <span className={cn("text-2xl font-mono font-medium", toneTextClass(item.trend))}>
                          {item.value}
                        </span>
                      </div>
@@ -612,11 +1319,61 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                )}
 
                {activePanelTab === 'quant' && (
-                 <motion.div key="quant" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex h-full items-center justify-center p-4">
-                   <div className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-3 rounded-lg text-xs flex items-start gap-3 max-w-3xl whitespace-pre-wrap font-mono leading-relaxed">
-                     <Settings2 className="w-5 h-5" />
-                     {factorSummary}
-                   </div>
+                 <motion.div key="quant" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full p-4 space-y-4">
+                   {factorPanel.state === 'loading' || factorPanel.state === 'error' || factorPanel.state === 'empty' ? (
+                     <div className="h-full min-h-[220px] flex items-center justify-center text-center text-xs text-neutral-500">
+                       {factorPanel.message}
+                     </div>
+                   ) : (
+                     <>
+                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                         {factorPanel.cards.map((item) => (
+                           <div key={item.label} className="bg-white/[0.03] border border-white/5 p-4 rounded-xl">
+                             <div className="flex items-center justify-between gap-3">
+                               <span className="text-xs text-neutral-500">{item.label}</span>
+                               <Settings2 className="w-3.5 h-3.5 text-neutral-600" />
+                             </div>
+                             <div className={cn("mt-2 text-2xl font-mono font-medium", toneTextClass(item.tone))}>{item.value}</div>
+                             <div className="mt-1 text-[10px] leading-relaxed text-neutral-500">{item.detail}</div>
+                           </div>
+                         ))}
+                       </div>
+                       <div className="grid grid-cols-1 lg:grid-cols-[180px_1fr] gap-4">
+                         <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
+                           <div className="text-xs text-neutral-500 mb-3">样本量</div>
+                           <div className="space-y-2">
+                             {factorPanel.counts.map(item => (
+                               <div key={item.label} className="flex items-center justify-between text-xs">
+                                 <span className="text-neutral-500">{item.label}</span>
+                                 <span className="font-mono text-neutral-200">{item.value}</span>
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+                         <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4 min-w-0">
+                           <div className="flex items-center justify-between gap-3 mb-3">
+                             <span className="text-xs text-neutral-500">关键信号</span>
+                             {factorPanel.computedAt && <span className="text-[10px] text-neutral-600 font-mono">{factorPanel.computedAt.slice(0, 19).replace('T', ' ')}</span>}
+                           </div>
+                           {factorPanel.signals.length ? (
+                             <div className="space-y-2">
+                               {factorPanel.signals.map((signal, index) => (
+                                 <div key={`${signal.type}-${index}`} className="flex items-start gap-3 text-xs">
+                                   <span className="shrink-0 px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px]">{signal.type}</span>
+                                   <div className="min-w-0">
+                                     <div className="text-neutral-200 truncate">{signal.title}</div>
+                                     <div className="text-[10px] text-neutral-500 mt-0.5">{signal.meta}</div>
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+                           ) : (
+                             <div className="text-xs text-neutral-500">暂无可展示信号，后端样本量可能为 0。</div>
+                           )}
+                         </div>
+                       </div>
+                     </>
+                   )}
                  </motion.div>
                )}
              </AnimatePresence>
@@ -674,8 +1431,8 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                 )}
               </AnimatePresence>
             </div>
-            <button onClick={refreshPrices} title="刷新行情与面板数据" className="p-1.5 hover:bg-white/5 rounded-md text-neutral-500 transition-colors">
-              <RefreshCw className="w-3.5 h-3.5" />
+            <button onClick={refreshPrices} title="刷新行情与面板数据" disabled={isRefreshingPrices} className="p-1.5 hover:bg-white/5 rounded-md text-neutral-500 transition-colors disabled:opacity-50">
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshingPrices && "animate-spin text-indigo-300")} />
             </button>
             <button onClick={toggleFullscreen} title="切换全屏" className="p-1.5 hover:bg-white/5 rounded-md text-neutral-500 transition-colors">
               <Maximize2 className="w-3.5 h-3.5" />

@@ -65,11 +65,15 @@ def calc_sharpe_ratio(returns: list[float], risk_free_rate: float = 0.03) -> flo
     """计算夏普比率"""
     if len(returns) < 2:
         return 0.0
-    vol = calc_volatility(returns, annualize=True)
     annual_return = sum(returns) / len(returns) * 252
     excess_return = annual_return - risk_free_rate
+    vol = calc_volatility(returns, annualize=True)
     if vol <= 0:
-        return excess_return
+        if excess_return > 0:
+            return math.inf
+        if excess_return < 0:
+            return -math.inf
+        return 0.0
     return excess_return / vol
 
 
@@ -86,6 +90,12 @@ def calc_win_rate(returns: list[float]) -> float:
         return 0.0
     positive = sum(1 for r in returns if r > 0)
     return positive / len(returns)
+
+
+def _round_json_float(value: float, digits: int) -> float | None:
+    if not math.isfinite(value):
+        return None
+    return round(value, digits)
 
 
 def calc_fund_metrics(
@@ -116,12 +126,12 @@ def calc_fund_metrics(
     win = calc_win_rate(returns)
 
     return {
-        "total_return": round(total_return, 6),
-        "annualized_return": round(annualized_return, 6),
-        "volatility": round(volatility, 6),
-        "max_drawdown": round(max_drawdown, 6),
-        "sharpe_ratio": round(sharpe, 4),
-        "calmar_ratio": round(calmar, 4),
-        "win_rate": round(win, 4),
+        "total_return": _round_json_float(total_return, 6),
+        "annualized_return": _round_json_float(annualized_return, 6),
+        "volatility": _round_json_float(volatility, 6),
+        "max_drawdown": _round_json_float(max_drawdown, 6),
+        "sharpe_ratio": _round_json_float(sharpe, 4),
+        "calmar_ratio": _round_json_float(calmar, 4),
+        "win_rate": _round_json_float(win, 4),
         "data_points": len(navs),
     }

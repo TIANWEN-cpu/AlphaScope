@@ -16,6 +16,8 @@ export interface PriceBar {
   amount?: number;
   turnover?: number;
   change_pct?: number;
+  previous_close?: number;
+  prev_close?: number;
   frequency?: string;
   source?: string;
 }
@@ -220,6 +222,16 @@ export interface FundPortfolioCreatePayload {
   holdings?: FundPortfolioHolding[];
 }
 
+export interface StockResolveResult {
+  query: string;
+  symbol: string;
+  name: string;
+  market?: string;
+  exchange?: string;
+  resolved?: boolean;
+  source?: string;
+}
+
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000"
@@ -340,26 +352,26 @@ export async function streamChat(
 export const api = {
   baseUrl: API_BASE_URL,
   health: () => request<{ status: string; version: string }>("/health"),
-  prices: (symbol: string, limit = 80, frequency = "1d") =>
+  prices: (symbol: string, limit = 80, frequency = "1d", options: RequestInit = {}) =>
     request<{ symbol: string; bars: PriceBar[]; total: number }>(
       `/api/prices/${encodeURIComponent(symbol)}`,
-      {},
+      options,
       { limit, frequency },
     ),
-  latestPrice: (symbol: string) =>
-    request<PriceBar>(`/api/prices/${encodeURIComponent(symbol)}/latest`),
-  fundamentals: (symbol: string) =>
-    request<Record<string, unknown>>(`/api/fundamentals/${encodeURIComponent(symbol)}`),
-  news: (symbol?: string, limit = 20) =>
-    request<{ news: NewsRecord[]; total: number }>("/api/news", {}, { symbol, limit }),
-  announcements: (symbol?: string, limit = 10) =>
+  latestPrice: (symbol: string, options: RequestInit = {}) =>
+    request<PriceBar>(`/api/prices/${encodeURIComponent(symbol)}/latest`, options),
+  fundamentals: (symbol: string, options: RequestInit = {}) =>
+    request<Record<string, unknown>>(`/api/fundamentals/${encodeURIComponent(symbol)}`, options),
+  news: (symbol?: string, limit = 20, options: RequestInit = {}) =>
+    request<{ news: NewsRecord[]; total: number }>("/api/news", options, { symbol, limit }),
+  announcements: (symbol?: string, limit = 10, options: RequestInit = {}) =>
     request<{ announcements: AnnouncementRecord[]; total: number }>(
       "/api/news/announcements",
-      {},
+      options,
       { symbol, limit },
     ),
-  fundFlow: (symbol: string, days = 30) =>
-    request<Record<string, unknown>>(`/api/fund-flow/${encodeURIComponent(symbol)}`, {}, { days }),
+  fundFlow: (symbol: string, days = 30, options: RequestInit = {}) =>
+    request<Record<string, unknown>>(`/api/fund-flow/${encodeURIComponent(symbol)}`, options, { days }),
   agents: () => request<{ agents: AgentRecord[] }>("/api/agents"),
   manageAgents: () => request<{ agents: AgentRecord[] }>("/api/manage/agents"),
   manageAgentSave: (payload: AgentSavePayload) =>
@@ -390,10 +402,12 @@ export const api = {
     request<{ original: string; normalized: string; market: string }>(
       `/api/prices/normalize/${encodeURIComponent(symbol)}`,
     ),
-  priceFetch: (symbol: string, days = 120) =>
+  resolveStock: (query: string, options: RequestInit = {}) =>
+    request<StockResolveResult>("/api/stocks/resolve", options, { q: query }),
+  priceFetch: (symbol: string, days = 120, options: RequestInit = {}) =>
     request<{ symbol: string; fetched: number }>(
       `/api/prices/${encodeURIComponent(symbol)}/fetch`,
-      { method: "POST" },
+      { ...options, method: "POST" },
       { days },
     ),
   technical: (symbol: string, limit = 250) =>
@@ -404,18 +418,20 @@ export const api = {
       {},
       { lookback },
     ),
-  factors: (symbol: string, stockName = "", days = 30) =>
+  factors: (symbol: string, stockName = "", days = 30, options: RequestInit = {}) =>
     request<Record<string, unknown>>(
       `/api/factors/${encodeURIComponent(symbol)}`,
-      {},
+      options,
       { stock_name: stockName, days },
     ),
-  newsSearch: (query: string, limit = 20) =>
+  newsSearch: (query: string, limit = 20, options: RequestInit = {}) =>
     request<{ query: string; results: NewsRecord[]; total: number }>("/api/news/search", {
+      ...options,
       method: "POST",
       body: JSON.stringify({ query, limit }),
     }),
-  newsDetail: (id: string) => request<NewsRecord>(`/api/news/${encodeURIComponent(id)}`),
+  newsDetail: (id: string, options: RequestInit = {}) =>
+    request<NewsRecord>(`/api/news/${encodeURIComponent(id)}`, options),
   newsEvents: (symbol: string, days = 30) =>
     request<Record<string, unknown>>(`/api/news/events/${encodeURIComponent(symbol)}`, {}, { days }),
   newsImpact: (symbol: string, days = 30, window = 5) =>

@@ -273,7 +273,7 @@ class DataPipeline:
                         item.get("turnover", 0),
                         item.get("amplitude", 0),
                         item.get("change_pct", 0),
-                        item.get("adjust", "hfq"),
+                        item.get("adjust", ""),
                         item.get("source", "akshare"),
                     ),
                 )

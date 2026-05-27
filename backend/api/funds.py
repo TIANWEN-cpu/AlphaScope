@@ -94,6 +94,26 @@ def set_portfolio_mgr(mgr: PortfolioManager):
     _portfolio_mgr = mgr
 
 
+class _MetricNA:
+    def __format__(self, spec: str) -> str:
+        return "N/A"
+
+
+class _ReportMetrics(dict[str, Any]):
+    def get(self, key: str, default: Any = None) -> Any:
+        value = super().get(key, default)
+        return _MetricNA() if value is None else value
+
+
+def _normalize_fund_search_item(info: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "code": str(info.get("code", "")).strip(),
+        "name": str(info.get("name", "")).strip(),
+        "fund_type": str(info.get("fund_type", "")).strip(),
+        "company": str(info.get("company", info.get("manager", ""))).strip(),
+    }
+
+
 # ============================================================
 # 请求模型
 # ============================================================
@@ -163,18 +183,81 @@ async def search_funds(
             results = [item for item in results if item["type"] == fund_type]
         return ApiResponse(success=True, data=results[:limit])
 
-    if not keyword.strip():
+    keyword = keyword.strip()
+    if not keyword:
         return ApiResponse(success=True, data={"funds": [], "total": 0})
     provider = get_provider()
     try:
-        funds = await provider.search(keyword)
-        return ApiResponse(success=True, data={"funds": funds, "total": len(funds)})
+        degraded = False
+        source_status = "ok"
+        funds: list[dict[str, Any]] = []
+        seen_codes: set[str] = set()
+
+        if keyword.isdigit() and len(keyword) == 6:
+            try:
+                info = await provider.get_info(keyword)
+            except Exception:
+                info = None
+            if info:
+                item = _normalize_fund_search_item(info)
+                if item["code"]:
+                    funds.append(item)
+                    seen_codes.add(item["code"])
+                    source_status = "code_lookup"
+
+        try:
+            search_results = await provider.search(keyword)
+        except Exception as e:
+            if funds:
+                return ApiResponse(
+                    success=True,
+                    error=str(e),
+                    error_code="FUND_SEARCH_DEGRADED",
+                    data={
+                        "funds": funds,
+                        "total": len(funds),
+                        "degraded": True,
+                        "source": "fund_provider",
+                        "source_status": "code_lookup_search_unavailable",
+                    },
+                )
+            raise
+        for item in search_results:
+            code = str(item.get("code", "")).strip()
+            if code and code in seen_codes:
+                continue
+            funds.append(item)
+            if code:
+                seen_codes.add(code)
+
+        if keyword.isdigit() and len(keyword) == 6 and not funds:
+            degraded = True
+            source_status = "empty"
+
+        return ApiResponse(
+            success=True,
+            data={
+                "funds": funds,
+                "total": len(funds),
+                "degraded": degraded,
+                "source": "fund_provider",
+                "source_status": source_status,
+            },
+            error="No fund matched by code or keyword" if degraded else None,
+            error_code="FUND_SEARCH_DEGRADED" if degraded else None,
+        )
     except Exception as e:
         return ApiResponse(
-            success=False,
+            success=True,
             error=str(e),
-            error_code="FUND_SEARCH_ERROR",
-            data={"funds": [], "total": 0},
+            error_code="FUND_SEARCH_DEGRADED",
+            data={
+                "funds": [],
+                "total": 0,
+                "degraded": True,
+                "source": "fund_provider",
+                "source_status": "unavailable",
+            },
         )
 
 
@@ -561,16 +644,17 @@ async def generate_fund_report(body: FundReportBody):
             "",
         ]
 
+        report_metrics = _ReportMetrics(metrics)
         if body.include_metrics and metrics:
             lines.extend(
                 [
                     "## 核心指标",
-                    f"- 总收益率: {metrics.get('total_return', 0):.2%}",
-                    f"- 年化收益率: {metrics.get('annualized_return', 0):.2%}",
-                    f"- 夏普比率: {metrics.get('sharpe_ratio', 0):.4f}",
-                    f"- 最大回撤: {metrics.get('max_drawdown', 0):.2%}",
-                    f"- 波动率: {metrics.get('volatility', 0):.2%}",
-                    f"- 胜率: {metrics.get('win_rate', 0):.2%}",
+                    f"- 总收益率: {report_metrics.get('total_return', 0):.2%}",
+                    f"- 年化收益率: {report_metrics.get('annualized_return', 0):.2%}",
+                    f"- 夏普比率: {report_metrics.get('sharpe_ratio', 0):.4f}",
+                    f"- 最大回撤: {report_metrics.get('max_drawdown', 0):.2%}",
+                    f"- 波动率: {report_metrics.get('volatility', 0):.2%}",
+                    f"- 胜率: {report_metrics.get('win_rate', 0):.2%}",
                     "",
                 ]
             )

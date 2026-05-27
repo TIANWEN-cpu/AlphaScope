@@ -74,14 +74,31 @@ def build_market_brief(
     stock_data: Dict[str, Any], evidence_context: str = "", factor_context: str = ""
 ) -> str:
     """把数据打包成一段简洁的市场简报"""
+    name = stock_data.get("name") or "未知标的"
+    symbol = stock_data.get("symbol") or ""
+    close = float(stock_data.get("close") or 0)
+    day_change = float(
+        stock_data.get("day_change", stock_data.get("change_pct", 0)) or 0
+    )
+    days = int(stock_data.get("days") or 0)
+    period_change = float(stock_data.get("period_change") or 0)
+    period_high = float(stock_data.get("period_high") or 0)
+    period_low = float(stock_data.get("period_low") or 0)
+    volume = float(stock_data.get("volume") or 0)
+    total_amount = float(
+        stock_data.get("total_amount", stock_data.get("amount", 0)) or 0
+    )
+    price_note = ""
+    if close <= 0:
+        price_note = "\n- 行情状态: 暂无可用价格数据，请结合数据源状态判断。"
     base = f"""
-【标的】{stock_data["name"]} ({stock_data["symbol"]})
+【标的】{name} ({symbol})
 
 【价格信息】
-- 最新价: ¥{stock_data["close"]:.2f}
-- 当日涨跌: {stock_data["day_change"]:+.2f}%
-- 区间涨跌（{stock_data["days"]}日）: {stock_data["period_change"]:+.2f}%
-- 区间最高/最低: ¥{stock_data["period_high"]:.2f} / ¥{stock_data["period_low"]:.2f}
+- 最新价: ¥{close:.2f}
+- 当日涨跌: {day_change:+.2f}%
+- 区间涨跌（{days}日）: {period_change:+.2f}%
+- 区间最高/最低: ¥{period_high:.2f} / ¥{period_low:.2f}{price_note}
 
 【技术指标】
 - MA5: {stock_data.get("ma5", "N/A")}
@@ -92,8 +109,8 @@ def build_market_brief(
 - RSI(14): {stock_data.get("rsi", "N/A")}
 
 【量价数据】
-- 当日成交量: {stock_data["volume"]:,.0f} 手
-- 区间成交额: {stock_data["total_amount"]:.1f} 亿元
+- 当日成交量: {volume:,.0f} 手
+- 区间成交额: {total_amount:.1f} 亿元
 - 当日换手率: {stock_data.get("turnover", 0):.2f}%
 - 近5日量比: {stock_data.get("vol_ratio", 1):.2f}
 - 日波动率: {stock_data.get("volatility", 0):.2f}%

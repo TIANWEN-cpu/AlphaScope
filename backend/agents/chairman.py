@@ -9,8 +9,8 @@ Chairman Agent: 投资委员会主席综合判断。
 
 from typing import Dict, Any, Optional
 
-from backend.models.provider_gateway import VENDORS, _call_with
-from backend.agents.base import AGENT_MODEL_CONFIG, FALLBACK_VENDOR_MODEL
+from backend.models.provider_gateway import VENDORS, _call_with, get_configured_provider
+from backend.agents.base import AGENT_MODEL_CONFIG
 
 
 def summarize_with_chairman(
@@ -42,6 +42,7 @@ def summarize_with_chairman(
 字数控制在 280 字以内，使用 markdown 格式。"""
 
     vendor, model = AGENT_MODEL_CONFIG["chairman"]
+    fallback_vendor, fallback_model = get_configured_provider()
     messages = [
         {
             "role": "system",
@@ -50,10 +51,10 @@ def summarize_with_chairman(
         {"role": "user", "content": prompt},
     ]
     last = ""
-    for vd, md, key_override in [
-        (vendor, model, api_key),
-        (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], None),
-    ]:
+    candidates = [(vendor, model, api_key)]
+    if (fallback_vendor, fallback_model) != (vendor, model):
+        candidates.append((fallback_vendor, fallback_model, None))
+    for vd, md, key_override in candidates:
         try:
             return _call_with(
                 vd,
@@ -65,6 +66,6 @@ def summarize_with_chairman(
                 api_key=key_override,
             )
         except Exception as e:
-            last = f"主席总结生成失败 ({VENDORS[vd]['label']}/{md}): {e}"
+            last = f"主席总结生成失败 ({VENDORS.get(vd, {}).get('label', vd)}/{md}): {e}"
             continue
     return last

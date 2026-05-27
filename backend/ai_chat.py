@@ -52,14 +52,7 @@ load_dotenv(ENV_FILE)
 
 # ============== 默认厂商/模型映射 ==============
 # 每个厂商的 AI 咨询默认模型
-PROVIDER_DEFAULT_MODEL = {
-    "deepseek": "deepseek-chat",
-    "kimi": "moonshot-v1-32k",
-    "claude": "claude-sonnet-4-5",
-    "gpt": "gpt-5.2",
-    "mimo": "mimo-v2.5-pro",
-    "sensenova": "deepseek-v4-flash",
-}
+PROVIDER_DEFAULT_MODEL = dict(_llm_agents.DEFAULT_PROVIDER_MODELS)
 
 # 单会话最大轮数（超过自动截断）
 MAX_ROUNDS = 30
@@ -163,10 +156,7 @@ def new_session(
 ) -> ChatSession:
     """创建新会话:首条 system message 已拼接好,可直接调 send_message"""
     ctx = ctx or {}
-    provider = provider or os.getenv("AI_CHAT_PROVIDER", "deepseek")
-    if provider not in VENDORS:
-        provider = "deepseek"
-    model = PROVIDER_DEFAULT_MODEL.get(provider, "deepseek-chat")
+    provider, model = _llm_agents.get_configured_provider(provider)
 
     sys_prompt = build_system_prompt(stock_symbol, stock_name, ctx)
     session = ChatSession(
@@ -275,9 +265,13 @@ def send_message(session: ChatSession, user_msg: str) -> ChatSession:
 
     # 双层兜底:主厂商失败 → DeepSeek
     primary = (session.provider, session.model)
+    fallback = _llm_agents.get_configured_provider()
     last_err = None
     reply = None
-    for vd, md in [primary, FALLBACK_VENDOR_MODEL]:
+    candidates = [primary]
+    if fallback != primary:
+        candidates.append(fallback)
+    for vd, md in candidates:
         try:
             payload = dict(
                 vendor=vd,
@@ -289,9 +283,7 @@ def send_message(session: ChatSession, user_msg: str) -> ChatSession:
             )
             # Streamlit 热重载时 call_llm 可能仍指向旧函数签名，不接受 api_key。
             # 用签名检查兼容旧函数，避免 TypeError 字符串匹配掩盖真实错误。
-            key_override = getattr(session, "api_key", "") or None
-            if (vd, md) == FALLBACK_VENDOR_MODEL:
-                key_override = None
+            key_override = (getattr(session, "api_key", "") or None) if (vd, md) == primary else None
             reply = _call_llm_compat(payload, api_key=key_override)
             if reply and reply.strip():
                 if (vd, md) != primary:

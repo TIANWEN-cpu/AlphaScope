@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from backend.funds.metrics import (
     calc_annualized_return,
     calc_calmar_ratio,
@@ -160,3 +162,9 @@ class TestFundMetrics:
         metrics = calc_fund_metrics([1.0])
         assert metrics["data_points"] == 1
         assert metrics["total_return"] == 0.0
+
+    def test_metrics_are_strict_json_safe(self):
+        navs = [float(2**i) for i in range(30)]
+        metrics = calc_fund_metrics(navs)
+        assert metrics["sharpe_ratio"] is None
+        json.dumps(metrics, allow_nan=False)

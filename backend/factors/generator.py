@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import logging
+import queue
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
@@ -65,6 +67,32 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "momentum": 0.15,
 }
 
+FUND_FLOW_FACTOR_TIMEOUT_SECONDS = 6.0
+
+
+def _call_with_timeout(fn, timeout: float):
+    """Run a blocking factor input provider without stalling the whole report."""
+    result_queue: queue.Queue[tuple[bool, object]] = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            result_queue.put((True, fn()), block=False)
+        except Exception as exc:
+            try:
+                result_queue.put((False, exc), block=False)
+            except queue.Full:
+                pass
+
+    thread = threading.Thread(target=worker, name="factor-provider", daemon=True)
+    thread.start()
+    try:
+        ok, payload = result_queue.get(timeout=timeout)
+    except queue.Empty as exc:
+        raise TimeoutError("factor provider timed out") from exc
+    if ok:
+        return payload
+    raise payload
+
 
 @dataclass
 class FactorReport:
@@ -86,6 +114,10 @@ class FactorReport:
     news_count: int = 0
     event_count: int = 0
     report_count: int = 0
+
+    # 数据质量
+    degraded_inputs: list[str] = field(default_factory=list)
+    missing_dimensions: list[str] = field(default_factory=list)
 
     # 详细信号
     signals: list[dict] = field(default_factory=list)
@@ -112,6 +144,8 @@ class FactorReport:
                 "events": self.event_count,
                 "reports": self.report_count,
             },
+            "degraded_inputs": self.degraded_inputs,
+            "missing_dimensions": self.missing_dimensions,
             "signals": self.signals[:20],  # 最多返回 20 条信号
         }
 
@@ -340,10 +374,38 @@ class FactorGenerator:
     ) -> None:
         """资金流向因子: 主力净流入趋势"""
         try:
-            from backend.fund_flow import summarize_fund_flow
+            from backend.fund_flow import fetch_individual_fund_flow, summarize_fund_flow
 
-            summary = summarize_fund_flow(symbol, days=5)
-        except Exception:
+            df = _call_with_timeout(
+                lambda: fetch_individual_fund_flow(symbol, days=5),
+                FUND_FLOW_FACTOR_TIMEOUT_SECONDS,
+            )
+            if df is None or len(df) == 0:
+                report.degraded_inputs.append("fund_flow")
+                report.missing_dimensions.append("fund_flow")
+                if include_signals:
+                    report.signals.append(
+                        {
+                            "type": "fund_flow",
+                            "degraded": True,
+                            "reason": "fund-flow provider returned no data",
+                        }
+                    )
+                return
+            if getattr(df, "attrs", {}).get("degraded"):
+                report.degraded_inputs.append("fund_flow")
+            summary = summarize_fund_flow(df, recent_days=5)
+        except Exception as exc:
+            report.degraded_inputs.append("fund_flow")
+            report.missing_dimensions.append("fund_flow")
+            if include_signals:
+                report.signals.append(
+                    {
+                        "type": "fund_flow",
+                        "degraded": True,
+                        "reason": str(exc),
+                    }
+                )
             return
 
         if not summary:
@@ -391,17 +453,15 @@ class FactorGenerator:
         include_signals: bool,
     ) -> None:
         """价格动量因子: 涨跌幅 + 成交量变化"""
-        from backend.storage.db import Database
+        from backend.price_store import get_prices
 
-        db = Database()
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
-        rows = db.conn.execute(
-            """SELECT date, close, volume, change_pct
-               FROM price_bars
-               WHERE symbol = ? AND date >= ?
-               ORDER BY date ASC""",
-            (symbol, cutoff),
-        ).fetchall()
+        rows = [
+            row
+            for row in get_prices(symbol, frequency="1d", limit=max(days * 2, 30))
+            if str(row.get("date", "")) >= cutoff
+        ]
+        rows.sort(key=lambda row: str(row.get("date", "")))
 
         if len(rows) < 2:
             return
@@ -409,21 +469,23 @@ class FactorGenerator:
         # 短期动量: 近5日涨跌幅
         recent = rows[-5:] if len(rows) >= 5 else rows
         short_return = 0.0
-        if recent[0]["close"] and recent[0]["close"] > 0:
-            short_return = (recent[-1]["close"] - recent[0]["close"]) / recent[0][
-                "close"
-            ]
+        recent_first_close = float(recent[0].get("close") or 0)
+        recent_last_close = float(recent[-1].get("close") or 0)
+        if recent_first_close > 0:
+            short_return = (recent_last_close - recent_first_close) / recent_first_close
 
         # 中期动量: 全周期涨跌幅
         mid_return = 0.0
-        if rows[0]["close"] and rows[0]["close"] > 0:
-            mid_return = (rows[-1]["close"] - rows[0]["close"]) / rows[0]["close"]
+        first_close = float(rows[0].get("close") or 0)
+        last_close = float(rows[-1].get("close") or 0)
+        if first_close > 0:
+            mid_return = (last_close - first_close) / first_close
 
         # 成交量变化: 近期 vs 前期
         vol_score = 0.0
         if len(rows) >= 10:
-            early_vol = sum(r["volume"] or 0 for r in rows[: len(rows) // 2])
-            late_vol = sum(r["volume"] or 0 for r in rows[len(rows) // 2 :])
+            early_vol = sum(float(r.get("volume") or 0) for r in rows[: len(rows) // 2])
+            late_vol = sum(float(r.get("volume") or 0) for r in rows[len(rows) // 2 :])
             if early_vol > 0:
                 vol_change = (late_vol - early_vol) / early_vol
                 vol_score = max(-1.0, min(1.0, vol_change))

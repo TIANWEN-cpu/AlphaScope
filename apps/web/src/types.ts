@@ -31,4 +31,7 @@ export interface StockSelection {
   symbol: string;
   name: string;
   exchange?: string;
+  market?: string;
+  resolved?: boolean;
+  source?: string;
 }

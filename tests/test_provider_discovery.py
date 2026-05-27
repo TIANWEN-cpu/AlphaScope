@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
+import pandas as pd
 
 from backend.providers.base import BaseProvider
+from backend.providers.akshare_provider import AkShareProvider
 from backend.providers.registry import (
     ProviderRegistry,
     _scan_directory,
@@ -211,3 +214,40 @@ class TestProviderRegistry:
         # Should return a list (may be empty if no actual data fetching)
         result = registry.get("news", market="CN")
         assert isinstance(result, list)
+
+
+def test_akshare_prices_fall_back_to_tencent_when_primary_empty():
+    """AkShare 主行情接口为空时应使用 Tencent 历史行情兜底。"""
+    provider = AkShareProvider()
+    tx_df = pd.DataFrame(
+        [
+            {
+                "date": "2026-05-22",
+                "open": 1280.0,
+                "high": 1290.0,
+                "low": 1275.0,
+                "close": 1285.0,
+                "amount": 12850000.0,
+            }
+        ]
+    )
+
+    with (
+        patch(
+            "backend.providers.akshare_provider.ak.stock_zh_a_hist",
+            return_value=pd.DataFrame(),
+        ) as primary,
+        patch(
+            "backend.providers.akshare_provider.ak.stock_zh_a_hist_tx",
+            return_value=tx_df,
+        ) as fallback,
+    ):
+        result = provider.get_prices({"symbol": "600519", "limit": 1})
+
+    primary.assert_called_once()
+    fallback.assert_called_once()
+    assert result[0]["symbol"] == "600519"
+    assert result[0]["date"] == "2026-05-22"
+    assert result[0]["close"] == 1285.0
+    assert result[0]["adjust"] == ""
+    assert result[0]["source"] == "tencent"
