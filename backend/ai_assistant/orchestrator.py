@@ -26,6 +26,15 @@ from .conversation_store import ConversationStore
 from .report_generator import generate_report
 
 
+def _default_llm_identity(preferred: Optional[str] = None) -> tuple[str, str]:
+    try:
+        from backend.models.provider_gateway import get_configured_provider
+
+        return get_configured_provider(preferred)
+    except Exception:
+        return preferred or "deepseek", "deepseek-chat"
+
+
 class AnalysisMode(Enum):
     FREE = "free"
     STANDARD = "standard"
@@ -366,11 +375,13 @@ class ChatOrchestrator:
         stock_symbol: str = "",
         stock_name: str = "",
         mode: AnalysisMode = AnalysisMode.FREE,
-        provider: str = "deepseek",
-        model: str = "deepseek-chat",
+        provider: str = "",
+        model: str = "",
         title: str = "",
     ) -> str:
         """创建新对话，返回 ID"""
+        provider, default_model = _default_llm_identity(provider)
+        model = model or default_model
         if not title:
             mode_label = MODE_LABELS.get(mode, mode.value)
             if stock_symbol:
@@ -554,12 +565,13 @@ class ChatOrchestrator:
 
         # 获取或创建 chat session
         if conversation_id not in self._chat_sessions:
-            provider = conv.get("provider", "deepseek")
+            provider = conv.get("provider") or ""
+            provider, _model = _default_llm_identity(provider)
             self._chat_sessions[conversation_id] = new_session(
                 stock_symbol=conv.get("stock_symbol", ""),
                 stock_name=conv.get("stock_name", ""),
                 ctx=ctx,
-                provider=provider if provider != "deepseek" else None,
+                provider=provider,
             )
 
         session = self._chat_sessions[conversation_id]

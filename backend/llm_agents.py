@@ -28,6 +28,8 @@ from backend.models.provider_gateway import (  # noqa: F401
     create_client,
     get_client,
     clear_client_cache,
+    DEFAULT_PROVIDER_MODELS,
+    get_configured_provider,
     _call_with,
     call_llm,
     _extract_json,

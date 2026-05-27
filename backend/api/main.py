@@ -186,11 +186,21 @@ if HAS_FASTAPI:
         from backend.storage.db import Database
 
         store = ConversationStore(db=Database())
+        provider = ""
+        model = ""
+        try:
+            from backend.models.provider_gateway import get_configured_provider
+
+            provider, model = get_configured_provider()
+        except Exception:
+            provider, model = "deepseek", "deepseek-chat"
         conv_id = store.create_conversation(
             title=req.title,
             stock_symbol=req.stock_symbol or "",
             stock_name=req.stock_name or "",
             mode=req.mode,
+            provider=provider,
+            model=model,
         )
         return ApiResponse(
             success=True,

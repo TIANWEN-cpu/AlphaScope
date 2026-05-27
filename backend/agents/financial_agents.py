@@ -20,6 +20,7 @@ from backend.models.provider_gateway import (
     VENDORS,
     _call_with,
     _extract_json,
+    get_configured_provider,
 )
 from backend.agents.base import (
     AGENT_MODEL_CONFIG,
@@ -43,6 +44,21 @@ except Exception:
 logger = logging.getLogger(__name__)
 
 
+def _candidate_models(
+    provider: str,
+    model: str,
+    *,
+    api_key: Optional[str] = None,
+    base_url: str = "",
+) -> list[tuple[str, str, str, Optional[str]]]:
+    candidates = [(provider, model, base_url, api_key)]
+    fallback_provider, fallback_model = get_configured_provider()
+    fallback = (fallback_provider, fallback_model, "", None)
+    if (fallback_provider, fallback_model) != (provider, model):
+        candidates.append(fallback)
+    return candidates
+
+
 def run_one_agent(
     agent_key: str, market_brief: str, api_key: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -60,10 +76,9 @@ def run_one_agent(
     ]
 
     last_err = None
-    for vd, md, key_override in [
-        (vendor, model, api_key),
-        (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], None),
-    ]:
+    for vd, md, base_url, key_override in _candidate_models(
+        vendor, model, api_key=api_key
+    ):
         try:
             mtokens = 2048 if vd == "mimo" else 600
             text = _call_with(
@@ -74,6 +89,7 @@ def run_one_agent(
                 max_tokens=mtokens,
                 temperature=0.3,
                 api_key=key_override,
+                base_url=base_url,
             )
             data = _extract_json(text)
             if not data or not data.get("signal"):
@@ -93,14 +109,12 @@ def run_one_agent(
                     max_tokens=retry_tokens,
                     temperature=0.1,
                     api_key=key_override,
+                    base_url=base_url,
                 )
                 data = _extract_json(text)
 
-            if (not data or not data.get("signal")) and (
-                vd,
-                md,
-            ) != FALLBACK_VENDOR_MODEL:
-                last_err = f"{VENDORS[vd]['label']} 未返回有效 JSON"
+            if not data or not data.get("signal"):
+                last_err = f"{VENDORS.get(vd, {}).get('label', vd)} 未返回有效 JSON"
                 continue
 
             valid = _validate_agent_output(data or {})
@@ -113,9 +127,11 @@ def run_one_agent(
                 "evidence": valid["evidence"],
                 "invalid_if": valid["invalid_if"],
                 "risks": valid["risks"],
-                "vendor": VENDORS[vd]["label"],
+                "vendor": VENDORS.get(vd, {}).get("label", vd),
                 "model": md,
-                "primary_vendor": VENDORS[primary_vendor]["label"],
+                "primary_vendor": VENDORS.get(primary_vendor, {}).get(
+                    "label", primary_vendor
+                ),
                 "fallback_used": vd != primary_vendor,
                 "ok": True,
             }
@@ -232,10 +248,12 @@ def run_custom_agent(
     ]
     primary_vendor = resolved_provider
     last_err = None
-    for vd, md, bu, key_override in [
-        (resolved_provider, resolved_model, resolved_base_url, resolved_key),
-        (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1], "", None),
-    ]:
+    for vd, md, bu, key_override in _candidate_models(
+        resolved_provider,
+        resolved_model,
+        api_key=resolved_key,
+        base_url=resolved_base_url,
+    ):
         try:
             mtokens = 2048 if vd == "mimo" else 500
             call_messages = (

@@ -31,7 +31,6 @@ import llm_agents as _llm_agents  # noqa: E402
 call_llm = getattr(_llm_agents, "call_llm", _llm_agents._call_with)
 _extract_json = _llm_agents._extract_json
 VENDORS = _llm_agents.VENDORS
-FALLBACK_VENDOR_MODEL = _llm_agents.FALLBACK_VENDOR_MODEL
 
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "prompts" / "critic.md"
 
@@ -294,8 +293,9 @@ def run_batch_critic(
         model or DEFAULT_CRITIC_MODEL[1],
     )
     candidates = [primary]
-    if (FALLBACK_VENDOR_MODEL[0], FALLBACK_VENDOR_MODEL[1]) != primary:
-        candidates.append(FALLBACK_VENDOR_MODEL)
+    fallback = _llm_agents.get_configured_provider()
+    if fallback != primary:
+        candidates.append(fallback)
 
     last_err = ""
     for vd, md in candidates:
