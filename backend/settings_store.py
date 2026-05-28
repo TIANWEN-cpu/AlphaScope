@@ -218,9 +218,7 @@ def _normalize_preferences(raw: dict[str, Any]) -> dict[str, dict[str, Any]]:
             continue
         for key, value in values.items():
             if key in normalized[section]:
-                normalized[section][key] = _coerce_preference_value(
-                    section, key, value
-                )
+                normalized[section][key] = _coerce_preference_value(section, key, value)
     return normalized
 
 

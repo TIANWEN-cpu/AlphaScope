@@ -90,7 +90,9 @@ class AkShareFundProvider(FundDataProvider):
             import akshare as ak
 
             df = await _run_blocking(
-                lambda: ak.fund_open_fund_info_em(symbol=code, indicator="单位净值走势"),
+                lambda: ak.fund_open_fund_info_em(
+                    symbol=code, indicator="单位净值走势"
+                ),
                 name="fund-nav",
             )
             if df.empty:

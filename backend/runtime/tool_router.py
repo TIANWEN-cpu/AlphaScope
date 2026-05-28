@@ -327,7 +327,9 @@ class ToolRouter:
                 start_date=start_date,
                 end_date=end_date,
                 initial_capital=initial_capital,
-                params=kwargs.get("params") if isinstance(kwargs.get("params"), dict) else None,
+                params=kwargs.get("params")
+                if isinstance(kwargs.get("params"), dict)
+                else None,
             )
             return {
                 "run_id": result.get("run_id"),
