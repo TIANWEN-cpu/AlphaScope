@@ -1,10 +1,10 @@
-# AI-FINANCE 用户手册
+# 研策中枢 AlphaScope 用户手册
 
-> 本地运行的 AI 金融分析工作台
+> 本地运行的 AI 投研与量化决策工作台
 
-## 什么是 AI-FINANCE？
+## 什么是研策中枢 AlphaScope？
 
-AI-FINANCE 是一个本地运行的 AI 金融分析工作台，通过多个 AI Agent 协作产出投资研究报告。
+研策中枢 AlphaScope 是一个本地运行的 AI 投研与量化决策工作台，通过多个 AI Agent 协作产出投资研究报告，并整合新闻、证据链、量化回测和本地设置管理。
 
 核心能力：
 - 多 Agent 专家团协作分析（10 位专家）
@@ -45,5 +45,5 @@ AI-FINANCE 是一个本地运行的 AI 金融分析工作台，通过多个 AI A
 
 ## 快速链接
 
-- [GitHub 仓库](https://github.com/TIANWEN-cpu/AI--FINANCE)
-- [问题反馈](https://github.com/TIANWEN-cpu/AI--FINANCE/issues)
+- [GitHub 仓库](https://github.com/TIANWEN-cpu/AlphaScope)
+- [问题反馈](https://github.com/TIANWEN-cpu/AlphaScope/issues)
