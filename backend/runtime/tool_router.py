@@ -319,7 +319,7 @@ class ToolRouter:
     ) -> Dict[str, Any]:
         """量化回测工具"""
         try:
-            from backend.api.quant import run_local_backtest_payload
+            from backend.quant.local_runner import run_local_backtest_payload
 
             result = run_local_backtest_payload(
                 strategy_id=strategy_id,
