@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Play, Settings2, Download, TrendingUp, History, Flag, ShieldAlert, BarChart, XCircle, Activity, Code2, Layers, Cpu, CheckCircle } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { api, QuantRun, QuantStrategy, QuantStrategyParam } from '../lib/api';
+import { SafeResponsiveContainer } from './SafeResponsiveContainer';
 
 interface BacktestingProps {
   symbol?: string;
@@ -73,10 +74,49 @@ const TABS = [
   { id: 'compare', label: '运行记录', icon: Activity },
 ];
 
+const BACKTEST_SERVICE_OFFLINE_STATUS = '外部服务未运行：已切换为本地回测引擎。';
+const BACKTEST_SERVICE_START_HINT = '请启动外部回测服务，并确认 http://localhost:8888 提供 /api/status、/api/strategies 和 /api/backtest。';
+
+const isRawBacktestServiceError = (value: unknown) => {
+  const text = String(value || '').trim();
+  return /^(\S+\s+)?HTTP \d{3}:?/i.test(text) || text.endsWith('请求异常:');
+};
+
+const formatDisplayText = (value: unknown, fallback = '') => {
+  const text = String(value || fallback);
+  const serviceNamePattern = new RegExp(['jin', 'ce'].join(''), 'gi');
+  const servicePackagePattern = new RegExp(['jin', '-ce', '-zhi', '-suan'].join(''), 'gi');
+  return text
+    .replace(servicePackagePattern, '外部回测服务')
+    .replace(serviceNamePattern, '外部回测服务');
+};
+
+const formatQuantStatusText = (
+  canRun: boolean,
+  data: Record<string, unknown>,
+  fallbackError?: string | null,
+) => {
+  const externalConnected = Boolean(data.external_connected ?? data.connected) && !Boolean(data.degraded);
+  const strategyCount = data.strategy_count || 0;
+  const activeRuns = data.active_runs || 0;
+  if (externalConnected) {
+    return `外部回测服务已连接，策略 ${data.strategy_count || 0} 个，活跃运行 ${data.active_runs || 0} 个`;
+  }
+  if (canRun) {
+    return `本地回测引擎可用，策略 ${strategyCount} 个，活跃运行 ${activeRuns} 个`;
+  }
+
+  const rawError = fallbackError || String(data.error || '');
+  if (!rawError || isRawBacktestServiceError(rawError)) {
+    return BACKTEST_SERVICE_OFFLINE_STATUS;
+  }
+  return `${BACKTEST_SERVICE_OFFLINE_STATUS} ${BACKTEST_SERVICE_START_HINT}`;
+};
+
 export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: BacktestingProps) {
   const [running, setRunning] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const [statusText, setStatusText] = useState('正在连接 Jince 量化引擎...');
+  const [statusText, setStatusText] = useState('正在连接外部回测服务...');
   const [strategies, setStrategies] = useState<QuantStrategy[]>([]);
   const [runs, setRuns] = useState<QuantRun[]>([]);
   const [selectedStrategyId, setSelectedStrategyId] = useState('macd_momentum');
@@ -88,21 +128,40 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
   const [metrics, setMetrics] = useState<BacktestMetrics | null>(null);
   const [hasBacktestResult, setHasBacktestResult] = useState(false);
   const [quantConnected, setQuantConnected] = useState<boolean | null>(null);
+  const [externalConnected, setExternalConnected] = useState<boolean | null>(null);
   const [strategySource, setStrategySource] = useState<'backend' | 'local-template'>('local-template');
 
   const selectedStrategy = strategies.find(strategy => String(strategy.id || strategy.name) === selectedStrategyId);
   const selectedParams = selectedStrategy?.params || [];
+  const externalUnavailable = externalConnected === false;
   const quantUnavailable = quantConnected === false;
   const canRunBacktest = quantConnected === true && !running;
   const resultStateLabel = hasBacktestResult
     ? '后端回测结果'
-    : quantUnavailable
-      ? 'Jince 离线，暂无回测结果'
+    : externalUnavailable && !quantUnavailable
+      ? '本地回测引擎待运行'
+      : quantUnavailable
+        ? '回测能力不可用'
       : '等待后端回测';
 
   useEffect(() => {
     setStrategyParams(buildDefaultParams(selectedStrategy));
   }, [selectedStrategyId, selectedStrategy]);
+
+  const refreshQuantHealth = async () => {
+    setStatusText('正在检查回测服务状态...');
+    const result = await api.quantStatus();
+    const data = result.data || {};
+    const externalOk = result.success && Boolean(data.external_connected ?? data.connected) && !Boolean(data.degraded);
+    const canRun = result.success && (externalOk || Boolean(data.can_run_backtest) || Boolean(data.local_backtest_available));
+    setExternalConnected(externalOk);
+    setQuantConnected(canRun);
+    setStatusText(formatQuantStatusText(canRun, data, result.error));
+    if (canRun) {
+      await loadStrategies();
+      await refreshRuns();
+    }
+  };
 
   const loadStrategies = async () => {
     const result = await api.quantStrategies();
@@ -112,9 +171,9 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
       setSelectedStrategyId(String(nextStrategy.id || nextStrategy.name || 'macd_momentum'));
       const degraded = Boolean((result.data as Record<string, unknown>).degraded);
       setStrategySource(degraded ? 'local-template' : 'backend');
-      setStatusText(degraded ? `Jince 离线，已加载 ${result.data.strategies.length} 个本地策略模板` : `已加载 ${result.data.strategies.length} 个后端策略`);
+      setStatusText(degraded ? `已加载 ${result.data.strategies.length} 个本地回测策略` : `已加载 ${result.data.strategies.length} 个后端策略`);
     } else {
-      setStatusText(result.error || '策略列表加载失败');
+      setStatusText(formatDisplayText(result.error, '策略列表加载失败'));
     }
   };
 
@@ -124,7 +183,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
       setRuns(result.data.runs);
       setStatusText(`已刷新 ${result.data.runs.length} 条运行记录`);
     } else {
-      setStatusText(result.error || '运行记录刷新失败');
+      setStatusText(formatDisplayText(result.error, '运行记录刷新失败'));
     }
   };
 
@@ -143,16 +202,15 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
       if (statusResult.status === 'fulfilled') {
         const status = statusResult.value;
         const data = status.data || {};
-        const connected = status.success && Boolean(data.connected) && !Boolean(data.degraded);
-        setQuantConnected(connected);
-        setStatusText(
-          connected
-            ? `Jince 已连接，策略 ${data.strategy_count || 0} 个，活跃运行 ${data.active_runs || 0} 个`
-            : status.error || 'Jince 服务离线：回测执行已暂停，仅显示本地策略模板。',
-        );
+        const externalOk = status.success && Boolean(data.external_connected ?? data.connected) && !Boolean(data.degraded);
+        const canRun = status.success && (externalOk || Boolean(data.can_run_backtest) || Boolean(data.local_backtest_available));
+        setExternalConnected(externalOk);
+        setQuantConnected(canRun);
+        setStatusText(formatQuantStatusText(canRun, data, status.error));
       } else {
+        setExternalConnected(false);
         setQuantConnected(false);
-        setStatusText('Jince 状态接口不可用：回测执行已暂停，仅显示本地策略模板。');
+        setStatusText('回测服务状态接口不可用：回测执行暂不可用。');
       }
 
       if (strategiesResult.status === 'fulfilled' && strategiesResult.value.data?.strategies?.length) {
@@ -183,26 +241,26 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
     const strategy = strategies.find(item => String(item.id || item.name) === strategyId);
     setSelectedStrategyId(strategyId);
     setActiveTab('workshop');
-    setStatusText(`已打开 ${String(strategy?.name || strategyId)} 参数配置，修改后返回回测大厅执行。`);
+    setStatusText(`已打开 ${formatDisplayText(strategy?.name || strategyId)} 参数配置，修改后返回回测大厅执行。`);
   };
 
   const reloadStrategies = async () => {
-    setStatusText('正在请求 Jince 重载策略目录...');
+    setStatusText('正在请求回测服务重载策略目录...');
     const result = await api.quantReloadStrategies();
     if (!result.success) {
-      setStatusText(result.error || '策略重载失败');
+      setStatusText(formatDisplayText(result.error, '策略重载失败'));
       return;
     }
     await loadStrategies();
   };
 
   const showUnsupported = (message: string) => {
-    setStatusText(message);
+    setStatusText(formatDisplayText(message));
   };
 
   const runTest = async () => {
     if (!quantConnected) {
-      setStatusText('Jince 量化引擎未连接，已阻止回测执行；请启动服务后再运行。');
+      setStatusText('回测能力暂不可用，请稍后重新检查服务状态。');
       return;
     }
     setRunning(true);
@@ -219,7 +277,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
     if (result.success && result.data) {
       const businessStatus = String(result.data.status || '').toLowerCase();
       if (businessStatus && businessStatus !== 'completed') {
-        const error = String(result.data.error || `回测状态为 ${businessStatus}`);
+        const error = formatDisplayText(result.data.error || `回测状态为 ${businessStatus}`);
         setStatusText(`回测未完成：${error}${hasBacktestResult ? '，已保留当前后端回测曲线' : ''}`);
       } else {
         const responseMetrics = (result.data.metrics || {}) as Record<string, unknown>;
@@ -232,10 +290,10 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
         });
         setEquityCurve(normalizeCurve(result.data.equity_curve, initialCapital));
         setHasBacktestResult(true);
-        setStatusText(`回测完成：${String(result.data.run_id || '无运行ID')}`);
+        setStatusText(`${formatDisplayText(result.data.message, '回测完成')}：${formatDisplayText(result.data.run_id || '无运行ID')}`);
       }
     } else {
-      setStatusText(result.error || `后端回测失败${hasBacktestResult ? '，已保留当前后端回测曲线' : ''}`);
+      setStatusText(formatDisplayText(result.error, `后端回测失败${hasBacktestResult ? '，已保留当前后端回测曲线' : ''}`));
     }
     setRunning(false);
   };
@@ -269,7 +327,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
             >
               {activeTab === tab.id && (
                 <motion.div 
-                  layoutId="jince-tab"
+                  layoutId="quant-tab"
                   className="absolute inset-0 bg-white/10 rounded-lg shadow-sm border border-white/10"
                   initial={false}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -300,7 +358,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                   >
                     {strategies.map(strategy => (
                       <option key={String(strategy.id || strategy.name)} value={String(strategy.id || strategy.name)} className="bg-neutral-900">
-                        {String(strategy.name || strategy.id)}
+                        {formatDisplayText(strategy.name || strategy.id)}
                       </option>
                     ))}
                   </select>
@@ -320,13 +378,57 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                   <button 
                     onClick={runTest}
                     disabled={!canRunBacktest}
-                    className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white border border-indigo-500/50 rounded-lg flex items-center gap-2 text-xs font-mono uppercase font-medium transition-all shadow-[0_0_20px_rgba(99,102,241,0.2)]"
+                    className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white border border-indigo-500/50 rounded-lg flex items-center gap-2 text-xs font-mono font-medium transition-all shadow-[0_0_20px_rgba(99,102,241,0.2)]"
                   >
                     {running ? <Activity className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
-                    {running ? '引擎计算中...' : quantUnavailable ? 'Jince 离线，无法回测' : '启动单票/组合回测'}
+                    {running ? '引擎计算中...' : quantUnavailable ? '回测暂不可用' : externalUnavailable ? '用本地引擎回测' : '启动单票/组合回测'}
                   </button>
                 </div>
               </div>
+
+              {externalUnavailable && (
+                <div className={cn(
+                  "mb-6 rounded-2xl border p-4",
+                  quantUnavailable ? "border-yellow-400/20 bg-yellow-400/10" : "border-emerald-400/20 bg-emerald-400/10"
+                )}>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <div className={cn(
+                        "flex items-center gap-2 text-sm font-semibold",
+                        quantUnavailable ? "text-yellow-100" : "text-emerald-100"
+                      )}>
+                        {quantUnavailable ? <ShieldAlert className="h-4 w-4 text-yellow-300" /> : <CheckCircle className="h-4 w-4 text-emerald-300" />}
+                        {quantUnavailable ? '回测能力暂不可用' : '外部服务未运行，本地回测引擎已接管'}
+                      </div>
+                      <p className={cn(
+                        "mt-2 text-xs leading-relaxed",
+                        quantUnavailable ? "text-yellow-100/75" : "text-emerald-100/75"
+                      )}>
+                        {quantUnavailable
+                          ? <>后端适配器默认连接 <span className="font-mono text-yellow-50">http://localhost:8888</span>。请确认回测后端或本地回测引擎可用。</>
+                          : <>外部服务未监听 <span className="font-mono text-emerald-50">http://localhost:8888</span>，当前会使用项目内置策略和本地行情完成回测。</>}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <button
+                        onClick={refreshQuantHealth}
+                        className={cn(
+                          "rounded-lg border bg-black/20 px-4 py-2 text-xs font-semibold transition-colors hover:bg-black/35",
+                          quantUnavailable ? "border-yellow-300/25 text-yellow-100" : "border-emerald-300/25 text-emerald-100"
+                        )}
+                      >
+                        重新检查服务
+                      </button>
+                      <button
+                        onClick={reloadStrategies}
+                        className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-neutral-200 transition-colors hover:bg-white/10"
+                      >
+                        重载策略目录
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
                 {/* Metric Cards */}
@@ -369,11 +471,11 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                   <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-[80px] pointer-events-none"></div>
                   <h3 className="text-xs font-mono uppercase tracking-widest text-neutral-400 mb-6 flex items-center gap-2 pb-3 border-b border-white/5">
                     收益率曲线（{hasBacktestResult ? '后端回测路径' : '暂无可用回测'}）
-                    {!hasBacktestResult && <span className="ml-auto text-[10px] px-2 py-0.5 rounded bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 font-mono">{quantUnavailable ? 'Jince 离线' : '待回测更新'}</span>}
+                    {!hasBacktestResult && <span className="ml-auto text-[10px] px-2 py-0.5 rounded bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 font-mono normal-case">{quantUnavailable ? '暂不可用' : externalUnavailable ? '本地引擎待运行' : '待回测更新'}</span>}
                   </h3>
                   <div className="h-80 w-full -ml-3 relative z-10 min-w-0">
                     {equityCurve.length ? (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <SafeResponsiveContainer minHeight={320}>
                         <LineChart data={equityCurve}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                           <XAxis dataKey="month" stroke="#737373" fontSize={11} fontFamily="monospace" tickLine={false} />
@@ -384,14 +486,16 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                           <Line type="monotone" dataKey="strategy" name="策略收益" stroke="#f43f5e" strokeWidth={2.5} dot={false} activeDot={{r: 4}} style={{ filter: 'drop-shadow(0 0 8px rgba(244,63,94,0.4))' }} />
                           <Line type="monotone" dataKey="base" name="沪深300基准" stroke="#737373" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
                         </LineChart>
-                      </ResponsiveContainer>
+                      </SafeResponsiveContainer>
                     ) : (
                       <div className="flex h-full items-center justify-center rounded-xl border border-white/5 bg-black/20 px-6 text-center">
                         <div>
-                          <p className="text-sm font-medium text-neutral-300">{quantUnavailable ? 'Jince 量化引擎未连接' : '尚未运行回测'}</p>
+                          <p className="text-sm font-medium text-neutral-300">{quantUnavailable ? '回测能力暂不可用' : externalUnavailable ? '本地回测引擎待运行' : '尚未运行回测'}</p>
                           <p className="mt-2 text-xs leading-relaxed text-neutral-500">
                             {quantUnavailable
                               ? '当前不会展示本地演示收益曲线，避免把模板数据误认为真实回测结果。'
+                              : externalUnavailable
+                                ? '点击“用本地引擎回测”后，这里将显示本地回测引擎返回的权益曲线。'
                               : '提交回测后，这里将显示后端返回的权益曲线。'}
                           </p>
                         </div>
@@ -473,7 +577,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div>
                     <h3 className="text-sm font-medium text-white">策略参数配置</h3>
-                    <p className="mt-1 text-xs text-neutral-500">{String(selectedStrategy?.name || selectedStrategyId)} · 参数会随下一次回测提交</p>
+                    <p className="mt-1 text-xs text-neutral-500">{formatDisplayText(selectedStrategy?.name || selectedStrategyId)} · 参数会随下一次回测提交</p>
                   </div>
                   <button onClick={() => setActiveTab('overview')} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-mono text-white">
                     返回回测大厅执行
@@ -532,7 +636,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                       重载策略
                     </button>
                     <button
-                      onClick={() => showUnsupported('当前后端未提供创建策略接口，请在 Jince 策略目录添加后点击重载。')}
+                      onClick={() => showUnsupported('当前后端未提供创建策略接口，请在外部回测服务的策略目录添加后点击重载。')}
                       className="text-xs text-neutral-500 hover:text-neutral-300 font-medium transition-colors"
                     >
                       + 创建新策略
@@ -542,7 +646,9 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                 <div className="flex-1 p-5 overflow-y-auto custom-scrollbar space-y-4">
                   {strategies.map((strategy, i) => {
                     const id = String(strategy.id || strategy.name || `strategy-${i}`);
-                    const name = String(strategy.name || strategy.id || '未命名策略');
+                    const name = formatDisplayText(strategy.name || strategy.id || '未命名策略');
+                    const description = formatDisplayText(strategy.description || '点击选择为回测策略');
+                    const status = formatDisplayText(strategy.status || '待选');
                     return (
                     <div key={id} onClick={() => setSelectedStrategyId(id)} className="border border-white/5 bg-white/[0.02] rounded-xl p-4 flex justify-between items-center group hover:bg-white/[0.04] transition-colors cursor-pointer">
                       <div className="flex items-center gap-4">
@@ -553,7 +659,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                           <h4 className="text-sm text-neutral-200 font-medium mb-1 group-hover:text-indigo-300 transition-colors">{name}</h4>
                           <div className="flex gap-3 text-[10px] font-mono text-neutral-500">
                             <span>ID: {id}</span>
-                            <span>{String(strategy.description || '点击选择为回测策略')}</span>
+                            <span>{description}</span>
                           </div>
                         </div>
                       </div>
@@ -561,7 +667,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                         <span className={cn(
                           "text-sm font-mono font-medium border px-2.5 py-1 rounded-lg",
                           selectedStrategyId === id ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10" : "text-neutral-500 border-white/10 bg-white/5"
-                        )}>{selectedStrategyId === id ? '已选择' : String(strategy.status || '待选')}</span>
+                        )}>{selectedStrategyId === id ? '已选择' : status}</span>
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
@@ -621,8 +727,8 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                 <div className="mt-6 w-full max-w-2xl grid gap-2">
                   {runs.slice(0, 5).map((run, index) => (
                     <div key={String(run.run_id || run.id || index)} className="flex items-center justify-between bg-black/30 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono">
-                      <span className="text-neutral-300">{String(run.strategy_id || '--')} · {String(run.symbol || '--')}</span>
-                      <span className="text-indigo-400">{String(run.status || '--')}</span>
+                      <span className="text-neutral-300">{formatDisplayText(run.strategy_id || '--')} · {String(run.symbol || '--')}</span>
+                      <span className="text-indigo-400">{formatDisplayText(run.status || '--')}</span>
                       <span className="text-rose-400">{run.total_return !== undefined ? formatPct(run.total_return) : '--'}</span>
                     </div>
                   ))}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter
@@ -9,6 +11,49 @@ from fastapi import APIRouter
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/prices", tags=["prices"])
+logger = logging.getLogger(__name__)
+
+PRICE_PROVIDER_TIMEOUT_SECONDS = 8.0
+
+
+async def _fetch_provider_bars(sym: str, days: int) -> list[dict]:
+    from backend.price_store import get_market
+    from backend.providers.registry import get_registry
+
+    registry = get_registry()
+    end_date = datetime.now().strftime("%Y%m%d")
+    start_date = (datetime.now() - timedelta(days=max(days * 2, 30))).strftime(
+        "%Y%m%d"
+    )
+    return await asyncio.wait_for(
+        asyncio.to_thread(
+            registry.get,
+            data_type="prices",
+            market=get_market(sym),
+            symbol=sym,
+            limit=days,
+            start_date=start_date,
+            end_date=end_date,
+            period="daily",
+            frequency="1d",
+            adjust="",
+        ),
+        timeout=PRICE_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
+def _provider_timeout_response(sym: str) -> ApiResponse:
+    return ApiResponse(
+        success=False,
+        data={
+            "symbol": sym,
+            "fetched": 0,
+            "degraded": True,
+            "source_status": "timeout",
+        },
+        error="行情源响应超时，请稍后重试",
+        error_code="PRICE_PROVIDER_TIMEOUT",
+    )
 
 
 # ============== Endpoints ==============
@@ -33,18 +78,26 @@ async def get_latest_price(symbol: str):
     from backend.price_quality import filter_incompatible_price_bars
     from backend.price_store import get_latest_price as _latest, get_prices as _get
 
+    fetch_result = None
     raw_daily_bars = _get(
         symbol=symbol, frequency="1d", limit=20, include_incompatible=True
     )
     daily_bars = filter_incompatible_price_bars(raw_daily_bars)
     if not daily_bars:
-        await fetch_prices(symbol, days=120)
+        fetch_result = await fetch_prices(symbol, days=120)
         raw_daily_bars = _get(
             symbol=symbol, frequency="1d", limit=20, include_incompatible=True
         )
         daily_bars = filter_incompatible_price_bars(raw_daily_bars)
     bar = daily_bars[0] if daily_bars else _latest(symbol)
     if not bar:
+        if fetch_result is not None and not fetch_result.success:
+            return ApiResponse(
+                success=False,
+                data=fetch_result.data,
+                error=fetch_result.error or "无价格数据",
+                error_code=fetch_result.error_code,
+            )
         return ApiResponse(success=False, error="无价格数据")
     return ApiResponse(success=True, data=bar)
 
@@ -95,8 +148,20 @@ async def get_prices(
         include_incompatible=True,
     )
     bars = filter_incompatible_price_bars(raw_bars)
+    degraded = False
+    source_status = "ok"
+    error = None
+    error_code = None
     if not bars and not start and not end:
-        await fetch_prices(symbol, days=max(1, min(fetch_days, 365)))
+        fetch_result = await fetch_prices(symbol, days=max(1, min(fetch_days, 365)))
+        if not fetch_result.success:
+            degraded = True
+            error = fetch_result.error
+            error_code = fetch_result.error_code
+            if error_code == "PRICE_PROVIDER_TIMEOUT":
+                source_status = "timeout"
+            else:
+                source_status = "unavailable"
         raw_bars = _get(
             symbol=symbol,
             frequency=store_frequency,
@@ -115,7 +180,11 @@ async def get_prices(
             "frequency": normalized_frequency,
             "bars": bars,
             "total": len(bars),
+            "degraded": degraded,
+            "source_status": source_status,
         },
+        error=error,
+        error_code=error_code,
     )
 
 
@@ -126,35 +195,14 @@ async def fetch_prices(symbol: str, days: int = 30):
         from fastapi import HTTPException
 
         raise HTTPException(status_code=400, detail="days 参数必须在 1-365 之间")
-    from backend.price_store import (
-        get_market,
-        normalize_symbol as _norm,
-        save_price_bars,
-    )
+    from backend.price_store import normalize_symbol as _norm, save_price_bars
 
     sym = _norm(symbol)
     if not sym:
         return ApiResponse(success=False, error="无效的股票代码")
 
     try:
-        from backend.providers.registry import get_registry
-
-        registry = get_registry()
-        end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=max(days * 2, 30))).strftime(
-            "%Y%m%d"
-        )
-        bars = registry.get(
-            data_type="prices",
-            market=get_market(sym),
-            symbol=sym,
-            limit=days,
-            start_date=start_date,
-            end_date=end_date,
-            period="daily",
-            frequency="1d",
-            adjust="",
-        )
+        bars = await _fetch_provider_bars(sym, days)
         if not bars:
             return ApiResponse(success=False, error="未从 Provider 获取到数据")
 
@@ -165,5 +213,8 @@ async def fetch_prices(symbol: str, days: int = 30):
             data={"symbol": sym, "fetched": count},
             message=f"成功获取 {count} 条 K 线数据",
         )
+    except asyncio.TimeoutError:
+        logger.warning("Price provider timed out for %s after %.1fs", sym, PRICE_PROVIDER_TIMEOUT_SECONDS)
+        return _provider_timeout_response(sym)
     except Exception as e:
         return ApiResponse(success=False, error=f"获取数据失败: {e}")

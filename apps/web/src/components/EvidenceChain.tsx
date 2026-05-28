@@ -32,6 +32,23 @@ interface EvidenceNode {
   localOnly?: boolean;
 }
 
+interface EvidenceBundle {
+  claim: string;
+  evidence?: EvidenceRecord[];
+  confidence?: number;
+  source_count?: number;
+  trust_score?: number;
+  decay_factor?: number;
+  contradictions?: Array<string | Record<string, unknown>>;
+}
+
+interface EvidenceChainResult {
+  bundles: EvidenceBundle[];
+  totalSources: number;
+  averageConfidence: number;
+  contradictionCount: number;
+}
+
 interface EvidenceChainProps {
   symbol?: string;
   stockName?: string;
@@ -50,6 +67,38 @@ const evidenceTypeFromPillar = (pillar: EvidenceNode['pillar']) => {
   if (pillar === 'sentiment') return 'news';
   if (pillar === 'liquidity') return 'fund_flow';
   return 'fundamental';
+};
+
+const formatPercent = (value?: number) => {
+  const num = Number(value ?? 0);
+  const normalized = Math.abs(num) <= 1 ? num * 100 : num;
+  return `${Math.round(normalized)}%`;
+};
+
+const normalizeEvidenceChainResult = (data: Record<string, unknown>): EvidenceChainResult => {
+  const rawBundles = Array.isArray(data.bundles) ? data.bundles : [];
+  const bundles = rawBundles.map((bundle) => bundle as EvidenceBundle);
+  const sourceTotal = bundles.reduce((sum, bundle) => {
+    const explicitCount = Number(bundle.source_count);
+    if (Number.isFinite(explicitCount) && explicitCount > 0) return sum + explicitCount;
+    return sum + (Array.isArray(bundle.evidence) ? bundle.evidence.length : 0);
+  }, 0);
+  const confidenceTotal = bundles.reduce((sum, bundle) => sum + Number(bundle.confidence || 0), 0);
+  const contradictionCount = bundles.reduce((sum, bundle) => (
+    sum + (Array.isArray(bundle.contradictions) ? bundle.contradictions.length : 0)
+  ), 0);
+
+  return {
+    bundles,
+    totalSources: sourceTotal,
+    averageConfidence: bundles.length ? confidenceTotal / bundles.length : 0,
+    contradictionCount,
+  };
+};
+
+const contradictionText = (item: string | Record<string, unknown>) => {
+  if (typeof item === 'string') return item;
+  return String(item.claim || item.summary || item.title || item.reason || JSON.stringify(item));
 };
 
 const mapEvidenceRecord = (item: EvidenceRecord): EvidenceNode => ({
@@ -126,7 +175,7 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
   const [selectedStock, setSelectedStock] = useState(`${stockName} (${symbol})`);
   const [selectedNode, setSelectedNode] = useState<EvidenceNode | null>(null);
   const [statusText, setStatusText] = useState('证据链后端待同步');
-  const [chainResult, setChainResult] = useState('');
+  const [chainResult, setChainResult] = useState<EvidenceChainResult | null>(null);
   
   // Custom new node states
   const [isAdding, setIsAdding] = useState(false);
@@ -155,9 +204,10 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
         setSelectedNode(nodes[0] || null);
         setStatusText(`已接入 ${nodes.length} 条持久化证据`);
       } else {
-        setEvidenceNodes([]);
-        setSelectedNode(null);
-        setStatusText(result.error || '后端暂无证据；当前不展示样例，新增论据后会写入后端。');
+        setEvidenceNodes(DEFAULT_NODES);
+        setSelectedNode(DEFAULT_NODES[0]);
+        setChainResult(null);
+        setStatusText(result.error || '后端暂无证据；当前显示本地预览样例，新增论据后会写入后端。');
       }
     }
 
@@ -235,7 +285,7 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
 
   const handleBuildChain = async () => {
     if (!evidenceNodes.length) {
-      setChainResult('');
+      setChainResult(null);
       setStatusText('暂无证据可构建，请先追加论据或显式载入本地样例。');
       return;
     }
@@ -252,10 +302,10 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
     })) as EvidenceRecord[];
     const result = await api.evidenceChain(payload);
     if (result.success && result.data) {
-      setChainResult(JSON.stringify(result.data, null, 2));
+      setChainResult(normalizeEvidenceChainResult(result.data));
       setStatusText('证据链构建完成');
     } else {
-      setChainResult('');
+      setChainResult(null);
       setStatusText(result.error || '证据链构建失败');
     }
   };
@@ -267,7 +317,7 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
   const loadLocalSamples = () => {
     setEvidenceNodes(DEFAULT_NODES);
     setSelectedNode(DEFAULT_NODES[0]);
-    setChainResult('');
+    setChainResult(null);
     setStatusText('已载入本地样例，仅用于界面演示，不代表后端证据库。');
   };
 
@@ -360,14 +410,12 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
           >
             <Plus className="w-4 h-4" /> 追加核心决策论据
           </button>
-          {!evidenceNodes.length && (
-            <button
-              onClick={loadLocalSamples}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-yellow-400/10 hover:bg-yellow-400/15 text-yellow-300 border border-yellow-400/20 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer"
-            >
-              载入本地样例
-            </button>
-          )}
+          <button
+            onClick={loadLocalSamples}
+            className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-yellow-400/10 hover:bg-yellow-400/15 text-yellow-300 border border-yellow-400/20 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer"
+          >
+            刷新本地样例
+          </button>
         </div>
       </div>
 
@@ -566,9 +614,58 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
 
           <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 text-xs text-neutral-400 leading-relaxed pr-1 flex flex-col">
             {chainResult && (
-              <pre className="mb-4 max-h-40 overflow-y-auto custom-scrollbar bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-3 text-[10px] text-indigo-100 whitespace-pre-wrap">
-                {chainResult}
-              </pre>
+              <div className="mb-4 space-y-3 rounded-xl border border-indigo-500/10 bg-indigo-500/5 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-indigo-300">证据链摘要</p>
+                    <p className="mt-1 text-[11px] text-neutral-400">后端已聚合论断、来源、可信度与矛盾项。</p>
+                  </div>
+                  <span className={cn(
+                    "rounded-md border px-2 py-1 text-[10px] font-mono",
+                    chainResult.contradictionCount
+                      ? "border-yellow-400/20 bg-yellow-400/10 text-yellow-300"
+                      : "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
+                  )}>
+                    {chainResult.contradictionCount ? `${chainResult.contradictionCount} 个矛盾项` : '未发现矛盾'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center font-mono">
+                  <div className="rounded-lg border border-white/5 bg-black/25 p-2">
+                    <span className="block text-[9px] text-neutral-500">论断束</span>
+                    <strong className="text-sm text-white">{chainResult.bundles.length}</strong>
+                  </div>
+                  <div className="rounded-lg border border-white/5 bg-black/25 p-2">
+                    <span className="block text-[9px] text-neutral-500">来源数</span>
+                    <strong className="text-sm text-white">{chainResult.totalSources}</strong>
+                  </div>
+                  <div className="rounded-lg border border-white/5 bg-black/25 p-2">
+                    <span className="block text-[9px] text-neutral-500">平均可信度</span>
+                    <strong className="text-sm text-white">{formatPercent(chainResult.averageConfidence)}</strong>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {chainResult.bundles.slice(0, 4).map((bundle, index) => (
+                    <div key={`${bundle.claim}-${index}`} className="rounded-lg border border-white/5 bg-black/25 p-2.5">
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <p className="line-clamp-2 text-[11px] font-medium text-neutral-200">{bundle.claim || `证据束 ${index + 1}`}</p>
+                        <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-mono text-indigo-300">
+                          {formatPercent(bundle.confidence)}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-[9px] font-mono text-neutral-500">
+                        <span>来源 {bundle.source_count ?? bundle.evidence?.length ?? 0}</span>
+                        <span>可信评分 {Number(bundle.trust_score ?? 0).toFixed(2)}</span>
+                        <span>时效衰减 {Number(bundle.decay_factor ?? 0).toFixed(2)}</span>
+                      </div>
+                      {!!bundle.contradictions?.length && (
+                        <div className="mt-2 rounded border border-yellow-400/10 bg-yellow-400/5 p-2 text-[10px] text-yellow-200">
+                          {bundle.contradictions.slice(0, 2).map(contradictionText).join('；')}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
             <AnimatePresence mode="wait">
               {selectedNode ? (

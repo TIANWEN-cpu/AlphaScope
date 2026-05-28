@@ -46,6 +46,38 @@ const PERIOD_CONFIG: Record<string, { frequency: PriceFrequency; limit: number; 
 
 const getPeriodConfig = (period: string) => PERIOD_CONFIG[period] || PERIOD_CONFIG['日K'];
 
+type PriceStatusResult = {
+  error?: string | null;
+  error_code?: string | null;
+  data?: unknown | null;
+};
+
+const priceSourceStatus = (data: unknown) => {
+  if (!data || typeof data !== 'object' || !('source_status' in data)) return '';
+  return String((data as { source_status?: unknown }).source_status || '');
+};
+
+const isPriceTimeout = (result: PriceStatusResult) =>
+  result.error_code === 'PRICE_PROVIDER_TIMEOUT' ||
+  priceSourceStatus(result.data) === 'timeout' ||
+  /timeout|超时/i.test(result.error || '');
+
+const priceStatusMessage = (
+  result: PriceStatusResult,
+  label: string,
+  fallbackPeriod?: string,
+) => {
+  if (isPriceTimeout(result)) {
+    return fallbackPeriod
+      ? `${label} 行情源响应超时，已保留 ${fallbackPeriod} 图表`
+      : `${label} 行情源响应超时，请稍后刷新`;
+  }
+  if (result.error === '请求已取消') {
+    return `${label} 行情请求已取消`;
+  }
+  return result.error || `${label} 行情接口暂不可用`;
+};
+
 const averageClose = (bars: PriceBar[], index: number, window: number): number | null => {
   const start = Math.max(0, index - window + 1);
   const slice = bars.slice(start, index + 1);
@@ -890,12 +922,18 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
         setMarketState('ready');
         setDataStatus(`已同步 ${periodConfig.label} 行情数据`);
       } else {
-        setPriceBars([]);
-        setChartData([]);
         setMarketState(result.success ? 'empty' : 'error');
-        setDataStatus(result.success
-          ? `${periodConfig.label} 暂无可用数据`
-          : result.error || `${periodConfig.label} 行情接口暂不可用`);
+        if (chartData.length === 0) {
+          setPriceBars([]);
+          setChartData([]);
+        }
+        setDataStatus(
+          chartData.length
+            ? priceStatusMessage(result, periodConfig.label, chartPeriod)
+            : result.success && !result.data?.degraded
+              ? `${periodConfig.label} 暂无可用数据`
+              : priceStatusMessage(result, periodConfig.label),
+        );
       }
     });
 
@@ -926,7 +964,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
       : await api.priceFetch(symbol, 120);
     if (!isCurrent()) return;
     if (!fetched.success && periodConfig.frequency !== 'intraday') {
-      setDataStatus(fetched.error || '行情刷新失败');
+      setDataStatus(priceStatusMessage(fetched, periodConfig.label, priceBars.length ? chartPeriod : undefined));
       setMarketState(priceBars.length ? 'ready' : 'error');
       setIsRefreshingPrices(false);
       return;
