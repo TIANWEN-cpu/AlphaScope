@@ -365,7 +365,13 @@ export const api = {
   news: (symbol?: string, limit = 20, options: RequestInit = {}) =>
     request<{ news: NewsRecord[]; total: number }>("/api/news", options, { symbol, limit }),
   announcements: (symbol?: string, limit = 10, options: RequestInit = {}) =>
-    request<{ announcements: AnnouncementRecord[]; total: number }>(
+    request<{
+      announcements: AnnouncementRecord[];
+      total: number;
+      degraded?: boolean;
+      source_status?: string;
+      related_news?: NewsRecord[];
+    }>(
       "/api/news/announcements",
       options,
       { symbol, limit },
@@ -458,6 +464,18 @@ export const api = {
     request<{ reports: Record<string, unknown>[]; total: number }>("/api/archive", {}, { stock, limit }),
   archiveReport: (path: string) =>
     request<{ path: string; content: string }>(`/api/archive/report/${encodeURIComponent(path)}`),
+  archiveCreate: (payload: {
+    stock_name: string;
+    symbol: string;
+    content: string;
+    rating?: string;
+    report_type?: string;
+    payload?: Record<string, unknown>;
+  }) =>
+    request<{ saved: boolean; path: string; reason: string }>("/api/archive", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   quantStatus: () => request<Record<string, unknown>>("/api/quant/status"),
   quantStrategies: async () => {
     const result = await request<QuantStrategy[] | { strategies: QuantStrategy[] }>("/api/quant/strategies");

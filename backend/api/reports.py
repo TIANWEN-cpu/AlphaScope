@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/archive", tags=["archive"])
+
+
+class ArchiveCreateRequest(BaseModel):
+    """Create a lightweight archive entry from a generated frontend report."""
+
+    stock_name: str = Field(default="", description="股票名称")
+    symbol: str = Field(description="股票代码")
+    content: str = Field(description="Markdown 报告正文")
+    rating: str = Field(default="", description="报告评级")
+    report_type: str = Field(default="frontend_report", description="报告类型")
+    payload: dict[str, Any] = Field(default_factory=dict, description="报告元数据")
 
 
 @router.get("")
@@ -32,6 +44,36 @@ async def list_reports(
         limit=limit,
     )
     return ApiResponse(success=True, data={"reports": reports, "total": len(reports)})
+
+
+@router.post("")
+async def create_report(req: ArchiveCreateRequest):
+    """保存前端生成的 Markdown 报告到归档中心。"""
+    if not req.symbol.strip():
+        raise HTTPException(status_code=400, detail="缺少股票代码")
+    if not req.content.strip():
+        raise HTTPException(status_code=400, detail="报告内容为空")
+
+    from backend.archive import save_report
+
+    rating = req.rating.strip() or "未评级"
+    result = save_report(
+        stock_name=req.stock_name.strip() or req.symbol.strip(),
+        symbol=req.symbol.strip(),
+        payload=req.payload or {},
+        llm_result={
+            "summary": {
+                "final": rating,
+                "avg_confidence": req.payload.get("confidence", 0),
+            },
+            "agents": {},
+        },
+        chairman_text=rating,
+        report_md=req.content,
+        dedupe_minutes=0,
+        report_type=req.report_type or "frontend_report",
+    )
+    return ApiResponse(success=True, data=result)
 
 
 @router.get("/stats")

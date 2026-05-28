@@ -217,6 +217,32 @@ def test_save_provider_empty_key_preserves_existing_key():
     assert provider["base_url"] == "https://new.example.com/v1"
 
 
+def test_provider_names_are_cleaned_before_returning():
+    """DB 中的历史乱码 provider 名称不应继续透出给前端或 gateway。"""
+    from backend import settings_store
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch("backend.settings_store._sync_to_gateway"),
+    ):
+        settings_store.save_provider(
+            provider_id="sensenova",
+            name="ÉÌÌÀ",
+            base_url="https://api.sensenova.cn/v1",
+            api_key="sk-original-key",
+            enabled=True,
+        )
+        providers = settings_store.list_providers()
+        provider = settings_store.get_provider("sensenova")
+
+    assert providers[0]["name"] == "商汤"
+    assert provider is not None
+    assert provider["name"] == "商汤"
+
+
 @pytest.mark.anyio
 async def test_export_settings(client):
     """GET /api/settings/export 导出不含明文 key"""

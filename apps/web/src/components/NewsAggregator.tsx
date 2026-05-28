@@ -36,6 +36,7 @@ interface NewsItem {
   aiSummary: string;
   sourceUrl?: string;
   publishedAt?: string;
+  degradedFrom?: string;
 }
 
 interface NewsAggregatorProps {
@@ -132,6 +133,13 @@ const mapNewsRecord = (item: NewsRecord): NewsItem => ({
   publishedAt: item.published_at,
 });
 
+const mapRelatedNewsFallback = (item: NewsRecord): NewsItem => ({
+  ...mapNewsRecord(item),
+  category: 'announcement',
+  degradedFrom: '公告源降级，使用相关新闻替代',
+  aiSummary: item.summary || '公告源当前不可用，该条为后端 related_news 降级替代结果，需人工确认是否等同正式公告。',
+});
+
 const mapAnnouncementRecord = (item: AnnouncementRecord): NewsItem => ({
   id: item.id,
   time: displayTime(item.published_at),
@@ -167,7 +175,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedArticle, setSelectedArticle] = useState<NewsItem | null>(null);
   const [isAiExpanded, setIsAiExpanded] = useState<boolean>(true);
-  const [isCalendarExpanded, setIsCalendarExpanded] = useState<boolean>(true);
+  const [isCalendarExpanded, setIsCalendarExpanded] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(false);
   const [newsState, setNewsState] = useState<LoadState>('idle');
   const [priceState, setPriceState] = useState<LoadState>('idle');
@@ -212,6 +220,14 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
         }
         if (announcementResult.status === 'fulfilled' && announcementResult.value.success && announcementResult.value.data?.announcements?.length) {
           nextItems.push(...announcementResult.value.data.announcements.map(mapAnnouncementRecord));
+        } else if (
+          announcementResult.status === 'fulfilled'
+          && announcementResult.value.success
+          && announcementResult.value.data?.degraded
+          && announcementResult.value.data.related_news?.length
+        ) {
+          nextItems.push(...announcementResult.value.data.related_news.map(mapRelatedNewsFallback));
+          failures.push(`公告源降级：${announcementResult.value.error || announcementResult.value.data.source_status || '使用相关新闻替代'}`);
         }
 
         if (nextItems.length) {
@@ -559,6 +575,11 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                           <span className="text-[10px] uppercase font-mono font-bold tracking-wider rounded px-1.5 py-0.5 bg-white/5 border border-white/10 text-indigo-400">
                             {item.source}
                           </span>
+                          {item.degradedFrom && (
+                            <span className="text-[10px] font-mono rounded px-1.5 py-0.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-300">
+                              降级替代
+                            </span>
+                          )}
                           <span className="text-[10px] font-mono text-neutral-500 flex items-center gap-1">
                             影响因子: <span className={cn(
                               "font-bold",
@@ -649,6 +670,9 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                     <div className="bg-black/30 border border-white/5 rounded-xl p-3">
                       <span className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">选定信源</span>
                       <p className="text-xs text-neutral-200 font-medium">{selectedArticle.title}</p>
+                      {selectedArticle.degradedFrom && (
+                        <p className="mt-2 text-[10px] text-yellow-300 font-mono">{selectedArticle.degradedFrom}</p>
+                      )}
                       <div className="flex items-center gap-2 mt-3">
                         <span className="text-[10px] font-mono text-neutral-500">
                           {selectedArticle.publishedAt || selectedArticle.time} · {selectedArticle.source}
@@ -731,7 +755,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                     海外财经及指标前瞻
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 font-mono">演示</span>
                   </h3>
-                  <p className="text-[9px] font-mono uppercase text-neutral-500 tracking-wider">Macro Indicator Calendar · Demo reference</p>
+                  <p className="text-[9px] font-mono uppercase text-neutral-500 tracking-wider">Macro Indicator Calendar · Local demo, collapsed by default</p>
                 </div>
               </div>
               <button 

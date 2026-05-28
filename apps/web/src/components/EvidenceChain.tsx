@@ -29,6 +29,7 @@ interface EvidenceNode {
   time: string;
   content: string;
   verifiedBy: string;
+  localOnly?: boolean;
 }
 
 interface EvidenceChainProps {
@@ -71,7 +72,8 @@ const DEFAULT_NODES: EvidenceNode[] = [
     source: '贵州茅台 2026-Q1 季度财报',
     time: '2026-05-22 17:30',
     content: '基本面分析师核对：最新销售净利润率达 51.2%历史同期高点位，主营现金返流比超 120%，确定为一级核心护城河论证。',
-    verifiedBy: '基本面分析助手'
+    verifiedBy: '基本面分析助手',
+    localOnly: true
   },
   {
     id: '2',
@@ -81,7 +83,8 @@ const DEFAULT_NODES: EvidenceNode[] = [
     source: '直销配额去化数据监测研报',
     time: '2026-05-23 10:15',
     content: '相比传统低利润率代理商层级，直销配额每吨多释放逾30%附加值。直营商城活跃付费买家超历史均值高限，利润增量因子触发。',
-    verifiedBy: '基本面分析助手'
+    verifiedBy: '基本面分析助手',
+    localOnly: true
   },
   {
     id: '3',
@@ -91,7 +94,8 @@ const DEFAULT_NODES: EvidenceNode[] = [
     source: '行情多周期量价归因指标',
     time: '2026-05-23 12:44',
     content: '自 1460 阶段重底盘起稳后，高频均线呈多头排列回归，MACD零轴下方底背离指标双针探底金叉抬升，符合量度超跌逆转判定。',
-    verifiedBy: '量化策略专家'
+    verifiedBy: '量化策略专家',
+    localOnly: true
   },
   {
     id: '4',
@@ -101,7 +105,8 @@ const DEFAULT_NODES: EvidenceNode[] = [
     source: '大基金三期落地事件另类舆情监测',
     time: '2026-05-23 14:30',
     content: '虽然并非直接入主食品饮料，但作为万亿级别国家资金底座催化，成功逆转了此前低迷不振的流动性挤压，风险溢价（RP）因风险偏好骤升而降低。',
-    verifiedBy: '宏观趋势分析师'
+    verifiedBy: '宏观趋势分析师',
+    localOnly: true
   },
   {
     id: '5',
@@ -111,14 +116,15 @@ const DEFAULT_NODES: EvidenceNode[] = [
     source: '交易所盘末及北上主板跨境透视',
     time: '2026-05-23 15:10',
     content: '北上主力配置方向中，上证蓝筹红利名录买进重仓茅台、招行居于前三，中单与超大单主力呈现同步多头的坚决吸筹，非中小散户游资出击。',
-    verifiedBy: '数据情报收集员'
+    verifiedBy: '数据情报收集员',
+    localOnly: true
   }
 ];
 
 export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }: EvidenceChainProps) {
-  const [evidenceNodes, setEvidenceNodes] = useState<EvidenceNode[]>(DEFAULT_NODES);
+  const [evidenceNodes, setEvidenceNodes] = useState<EvidenceNode[]>([]);
   const [selectedStock, setSelectedStock] = useState(`${stockName} (${symbol})`);
-  const [selectedNode, setSelectedNode] = useState<EvidenceNode | null>(evidenceNodes[0]);
+  const [selectedNode, setSelectedNode] = useState<EvidenceNode | null>(null);
   const [statusText, setStatusText] = useState('证据链后端待同步');
   const [chainResult, setChainResult] = useState('');
   
@@ -149,9 +155,9 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
         setSelectedNode(nodes[0] || null);
         setStatusText(`已接入 ${nodes.length} 条持久化证据`);
       } else {
-        setEvidenceNodes(DEFAULT_NODES);
-        setSelectedNode(DEFAULT_NODES[0]);
-        setStatusText(result.error || '后端暂无证据，显示本地样例，可新增后写入后端');
+        setEvidenceNodes([]);
+        setSelectedNode(null);
+        setStatusText(result.error || '后端暂无证据；当前不展示样例，新增论据后会写入后端。');
       }
     }
 
@@ -192,7 +198,8 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
       source: newSource,
       time: new Date().toISOString().replace('T', ' ').substring(0, 16),
       content: newContent,
-      verifiedBy: '人工审计分析师'
+      verifiedBy: '人工审计分析师',
+      localOnly: true
     };
 
     setEvidenceNodes(prev => [newNode, ...prev]);
@@ -205,6 +212,15 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
 
   const handleDeleteEvidence = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const node = evidenceNodes.find(item => item.id === id);
+    if (node?.localOnly) {
+      setEvidenceNodes(prev => prev.filter(item => item.id !== id));
+      if (selectedNode?.id === id) {
+        setSelectedNode(null);
+      }
+      setStatusText('本地样例论据已从当前视图移除');
+      return;
+    }
     const response = await api.evidenceDelete(id);
     if (response.success) {
       setEvidenceNodes(prev => prev.filter(item => item.id !== id));
@@ -218,6 +234,11 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
   };
 
   const handleBuildChain = async () => {
+    if (!evidenceNodes.length) {
+      setChainResult('');
+      setStatusText('暂无证据可构建，请先追加论据或显式载入本地样例。');
+      return;
+    }
     setStatusText('正在调用后端构建证据链...');
     const payload = evidenceNodes.map(node => ({
       id: node.id,
@@ -243,6 +264,12 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
   const totalWeight = evidenceNodes.reduce((sum, n) => sum + n.weight, 0);
   const maxPotentialWeight = evidenceNodes.length * 10;
   const compositeScore = Math.round(maxPotentialWeight > 0 ? (totalWeight / maxPotentialWeight) * 100 : 0);
+  const loadLocalSamples = () => {
+    setEvidenceNodes(DEFAULT_NODES);
+    setSelectedNode(DEFAULT_NODES[0]);
+    setChainResult('');
+    setStatusText('已载入本地样例，仅用于界面演示，不代表后端证据库。');
+  };
 
   return (
     <motion.div 
@@ -311,10 +338,10 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
 
           <div>
             <h3 className="text-neutral-100 text-sm font-semibold tracking-wide">
-              {selectedStock} 论据综合看多溢价指数
+              {selectedStock} 证据覆盖与权重指数
             </h3>
             <p className="text-xs text-neutral-400 mt-1 max-w-xl">
-              结合当前已收集并由辅助Agent交叉认证的 <strong className="text-white font-medium">{evidenceNodes.length} 件决策链单据</strong>，复合多维数学模型给出的综合看多推荐置信度。
+              当前视图包含 <strong className="text-white font-medium">{evidenceNodes.length} 件决策链单据</strong>。该指数只衡量已加载证据的覆盖与权重，不直接代表买卖评级。
             </p>
           </div>
         </div>
@@ -333,6 +360,14 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
           >
             <Plus className="w-4 h-4" /> 追加核心决策论据
           </button>
+          {!evidenceNodes.length && (
+            <button
+              onClick={loadLocalSamples}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-yellow-400/10 hover:bg-yellow-400/15 text-yellow-300 border border-yellow-400/20 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer"
+            >
+              载入本地样例
+            </button>
+          )}
         </div>
       </div>
 
@@ -486,6 +521,11 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
                             <span className="line-clamp-1 flex-1 pr-4">{node.title}</span>
                             
                             <div className="flex items-center gap-2 flex-shrink-0 shrink-0">
+                              {node.localOnly && (
+                                <span className="text-[9px] font-mono font-bold px-1 rounded bg-yellow-400/10 text-yellow-300 border border-yellow-400/20">
+                                  样例
+                                </span>
+                              )}
                               <span className="text-[9px] font-mono font-bold px-1 rounded bg-[#6366f1]/15 text-indigo-400 border border-[#6366f1]/10">
                                 W {node.weight}
                               </span>
@@ -540,6 +580,9 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
                   <div className="bg-black/30 border border-white/5 rounded-xl p-3.5">
                     <span className="text-[9px] font-mono uppercase tracking-widest text-neutral-500 block mb-1">选论论断</span>
                     <h4 className="text-sm text-neutral-200 font-semibold leading-relaxed text-left">{selectedNode.title}</h4>
+                    {selectedNode.localOnly && (
+                      <p className="mt-2 text-[10px] text-yellow-300 font-mono">本地样例，仅用于界面演示，未写入后端证据库。</p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-center text-[10px] font-mono">
