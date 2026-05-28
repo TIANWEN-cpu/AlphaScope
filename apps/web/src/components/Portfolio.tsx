@@ -63,12 +63,13 @@ const toHoldingRows = (items: PortfolioSlice[]): HoldingRow[] =>
   }));
 
 export function Portfolio(_props: PortfolioProps) {
-  const [portfolioData, setPortfolioData] = useState<PortfolioSlice[]>(PORTFOLIO_DATA);
+  const [portfolioData, setPortfolioData] = useState<PortfolioSlice[]>([]);
   const [statusText, setStatusText] = useState('正在同步后端基金组合...');
   const [portfolioCount, setPortfolioCount] = useState(0);
   const [hasBackendHoldings, setHasBackendHoldings] = useState(false);
+  const [showingLocalSample, setShowingLocalSample] = useState(false);
   const [backendTotalValue, setBackendTotalValue] = useState<number | null>(null);
-  const [recentTrades, setRecentTrades] = useState<HoldingRow[]>(toHoldingRows(PORTFOLIO_DATA));
+  const [recentTrades, setRecentTrades] = useState<HoldingRow[]>([]);
 
   const totalValue = backendTotalValue ?? portfolioData.reduce((sum, item) => sum + item.value, 0);
   const maxAllocation = Math.max(...portfolioData.map(item => item.value / Math.max(totalValue, 1)), 0);
@@ -84,22 +85,25 @@ export function Portfolio(_props: PortfolioProps) {
         setRecentTrades(toHoldingRows(mapped));
         setBackendTotalValue(portfolio.total_value ?? null);
         setHasBackendHoldings(true);
+        setShowingLocalSample(false);
         setStatusText(`已接入后端基金组合：${portfolio.name || '默认组合'}`);
       } else {
-        setPortfolioData(PORTFOLIO_DATA);
-        setRecentTrades(toHoldingRows(PORTFOLIO_DATA));
+        setPortfolioData([]);
+        setRecentTrades([]);
         setBackendTotalValue(null);
         setHasBackendHoldings(false);
-        setStatusText(`后端组合 ${portfolio.name || '默认组合'} 暂无持仓，当前显示可创建的演示配置`);
+        setShowingLocalSample(false);
+        setStatusText(`后端组合 ${portfolio.name || '默认组合'} 暂无持仓；当前不展示演示持仓。`);
       }
       setPortfolioCount(result.data.total || result.data.portfolios.length);
     } else {
-      setPortfolioData(PORTFOLIO_DATA);
-      setRecentTrades(toHoldingRows(PORTFOLIO_DATA));
+      setPortfolioData([]);
+      setRecentTrades([]);
       setBackendTotalValue(null);
       setHasBackendHoldings(false);
+      setShowingLocalSample(false);
       setPortfolioCount(0);
-      setStatusText(result.error || '后端暂无基金组合，当前显示可创建的演示配置');
+      setStatusText(result.error || '后端暂无基金组合；当前不展示演示持仓。');
     }
   };
 
@@ -124,6 +128,15 @@ export function Portfolio(_props: PortfolioProps) {
     } else {
       setStatusText(result.error || '示例基金组合创建失败');
     }
+  };
+
+  const loadLocalSample = () => {
+    setPortfolioData(PORTFOLIO_DATA);
+    setRecentTrades(toHoldingRows(PORTFOLIO_DATA));
+    setBackendTotalValue(null);
+    setHasBackendHoldings(false);
+    setShowingLocalSample(true);
+    setStatusText('已载入本地样例组合，仅用于界面演示，未写入后端。');
   };
 
   return (
@@ -152,7 +165,7 @@ export function Portfolio(_props: PortfolioProps) {
           </div>
           <h2 className="text-4xl font-mono font-medium mb-3 text-white relative z-10">¥{totalValue.toLocaleString()}</h2>
           <p className="text-indigo-300 text-xs font-mono flex items-center gap-1 relative z-10">
-            <ArrowUpRight className="w-3 h-3" /> 后端基金组合估值
+            <ArrowUpRight className="w-3 h-3" /> {showingLocalSample ? '本地样例估值' : hasBackendHoldings ? '后端基金组合估值' : '暂无后端持仓'}
           </p>
         </div>
 
@@ -170,9 +183,19 @@ export function Portfolio(_props: PortfolioProps) {
       </div>
 
       {!hasBackendHoldings && (
-        <button onClick={createDemoPortfolio} className="mb-8 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold border border-indigo-500 flex items-center gap-2">
-          <Plus className="w-4 h-4" /> 创建示例基金组合
-        </button>
+        <div className="mb-8 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+          <p className="flex-1 text-xs text-neutral-400">
+            后端没有可用持仓时，页面保持真实空态。可以写入一个示例组合，或只在当前浏览器中载入本地样例预览布局。
+          </p>
+          <button onClick={createDemoPortfolio} className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold border border-indigo-500 flex items-center gap-2">
+            <Plus className="w-4 h-4" /> 创建示例基金组合
+          </button>
+          {!showingLocalSample && (
+            <button onClick={loadLocalSample} className="px-5 py-2.5 rounded-xl bg-yellow-400/10 hover:bg-yellow-400/15 text-yellow-300 text-xs font-semibold border border-yellow-400/20">
+              仅预览本地样例
+            </button>
+          )}
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -180,27 +203,33 @@ export function Portfolio(_props: PortfolioProps) {
           <h3 className="text-xs font-mono uppercase tracking-widest text-neutral-400 mb-6 flex items-center gap-2 pb-3 border-b border-white/5">基金配置</h3>
           <div className="h-64 flex items-center">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={portfolioData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {portfolioData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartsTooltip 
-                  contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace' }}
-                  itemStyle={{ color: '#e5e5e5' }}
-                  formatter={(value: number) => `¥${value.toLocaleString()}`}
-                />
-              </PieChart>
+              {portfolioData.length ? (
+                <PieChart>
+                  <Pie
+                    data={portfolioData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {portfolioData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace' }}
+                    itemStyle={{ color: '#e5e5e5' }}
+                    formatter={(value: number) => `¥${value.toLocaleString()}`}
+                  />
+                </PieChart>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center rounded-xl border border-white/5 bg-black/20 px-6 text-center text-xs text-neutral-500">
+                  暂无后端持仓，未绘制配置图。
+                </div>
+              )}
             </ResponsiveContainer>
             <div className="w-1/2 ml-4">
               {portfolioData.map(item => (
@@ -231,8 +260,8 @@ export function Portfolio(_props: PortfolioProps) {
                  </tr>
                </thead>
                <tbody className="text-xs">
-                 {recentTrades.map((trade, i) => (
-                   <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                 {recentTrades.length ? recentTrades.map((trade, i) => (
+                    <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                      <td className="py-3.5 px-5 font-mono font-medium text-neutral-200">{trade.asset}</td>
                      <td className="py-3.5 px-5">
                        <span className={cn(
@@ -250,7 +279,13 @@ export function Portfolio(_props: PortfolioProps) {
                        {trade.pnl}
                      </td>
                    </tr>
-                 ))}
+                  )) : (
+                    <tr>
+                      <td colSpan={4} className="py-10 px-5 text-center text-xs text-neutral-500">
+                        暂无后端持仓记录。
+                      </td>
+                    </tr>
+                  )}
                </tbody>
              </table>
           </div>

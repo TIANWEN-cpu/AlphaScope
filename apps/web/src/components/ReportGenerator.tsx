@@ -111,6 +111,49 @@ const formatLocalDate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const numberValue = (value: unknown, fallback = 0) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const buildMarkdown = (
+  selectedStock: string,
+  rating: string,
+  templateName: string,
+  quality: ReportQuality,
+  statuses: SourceStatus[],
+  sections: ReportSection[],
+) => [
+  `# ${selectedStock} 投研报告`,
+  '',
+  `评级：${rating}`,
+  `模板：${templateName}`,
+  `数据质量：${quality === 'complete' ? '后端数据完整' : quality === 'partial' ? '部分数据缺失' : '未生成'}`,
+  '',
+  ...statuses.map(status => `- ${status.label}：${sourceStatusText(status)}`),
+  '',
+  ...sections.map(section => `## ${section.title}\n\n${section.content}`),
+].join('\n\n');
+
+const inferRating = (
+  factorsData: Record<string, unknown>,
+  fundFlowData: Record<string, unknown>,
+  statuses: SourceStatus[],
+) => {
+  const factors = (factorsData.factors || {}) as Record<string, unknown>;
+  const composite = numberValue(factors.composite);
+  const momentum = numberValue(factors.momentum);
+  const fundFlow = numberValue(factors.fund_flow);
+  const flowSummary = (fundFlowData.summary || {}) as Record<string, unknown>;
+  const lastMain = numberValue(flowSummary.last_main_yi);
+  const degradedPenalty = statuses.filter(status => !status.ok).length * 0.06;
+  const score = composite * 0.55 + fundFlow * 0.2 + momentum * 0.15 + Math.max(-0.15, Math.min(0.15, lastMain / 25)) - degradedPenalty;
+
+  if (score >= 0.18) return { rating: 'BUY / 推荐', score };
+  if (score <= -0.12) return { rating: 'UNDERWEIGHT / 建议避险', score };
+  return { rating: 'HOLD / 中性持有', score };
+};
+
 function readSource<T>(
   key: ReportSourceKey,
   settled: PromiseSettledResult<{ success: boolean; data?: T | null; error?: string | null; message?: string | null }>,
@@ -146,7 +189,8 @@ function readSource<T>(
 export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' }: ReportGeneratorProps) {
   const [selectedStock, setSelectedStock] = useState(`${stockName} (${symbol})`);
   const [selectedTemplate, setSelectedTemplate] = useState('standard');
-  const [rating, setRating] = useState('BUY / 强烈推荐');
+  const [rating, setRating] = useState('等待后端数据');
+  const [ratingScore, setRatingScore] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
   const [reportGenerated, setReportGenerated] = useState(false);
@@ -156,6 +200,7 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
   const [generationError, setGenerationError] = useState('');
   const [reportQuality, setReportQuality] = useState<ReportQuality>('idle');
   const [sourceStatuses, setSourceStatuses] = useState<SourceStatus[]>([]);
+  const [archiveStatus, setArchiveStatus] = useState('');
   const targetSymbol = selectedStock.match(/\d{5,6}/)?.[0] || symbol;
   const selectedStockName = selectedStock.replace(/\s*\([^)]*\)\s*$/, '') || stockName;
   const reportDate = formatLocalDate(new Date());
@@ -184,6 +229,9 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
     setGenerationError('');
     setReportQuality('idle');
     setSourceStatuses([]);
+    setArchiveStatus('');
+    setRating('等待后端数据');
+    setRatingScore(null);
   }, [symbol, stockName]);
 
   const steps = [
@@ -197,7 +245,7 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
     {
       id: 'summary',
       title: '一、 核心投资摘要 (Executive Summary)',
-      content: `本报告对 ${selectedStock} 展开深度多维度测绘。由于行业估值调整已进入历史高流动性折溢价底线，且本标的品牌护城河稳固，核心红利与利润率保障极其明确。量化多因子多头暴露显示技术性低点已经构成。因此维持强烈推荐（${rating}）评级，设定目标溢价估值在 1,750.00 元至 1,820.00 元区间。`
+      content: `本报告将在后端数据聚合完成后生成。生成前不预设买卖评级，避免把模板描述误认为真实投研结论。`
     },
     {
       id: 'fundamentals',
@@ -224,6 +272,7 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
     setGenerationError('');
     setReportQuality('idle');
     setSourceStatuses([]);
+    setArchiveStatus('');
     setDataStatus(`正在聚合 ${selectedStock} 后端数据...`);
 
     const [fundamentalsResult, factorsResult, newsResult, fundFlowResult, archiveResult] = await Promise.allSettled([
@@ -273,51 +322,64 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
     const flowSuper = flowSummary.super_total_yi ?? '--';
     const flowLarge = flowSummary.large_total_yi ?? '--';
     const flowNote = fundFlowDegraded ? '资金流数据源降级，当前不应解读为真实净流入。' : '';
+    const inferred = inferRating(factors, fundFlow, statuses);
+    const generatedRating = inferred.rating;
+    setRating(generatedRating);
+    setRatingScore(inferred.score);
     const missingNote = statuses.some(status => !status.ok)
       ? `数据缺口：${statuses.filter(status => !status.ok).map(status => `${status.label}${status.error ? `失败(${status.error})` : '为空'}`).join('；')}。`
       : '全部后端数据源均返回可用数据。';
 
     const sectionSets: Record<string, ReportSection[]> = {
       standard: [
-        { id: 'summary', title: '一、 核心投资摘要 (Executive Summary)', content: `本报告对 ${selectedStock} 展开后端数据驱动的投研整合。当前评级设定为 ${rating}。估值侧 PE=${valuation.pe || valuation.pe_ttm || '--'}，PB=${valuation.pb || '--'}；系统同步到 ${newsItems.length} 条相关新闻/公告与 ${archives.length} 条历史归档报告。${missingNote}` },
+        { id: 'summary', title: '一、 核心投资摘要 (Executive Summary)', content: `本报告对 ${selectedStock} 展开后端数据驱动的投研整合。当前系统评级为 ${generatedRating}，评分=${inferred.score.toFixed(3)}。估值侧 PE=${valuation.pe || valuation.pe_ttm || '--'}，PB=${valuation.pb || '--'}；系统同步到 ${newsItems.length} 条相关新闻/公告与 ${archives.length} 条历史归档报告。${missingNote}` },
         { id: 'fundamentals', title: '二、 深度基本面多维透视 (Fundamentals Analysis)', content: `基本面接口返回最近财务期：${latest.period || latest.report_date || '--'}。毛利率=${latest.gross_margin_pct || '--'}，净利润同比=${latest.yoy_net_profit_pct || '--'}，ROE=${latest.roe_pct || '--'}。` },
         { id: 'quant', title: '三、 金策量化多因子测绘 (Quantitative Factor Evaluation)', content: factorText },
         { id: 'risk', title: '四、 舆情、资金流与风控披露 (Risk Assessment & Disclosure)', content: `近端资金流摘要：主力净流入=${flowMain}亿，超大单=${flowSuper}亿，大单=${flowLarge}亿。${flowNote}最新新闻要点：${newsItems.map(item => item.title).slice(0, 4).join('；') || '暂无后端新闻'}。` },
       ],
       macro: [
-        { id: 'summary', title: '一、 行业及产业链跟踪摘要', content: `${selectedStock} 当前评级为 ${rating}。本模板优先关注产业链、资金流和历史归档交叉验证。${missingNote}` },
+        { id: 'summary', title: '一、 行业及产业链跟踪摘要', content: `${selectedStock} 当前系统评级为 ${generatedRating}，评分=${inferred.score.toFixed(3)}。本模板优先关注产业链、资金流和历史归档交叉验证。${missingNote}` },
         { id: 'fundamentals', title: '二、 估值与财务上下文', content: `估值侧 PE=${valuation.pe || valuation.pe_ttm || '--'}，PB=${valuation.pb || '--'}；最近财务期=${latest.period || latest.report_date || '--'}。` },
         { id: 'quant', title: '三、 资金流与因子联动', content: `资金流摘要：主力=${flowMain}亿，超大单=${flowSuper}亿。${flowNote}因子摘要：${factorText}` },
         { id: 'risk', title: '四、 新闻与归档跟踪', content: `新闻要点：${newsItems.map(item => item.title).slice(0, 5).join('；') || '暂无后端新闻'}。历史报告数量：${archives.length}。` },
       ],
       risk: [
-        { id: 'summary', title: '一、 风险摘要与评级约束', content: `${selectedStock} 当前评级为 ${rating}。本模板优先披露不可用数据源与尾部风险。${missingNote}` },
+        { id: 'summary', title: '一、 风险摘要与评级约束', content: `${selectedStock} 当前系统评级为 ${generatedRating}，评分=${inferred.score.toFixed(3)}。本模板优先披露不可用数据源与尾部风险。${missingNote}` },
         { id: 'fundamentals', title: '二、 财务红旗扫描', content: `毛利率=${latest.gross_margin_pct || '--'}，净利润同比=${latest.yoy_net_profit_pct || '--'}，ROE=${latest.roe_pct || '--'}。缺失字段应视为后续人工复核重点。` },
         { id: 'quant', title: '三、 因子与资金压力测试', content: `资金流：主力=${flowMain}亿，大单=${flowLarge}亿。${flowNote}因子风险摘要：${factorText}` },
         { id: 'risk', title: '四、 舆情与历史归档预警', content: `新闻风险线索：${newsItems.map(item => item.title).slice(0, 4).join('；') || '暂无后端新闻'}。历史归档报告：${archives.length} 条。` },
       ],
     };
 
-    setDynamicSections(sectionSets[selectedTemplate] || sectionSets.standard);
+    const nextSections = sectionSets[selectedTemplate] || sectionSets.standard;
+    setDynamicSections(nextSections);
     const quality: ReportQuality = statuses.every(status => status.ok) ? 'complete' : 'partial';
     setReportQuality(quality);
     setReportGenerated(true);
     setDataStatus(quality === 'complete' ? '后端数据已完成聚合，可在右侧预览、下载或打印' : '部分后端数据可用：已生成带缺口披露的研报');
+    const markdown = buildMarkdown(selectedStock, generatedRating, selectedTemplateName, quality, statuses, nextSections);
+    const archiveSaveResult = await api.archiveCreate({
+      stock_name: selectedStockName,
+      symbol: targetSymbol,
+      content: markdown,
+      rating: generatedRating,
+      report_type: 'frontend_report',
+      payload: {
+        quality,
+        rating_score: inferred.score,
+        source_statuses: statuses,
+      },
+    });
+    setArchiveStatus(
+      archiveSaveResult.success && archiveSaveResult.data
+        ? `已归档：${archiveSaveResult.data.saved ? archiveSaveResult.data.path : archiveSaveResult.data.reason}`
+        : `归档失败：${archiveSaveResult.error || '未知错误'}`,
+    );
     setIsGenerating(false);
   };
 
   const downloadReport = () => {
-    const markdown = [
-      `# ${selectedStock} 投研报告`,
-      '',
-      `评级：${rating}`,
-      `模板：${selectedTemplateName}`,
-      `数据质量：${reportQuality === 'complete' ? '后端数据完整' : reportQuality === 'partial' ? '部分数据缺失' : '未生成'}`,
-      '',
-      ...sourceStatuses.map(status => `- ${status.label}：${sourceStatusText(status)}`),
-      '',
-      ...reportSections.map(section => `## ${section.title}\n\n${section.content}`),
-    ].join('\n\n');
+    const markdown = buildMarkdown(selectedStock, rating, selectedTemplateName, reportQuality, sourceStatuses, reportSections);
     const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -387,16 +449,13 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
 
           {/* Report Rating Select */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-neutral-400 select-none">推荐主权评级 (Rating)</label>
-            <select 
-              value={rating}
-              onChange={e => setRating(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500/50"
-            >
-              <option value="BUY / 强烈推荐">强烈推荐 (STRONG BUY)</option>
-              <option value="HOLD / 中性持有">中性持有 (HOLD)</option>
-              <option value="UNDERWEIGHT / 建议避险">建议避险 (UNDERWEIGHT)</option>
-            </select>
+            <label className="text-xs font-medium text-neutral-400 select-none">系统评级 (Data-driven Rating)</label>
+            <div className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-neutral-200">
+              <div className="font-semibold text-white">{rating}</div>
+              <div className="mt-1 text-[10px] text-neutral-500">
+                {ratingScore === null ? '生成报告后按因子、资金流与数据质量自动计算。' : `评分 ${ratingScore.toFixed(3)}，可在报告摘要中复核。`}
+              </div>
+            </div>
           </div>
 
           {/* Template Lists */}
@@ -583,6 +642,11 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
                         <p className="text-[10px] font-mono tracking-widest text-[#6366f1] font-semibold">
                           编号: {reportId} • 授信主体: 核心分析助理网络
                         </p>
+                        {archiveStatus && (
+                          <p className="text-[10px] font-mono text-emerald-400">
+                            {archiveStatus}
+                          </p>
+                        )}
                       </div>
 
                       {/* Header block details */}

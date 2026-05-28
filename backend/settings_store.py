@@ -37,6 +37,81 @@ _MODEL_PREFERENCE_HINTS = (
 )
 
 
+_MOJIBAKE_MARKERS = ("\ufffd", "\u951f", "\u8119", "\u8117")
+
+
+def _contains_cjk(value: str) -> bool:
+    return any("\u4e00" <= ch <= "\u9fff" for ch in value)
+
+
+def _has_latin1_run(value: str) -> bool:
+    run = 0
+    for ch in value:
+        if "\u00c0" <= ch <= "\u00ff":
+            run += 1
+            if run >= 2:
+                return True
+        else:
+            run = 0
+    return False
+
+
+def _looks_mojibake(value: str) -> bool:
+    if not value:
+        return False
+    if any(marker in value for marker in _MOJIBAKE_MARKERS):
+        return True
+    if any("\u0080" <= ch <= "\u009f" for ch in value):
+        return True
+    return _has_latin1_run(value)
+
+
+def _repair_mojibake_name(value: str) -> str:
+    try:
+        raw = value.encode("latin1")
+    except UnicodeEncodeError:
+        return ""
+    for encoding in ("utf-8", "gbk"):
+        try:
+            decoded = raw.decode(encoding).strip()
+        except UnicodeDecodeError:
+            continue
+        if decoded and _contains_cjk(decoded):
+            return decoded
+    return ""
+
+
+def _infer_provider_name(provider_id: str, base_url: str) -> str:
+    haystack = f"{provider_id} {base_url}".lower()
+    for token, label in (
+        ("deepseek", "DeepSeek"),
+        ("sensenova", "SenseNova"),
+        ("sensecore", "SenseNova"),
+        ("sense", "SenseNova"),
+        ("moonshot", "Kimi"),
+        ("kimi", "Kimi"),
+        ("openai", "OpenAI"),
+        ("gpt", "OpenAI"),
+        ("anthropic", "Claude"),
+        ("claude", "Claude"),
+        ("mimo", "Mimo"),
+    ):
+        if token in haystack:
+            return label
+    return provider_id.strip()
+
+
+def _clean_provider_name(provider_id: str, name: str, base_url: str) -> str:
+    raw_name = str(name or "").strip()
+    if raw_name and not _looks_mojibake(raw_name):
+        return raw_name
+    repaired = _repair_mojibake_name(raw_name) if raw_name else ""
+    if repaired:
+        return repaired
+    inferred = _infer_provider_name(str(provider_id or ""), str(base_url or ""))
+    return inferred or raw_name or "Unnamed Provider"
+
+
 def _preferred_model_id(model_ids: list[str]) -> str:
     """Pick a likely chat model from a provider model listing."""
     for hint in _MODEL_PREFERENCE_HINTS:
@@ -69,7 +144,9 @@ def list_providers() -> list[dict[str, Any]]:
         result.append(
             {
                 "id": row["id"],
-                "name": row["name"],
+                "name": _clean_provider_name(
+                    row["id"], row["name"], row["base_url"] or ""
+                ),
                 "type": row["type"],
                 "base_url": row["base_url"] or "",
                 "api_key_masked": mask_key(decrypt_key(row["encrypted_api_key"] or "")),
@@ -91,7 +168,7 @@ def get_provider(provider_id: str) -> Optional[dict[str, Any]]:
         return None
     return {
         "id": row["id"],
-        "name": row["name"],
+        "name": _clean_provider_name(row["id"], row["name"], row["base_url"] or ""),
         "type": row["type"],
         "base_url": row["base_url"] or "",
         "api_key": decrypt_key(row["encrypted_api_key"] or ""),
@@ -112,6 +189,7 @@ def save_provider(
     """添加或更新 provider"""
     conn = _get_conn()
     now = time.time()
+    display_name = _clean_provider_name(provider_id, name, base_url)
     existing = conn.execute(
         "SELECT id, config_json FROM model_providers WHERE id = ?", (provider_id,)
     ).fetchone()
@@ -123,7 +201,7 @@ def save_provider(
             conn.execute(
                 "UPDATE model_providers SET name=?, base_url=?, encrypted_api_key=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
                 (
-                    name,
+                    display_name,
                     base_url,
                     encrypt_key(api_key),
                     int(enabled),
@@ -135,7 +213,14 @@ def save_provider(
         else:
             conn.execute(
                 "UPDATE model_providers SET name=?, base_url=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
-                (name, base_url, int(enabled), next_config_json, now, provider_id),
+                (
+                    display_name,
+                    base_url,
+                    int(enabled),
+                    next_config_json,
+                    now,
+                    provider_id,
+                ),
             )
     else:
         encrypted = encrypt_key(api_key) if api_key else ""
@@ -144,7 +229,7 @@ def save_provider(
             "VALUES (?, ?, 'openai_compatible', ?, ?, ?, ?, ?, ?)",
             (
                 provider_id,
-                name,
+                display_name,
                 base_url,
                 encrypted,
                 int(enabled),

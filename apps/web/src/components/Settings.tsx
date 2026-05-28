@@ -78,9 +78,22 @@ const emptyProviderForm = (): ProviderForm => ({
   isNew: true,
 });
 
+const looksMojibake = (value: string) => /[ÃÂ�]|[\u00c0-\u00ff]{2,}/.test(value);
+
+const providerDisplayName = (provider: ProviderRecord) => {
+  const rawName = String(provider.name || '').trim();
+  if (rawName && !looksMojibake(rawName)) return rawName;
+  const id = String(provider.id || '').trim();
+  const baseUrl = String(provider.base_url || '').toLowerCase();
+  if (baseUrl.includes('sensenova')) return 'SenseNova';
+  if (baseUrl.includes('deepseek')) return 'DeepSeek';
+  if (baseUrl.includes('openai')) return 'OpenAI';
+  return id || 'Unnamed Provider';
+};
+
 const mapProviderToForm = (provider: ProviderRecord): ProviderForm => ({
   id: String(provider.id || ''),
-  name: String(provider.name || provider.id || ''),
+  name: providerDisplayName(provider),
   base_url: String(provider.base_url || ''),
   api_key: '',
   api_key_masked: String(provider.api_key_masked || ''),
