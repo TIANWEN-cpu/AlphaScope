@@ -3,7 +3,7 @@ import { Settings, CircleUserRound, ShieldCheck, TrendingUp, BarChart3, Database
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { AgentModule } from '../types';
-import { AgentRecord, api } from '../lib/api';
+import { AgentRecord, api, normalizeDisplayError } from '../lib/api';
 
 interface Expert {
   id: string;
@@ -111,7 +111,7 @@ export function AgentsSystem() {
         setStatusText('当前显示默认 Agent 配置；启停需先在管理端持久化配置');
       } else {
         setExperts(EXPERTS);
-        setStatusText(defaults.error || managed.error || '后端暂无 Agent 配置，当前显示演示卡片');
+        setStatusText(normalizeDisplayError(defaults.error || managed.error, '后端暂无 Agent 配置，当前显示演示卡片'));
       }
     };
 
@@ -150,7 +150,7 @@ export function AgentsSystem() {
       setExperts(prev => prev.map(item => (item.id === expert.id ? updated : item)));
       setStatusText(`${expert.name} 已${nextEnabled ? '启用' : '停用'}，状态已写入后端`);
     } else {
-      setStatusText(result.error || `${expert.name} 启停失败`);
+      setStatusText(normalizeDisplayError(result.error, `${expert.name} 启停失败`));
     }
   };
 

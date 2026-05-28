@@ -18,7 +18,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { api, EvidenceRecord } from '../lib/api';
+import { api, EvidenceRecord, normalizeDisplayError } from '../lib/api';
 
 interface EvidenceNode {
   id: string;
@@ -207,7 +207,7 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
         setEvidenceNodes(DEFAULT_NODES);
         setSelectedNode(DEFAULT_NODES[0]);
         setChainResult(null);
-        setStatusText(result.error || '后端暂无证据；当前显示本地预览样例，新增论据后会写入后端。');
+        setStatusText(normalizeDisplayError(result.error, '后端暂无证据；当前显示本地预览样例，新增论据后会写入后端。'));
       }
     }
 
@@ -254,7 +254,7 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
 
     setEvidenceNodes(prev => [newNode, ...prev]);
     setSelectedNode(newNode);
-    setStatusText(response.success ? '证据已写入后端证据库' : response.error || '后端写入失败，已在当前会话临时保留');
+    setStatusText(response.success ? '证据已写入后端证据库' : normalizeDisplayError(response.error, '后端写入失败，已在当前会话临时保留'));
     setNewTitle('');
     setNewContent('');
     setIsAdding(false);
@@ -279,7 +279,7 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
       }
       setStatusText('证据已从后端删除');
     } else {
-      setStatusText(response.error || '证据删除失败');
+      setStatusText(normalizeDisplayError(response.error, '证据删除失败'));
     }
   };
 
@@ -306,7 +306,7 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
       setStatusText('证据链构建完成');
     } else {
       setChainResult(null);
-      setStatusText(result.error || '证据链构建失败');
+      setStatusText(normalizeDisplayError(result.error, '证据链构建失败'));
     }
   };
 

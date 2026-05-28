@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+FUND_PROVIDER_TIMEOUT_SECONDS = 8.0
+
+
+async def _run_blocking(fn, *, name: str):
+    return await asyncio.wait_for(
+        asyncio.to_thread(fn),
+        timeout=FUND_PROVIDER_TIMEOUT_SECONDS,
+    )
 
 
 class FundDataProvider:
@@ -33,7 +43,7 @@ class AkShareFundProvider(FundDataProvider):
         try:
             import akshare as ak
 
-            df = ak.fund_name_em()
+            df = await _run_blocking(ak.fund_name_em, name="fund-search")
             mask = df["基金简称"].str.contains(keyword, na=False)
             results = df[mask].head(20)
             return [
@@ -53,7 +63,10 @@ class AkShareFundProvider(FundDataProvider):
         try:
             import akshare as ak
 
-            df = ak.fund_individual_basic_info_xq(symbol=code)
+            df = await _run_blocking(
+                lambda: ak.fund_individual_basic_info_xq(symbol=code),
+                name="fund-info",
+            )
             if df.empty:
                 return None
             info = dict(zip(df["item"], df["value"]))
@@ -76,7 +89,10 @@ class AkShareFundProvider(FundDataProvider):
         try:
             import akshare as ak
 
-            df = ak.fund_open_fund_info_em(symbol=code, indicator="单位净值走势")
+            df = await _run_blocking(
+                lambda: ak.fund_open_fund_info_em(symbol=code, indicator="单位净值走势"),
+                name="fund-nav",
+            )
             if df.empty:
                 return []
             records = []

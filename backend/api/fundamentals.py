@@ -4,9 +4,38 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from backend.provider_timeout import call_with_timeout
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/fundamentals", tags=["fundamentals"])
+
+FUNDAMENTALS_TIMEOUT_SECONDS = 10.0
+
+
+def _empty_fundamentals(symbol: str, source_status: str, error: str = "") -> dict:
+    return {
+        "symbol": symbol,
+        "stock_name": "",
+        "industry": "",
+        "financial_periods": [],
+        "valuation": {},
+        "earnings_quality": {},
+        "cashflow": {},
+        "balance_sheet": {},
+        "fundamental_score": {},
+        "peers": [],
+        "degraded": True,
+        "source_status": source_status,
+        "error": error,
+    }
+
+
+def _run_fundamentals(fn, *, name: str):
+    return call_with_timeout(
+        fn,
+        FUNDAMENTALS_TIMEOUT_SECONDS,
+        name=f"fundamentals-{name}",
+    )
 
 
 @router.get("/{symbol}")
@@ -21,9 +50,29 @@ async def get_fundamentals(symbol: str):
         load_fundamentals,
     )
 
-    data = load_fundamentals(symbol)
+    try:
+        data = _run_fundamentals(lambda: load_fundamentals(symbol), name="summary")
+    except TimeoutError as exc:
+        return ApiResponse(
+            success=True,
+            data=_empty_fundamentals(symbol, "timeout", str(exc)),
+            error="基本面数据源响应超时，已降级为空数据",
+            error_code="FUNDAMENTALS_DEGRADED",
+        )
+    except Exception as exc:
+        return ApiResponse(
+            success=True,
+            data=_empty_fundamentals(symbol, "unavailable", str(exc)),
+            error="基本面数据源暂不可用，已降级为空数据",
+            error_code="FUNDAMENTALS_DEGRADED",
+        )
     if data.has_error:
-        return ApiResponse(success=False, error=data.error_msg)
+        return ApiResponse(
+            success=True,
+            data=_empty_fundamentals(symbol, "empty", data.error_msg),
+            error=data.error_msg,
+            error_code="FUNDAMENTALS_DEGRADED",
+        )
 
     # 从财务摘要取最新一期数据
     latest = data.financials[0] if data.financials else None
@@ -76,6 +125,8 @@ async def get_fundamentals(symbol: str):
                 }
                 for p in data.peers
             ],
+            "degraded": False,
+            "source_status": "ok",
         },
     )
 
@@ -88,9 +139,29 @@ async def get_valuation(symbol: str):
         load_fundamentals,
     )
 
-    data = load_fundamentals(symbol)
+    try:
+        data = _run_fundamentals(lambda: load_fundamentals(symbol), name="valuation")
+    except TimeoutError as exc:
+        return ApiResponse(
+            success=True,
+            data={"symbol": symbol, "degraded": True, "source_status": "timeout"},
+            error=str(exc),
+            error_code="FUNDAMENTALS_DEGRADED",
+        )
+    except Exception as exc:
+        return ApiResponse(
+            success=True,
+            data={"symbol": symbol, "degraded": True, "source_status": "unavailable"},
+            error=str(exc),
+            error_code="FUNDAMENTALS_DEGRADED",
+        )
     if data.has_error:
-        return ApiResponse(success=False, error=data.error_msg)
+        return ApiResponse(
+            success=True,
+            data={"symbol": symbol, "degraded": True, "source_status": "empty"},
+            error=data.error_msg,
+            error_code="FUNDAMENTALS_DEGRADED",
+        )
 
     latest = data.financials[0] if data.financials else None
     pe = data.peers[0].pe if data.peers else 0
@@ -112,7 +183,27 @@ async def get_peers(symbol: str):
     """行业对比"""
     from backend.fundamentals import fetch_industry_peers
 
-    industry, peers = fetch_industry_peers(symbol)
+    try:
+        industry, peers = _run_fundamentals(
+            lambda: fetch_industry_peers(symbol),
+            name="peers",
+        )
+        degraded = False
+        source_status = "ok"
+        error = None
+        error_code = None
+    except TimeoutError as exc:
+        industry, peers = "", []
+        degraded = True
+        source_status = "timeout"
+        error = str(exc)
+        error_code = "FUNDAMENTALS_DEGRADED"
+    except Exception as exc:
+        industry, peers = "", []
+        degraded = True
+        source_status = "unavailable"
+        error = str(exc)
+        error_code = "FUNDAMENTALS_DEGRADED"
     return ApiResponse(
         success=True,
         data={
@@ -129,7 +220,11 @@ async def get_peers(symbol: str):
                 }
                 for p in peers
             ],
+            "degraded": degraded,
+            "source_status": source_status,
         },
+        error=error,
+        error_code=error_code,
     )
 
 
@@ -142,9 +237,31 @@ async def get_shareholders(symbol: str):
         fetch_top_holders,
     )
 
-    top = fetch_top_holders(symbol)
-    circ = fetch_circulate_holders(symbol)
-    inst = fetch_inst_changes(symbol)
+    try:
+        top, circ, inst = _run_fundamentals(
+            lambda: (
+                fetch_top_holders(symbol),
+                fetch_circulate_holders(symbol),
+                fetch_inst_changes(symbol),
+            ),
+            name="shareholders",
+        )
+        degraded = False
+        source_status = "ok"
+        error = None
+        error_code = None
+    except TimeoutError as exc:
+        top, circ, inst = [], [], []
+        degraded = True
+        source_status = "timeout"
+        error = str(exc)
+        error_code = "FUNDAMENTALS_DEGRADED"
+    except Exception as exc:
+        top, circ, inst = [], [], []
+        degraded = True
+        source_status = "unavailable"
+        error = str(exc)
+        error_code = "FUNDAMENTALS_DEGRADED"
 
     def _sh(h):
         return {
@@ -162,5 +279,9 @@ async def get_shareholders(symbol: str):
             "top_holders": [_sh(h) for h in top],
             "circulate_holders": [_sh(h) for h in circ],
             "institutional_changes": [_sh(h) for h in inst],
+            "degraded": degraded,
+            "source_status": source_status,
         },
+        error=error,
+        error_code=error_code,
     )

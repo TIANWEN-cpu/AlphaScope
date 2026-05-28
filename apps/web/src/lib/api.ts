@@ -250,6 +250,26 @@ export interface BackendCapabilities {
 
 const requestTimeouts = new WeakMap<AbortSignal, number>();
 const timedOutSignals = new WeakSet<AbortSignal>();
+const DEFAULT_REQUEST_TIMEOUT_MS = 12000;
+
+export function normalizeDisplayError(error: unknown, fallback = "请求失败"): string {
+  const message = typeof error === "string"
+    ? error
+    : error instanceof Error
+      ? error.message
+      : "";
+  if (!message) return fallback;
+  if (/signal is aborted without reason|aborted|abort/i.test(message)) {
+    return "请求已取消";
+  }
+  if (/timeout|timed out|超时/i.test(message)) {
+    return "请求超时，请稍后重试";
+  }
+  if (/failed to fetch|networkerror|load failed|fetch/i.test(message)) {
+    return "后端连接暂不可用，请确认服务已启动";
+  }
+  return message;
+}
 
 function normalizeRequestError(error: unknown, signal?: AbortSignal): string {
   if (signal && timedOutSignals.has(signal)) {
@@ -262,7 +282,7 @@ function normalizeRequestError(error: unknown, signal?: AbortSignal): string {
   if (/aborted|abort/i.test(message)) {
     return "请求已取消";
   }
-  return message || "API request failed";
+  return normalizeDisplayError(message, "API request failed");
 }
 
 export function withTimeout(options: RequestInit = {}, timeoutMs = 12000): RequestInit {
@@ -273,12 +293,19 @@ export function withTimeout(options: RequestInit = {}, timeoutMs = 12000): Reque
     controller.abort();
   }, timeoutMs);
   requestTimeouts.set(controller.signal, timer);
+  let externalAbortHandler: (() => void) | undefined;
 
   if (externalSignal) {
     if (externalSignal.aborted) {
       controller.abort();
     } else {
-      externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+      externalAbortHandler = () => {
+        if (!timedOutSignals.has(controller.signal)) {
+          timedOutSignals.delete(controller.signal);
+        }
+        controller.abort();
+      };
+      externalSignal.addEventListener("abort", externalAbortHandler, { once: true });
     }
   }
 
@@ -289,6 +316,11 @@ export function withTimeout(options: RequestInit = {}, timeoutMs = 12000): Reque
       ...(options.headers || {}),
       "X-AI-Finance-Client-Timeout": String(timeoutMs),
     },
+    _externalSignal: externalSignal,
+    _externalAbortHandler: externalAbortHandler,
+  } as RequestInit & {
+    _externalSignal?: AbortSignal;
+    _externalAbortHandler?: () => void;
   };
 }
 
@@ -313,12 +345,16 @@ async function request<T>(
   options: RequestInit = {},
   params?: Record<string, string | number | boolean | undefined | null>,
 ): Promise<ApiResponse<T>> {
+  const requestOptions =
+    options.signal && requestTimeouts.has(options.signal)
+      ? options
+      : withTimeout(options, DEFAULT_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(buildUrl(path, params), {
-      ...options,
+      ...requestOptions,
       headers: {
         "Content-Type": "application/json",
-        ...(options.headers || {}),
+        ...(requestOptions.headers || {}),
       },
     });
 
@@ -332,14 +368,14 @@ async function request<T>(
     }
     return payload;
   } catch (error) {
-    const signal = options.signal;
+    const signal = requestOptions.signal;
     return {
       success: false,
       error: normalizeRequestError(error, signal),
       data: null,
     };
   } finally {
-    const signal = options.signal;
+    const signal = requestOptions.signal;
     if (signal) {
       const timer = requestTimeouts.get(signal);
       if (timer !== undefined) {
@@ -347,6 +383,13 @@ async function request<T>(
         requestTimeouts.delete(signal);
       }
       timedOutSignals.delete(signal);
+      const maybeWithCleanup = requestOptions as RequestInit & {
+        _externalSignal?: AbortSignal;
+        _externalAbortHandler?: () => void;
+      };
+      if (maybeWithCleanup._externalSignal && maybeWithCleanup._externalAbortHandler) {
+        maybeWithCleanup._externalSignal.removeEventListener("abort", maybeWithCleanup._externalAbortHandler);
+      }
     }
   }
 }
@@ -374,7 +417,7 @@ export async function checkBackendCapabilities(): Promise<BackendCapabilities> {
   } catch (error) {
     return {
       archivePost: false,
-      error: error instanceof Error ? error.message : "Capability check failed",
+      error: normalizeDisplayError(error, "Capability check failed"),
     };
   }
 }

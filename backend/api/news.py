@@ -9,15 +9,24 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from backend.provider_timeout import call_with_timeout
 from backend.schemas.api import ApiResponse
 from backend.utils.datetime_util import normalize_dt_str
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
+NEWS_PROVIDER_TIMEOUT_SECONDS = 8.0
+
 
 class NewsSearchRequest(BaseModel):
     query: str = Field(description="搜索关键词")
     limit: int = Field(default=20, description="最大结果数")
+
+
+def _coerce_fetch_result(result: Any) -> tuple[str, str]:
+    if isinstance(result, tuple) and len(result) >= 2:
+        return str(result[0] or "ok"), str(result[1] or "")
+    return "ok", ""
 
 
 @router.get("")
@@ -28,10 +37,29 @@ async def list_news(
     from backend.news_store import list_news as _list
 
     items = _list(symbol=symbol, event_type=event_type, limit=limit)
+    fetch_status = "ok"
+    fetch_error = ""
     if not items:
-        await _fetch_and_store_news(symbol=symbol, limit=limit)
+        fetch_status, fetch_error = _coerce_fetch_result(
+            await _fetch_and_store_news(
+                symbol=symbol,
+                limit=limit,
+            )
+        )
         items = _list(symbol=symbol, event_type=event_type, limit=limit)
-    return ApiResponse(success=True, data={"news": items, "total": len(items)})
+    degraded = not items and fetch_status != "ok"
+    return ApiResponse(
+        success=True,
+        data={
+            "news": items,
+            "total": len(items),
+            "degraded": degraded,
+            "source_status": fetch_status,
+            "error": fetch_error,
+        },
+        error=fetch_error or None,
+        error_code="NEWS_DEGRADED" if degraded else None,
+    )
 
 
 @router.get("/announcements")
@@ -46,8 +74,15 @@ async def list_announcements(
     attempted_provider_fetch = False
     if not items and symbol:
         attempted_provider_fetch = True
-        await _fetch_and_store_announcements(symbol=symbol, limit=limit)
+        fetch_status, fetch_error = _coerce_fetch_result(
+            await _fetch_and_store_announcements(
+                symbol=symbol,
+                limit=limit,
+            )
+        )
         items = _list(symbol=symbol, category=category, limit=limit)
+    else:
+        fetch_status, fetch_error = "ok", ""
 
     related_news = []
     if not items and symbol:
@@ -58,7 +93,7 @@ async def list_announcements(
     if degraded and related_news:
         source_status = "fallback_related_news"
     elif degraded and attempted_provider_fetch:
-        source_status = "empty"
+        source_status = fetch_status if fetch_status != "ok" else "empty"
     elif degraded:
         source_status = "local_empty"
 
@@ -77,9 +112,8 @@ async def list_announcements(
                 "local_news",
             ],
         },
-        error="No announcements available from configured sources"
-        if degraded
-        else None,
+        error=fetch_error
+        or ("No announcements available from configured sources" if degraded else None),
         error_code="ANNOUNCEMENTS_DEGRADED" if degraded else None,
     )
 
@@ -128,11 +162,29 @@ async def search_news(req: NewsSearchRequest):
 
     items = _search(req.query, limit=req.limit)
     if not items:
-        await _fetch_and_store_news(symbol=req.query, limit=req.limit)
+        fetch_status, fetch_error = _coerce_fetch_result(
+            await _fetch_and_store_news(
+                symbol=req.query,
+                limit=req.limit,
+            )
+        )
         items = _search(req.query, limit=req.limit)
+    else:
+        fetch_status, fetch_error = "ok", ""
     return ApiResponse(
         success=True,
-        data={"query": req.query, "results": items, "total": len(items)},
+        data={
+            "query": req.query,
+            "results": items,
+            "total": len(items),
+            "degraded": not items and fetch_status != "ok",
+            "source_status": fetch_status,
+            "error": fetch_error,
+        },
+        error=fetch_error or None,
+        error_code="NEWS_SEARCH_DEGRADED"
+        if not items and fetch_status != "ok"
+        else None,
     )
 
 
@@ -147,7 +199,10 @@ async def get_news(news_id: str):
     return ApiResponse(success=True, data=item)
 
 
-async def _fetch_and_store_news(symbol: str | None = None, limit: int = 50) -> None:
+async def _fetch_and_store_news(
+    symbol: str | None = None,
+    limit: int = 50,
+) -> tuple[str, str]:
     try:
         from backend.news_data import (
             fetch_telegraph_cls,
@@ -159,23 +214,31 @@ async def _fetch_and_store_news(symbol: str | None = None, limit: int = 50) -> N
         )
         from backend.storage.db import Database
 
-        raw_items: list[dict[str, Any]] = []
-        if symbol:
-            raw_items.extend(fetch_stock_news_em(symbol, limit=limit))
-        if not raw_items:
-            market_items = merge_news_items(
-                fetch_telegraph_cls(limit=min(limit, 30)),
-                fetch_telegraph_em(limit=min(limit, 50)),
-                fetch_telegraph_sina(limit=min(limit, 20)),
-                limit=limit,
-            )
-            raw_items = (
-                get_stock_related_news(
-                    "", market_items, limit=limit, symbol=symbol or ""
+        def fetch_raw_items() -> list[dict[str, Any]]:
+            raw_items: list[dict[str, Any]] = []
+            if symbol:
+                raw_items.extend(fetch_stock_news_em(symbol, limit=limit))
+            if not raw_items:
+                market_items = merge_news_items(
+                    fetch_telegraph_cls(limit=min(limit, 30)),
+                    fetch_telegraph_em(limit=min(limit, 50)),
+                    fetch_telegraph_sina(limit=min(limit, 20)),
+                    limit=limit,
                 )
-                if symbol
-                else market_items
-            )
+                raw_items = (
+                    get_stock_related_news(
+                        "", market_items, limit=limit, symbol=symbol or ""
+                    )
+                    if symbol
+                    else market_items
+                )
+            return raw_items
+
+        raw_items = call_with_timeout(
+            fetch_raw_items,
+            NEWS_PROVIDER_TIMEOUT_SECONDS,
+            name="news-provider",
+        )
 
         db = Database()
         now = datetime.now().isoformat()
@@ -183,17 +246,30 @@ async def _fetch_and_store_news(symbol: str | None = None, limit: int = 50) -> N
             row = _to_news_row(item, symbol=symbol or "", fetched_at=now)
             if row["title"]:
                 db.insert_news(row)
-    except Exception:
-        return
+        return "ok", ""
+    except TimeoutError as exc:
+        return "timeout", str(exc)
+    except Exception as exc:
+        return "unavailable", str(exc)
 
 
-async def _fetch_and_store_announcements(symbol: str, limit: int = 50) -> None:
+async def _fetch_and_store_announcements(
+    symbol: str,
+    limit: int = 50,
+) -> tuple[str, str]:
     try:
         from backend.providers.registry import get_registry
         from backend.storage.db import Database
 
-        raw_items = get_registry().get(
-            data_type="announcements", market="CN", symbol=symbol, limit=limit
+        raw_items = call_with_timeout(
+            lambda: get_registry().get(
+                data_type="announcements",
+                market="CN",
+                symbol=symbol,
+                limit=limit,
+            ),
+            NEWS_PROVIDER_TIMEOUT_SECONDS,
+            name="announcement-provider",
         )
         db = Database()
         now = datetime.now().isoformat()
@@ -201,8 +277,11 @@ async def _fetch_and_store_announcements(symbol: str, limit: int = 50) -> None:
             row = _to_announcement_row(item, symbol=symbol, fetched_at=now)
             if row["title"]:
                 db.insert_announcement(row)
-    except Exception:
-        return
+        return "ok", ""
+    except TimeoutError as exc:
+        return "timeout", str(exc)
+    except Exception as exc:
+        return "unavailable", str(exc)
 
 
 def _stable_id(prefix: str, *parts: object) -> str:

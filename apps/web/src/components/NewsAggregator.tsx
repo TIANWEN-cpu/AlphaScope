@@ -21,7 +21,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { AnnouncementRecord, api, NewsRecord, PriceBar } from '../lib/api';
+import { AnnouncementRecord, api, NewsRecord, normalizeDisplayError, PriceBar } from '../lib/api';
 
 interface NewsItem {
   id: string;
@@ -87,10 +87,10 @@ const displayTime = (value?: string) => {
 
 const getApiFailure = (label: string, result: PromiseSettledResult<{ success: boolean; error?: string | null; message?: string | null }>) => {
   if (result.status === 'rejected') {
-    return `${label}请求失败：${result.reason instanceof Error ? result.reason.message : String(result.reason || '未知错误')}`;
+    return `${label}请求失败：${normalizeDisplayError(result.reason, '未知错误')}`;
   }
   if (!result.value.success) {
-    return `${label}接口失败：${result.value.error || result.value.message || '未知错误'}`;
+    return `${label}接口失败：${normalizeDisplayError(result.value.error || result.value.message, '未知错误')}`;
   }
   return '';
 };
@@ -226,7 +226,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
           setNewsState('ready');
           setDataStatus(`已接入 ${nextItems.length} 条后端新闻，正在补充公告通道...`);
         } else if (!newsResult.success) {
-          failures.push(`新闻接口失败：${newsResult.error || newsResult.message || '未知错误'}`);
+          failures.push(`新闻接口失败：${normalizeDisplayError(newsResult.error || newsResult.message, '未知错误')}`);
         }
 
         const announcementResult = await api.announcements(symbol, 12, { signal: controller.signal });
@@ -239,9 +239,9 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
           && announcementResult.data.related_news?.length
         ) {
           nextItems.push(...announcementResult.data.related_news.map(mapRelatedNewsFallback));
-          failures.push(`公告源降级：${announcementResult.error || announcementResult.data.source_status || '使用相关新闻替代'}`);
+          failures.push(`公告源降级：${normalizeDisplayError(announcementResult.error || announcementResult.data.source_status, '使用相关新闻替代')}`);
         } else if (!announcementResult.success) {
-          failures.push(`公告接口失败：${announcementResult.error || announcementResult.message || '未知错误'}`);
+          failures.push(`公告接口失败：${normalizeDisplayError(announcementResult.error || announcementResult.message, '未知错误')}`);
         }
 
         if (nextItems.length) {
@@ -268,7 +268,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
           setNews([]);
           setSelectedArticle(null);
           setNewsState('error');
-          setDataStatus(error instanceof Error ? `后端资讯同步异常：${error.message}` : '后端资讯同步异常');
+          setDataStatus(`后端资讯同步异常：${normalizeDisplayError(error, '后端资讯同步异常')}`);
         }
       } finally {
         if (isCurrent()) setIsLoading(false);
@@ -300,7 +300,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
       } else {
         setLatestPrice(null);
         setPriceState(result.success ? 'empty' : 'error');
-        setPriceStatus(result.error || `暂无 ${stockName} (${symbol}) 最新行情`);
+        setPriceStatus(normalizeDisplayError(result.error, `暂无 ${stockName} (${symbol}) 最新行情`));
       }
     }
 
@@ -333,7 +333,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
       setNews(prev => prev.map(newsItem => newsItem.id === mapped.id ? mapped : newsItem));
       setDataStatus(`已加载新闻详情：${mapped.title}`);
     } else {
-      setDataStatus(detail.error || `新闻详情加载失败：${item.title}`);
+      setDataStatus(normalizeDisplayError(detail.error, `新闻详情加载失败：${item.title}`));
     }
   };
 
@@ -369,7 +369,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
         setDataStatus(`后端未检索到 "${query}" 的匹配资讯`);
       } else {
         setNewsState(news.length ? 'ready' : 'error');
-        setDataStatus(result.error || `后端全文检索失败："${query}"，当前列表未更新`);
+        setDataStatus(normalizeDisplayError(result.error, `后端全文检索失败："${query}"，当前列表未更新`));
       }
     } finally {
       if (searchRequestRef.current === requestId) setIsLoading(false);

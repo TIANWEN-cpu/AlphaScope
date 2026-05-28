@@ -15,8 +15,11 @@ from dataclasses import dataclass, field
 from backend.vision.image_loader import load_image
 from backend.vision.chart_detector import detect_chart, ChartDetectionResult
 from backend.vision.kline_interpreter import interpret_kline, KlineAnalysis
+from backend.provider_timeout import call_with_timeout
 
 logger = logging.getLogger(__name__)
+
+VISION_PRICE_TIMEOUT_SECONDS = 8.0
 
 
 @dataclass
@@ -93,12 +96,16 @@ def _fetch_real_price_data(
         from backend.providers.registry import get_registry
 
         registry = get_registry()
-        raw = registry.get(
-            data_type="prices",
-            market=market,
-            symbol=ticker,
-            start_date=start_date,
-            end_date=end_date,
+        raw = call_with_timeout(
+            lambda: registry.get(
+                data_type="prices",
+                market=market,
+                symbol=ticker,
+                start_date=start_date,
+                end_date=end_date,
+            ),
+            VISION_PRICE_TIMEOUT_SECONDS,
+            name="vision-price-provider",
         )
         if raw and isinstance(raw, list) and len(raw) > 0:
             # 确保每条记录有必要的字段
@@ -125,7 +132,11 @@ def _fetch_real_price_data(
     try:
         from backend.price_fetcher import get_price_range
 
-        series = get_price_range(ticker, start_date, days)
+        series = call_with_timeout(
+            lambda: get_price_range(ticker, start_date, days),
+            VISION_PRICE_TIMEOUT_SECONDS,
+            name="vision-price-fetcher",
+        )
         if series:
             result = []
             for date_str, close in series:

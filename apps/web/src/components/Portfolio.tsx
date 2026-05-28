@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { Briefcase, ArrowUpRight, DollarSign, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import { api, FundPortfolio, FundPortfolioHolding } from '../lib/api';
+import { api, FundPortfolio, FundPortfolioHolding, normalizeDisplayError } from '../lib/api';
 import { SafeResponsiveContainer } from './SafeResponsiveContainer';
 
 interface PortfolioProps {
@@ -104,7 +104,7 @@ export function Portfolio(_props: PortfolioProps) {
       setHasBackendHoldings(false);
       setShowingLocalSample(true);
       setPortfolioCount(0);
-      setStatusText(result.error || '后端暂无基金组合；当前显示本地预览样例，未写入后端。');
+      setStatusText(normalizeDisplayError(result.error, '后端暂无基金组合；当前显示本地预览样例，未写入后端。'));
     }
   };
 
@@ -127,7 +127,7 @@ export function Portfolio(_props: PortfolioProps) {
       setStatusText('示例基金组合已写入后端，正在刷新...');
       await loadPortfolios();
     } else {
-      setStatusText(result.error || '示例基金组合创建失败');
+      setStatusText(normalizeDisplayError(result.error, '示例基金组合创建失败'));
     }
   };
 

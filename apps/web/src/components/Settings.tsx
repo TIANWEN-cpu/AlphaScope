@@ -15,7 +15,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { api, ProviderRecord } from '../lib/api';
+import { api, normalizeDisplayError, ProviderRecord } from '../lib/api';
 
 const SETTING_TABS = [
   { id: 'general', label: '基础设置', icon: Settings2 },
@@ -148,7 +148,7 @@ export function Settings() {
       setNotice({
         type: 'error',
         text: providersResult.status === 'fulfilled'
-          ? providersResult.value.error || '加载 Provider 配置失败。'
+          ? normalizeDisplayError(providersResult.value.error, '加载 Provider 配置失败。')
           : '后端连接失败，无法加载 Provider 配置。',
       });
     }
@@ -195,7 +195,7 @@ export function Settings() {
       setNotice({ type: 'success', text: `${provider.name.trim()} 已保存，配置已同步到模型网关。` });
       await loadSettings();
     } else {
-      setNotice({ type: 'error', text: result.error || '保存 Provider 失败。' });
+      setNotice({ type: 'error', text: normalizeDisplayError(result.error, '保存 Provider 失败。') });
     }
   };
 
@@ -221,7 +221,7 @@ export function Settings() {
     } else {
       setNotice({
         type: 'error',
-        text: result.data?.error || result.error || '连接测试失败。',
+        text: normalizeDisplayError(result.data?.error || result.error, '连接测试失败。'),
       });
     }
   };
@@ -245,7 +245,7 @@ export function Settings() {
       setNotice({ type: 'success', text: `${provider.name} 已删除。` });
       await loadSettings();
     } else {
-      setNotice({ type: 'error', text: result.error || '删除 Provider 失败。' });
+      setNotice({ type: 'error', text: normalizeDisplayError(result.error, '删除 Provider 失败。') });
     }
   };
 

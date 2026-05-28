@@ -5,9 +5,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from backend.provider_timeout import call_with_timeout
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/vision", tags=["vision"])
+
+VISION_ANALYSIS_TIMEOUT_SECONDS = 25.0
 
 
 class VisionAnalyzeRequest(BaseModel):
@@ -24,14 +27,26 @@ async def analyze_vision(req: VisionAnalyzeRequest):
     """分析K线图/金融图片"""
     from backend.vision.vision_agent import analyze_image
 
-    result = analyze_image(
-        image_base64=req.image_base64,
-        mime_type=req.mime_type,
-        user_context=req.user_context,
-        vendor=req.vendor,
-        model=req.model,
-        ticker=req.ticker,
-    )
+    try:
+        result = call_with_timeout(
+            lambda: analyze_image(
+                image_base64=req.image_base64,
+                mime_type=req.mime_type,
+                user_context=req.user_context,
+                vendor=req.vendor,
+                model=req.model,
+                ticker=req.ticker,
+            ),
+            VISION_ANALYSIS_TIMEOUT_SECONDS,
+            name="vision-analysis",
+        )
+    except TimeoutError as exc:
+        return ApiResponse(
+            success=False,
+            data={"degraded": True, "source_status": "timeout"},
+            error=f"视觉分析超时: {exc}",
+            error_code="VISION_ANALYSIS_TIMEOUT",
+        )
 
     # 构建响应
     data = {
@@ -72,14 +87,32 @@ async def generate_report(req: VisionAnalyzeRequest):
     from backend.vision.vision_agent import analyze_image
     from backend.vision.report_generator import generate_vision_report
 
-    result = analyze_image(
-        image_base64=req.image_base64,
-        mime_type=req.mime_type,
-        user_context=req.user_context,
-        vendor=req.vendor,
-        model=req.model,
-        ticker=req.ticker,
-    )
+    try:
+        result = call_with_timeout(
+            lambda: analyze_image(
+                image_base64=req.image_base64,
+                mime_type=req.mime_type,
+                user_context=req.user_context,
+                vendor=req.vendor,
+                model=req.model,
+                ticker=req.ticker,
+            ),
+            VISION_ANALYSIS_TIMEOUT_SECONDS,
+            name="vision-report",
+        )
+    except TimeoutError as exc:
+        return ApiResponse(
+            success=False,
+            data={
+                "report": "视觉分析超时，请稍后重试或缩小图片后再试。",
+                "ticker": "",
+                "is_chart": False,
+                "degraded": True,
+                "source_status": "timeout",
+            },
+            error=f"视觉分析超时: {exc}",
+            error_code="VISION_ANALYSIS_TIMEOUT",
+        )
 
     report = generate_vision_report(result)
 

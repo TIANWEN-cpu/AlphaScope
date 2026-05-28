@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Cell, ReferenceLine, Tooltip } from 'recharts';
 import { cn } from '../lib/utils';
-import { api, PriceBar, TechnicalSnapshot } from '../lib/api';
+import { api, normalizeDisplayError, PriceBar, TechnicalSnapshot } from '../lib/api';
 import { SafeResponsiveContainer } from './SafeResponsiveContainer';
 
 interface MultimodalChartProps {
@@ -496,7 +496,7 @@ export function MultimodalChart({ symbol = '600519', stockName = '贵州茅台' 
         ticker: activeSymbol,
         user_context: `${selectedStock.name} ${activeSymbol} K线截图诊断`,
       });
-      setVisionReport(result.success && result.data?.report ? result.data.report : result.error || '视觉模型暂未返回结构化报告。');
+      setVisionReport(result.success && result.data?.report ? result.data.report : normalizeDisplayError(result.error, '视觉模型暂未返回结构化报告。'));
     } else if (activeTab === 'kline') {
       setVisionReport(
         `${selectedStock.name} (${activeSymbol}) 后端技术摘要：收盘 ${technicalSummary.close || latestPoint?.close || '--'}，MA5 ${technicalSummary.ma5 || latestPoint?.ma5 || '--'}，MA20 ${technicalSummary.ma20 || latestPoint?.ma20 || '--'}，RSI ${technicalSummary.rsi || latestPoint?.rsi || '--'}。`,

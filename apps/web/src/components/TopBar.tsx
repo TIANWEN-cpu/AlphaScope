@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Search, RefreshCw, Maximize2, Bell } from 'lucide-react';
 import { motion } from 'motion/react';
 import { StockSelection } from '../types';
-import { api } from '../lib/api';
+import { api, normalizeDisplayError } from '../lib/api';
 import { cn } from '../lib/utils';
 
 interface TopBarProps {
@@ -53,7 +53,7 @@ function priceFetchStatus(result: Awaited<ReturnType<typeof api.priceFetch>>) {
   if (result.error === '请求已取消') {
     return '行情刷新已取消';
   }
-  return result.error || '行情刷新失败';
+  return normalizeDisplayError(result.error, '行情刷新失败');
 }
 
 export function TopBar({ activeStock, onStockChange }: TopBarProps) {
