@@ -60,6 +60,43 @@ async def test_list_providers(client):
 
 
 @pytest.mark.anyio
+async def test_get_preferences(client):
+    """GET /api/settings/preferences 返回应用偏好设置"""
+    preferences = {
+        "general": {"default_symbol": "600519", "refresh_interval": 60},
+        "data": {"news_limit": 30},
+    }
+    with patch("backend.settings_store.get_app_preferences", return_value=preferences):
+        resp = await client.get("/api/settings/preferences")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["preferences"]["general"]["default_symbol"] == "600519"
+
+
+@pytest.mark.anyio
+async def test_save_preferences(client):
+    """PUT /api/settings/preferences 保存应用偏好设置"""
+    saved = {
+        "general": {"default_symbol": "000001", "refresh_interval": 15},
+        "data": {"news_limit": 35},
+    }
+    with patch("backend.settings_store.save_app_preferences", return_value=saved):
+        resp = await client.put(
+            "/api/settings/preferences",
+            json={
+                "preferences": {
+                    "general": {"default_symbol": "000001", "refresh_interval": 15}
+                }
+            },
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["preferences"]["general"]["default_symbol"] == "000001"
+
+
+@pytest.mark.anyio
 async def test_save_provider(client):
     """POST /api/settings/providers 保存 provider"""
     saved = {
@@ -241,6 +278,34 @@ def test_provider_names_are_cleaned_before_returning():
     assert providers[0]["name"] == "商汤"
     assert provider is not None
     assert provider["name"] == "商汤"
+
+
+def test_app_preferences_are_persisted_and_sanitized():
+    """应用偏好设置应持久化，并对越界数值回落到允许范围。"""
+    from backend import settings_store
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)):
+        saved = settings_store.save_app_preferences(
+            {
+                "general": {
+                    "default_symbol": "000001",
+                    "refresh_interval": 1,
+                    "theme": "unknown",
+                },
+                "data": {"news_limit": 500},
+                "unknown": {"x": 1},
+            }
+        )
+        loaded = settings_store.get_app_preferences()
+
+    assert saved["general"]["default_symbol"] == "000001"
+    assert saved["general"]["refresh_interval"] == 10
+    assert saved["general"]["theme"] == "dark"
+    assert saved["data"]["news_limit"] == 100
+    assert loaded == saved
 
 
 @pytest.mark.anyio

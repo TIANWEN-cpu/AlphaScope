@@ -14,6 +14,11 @@ from httpx import ASGITransport, AsyncClient
 from backend.api.main import app
 
 
+class _Row(dict):
+    def __getitem__(self, key):
+        return self.get(key)
+
+
 # ============== news_store 测试 ==============
 
 
@@ -67,6 +72,29 @@ class TestNewsStore:
             result = search_news("茅台")
             assert isinstance(result, list)
 
+    def test_row_to_news_repairs_legacy_mojibake_text(self):
+        from backend.news_store import _row_to_news
+
+        item = _row_to_news(
+            _Row(
+                id="news_1",
+                title="è´µå·è\u0085å°ä¸æ§è¡è¡ä¸ç»­ç­¾",
+                summary="5æ21æ¥åå¸å\u0085¬å",
+                source="è¯å¸æ¶æ¥ç½",
+                source_url="",
+                published_at="2026-05-22T09:05:00+08:00",
+                symbols='["600519"]',
+                event_type="news",
+                sentiment=0,
+                importance=0.5,
+                confidence=0.6,
+            )
+        )
+
+        assert "贵州茅台" in item["title"]
+        assert "公告" in item["summary"]
+        assert item["source"] == "证券时报网"
+
     def test_list_announcements(self):
         from backend.news_store import list_announcements
 
@@ -94,6 +122,28 @@ class TestNewsStore:
             mock_conn.return_value = conn
             conn.execute.return_value.fetchone.return_value = None
             assert get_announcement("nonexistent") is None
+
+    def test_row_to_announcement_repairs_legacy_mojibake_text(self):
+        from backend.news_store import _row_to_announcement
+
+        item = _row_to_announcement(
+            _Row(
+                id="ann_1",
+                symbol="600519",
+                company_name="è´µå·è\u0085å°",
+                title="å¹´åº¦æ¥å",
+                category="å®ææ¥å",
+                published_at="2026-05-22T09:05:00+08:00",
+                source="å·¨æ½®èµè®¯",
+                source_url="",
+                importance=0.6,
+                confidence=0.9,
+            )
+        )
+
+        assert item["company_name"] == "贵州茅台"
+        assert item["title"] == "年度报告"
+        assert item["category"] == "定期报告"
 
     def test_get_event_summary(self):
         from backend.news_store import get_event_summary

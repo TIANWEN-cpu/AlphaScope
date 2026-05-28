@@ -92,6 +92,34 @@ export interface ProviderModelsResult {
   models: Array<{ id: string; owned_by?: string }>;
 }
 
+export interface AppPreferences {
+  general: {
+    language: string;
+    theme: string;
+    default_symbol: string;
+    auto_refresh: boolean;
+    refresh_interval: number;
+  };
+  network: {
+    api_base_url: string;
+    request_timeout_ms: number;
+    retry_count: number;
+    proxy_url: string;
+  };
+  security: {
+    mask_api_keys: boolean;
+    confirm_deletes: boolean;
+    allow_external_links: boolean;
+    audit_log: boolean;
+  };
+  data: {
+    news_limit: number;
+    price_cache_days: number;
+    prefer_local_cache: boolean;
+    auto_fetch_missing: boolean;
+  };
+}
+
 export interface AgentRecord {
   key?: string;
   id?: string;
@@ -545,6 +573,12 @@ export const api = {
     }),
   providerModels: (id: string) =>
     request<ProviderModelsResult>(`/api/settings/providers/${encodeURIComponent(id)}/models`),
+  preferences: () => request<{ preferences: AppPreferences }>("/api/settings/preferences"),
+  preferencesSave: (preferences: Partial<AppPreferences>) =>
+    request<{ preferences: AppPreferences }>("/api/settings/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ preferences }),
+    }),
   modelProviders: () => request<{ providers: ProviderRecord[] }>("/api/models/providers"),
   tasks: () => request<Record<string, unknown>>("/api/tasks"),
   normalizeSymbol: (symbol: string) =>

@@ -1,7 +1,8 @@
-"""设置存储层 — 管理 model_providers 表的 CRUD 操作"""
+"""设置存储层 — 管理 model_providers 与应用偏好设置。"""
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import time
@@ -26,6 +27,50 @@ CREATE TABLE IF NOT EXISTS model_providers (
     updated_at REAL NOT NULL
 )
 """
+
+_PREFERENCES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS app_preferences (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    updated_at REAL NOT NULL
+)
+"""
+
+DEFAULT_APP_PREFERENCES: dict[str, dict[str, Any]] = {
+    "general": {
+        "language": "zh-CN",
+        "theme": "dark",
+        "default_symbol": "600519",
+        "auto_refresh": True,
+        "refresh_interval": 60,
+    },
+    "network": {
+        "api_base_url": "http://127.0.0.1:8000",
+        "request_timeout_ms": 12000,
+        "retry_count": 1,
+        "proxy_url": "",
+    },
+    "security": {
+        "mask_api_keys": True,
+        "confirm_deletes": True,
+        "allow_external_links": True,
+        "audit_log": True,
+    },
+    "data": {
+        "news_limit": 30,
+        "price_cache_days": 180,
+        "prefer_local_cache": True,
+        "auto_fetch_missing": True,
+    },
+}
+
+_INT_LIMITS: dict[tuple[str, str], tuple[int, int]] = {
+    ("general", "refresh_interval"): (10, 3600),
+    ("network", "request_timeout_ms"): (3000, 120000),
+    ("network", "retry_count"): (0, 5),
+    ("data", "news_limit"): (5, 100),
+    ("data", "price_cache_days"): (30, 3650),
+}
 
 _MODEL_PREFERENCE_HINTS = (
     "deepseek",
@@ -123,6 +168,7 @@ def _preferred_model_id(model_ids: list[str]) -> str:
 
 def _ensure_table(conn) -> None:
     conn.execute(_TABLE_SQL)
+    conn.execute(_PREFERENCES_TABLE_SQL)
     conn.commit()
 
 
@@ -130,6 +176,91 @@ def _get_conn():
     db = Database()
     _ensure_table(db._conn)
     return db._conn
+
+
+def _default_preferences() -> dict[str, dict[str, Any]]:
+    return copy.deepcopy(DEFAULT_APP_PREFERENCES)
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on", "enabled"}
+    return bool(value)
+
+
+def _coerce_int(section: str, key: str, value: Any, default: int) -> int:
+    try:
+        coerced = int(value)
+    except (TypeError, ValueError):
+        coerced = default
+    low, high = _INT_LIMITS.get((section, key), (0, 10_000_000))
+    return max(low, min(high, coerced))
+
+
+def _coerce_preference_value(section: str, key: str, value: Any) -> Any:
+    default = DEFAULT_APP_PREFERENCES[section][key]
+    if isinstance(default, bool):
+        return _coerce_bool(value)
+    if isinstance(default, int):
+        return _coerce_int(section, key, value, default)
+    text = str(value if value is not None else default).strip()
+    if section == "general" and key == "language":
+        return text if text in {"zh-CN", "en-US"} else default
+    if section == "general" and key == "theme":
+        return text if text in {"dark", "light", "system"} else default
+    return text
+
+
+def _normalize_preferences(raw: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    normalized = _default_preferences()
+    for section, values in (raw or {}).items():
+        if section not in normalized or not isinstance(values, dict):
+            continue
+        for key, value in values.items():
+            if key in normalized[section]:
+                normalized[section][key] = _coerce_preference_value(
+                    section, key, value
+                )
+    return normalized
+
+
+def get_app_preferences() -> dict[str, dict[str, Any]]:
+    """读取应用偏好设置，并补齐新增默认项。"""
+    conn = _get_conn()
+    rows = conn.execute("SELECT key, value_json FROM app_preferences").fetchall()
+    raw = _default_preferences()
+    for row in rows:
+        section = row["key"]
+        if section not in raw:
+            continue
+        try:
+            values = json.loads(row["value_json"] or "{}")
+        except json.JSONDecodeError:
+            logger.warning("应用偏好设置 %s JSON 解析失败，使用默认值", section)
+            continue
+        if isinstance(values, dict):
+            raw[section].update(values)
+    return _normalize_preferences(raw)
+
+
+def save_app_preferences(
+    preferences: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """合并保存应用偏好设置，只接受已声明的 section/key。"""
+    conn = _get_conn()
+    current = get_app_preferences()
+    for section, values in (preferences or {}).items():
+        if section in current and isinstance(values, dict):
+            current[section].update(values)
+    normalized = _normalize_preferences(current)
+    now = time.time()
+    for section, values in normalized.items():
+        conn.execute(
+            "INSERT OR REPLACE INTO app_preferences (key, value_json, updated_at) VALUES (?, ?, ?)",
+            (section, json.dumps(values, ensure_ascii=False), now),
+        )
+    conn.commit()
+    return normalized
 
 
 def list_providers() -> list[dict[str, Any]]:
@@ -309,6 +440,7 @@ def export_settings() -> dict[str, Any]:
     providers = list_providers()
     return {
         "version": "1.0",
+        "preferences": get_app_preferences(),
         "providers": [
             {
                 "id": p["id"],
@@ -338,6 +470,8 @@ def import_settings(data: dict[str, Any]) -> dict[str, Any]:
             enabled=p.get("enabled", True),
         )
         imported += 1
+    if isinstance(data.get("preferences"), dict):
+        save_app_preferences(data["preferences"])
     return {
         "imported": imported,
         "message": f"导入 {imported} 个 provider（需手动填写 API Key）",

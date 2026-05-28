@@ -4,7 +4,6 @@ import {
   Settings2,
   Key,
   Shield,
-  Server,
   Database,
   Globe,
   Monitor,
@@ -15,7 +14,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { api, normalizeDisplayError, ProviderRecord } from '../lib/api';
+import { api, AppPreferences, normalizeDisplayError, ProviderRecord } from '../lib/api';
 
 const SETTING_TABS = [
   { id: 'general', label: '基础设置', icon: Settings2 },
@@ -23,7 +22,7 @@ const SETTING_TABS = [
   { id: 'network', label: '网络节点', icon: Globe },
   { id: 'security', label: '安全组', icon: Shield },
   { id: 'data', label: '数据管理', icon: Database },
-];
+] as const;
 
 type ApiStatus = 'online' | 'error' | 'checking';
 type NoticeType = 'info' | 'success' | 'warning' | 'error';
@@ -43,6 +42,10 @@ interface ProviderForm {
   dirty: boolean;
   isNew: boolean;
 }
+
+type PreferenceTabId = Exclude<(typeof SETTING_TABS)[number]['id'], 'api'>;
+
+type PreferenceDraft = AppPreferences;
 
 const DEFAULT_PROVIDER_FORMS: ProviderForm[] = [
   {
@@ -66,6 +69,34 @@ const DEFAULT_PROVIDER_FORMS: ProviderForm[] = [
     isNew: true,
   },
 ];
+
+const DEFAULT_PREFERENCES: PreferenceDraft = {
+  general: {
+    language: 'zh-CN',
+    theme: 'dark',
+    default_symbol: '600519',
+    auto_refresh: true,
+    refresh_interval: 60,
+  },
+  network: {
+    api_base_url: api.baseUrl,
+    request_timeout_ms: 12000,
+    retry_count: 1,
+    proxy_url: '',
+  },
+  security: {
+    mask_api_keys: true,
+    confirm_deletes: true,
+    allow_external_links: true,
+    audit_log: true,
+  },
+  data: {
+    news_limit: 30,
+    price_cache_days: 180,
+    prefer_local_cache: true,
+    auto_fetch_missing: true,
+  },
+};
 
 const emptyProviderForm = (): ProviderForm => ({
   id: '',
@@ -111,12 +142,21 @@ const validateProvider = (provider: ProviderForm): string | null => {
   return null;
 };
 
+const mergePreferences = (preferences?: Partial<AppPreferences> | null): PreferenceDraft => ({
+  general: { ...DEFAULT_PREFERENCES.general, ...(preferences?.general || {}) },
+  network: { ...DEFAULT_PREFERENCES.network, ...(preferences?.network || {}) },
+  security: { ...DEFAULT_PREFERENCES.security, ...(preferences?.security || {}) },
+  data: { ...DEFAULT_PREFERENCES.data, ...(preferences?.data || {}) },
+});
+
 export function Settings() {
   const [activeTab, setActiveTab] = useState('api');
   const [providers, setProviders] = useState<ProviderRecord[]>([]);
   const [providerForms, setProviderForms] = useState<ProviderForm[]>(DEFAULT_PROVIDER_FORMS);
+  const [preferences, setPreferences] = useState<PreferenceDraft>(DEFAULT_PREFERENCES);
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
+  const [isSavingPreferences, setIsSavingPreferences] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -130,7 +170,11 @@ export function Settings() {
     setApiStatus('checking');
     setNotice({ type: 'info', text: '正在同步后端 Provider 配置...' });
 
-    const [healthResult, providersResult] = await Promise.allSettled([api.health(), api.providers()]);
+    const [healthResult, providersResult, preferencesResult] = await Promise.allSettled([
+      api.health(),
+      api.providers(),
+      api.preferences(),
+    ]);
 
     setApiStatus(healthResult.status === 'fulfilled' && healthResult.value.success ? 'online' : 'error');
 
@@ -153,6 +197,18 @@ export function Settings() {
       });
     }
 
+    if (preferencesResult.status === 'fulfilled' && preferencesResult.value.success) {
+      setPreferences(mergePreferences(preferencesResult.value.data?.preferences));
+    } else if (preferencesResult.status === 'fulfilled') {
+      setPreferences(DEFAULT_PREFERENCES);
+      setNotice({
+        type: 'warning',
+        text: normalizeDisplayError(preferencesResult.value.error, '系统偏好设置接口不可用，已使用本地默认值。'),
+      });
+    } else {
+      setPreferences(DEFAULT_PREFERENCES);
+    }
+
     setIsLoadingProviders(false);
   }, []);
 
@@ -164,6 +220,37 @@ export function Settings() {
     setProviderForms(prev => prev.map((provider, currentIndex) => (
       currentIndex === index ? { ...provider, ...patch, dirty: true } : provider
     )));
+  };
+
+  const updatePreference = <TSection extends keyof PreferenceDraft>(
+    section: TSection,
+    patch: Partial<PreferenceDraft[TSection]>,
+  ) => {
+    setPreferences(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        ...patch,
+      },
+    }));
+  };
+
+  const handleSavePreferences = async (section?: PreferenceTabId) => {
+    setIsSavingPreferences(true);
+    setNotice({
+      type: 'info',
+      text: section ? `正在保存 ${SETTING_TABS.find(tab => tab.id === section)?.label || '偏好设置'}...` : '正在保存系统偏好设置...',
+    });
+
+    const payload = (section ? { [section]: preferences[section] } : preferences) as Partial<AppPreferences>;
+    const result = await api.preferencesSave(payload);
+    setIsSavingPreferences(false);
+    if (result.success && result.data?.preferences) {
+      setPreferences(mergePreferences(result.data.preferences));
+      setNotice({ type: 'success', text: '系统偏好设置已保存。' });
+    } else {
+      setNotice({ type: 'error', text: normalizeDisplayError(result.error, '保存系统偏好设置失败。') });
+    }
   };
 
   const handleAddProvider = () => {
@@ -255,6 +342,213 @@ export function Settings() {
     warning: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
     error: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
   }[notice.type];
+
+  const renderSaveBar = (section: PreferenceTabId) => (
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/5 bg-black/20 p-4">
+      <div>
+        <div className="text-xs font-medium text-neutral-200">保存到后端配置库</div>
+        <div className="mt-1 text-[11px] text-neutral-500">刷新页面或重启前端后仍会保留这些设置。</div>
+      </div>
+      <button
+        type="button"
+        onClick={() => void handleSavePreferences(section)}
+        disabled={isSavingPreferences}
+        className="flex items-center gap-2 rounded-xl border border-indigo-500 bg-indigo-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
+      >
+        <Save className="h-4 w-4" />
+        {isSavingPreferences ? '保存中...' : '保存设置'}
+      </button>
+    </div>
+  );
+
+  const renderTextField = (
+    label: string,
+    value: string,
+    onChange: (value: string) => void,
+    placeholder = '',
+    help = '',
+  ) => (
+    <label className="space-y-2">
+      <span className="text-xs text-neutral-400">{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-indigo-500"
+      />
+      {help && <span className="block text-[11px] leading-relaxed text-neutral-500">{help}</span>}
+    </label>
+  );
+
+  const renderNumberField = (
+    label: string,
+    value: number,
+    onChange: (value: number) => void,
+    min: number,
+    max: number,
+    step = 1,
+    help = '',
+  ) => (
+    <label className="space-y-2">
+      <span className="text-xs text-neutral-400">{label}</span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 font-mono text-sm text-white outline-none transition-all focus:border-indigo-500"
+      />
+      {help && <span className="block text-[11px] leading-relaxed text-neutral-500">{help}</span>}
+    </label>
+  );
+
+  const renderSelectField = (
+    label: string,
+    value: string,
+    onChange: (value: string) => void,
+    options: Array<{ value: string; label: string }>,
+    help = '',
+  ) => (
+    <label className="space-y-2">
+      <span className="text-xs text-neutral-400">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white outline-none transition-all focus:border-indigo-500"
+      >
+        {options.map(option => (
+          <option key={option.value} value={option.value} className="bg-neutral-900">
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {help && <span className="block text-[11px] leading-relaxed text-neutral-500">{help}</span>}
+    </label>
+  );
+
+  const renderToggle = (
+    label: string,
+    checked: boolean,
+    onChange: (value: boolean) => void,
+    help = '',
+  ) => (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex min-h-[72px] items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-left transition-colors hover:bg-white/[0.05]"
+    >
+      <span>
+        <span className="block text-sm font-medium text-neutral-200">{label}</span>
+        {help && <span className="mt-1 block text-[11px] leading-relaxed text-neutral-500">{help}</span>}
+      </span>
+      <span className={cn(
+        'relative h-6 w-11 shrink-0 rounded-full border transition-colors',
+        checked ? 'border-emerald-500/40 bg-emerald-500/30' : 'border-white/10 bg-black/40',
+      )}>
+        <span className={cn(
+          'absolute top-0.5 h-4.5 w-4.5 rounded-full bg-white transition-transform',
+          checked ? 'translate-x-5' : 'translate-x-0.5',
+        )} />
+      </span>
+    </button>
+  );
+
+  const renderPreferencePanel = (section: PreferenceTabId) => {
+    const currentTab = SETTING_TABS.find(tab => tab.id === section);
+    const Icon = currentTab?.icon || Settings2;
+
+    return (
+      <motion.div
+        key={section}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        className="max-w-4xl"
+      >
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="mb-2 flex items-center gap-2 text-xl font-medium text-neutral-100">
+              <Icon className="h-5 w-5 text-indigo-400" />
+              {currentTab?.label}
+            </h3>
+            <p className="text-sm text-neutral-400">
+              {section === 'general' && '配置界面语言、默认标的与自动刷新节奏。'}
+              {section === 'network' && '配置前端访问后端时使用的连接参数和重试策略。'}
+              {section === 'security' && '配置密钥展示、删除确认、外链打开和审计记录策略。'}
+              {section === 'data' && '配置新闻拉取数量、行情缓存窗口和缺失数据补齐策略。'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadSettings()}
+            disabled={isLoadingProviders}
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-neutral-300 transition-colors hover:bg-white/10 disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-4 w-4', isLoadingProviders && 'animate-spin')} />
+            重载
+          </button>
+        </div>
+
+        <div className={cn('mb-6 rounded-xl border px-3 py-2 text-xs font-mono', noticeClass)}>
+          {notice.text}
+        </div>
+
+        {section === 'general' && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {renderSelectField('界面语言', preferences.general.language, value => updatePreference('general', { language: value }), [
+              { value: 'zh-CN', label: '简体中文' },
+              { value: 'en-US', label: 'English' },
+            ])}
+            {renderSelectField('主题模式', preferences.general.theme, value => updatePreference('general', { theme: value }), [
+              { value: 'dark', label: '深色' },
+              { value: 'light', label: '浅色' },
+              { value: 'system', label: '跟随系统' },
+            ])}
+            {renderTextField('默认标的', preferences.general.default_symbol, value => updatePreference('general', { default_symbol: value }), '600519', '进入工作台时优先加载的股票代码。')}
+            {renderNumberField('自动刷新间隔（秒）', preferences.general.refresh_interval, value => updatePreference('general', { refresh_interval: value }), 10, 3600, 5)}
+            <div className="md:col-span-2">
+              {renderToggle('启用自动刷新', preferences.general.auto_refresh, value => updatePreference('general', { auto_refresh: value }), '用于新闻、行情和回测状态的定时刷新。')}
+            </div>
+          </div>
+        )}
+
+        {section === 'network' && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              {renderTextField('后端 API 地址', preferences.network.api_base_url, value => updatePreference('network', { api_base_url: value }), 'http://127.0.0.1:8000', '当前构建仍以环境变量中的地址发请求，这里保存的是可见配置与后续启动检查依据。')}
+            </div>
+            {renderNumberField('请求超时（毫秒）', preferences.network.request_timeout_ms, value => updatePreference('network', { request_timeout_ms: value }), 3000, 120000, 1000)}
+            {renderNumberField('失败重试次数', preferences.network.retry_count, value => updatePreference('network', { retry_count: value }), 0, 5, 1)}
+            <div className="md:col-span-2">
+              {renderTextField('代理地址', preferences.network.proxy_url, value => updatePreference('network', { proxy_url: value }), 'http://127.0.0.1:7890', '留空表示不使用代理。')}
+            </div>
+          </div>
+        )}
+
+        {section === 'security' && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {renderToggle('隐藏 API Key 明文', preferences.security.mask_api_keys, value => updatePreference('security', { mask_api_keys: value }), '设置页只展示脱敏密钥，避免误泄露。')}
+            {renderToggle('删除前二次确认', preferences.security.confirm_deletes, value => updatePreference('security', { confirm_deletes: value }), '删除 Provider、归档和证据条目前弹出确认。')}
+            {renderToggle('允许打开外部原文', preferences.security.allow_external_links, value => updatePreference('security', { allow_external_links: value }), '新闻与公告原文按钮会打开外部链接。')}
+            {renderToggle('记录配置审计日志', preferences.security.audit_log, value => updatePreference('security', { audit_log: value }), '为后续诊断保留配置变更痕迹。')}
+          </div>
+        )}
+
+        {section === 'data' && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {renderNumberField('新闻拉取数量', preferences.data.news_limit, value => updatePreference('data', { news_limit: value }), 5, 100, 5)}
+            {renderNumberField('行情缓存天数', preferences.data.price_cache_days, value => updatePreference('data', { price_cache_days: value }), 30, 3650, 30)}
+            {renderToggle('优先使用本地缓存', preferences.data.prefer_local_cache, value => updatePreference('data', { prefer_local_cache: value }), '已有缓存足够时减少外部数据源请求。')}
+            {renderToggle('自动补齐缺失行情', preferences.data.auto_fetch_missing, value => updatePreference('data', { auto_fetch_missing: value }), '分析或回测发现数据不足时尝试自动抓取。')}
+          </div>
+        )}
+
+        {renderSaveBar(section)}
+      </motion.div>
+    );
+  };
 
   return (
     <motion.div
@@ -508,26 +802,7 @@ export function Settings() {
               </motion.div>
             )}
 
-            {activeTab !== 'api' && (
-              <motion.div
-                key="other"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="h-full flex flex-col items-center justify-center text-center max-w-sm mx-auto"
-              >
-                <div className="w-16 h-16 bg-white/[0.03] border border-white/10 rounded-2xl flex items-center justify-center mb-6 shadow-inner">
-                  <Server className="w-8 h-8 text-neutral-500" />
-                </div>
-                <h3 className="text-lg font-medium text-neutral-200 mb-2">配置项暂未接入</h3>
-                <p className="text-sm text-neutral-400">
-                  {SETTING_TABS.find(t => t.id === activeTab)?.label} 面板当前没有对应后端持久化接口，暂不开放编辑。
-                </p>
-                <button disabled className="mt-8 px-5 py-2.5 bg-white/[0.03] border border-white/10 rounded-lg text-sm text-neutral-500 font-mono cursor-not-allowed">
-                  暂未开放
-                </button>
-              </motion.div>
-            )}
+            {activeTab !== 'api' && renderPreferencePanel(activeTab as PreferenceTabId)}
           </AnimatePresence>
         </div>
       </div>

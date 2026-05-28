@@ -26,6 +26,11 @@ class ProviderSaveRequest(BaseModel):
 class ImportRequest(BaseModel):
     version: str = Field(default="1.0")
     providers: list[dict[str, Any]] = Field(default_factory=list)
+    preferences: dict[str, Any] | None = Field(default=None)
+
+
+class PreferencesSaveRequest(BaseModel):
+    preferences: dict[str, Any] = Field(default_factory=dict)
 
 
 def _public_provider(provider: dict[str, Any]) -> dict[str, Any]:
@@ -41,6 +46,23 @@ async def list_providers():
     from backend.settings_store import list_providers as _list
 
     return ApiResponse(success=True, data={"providers": _list()})
+
+
+@router.get("/preferences")
+async def get_preferences():
+    """读取前端系统偏好设置"""
+    from backend.settings_store import get_app_preferences
+
+    return ApiResponse(success=True, data={"preferences": get_app_preferences()})
+
+
+@router.put("/preferences")
+async def save_preferences(req: PreferencesSaveRequest):
+    """保存前端系统偏好设置"""
+    from backend.settings_store import save_app_preferences
+
+    preferences = save_app_preferences(req.preferences)
+    return ApiResponse(success=True, data={"preferences": preferences})
 
 
 @router.post("/providers")
@@ -119,5 +141,8 @@ async def import_settings(req: ImportRequest):
     """导入设置"""
     from backend.settings_store import import_settings as _import
 
-    result = _import({"version": req.version, "providers": req.providers})
+    payload: dict[str, Any] = {"version": req.version, "providers": req.providers}
+    if req.preferences is not None:
+        payload["preferences"] = req.preferences
+    result = _import(payload)
     return ApiResponse(success=True, data=result)

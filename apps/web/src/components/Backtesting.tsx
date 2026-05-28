@@ -153,13 +153,14 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
   const [resultMeta, setResultMeta] = useState<Record<string, unknown> | null>(null);
   const [poolText, setPoolText] = useState(`${symbol}\n000001\n300750`);
   const [poolTarget, setPoolTarget] = useState(symbol);
+  const [quantLoading, setQuantLoading] = useState(false);
 
   const poolSymbols = useMemo(() => parsePoolSymbols(poolText), [poolText]);
   const selectedStrategy = strategies.find(strategy => String(strategy.id || strategy.name) === selectedStrategyId);
   const selectedParams = selectedStrategy?.params || [];
   const activeSymbol = poolTarget || symbol;
   const hasBacktestResult = Boolean(metrics && equityCurve.length);
-  const canRunBacktest = engineReady && !running && strategies.length > 0;
+  const canRunBacktest = !running;
 
   useEffect(() => {
     setPoolTarget(symbol);
@@ -177,6 +178,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
   };
 
   const loadQuant = async () => {
+    setQuantLoading(true);
     setStatusText('正在检查本地回测引擎...');
     const [statusResult, strategiesResult, runsResult] = await Promise.allSettled([
       api.quantStatus(),
@@ -184,9 +186,12 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
       api.quantRuns(),
     ]);
 
+    let ready = false;
+    let strategyData: QuantStrategy[] = [];
+
     if (statusResult.status === 'fulfilled') {
       const data = statusResult.value.data || {};
-      const ready = statusResult.value.success && Boolean(data.can_run_backtest);
+      ready = statusResult.value.success && Boolean(data.can_run_backtest);
       setEngineReady(ready);
       setStatusText(
         ready
@@ -199,9 +204,12 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
     }
 
     if (strategiesResult.status === 'fulfilled' && strategiesResult.value.data?.strategies?.length) {
-      const strategyData = strategiesResult.value.data.strategies;
+      strategyData = strategiesResult.value.data.strategies;
       setStrategies(strategyData);
-      setSelectedStrategyId(String(strategyData[0].id || strategyData[0].name || 'macd_momentum'));
+      setSelectedStrategyId(prev => {
+        const stillExists = strategyData.some(strategy => String(strategy.id || strategy.name) === prev);
+        return stillExists ? prev : String(strategyData[0].id || strategyData[0].name || 'macd_momentum');
+      });
     } else {
       setStrategies([]);
       setStatusText('本地策略列表加载失败，请稍后重试。');
@@ -210,6 +218,14 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
     if (runsResult.status === 'fulfilled' && runsResult.value.data?.runs) {
       setRuns(runsResult.value.data.runs);
     }
+
+    setQuantLoading(false);
+    return {
+      ready,
+      strategies: strategyData,
+      statusOk: statusResult.status === 'fulfilled' && statusResult.value.success,
+      strategiesOk: strategiesResult.status === 'fulfilled' && Boolean(strategiesResult.value.data?.strategies?.length),
+    };
   };
 
   useEffect(() => {
@@ -254,16 +270,37 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
   };
 
   const runTest = async () => {
-    if (!canRunBacktest) {
-      setStatusText('本地回测能力暂不可用，请先刷新状态。');
+    if (running) {
       return;
     }
 
     setRunning(true);
-    setStatusText(`正在运行 ${activeSymbol} 的本地回测...`);
     try {
+      let currentStrategies = strategies;
+      let currentReady = engineReady;
+      if (!currentReady || currentStrategies.length === 0) {
+        setStatusText('正在刷新本地回测状态...');
+        const refreshed = await loadQuant();
+        currentReady = refreshed.ready;
+        currentStrategies = refreshed.strategies;
+      }
+
+      const nextStrategyId = currentStrategies.some(strategy => String(strategy.id || strategy.name) === selectedStrategyId)
+        ? selectedStrategyId
+        : String(currentStrategies[0]?.id || currentStrategies[0]?.name || '');
+
+      if (!currentReady || !currentStrategies.length || !nextStrategyId) {
+        setStatusText('本地回测暂时无法运行：请确认后端 8000 正在监听，且 /api/quant/status 与 /api/quant/strategies 返回可用。');
+        return;
+      }
+
+      if (nextStrategyId !== selectedStrategyId) {
+        setSelectedStrategyId(nextStrategyId);
+      }
+
+      setStatusText(`正在运行 ${activeSymbol} 的本地回测...`);
       const result = await api.quantBacktest({
-        strategy_id: selectedStrategyId,
+        strategy_id: nextStrategyId,
         symbol: activeSymbol,
         start_date: startDate,
         end_date: endDate,
@@ -402,6 +439,14 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                   />
                   <button onClick={() => openStrategyParams()} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-4 py-2.5 font-mono text-xs font-medium text-neutral-300 transition-colors hover:bg-black/60">
                     <Settings2 className="h-4 w-4" /> 参数
+                  </button>
+                  <button
+                    onClick={() => void refreshQuantHealth()}
+                    disabled={running || quantLoading}
+                    title="刷新本地回测状态"
+                    className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-4 py-2.5 font-mono text-xs font-medium text-neutral-300 transition-colors hover:bg-black/60 disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn('h-4 w-4', quantLoading && 'animate-spin text-indigo-300')} /> 刷新状态
                   </button>
                   <button
                     onClick={runTest}

@@ -194,6 +194,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
   const [dataStatus, setDataStatus] = useState('等待同步后端资讯');
   const [latestPrice, setLatestPrice] = useState<PriceBar | null>(null);
   const [priceStatus, setPriceStatus] = useState('行情待同步');
+  const [newsSymbol, setNewsSymbol] = useState<string | null>(null);
   const newsRequestRef = useRef(0);
   const priceRequestRef = useRef(0);
   const searchRequestRef = useRef(0);
@@ -208,10 +209,14 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
     const isCurrent = () => newsRequestRef.current === requestId && !controller.signal.aborted;
 
     async function loadNews() {
+      const keepCurrentNews = newsSymbol === symbol && news.length > 0;
       setIsLoading(true);
       setNewsState('loading');
-      setNews([]);
-      setSelectedArticle(null);
+      if (!keepCurrentNews) {
+        setNews([]);
+        setSelectedArticle(null);
+        setNewsSymbol(null);
+      }
       setDataStatus(`正在同步 ${stockName} (${symbol}) 新闻与公告...`);
       try {
         const nextItems: NewsItem[] = [];
@@ -223,6 +228,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
           nextItems.push(...newsResult.data.news.map(mapNewsRecord));
           setNews(nextItems);
           setSelectedArticle(nextItems[0]);
+          setNewsSymbol(symbol);
           setNewsState('ready');
           setDataStatus(`已接入 ${nextItems.length} 条后端新闻，正在补充公告通道...`);
         } else if (!newsResult.success) {
@@ -247,6 +253,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
         if (nextItems.length) {
           setNews(nextItems);
           setSelectedArticle(nextItems[0]);
+          setNewsSymbol(symbol);
           setDataStatus(
             failures.length
               ? `已接入 ${nextItems.length} 条后端新闻/公告；部分通道异常：${failures.join('；')}`
@@ -254,21 +261,37 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
           );
           setNewsState('ready');
         } else {
-          setNews([]);
-          setSelectedArticle(null);
-          setNewsState(failures.length ? 'error' : 'empty');
-          setDataStatus(
-            failures.length
-              ? `后端资讯同步失败：${failures.join('；')}`
-              : `后端暂无 ${stockName} (${symbol}) 新闻或公告`,
-          );
+          if (keepCurrentNews) {
+            setNewsState('ready');
+            setDataStatus(
+              failures.length
+                ? `后端资讯同步失败，已保留上次成功结果：${failures.join('；')}`
+                : `后端暂无最新 ${stockName} (${symbol}) 新闻或公告，已保留上次成功结果`,
+            );
+          } else {
+            setNews([]);
+            setSelectedArticle(null);
+            setNewsSymbol(symbol);
+            setNewsState(failures.length ? 'error' : 'empty');
+            setDataStatus(
+              failures.length
+                ? `后端资讯同步失败：${failures.join('；')}`
+                : `后端暂无 ${stockName} (${symbol}) 新闻或公告`,
+            );
+          }
         }
       } catch (error) {
         if (isCurrent()) {
-          setNews([]);
-          setSelectedArticle(null);
-          setNewsState('error');
-          setDataStatus(`后端资讯同步异常：${normalizeDisplayError(error, '后端资讯同步异常')}`);
+          if (keepCurrentNews) {
+            setNewsState('ready');
+            setDataStatus(`后端资讯同步异常，已保留上次成功结果：${normalizeDisplayError(error, '后端资讯同步异常')}`);
+          } else {
+            setNews([]);
+            setSelectedArticle(null);
+            setNewsSymbol(symbol);
+            setNewsState('error');
+            setDataStatus(`后端资讯同步异常：${normalizeDisplayError(error, '后端资讯同步异常')}`);
+          }
         }
       } finally {
         if (isCurrent()) setIsLoading(false);
@@ -547,6 +570,16 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                       : news.length === 0
                         ? `后端暂无 ${stockName} (${symbol}) 新闻或公告。`
                         : `未能检索到包含关键字 "${searchQuery}" 的核心公告或数据，请重置过滤项。`}
+                  {newsState !== 'loading' && (
+                    <button
+                      type="button"
+                      onClick={() => setRefreshTick(tick => tick + 1)}
+                      className="mt-2 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] text-neutral-300 transition-colors hover:bg-white/[0.08]"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      重新同步
+                    </button>
+                  )}
                 </motion.div>
               ) : (
                 filteredNews.map((item, idx) => {

@@ -10,10 +10,37 @@ logger = logging.getLogger(__name__)
 
 from backend.storage.db import Database
 
+_MOJIBAKE_MARKERS = ("\ufffd", "\u00c2", "\u00c3", "\u00e2", "\u00e4", "\u00e5", "\u00e6", "\u00e7", "\u00e8", "\u00e9")
+
 
 def _get_conn():
     db = Database()
     return db._conn
+
+
+def _contains_cjk(value: str) -> bool:
+    return any("\u4e00" <= ch <= "\u9fff" for ch in value)
+
+
+def _looks_mojibake(value: str) -> bool:
+    if not value:
+        return False
+    if any("\u0080" <= ch <= "\u009f" for ch in value):
+        return True
+    return sum(1 for ch in value if ch in _MOJIBAKE_MARKERS) >= 2
+
+
+def _repair_text(value: Any) -> str:
+    text = str(value or "")
+    if not text or not _looks_mojibake(text):
+        return text
+    try:
+        repaired = text.encode("latin1").decode("utf-8")
+    except UnicodeError:
+        return text
+    if _contains_cjk(repaired) and len(repaired) <= len(text):
+        return repaired
+    return repaired if _contains_cjk(repaired) else text
 
 
 # ============== News CRUD ==============
@@ -72,9 +99,9 @@ def _row_to_news(row) -> dict[str, Any]:
 
     return {
         "id": row["id"],
-        "title": row["title"],
-        "summary": row["summary"] or "",
-        "source": row["source"],
+        "title": _repair_text(row["title"]),
+        "summary": _repair_text(row["summary"]),
+        "source": _repair_text(row["source"]),
         "source_url": row["source_url"] or "",
         "published_at": row["published_at"] or "",
         "symbols": symbols,
@@ -123,11 +150,11 @@ def _row_to_announcement(row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "symbol": row["symbol"],
-        "company_name": row["company_name"] or "",
-        "title": row["title"],
-        "category": row["category"] or "other",
+        "company_name": _repair_text(row["company_name"]),
+        "title": _repair_text(row["title"]),
+        "category": _repair_text(row["category"]) or "other",
         "published_at": row["published_at"] or "",
-        "source": row["source"],
+        "source": _repair_text(row["source"]),
         "source_url": row["source_url"] or "",
         "importance": row["importance"] or 0.5,
         "confidence": row["confidence"] or 0.9,
