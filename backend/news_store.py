@@ -10,7 +10,18 @@ logger = logging.getLogger(__name__)
 
 from backend.storage.db import Database
 
-_MOJIBAKE_MARKERS = ("\ufffd", "\u00c2", "\u00c3", "\u00e2", "\u00e4", "\u00e5", "\u00e6", "\u00e7", "\u00e8", "\u00e9")
+_MOJIBAKE_MARKERS = (
+    "\ufffd",
+    "\u00c2",
+    "\u00c3",
+    "\u00e2",
+    "\u00e4",
+    "\u00e5",
+    "\u00e6",
+    "\u00e7",
+    "\u00e8",
+    "\u00e9",
+)
 
 
 def _get_conn():

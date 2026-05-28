@@ -22,9 +22,7 @@ async def _fetch_provider_bars(sym: str, days: int) -> list[dict]:
 
     registry = get_registry()
     end_date = datetime.now().strftime("%Y%m%d")
-    start_date = (datetime.now() - timedelta(days=max(days * 2, 30))).strftime(
-        "%Y%m%d"
-    )
+    start_date = (datetime.now() - timedelta(days=max(days * 2, 30))).strftime("%Y%m%d")
     return await asyncio.wait_for(
         asyncio.to_thread(
             registry.get,
@@ -214,7 +212,11 @@ async def fetch_prices(symbol: str, days: int = 30):
             message=f"成功获取 {count} 条 K 线数据",
         )
     except asyncio.TimeoutError:
-        logger.warning("Price provider timed out for %s after %.1fs", sym, PRICE_PROVIDER_TIMEOUT_SECONDS)
+        logger.warning(
+            "Price provider timed out for %s after %.1fs",
+            sym,
+            PRICE_PROVIDER_TIMEOUT_SECONDS,
+        )
         return _provider_timeout_response(sym)
     except Exception as e:
         return ApiResponse(success=False, error=f"获取数据失败: {e}")

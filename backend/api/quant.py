@@ -175,7 +175,12 @@ def _load_local_bars(
     end_date: str,
     initial_capital: float,
 ) -> tuple[list[dict[str, Any]], str]:
-    from backend.price_store import get_market, get_prices, normalize_symbol, save_price_bars
+    from backend.price_store import (
+        get_market,
+        get_prices,
+        normalize_symbol,
+        save_price_bars,
+    )
 
     normalized_symbol = normalize_symbol(symbol) or symbol
     start_dt = _parse_date(start_date, datetime.now() - timedelta(days=365))
@@ -254,7 +259,10 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
     performance = result.performance or {}
     now = datetime.now()
     run_id = f"local-{now.strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"
-    final_equity = float(performance.get("final_equity") or (result.equity_curve[-1] if result.equity_curve else body.initial_capital))
+    final_equity = float(
+        performance.get("final_equity")
+        or (result.equity_curve[-1] if result.equity_curve else body.initial_capital)
+    )
     equity_curve = [
         {"date": date, "equity": equity, "value": equity}
         for date, equity in zip(result.dates, result.equity_curve)
@@ -292,7 +300,9 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
             "data_source_label": (
                 "本地样例行情"
                 if data_source == "local_preview"
-                else "实时数据源" if data_source == "provider" else "本地行情库"
+                else "实时数据源"
+                if data_source == "provider"
+                else "本地行情库"
             ),
         },
         "started_at": now.isoformat(),

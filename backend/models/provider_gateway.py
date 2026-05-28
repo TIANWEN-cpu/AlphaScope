@@ -236,7 +236,9 @@ def _models_from_config_json(config_json: Any) -> list[str]:
     if not config_json:
         return []
     try:
-        parsed = json.loads(config_json) if isinstance(config_json, str) else config_json
+        parsed = (
+            json.loads(config_json) if isinstance(config_json, str) else config_json
+        )
     except Exception:
         return []
     if not isinstance(parsed, dict):
