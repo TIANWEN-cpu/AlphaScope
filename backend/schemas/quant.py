@@ -1,4 +1,4 @@
-"""量化模块 Schema — Jince 适配层数据模型"""
+"""量化模块 Schema — 本地回测引擎数据模型"""
 
 from __future__ import annotations
 
@@ -159,15 +159,15 @@ class RunRecord(BaseModel):
 
 
 # ============================================================
-# Jince 服务状态
+# 本地量化能力状态
 # ============================================================
 
 
-class JinceStatus(BaseModel):
-    """Jince 服务状态"""
+class QuantEngineStatus(BaseModel):
+    """本地量化能力状态"""
 
     connected: bool = Field(description="是否连接")
-    version: Optional[str] = Field(default=None, description="Jince 版本")
+    version: Optional[str] = Field(default=None, description="引擎版本")
     strategy_count: int = Field(default=0, description="可用策略数")
     active_runs: int = Field(default=0, description="活跃运行数")
     error: Optional[str] = Field(default=None, description="错误信息")

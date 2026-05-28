@@ -1,8 +1,6 @@
-"""量化 API 端点测试"""
+"""量化 API 端点测试 - 本地回测引擎。"""
 
 from __future__ import annotations
-
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -12,16 +10,6 @@ pytest.importorskip("httpx")
 from httpx import ASGITransport, AsyncClient
 
 from backend.api.main import app
-from backend.integrations.jince.errors import JinceConnectionError, JinceError
-from backend.integrations.jince.service import JinceService
-from backend.schemas.quant import (
-    BacktestMetrics,
-    BacktestResult,
-    JinceStatus,
-    RunRecord,
-    RunStatus,
-    StrategyInfo,
-)
 
 
 @pytest.fixture
@@ -30,301 +18,183 @@ def client():
     return AsyncClient(transport=transport, base_url="http://test")
 
 
-def _mock_status_connected():
-    return JinceStatus(connected=True, version="2.0", strategy_count=3, active_runs=1)
-
-
-def _mock_status_disconnected():
-    return JinceStatus(connected=False, error="外部回测服务未运行")
-
-
-def _mock_strategies():
-    return [
-        StrategyInfo(id="s1", name="MACD金叉", description="MACD策略"),
-        StrategyInfo(id="s2", name="RSI反转", description="RSI策略"),
-    ]
-
-
-def _mock_backtest():
-    return BacktestResult(
-        run_id="r1",
-        strategy_id="s1",
-        symbol="600519",
-        status=RunStatus.COMPLETED,
-        metrics=BacktestMetrics(total_return=0.15, sharpe_ratio=1.2),
-    )
-
-
-# ========== GET /api/quant/status ==========
-
-
 class TestQuantStatus:
-    """Jince 服务状态端点"""
+    """本地量化能力状态端点。"""
 
     @pytest.mark.anyio
-    async def test_status_connected(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.get_status.return_value = _mock_status_connected()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/status")
+    async def test_status_is_local_and_runnable(self, client):
+        resp = await client.get("/api/quant/status")
+
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
         assert data["data"]["connected"] is True
-        assert data["data"]["version"] == "2.0"
-
-    @pytest.mark.anyio
-    async def test_status_disconnected(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.get_status.return_value = _mock_status_disconnected()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/status")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-        assert data["data"]["connected"] is False
+        assert data["data"]["execution_mode"] == "local"
+        assert data["data"]["source_status"] == "local"
         assert data["data"]["can_run_backtest"] is True
         assert data["data"]["local_backtest_available"] is True
-        assert data["data"]["degraded"] is True
-        assert data["data"]["source_status"] == "local_fallback"
+        assert data["data"]["capabilities"]["stock_pool_parse"] is True
+        assert data["data"]["external_connected"] is False
+        assert data["data"]["external_error"] is None
+        assert data["data"]["degraded"] is False
         assert data["error_code"] is None
 
 
-# ========== GET /api/quant/strategies ==========
-
-
 class TestQuantStrategies:
-    """策略列表端点"""
+    """本地策略列表端点。"""
 
     @pytest.mark.anyio
-    async def test_strategies_list(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.list_strategies.return_value = _mock_strategies()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/strategies")
+    async def test_strategies_list_local(self, client):
+        resp = await client.get("/api/quant/strategies")
+
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert len(data["data"]["strategies"]) == 2
-
-    @pytest.mark.anyio
-    async def test_strategies_disconnected(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.list_strategies.side_effect = JinceConnectionError()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/strategies")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-        assert data["error_code"] == "EXTERNAL_BACKTEST_DISCONNECTED"
-        assert "Jince" not in (data["error"] or "")
+        assert data["data"]["execution_mode"] == "local"
+        assert data["data"]["degraded"] is False
         names = [strategy["name"] for strategy in data["data"]["strategies"]]
         assert "macd_momentum" in names
-        assert data["data"]["degraded"] is True
-        assert data["data"]["source_status"] == "unavailable"
+        assert "ma_crossover" in names
+        assert "rsi_reversal" in names
 
     @pytest.mark.anyio
-    async def test_strategies_http_error_returns_structured_failure(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.list_strategies.side_effect = JinceError(
-            "外部回测服务 HTTP 503: ", code="JINCE_HTTP_ERROR"
-        )
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/strategies")
+    async def test_strategy_detail(self, client):
+        resp = await client.get("/api/quant/strategies/macd_momentum")
+
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert data["error_code"] == "EXTERNAL_BACKTEST_HTTP_ERROR"
-        assert "Jince" not in (data["error"] or "")
-        names = [strategy["name"] for strategy in data["data"]["strategies"]]
-        assert "macd_momentum" in names
-        assert data["data"]["degraded"] is True
-        assert data["data"]["source_status"] == "unavailable"
+        assert data["data"]["name"] == "macd_momentum"
+        assert data["data"]["source"] == "local"
 
+    @pytest.mark.anyio
+    async def test_strategy_detail_not_found(self, client):
+        resp = await client.get("/api/quant/strategies/not-a-strategy")
 
-# ========== POST /api/quant/strategies/reload ==========
+        assert resp.status_code == 404
 
 
 class TestQuantReload:
-    """策略重载端点"""
+    """本地策略重载端点。"""
 
     @pytest.mark.anyio
-    async def test_reload_ok(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.reload_strategies.return_value = {"reloaded": 3}
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.post("/api/quant/strategies/reload")
-        assert resp.json()["success"] is True
+    async def test_reload_local_strategies(self, client):
+        resp = await client.post("/api/quant/strategies/reload")
 
-    @pytest.mark.anyio
-    async def test_reload_disconnected(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.reload_strategies.side_effect = JinceConnectionError()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.post("/api/quant/strategies/reload")
-        assert resp.json()["success"] is True
-        assert resp.json()["error_code"] == "EXTERNAL_BACKTEST_DISCONNECTED"
-        assert resp.json()["data"]["local_backtest_available"] is True
-
-
-# ========== POST /api/quant/backtest ==========
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["data"]["execution_mode"] == "local"
+        assert data["data"]["reloaded"] >= 3
+        assert data["data"]["local_backtest_available"] is True
 
 
 class TestQuantBacktest:
-    """回测端点"""
+    """本地回测端点。"""
 
     @pytest.mark.anyio
-    async def test_backtest_ok(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.run_backtest.return_value = _mock_backtest()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.post(
-                "/api/quant/backtest",
-                json={
-                    "strategy_id": "s1",
-                    "symbol": "600519",
-                    "start_date": "2024-01-01",
-                    "end_date": "2024-12-31",
-                },
-            )
+    async def test_backtest_runs_local_engine(self, client):
+        resp = await client.post(
+            "/api/quant/backtest",
+            json={
+                "strategy_id": "macd_momentum",
+                "symbol": "600519",
+                "start_date": "2024-01-01",
+                "end_date": "2024-12-31",
+                "initial_capital": 1000000,
+            },
+        )
+
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-        assert data["data"]["run_id"] == "r1"
-        assert data["data"]["metrics"]["total_return"] == 0.15
-
-    @pytest.mark.anyio
-    async def test_backtest_disconnected(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.run_backtest.side_effect = JinceConnectionError()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.post(
-                "/api/quant/backtest",
-                json={
-                    "strategy_id": "s1",
-                    "symbol": "600519",
-                    "start_date": "2024-01-01",
-                    "end_date": "2024-12-31",
-                },
-            )
         data = resp.json()
         assert data["success"] is True
         assert data["data"]["status"] == "completed"
-        assert data["data"]["source_status"] == "local_fallback"
+        assert data["data"]["source_status"] == "local"
+        assert data["data"]["engine"] == "local"
+        assert data["data"]["run_id"].startswith("local-")
         assert data["data"]["metrics"]["trade_count"] >= 0
-
-
-# ========== POST /api/quant/live/start ==========
-
-
-class TestQuantLiveStart:
-    """启动实盘端点"""
-
-    @pytest.mark.anyio
-    async def test_live_start_disconnected(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.start_live.side_effect = JinceConnectionError()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.post(
-                "/api/quant/live/start",
-                json={"strategy_id": "s1", "symbol": "600519"},
-            )
-        assert resp.json()["success"] is False
-
-
-# ========== POST /api/quant/live/stop ==========
-
-
-class TestQuantLiveStop:
-    """停止实盘端点"""
+        assert data["data"]["summary"]["bar_count"] >= 30
+        assert data["data"]["summary"]["data_source"] in {
+            "local_price_store",
+            "provider",
+            "local_preview",
+        }
+        assert isinstance(data["data"]["equity_curve"], list)
 
     @pytest.mark.anyio
-    async def test_live_stop_disconnected(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.stop_live.side_effect = JinceConnectionError()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.post("/api/quant/live/stop", json={"run_id": "r1"})
-        assert resp.json()["success"] is False
+    async def test_backtest_unknown_strategy_returns_clear_error(self, client):
+        resp = await client.post(
+            "/api/quant/backtest",
+            json={
+                "strategy_id": "not-a-strategy",
+                "symbol": "600519",
+                "start_date": "2024-01-01",
+                "end_date": "2024-12-31",
+            },
+        )
 
-
-# ========== GET /api/quant/runs ==========
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert data["error_code"] == "LOCAL_BACKTEST_ERROR"
+        assert "策略不存在" in data["error"]
 
 
 class TestQuantRuns:
-    """运行记录端点"""
+    """本地运行记录端点。"""
 
     @pytest.mark.anyio
-    async def test_runs_list(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.list_runs.return_value = [
-            RunRecord(
-                run_id="r1",
-                strategy_id="s1",
-                symbol="600519",
-                status=RunStatus.COMPLETED,
-                total_return=0.15,
-            ),
-        ]
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/runs")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-        assert len(data["data"]["runs"]) == 1
-
-    @pytest.mark.anyio
-    async def test_runs_disconnected(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.list_runs.side_effect = JinceConnectionError()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/runs")
-        data = resp.json()
-        assert data["success"] is True
-        assert data["error_code"] == "EXTERNAL_BACKTEST_DISCONNECTED"
-        assert "Jince" not in (data["error"] or "")
-        assert isinstance(data["data"]["runs"], list)
-        assert data["data"]["local_backtest_available"] is True
-        assert data["data"]["degraded"] is True
-        assert data["data"]["source_status"] == "unavailable"
-
-    @pytest.mark.anyio
-    async def test_runs_http_error_returns_structured_failure(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.list_runs.side_effect = JinceError(
-            "外部回测服务 HTTP 503: ", code="JINCE_HTTP_ERROR"
+    async def test_runs_and_run_detail_after_backtest(self, client):
+        run_resp = await client.post(
+            "/api/quant/backtest",
+            json={
+                "strategy_id": "ma_crossover",
+                "symbol": "000001",
+                "start_date": "2024-01-01",
+                "end_date": "2024-12-31",
+            },
         )
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/runs")
-        assert resp.status_code == 200
+        run_id = run_resp.json()["data"]["run_id"]
+
+        list_resp = await client.get("/api/quant/runs")
+        assert list_resp.status_code == 200
+        list_data = list_resp.json()
+        assert list_data["success"] is True
+        assert list_data["data"]["execution_mode"] == "local"
+        assert any(item["run_id"] == run_id for item in list_data["data"]["runs"])
+
+        detail_resp = await client.get(f"/api/quant/runs/{run_id}")
+        assert detail_resp.status_code == 200
+        detail_data = detail_resp.json()
+        assert detail_data["success"] is True
+        assert detail_data["data"]["run_id"] == run_id
+        assert detail_data["data"]["source_status"] == "local"
+
+    @pytest.mark.anyio
+    async def test_run_detail_not_found(self, client):
+        resp = await client.get("/api/quant/runs/missing-run")
+
+        assert resp.status_code == 404
+
+
+class TestQuantLiveEndpoints:
+    """实盘接口目前明确未接入。"""
+
+    @pytest.mark.anyio
+    async def test_live_start_not_implemented(self, client):
+        resp = await client.post(
+            "/api/quant/live/start",
+            json={"strategy_id": "macd_momentum", "symbol": "600519"},
+        )
+
         data = resp.json()
-        assert data["success"] is True
-        assert data["error_code"] == "EXTERNAL_BACKTEST_HTTP_ERROR"
-        assert "Jince" not in (data["error"] or "")
-        assert isinstance(data["data"]["runs"], list)
-        assert data["data"]["local_backtest_available"] is True
-        assert data["data"]["degraded"] is True
-        assert data["data"]["source_status"] == "unavailable"
-
-
-# ========== GET /api/quant/runs/{run_id} ==========
-
-
-class TestQuantRunDetail:
-    """运行详情端点"""
+        assert data["success"] is False
+        assert data["error_code"] == "LOCAL_LIVE_NOT_IMPLEMENTED"
 
     @pytest.mark.anyio
-    async def test_run_detail(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.get_run.return_value = _mock_backtest()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/runs/r1")
-        assert resp.status_code == 200
-        assert resp.json()["data"]["run_id"] == "r1"
+    async def test_live_stop_not_implemented(self, client):
+        resp = await client.post("/api/quant/live/stop", json={"run_id": "r1"})
 
-    @pytest.mark.anyio
-    async def test_run_detail_disconnected(self, client):
-        mock_svc = AsyncMock(spec=JinceService)
-        mock_svc.get_run.side_effect = JinceConnectionError()
-        with patch("backend.api.quant._get_service", return_value=mock_svc):
-            resp = await client.get("/api/quant/runs/r1")
-        assert resp.json()["success"] is False
+        data = resp.json()
+        assert data["success"] is False
+        assert data["error_code"] == "LOCAL_LIVE_NOT_IMPLEMENTED"

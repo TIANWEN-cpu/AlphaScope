@@ -1,9 +1,9 @@
 """Quantitative backtesting engine module.
 
-Inspired by jin-ce-zhi-suan's architecture:
+Local-first architecture:
 - engine.py: Core backtesting engine
 - strategies.py: Strategy definitions and registry
-- risk_controller.py: Risk control (门下省 veto power)
+- risk_controller.py: Risk control checks before execution
 - portfolio.py: Portfolio tracking
 - metrics.py: Performance metrics calculator
 """

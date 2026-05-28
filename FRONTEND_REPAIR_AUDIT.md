@@ -19,7 +19,7 @@
 | `npm --prefix apps/web run lint` | 通过 | 当前脚本为 `tsc --noEmit` |
 | `python -m ruff check backend tests` | 通过 | All checks passed |
 | `python -m ruff format --check backend tests` | 通过 | 221 files already formatted |
-| `python -m pytest tests/test_sse_contract.py tests/test_settings.py tests/test_runtime_orchestrator.py tests/test_agent_editor.py tests/test_api.py tests/test_quant_api.py tests/test_jince_adapter.py tests/test_funds_api.py -q` | 通过 | 91 passed |
+| `python -m pytest tests/test_sse_contract.py tests/test_settings.py tests/test_runtime_orchestrator.py tests/test_agent_editor.py tests/test_api.py tests/test_quant_api.py tests/test_funds_api.py -q` | 通过 | 历史通过记录；当前量化回测已改为本地引擎，不再保留旧外部适配测试 |
 | `python -m pytest tests/ -q` | 通过 | 802 passed, 2 skipped |
 | `python -m pip check` | 未复跑 | 首轮检查通过，本轮未改依赖 |
 | `npm audit --audit-level=moderate` | 未复跑 | 首轮检查通过，本轮未改依赖 |

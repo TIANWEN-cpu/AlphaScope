@@ -1,4 +1,4 @@
-"""Risk controller - inspired by jin-ce-zhi-suan's 门下省 (veto power).
+"""Risk controller for local backtests.
 
 Validates trades against risk rules before execution.
 """
@@ -31,7 +31,7 @@ class RiskCheckResult:
 
 
 class RiskController:
-    """Risk controller with configurable rules (门下省 veto power)."""
+    """Risk controller with configurable rules."""
 
     def __init__(self, config: RiskConfig | None = None):
         self.config = config or RiskConfig()
