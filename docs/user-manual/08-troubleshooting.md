@@ -277,7 +277,7 @@ python scripts/restore_local.py backup/
 
 ### GitHub Issues
 
-1. 访问 [GitHub Issues](https://github.com/TIANWEN-cpu/AI--FINANCE/issues)
+1. 访问 [GitHub Issues](https://github.com/TIANWEN-cpu/AlphaScope/issues)
 2. 搜索已有问题
 3. 创建新 Issue
 

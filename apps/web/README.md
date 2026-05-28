@@ -1,6 +1,6 @@
-# AI-Finance Workbench Frontend
+# 研策中枢 AlphaScope Frontend
 
-Vite + React 前端，默认连接本地 FastAPI：
+研策中枢 AlphaScope 的 Vite + React 前端，默认连接本地 FastAPI：
 
 ```bash
 npm install

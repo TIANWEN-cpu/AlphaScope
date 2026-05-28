@@ -36,7 +36,7 @@ npm --version
 
 ---
 
-## 安装 AI-FINANCE
+## 安装研策中枢 AlphaScope
 
 ### 方式一：一键安装（推荐）
 
@@ -48,15 +48,15 @@ npm --version
 
 ### 方式二：下载发布包
 
-1. 前往 [GitHub Releases](https://github.com/TIANWEN-cpu/AI--FINANCE/releases)
+1. 前往 [GitHub Releases](https://github.com/TIANWEN-cpu/AlphaScope/releases)
 2. 下载最新版本的压缩包
 3. 解压到任意目录
 
 ### 方式三：Git 克隆
 
 ```bash
-git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git
-cd AI--FINANCE
+git clone https://github.com/TIANWEN-cpu/AlphaScope.git
+cd AlphaScope
 ```
 
 ---

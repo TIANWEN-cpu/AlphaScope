@@ -6,8 +6,8 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git
-cd AI--FINANCE
+git clone https://github.com/TIANWEN-cpu/AlphaScope.git
+cd AlphaScope
 
 # 2. 安装依赖
 pip install -r requirements.txt
