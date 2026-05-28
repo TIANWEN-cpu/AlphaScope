@@ -114,7 +114,7 @@ class ToolRouter:
             ToolDefinition(
                 id="quant_backtest",
                 name="量化回测",
-                description="通过外部回测服务运行策略回测，返回收益率/夏普/回撤等指标",
+                description="通过本地量化回测引擎运行策略回测，返回收益率/夏普/回撤等指标",
                 tool_type="calculator",
                 handler=self._tool_quant_backtest,
             )
@@ -319,26 +319,24 @@ class ToolRouter:
     ) -> Dict[str, Any]:
         """量化回测工具"""
         try:
-            import asyncio
+            from backend.api.quant import run_local_backtest_payload
 
-            from backend.integrations.jince.service import JinceService
-
-            svc = JinceService()
-            result = asyncio.run(
-                svc.run_backtest(
-                    strategy_id=strategy_id,
-                    symbol=symbol,
-                    start_date=start_date,
-                    end_date=end_date,
-                    initial_capital=initial_capital,
-                )
+            result = run_local_backtest_payload(
+                strategy_id=strategy_id,
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                initial_capital=initial_capital,
+                params=kwargs.get("params") if isinstance(kwargs.get("params"), dict) else None,
             )
             return {
-                "run_id": result.run_id,
-                "strategy_id": result.strategy_id,
-                "symbol": result.symbol,
-                "status": result.status.value,
-                "metrics": result.metrics.model_dump() if result.metrics else None,
+                "run_id": result.get("run_id"),
+                "strategy_id": result.get("strategy_id"),
+                "symbol": result.get("symbol"),
+                "status": result.get("status"),
+                "metrics": result.get("metrics"),
+                "data_source": result.get("data_source"),
+                "source_status": result.get("source_status"),
             }
         except Exception as e:
             return {"error": str(e), "strategy_id": strategy_id, "symbol": symbol}

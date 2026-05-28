@@ -1,92 +1,27 @@
-"""量化实验室 API — 外部服务适配与本地回测兜底端点"""
+"""量化实验室 API — 项目内置本地回测端点。
+
+本模块默认不探测、不监听外部量化服务。参考外部量化项目的策略/回测/报告思路，
+但运行链路固定使用当前项目内置策略、行情缓存、provider 取数和本地回测引擎。
+"""
 
 from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.integrations.jince.errors import JinceConnectionError, JinceError
-from backend.integrations.jince.service import JinceService
 from backend.provider_timeout import call_with_timeout
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/quant", tags=["quant"])
 
-# 默认服务实例（可被覆盖）
-_service: Optional[JinceService] = None
 _local_runs: list[dict[str, Any]] = []
+_local_run_details: dict[str, dict[str, Any]] = {}
 QUANT_PROVIDER_TIMEOUT_SECONDS = 8.0
-
-
-def _jince_failure_response(
-    error: JinceError,
-    data: dict[str, Any] | None = None,
-    *,
-    degraded_success: bool = False,
-):
-    """Return a structured API response for unavailable external backtest operations."""
-    public_code = _public_quant_error_code(error)
-    public_error = _public_quant_error_message(error, degraded_success=degraded_success)
-    payload = data or {}
-    if degraded_success:
-        payload["degraded"] = True
-        payload["source_status"] = "unavailable"
-    payload.setdefault("external_error", public_error)
-    return ApiResponse(
-        success=degraded_success,
-        error=public_error,
-        error_code=public_code,
-        data=payload,
-    )
-
-
-def _external_unavailable_text() -> str:
-    return "外部服务未运行，已使用本地回测引擎。"
-
-
-def _public_quant_error_code(error: JinceError) -> str:
-    raw_code = str(getattr(error, "code", "") or "")
-    if isinstance(error, JinceConnectionError) or raw_code == "JINCE_CONNECTION_ERROR":
-        return "EXTERNAL_BACKTEST_DISCONNECTED"
-    if "TIMEOUT" in raw_code:
-        return "EXTERNAL_BACKTEST_TIMEOUT"
-    if "HTTP" in raw_code:
-        return "EXTERNAL_BACKTEST_HTTP_ERROR"
-    if "STRATEGY" in raw_code:
-        return "EXTERNAL_BACKTEST_STRATEGY_NOT_FOUND"
-    return "EXTERNAL_BACKTEST_ERROR"
-
-
-def _public_quant_error_message(error: JinceError, *, degraded_success: bool = False) -> str:
-    code = _public_quant_error_code(error)
-    suffix = "，已使用本地回测引擎。" if degraded_success else "。"
-    if code == "EXTERNAL_BACKTEST_DISCONNECTED":
-        return f"外部回测服务未运行{suffix}"
-    if code == "EXTERNAL_BACKTEST_TIMEOUT":
-        return f"外部回测服务响应超时{suffix}"
-    if code == "EXTERNAL_BACKTEST_HTTP_ERROR":
-        return f"外部回测服务请求失败{suffix}"
-    if code == "EXTERNAL_BACKTEST_STRATEGY_NOT_FOUND":
-        return "策略不存在，请选择可用策略后重试。"
-    return f"外部回测服务暂不可用{suffix}"
-
-
-def _get_service() -> JinceService:
-    global _service
-    if _service is None:
-        _service = JinceService()
-    return _service
-
-
-def set_service(service: JinceService):
-    """注入服务实例（测试用）"""
-    global _service
-    _service = service
 
 
 def _infer_param_type(value: Any) -> str:
@@ -113,6 +48,7 @@ def _builtin_strategy_data() -> list[dict[str, Any]]:
                 "description": item.get("description", ""),
                 "status": "active",
                 "version": "local",
+                "source": "local",
                 "params": [
                     {
                         "name": name,
@@ -127,26 +63,32 @@ def _builtin_strategy_data() -> list[dict[str, Any]]:
     return strategies
 
 
-def _local_status_payload(external_status: Any | None = None) -> dict[str, Any]:
-    external_connected = bool(getattr(external_status, "connected", False))
+def _local_status_payload() -> dict[str, Any]:
     builtin_count = len(_builtin_strategy_data())
     return {
-        "connected": external_connected,
-        "external_connected": external_connected,
+        "connected": True,
+        "external_connected": False,
         "can_run_backtest": True,
         "local_backtest_available": True,
-        "execution_mode": "external" if external_connected else "local",
-        "version": getattr(external_status, "version", None) or "local",
-        "strategy_count": (
-            getattr(external_status, "strategy_count", 0)
-            if external_connected and getattr(external_status, "strategy_count", 0)
-            else builtin_count
-        ),
-        "active_runs": getattr(external_status, "active_runs", 0) or 0,
+        "execution_mode": "local",
+        "version": "local",
+        "strategy_count": builtin_count,
+        "active_runs": 0,
+        "run_count": len(_local_runs),
         "error": None,
-        "external_error": None if external_connected else _external_unavailable_text(),
-        "degraded": not external_connected,
-        "source_status": "ok" if external_connected else "local_fallback",
+        "external_error": None,
+        "degraded": False,
+        "source_status": "local",
+        "data_sources": ["local_price_store", "provider", "local_preview"],
+        "capabilities": {
+            "strategy_params": True,
+            "single_symbol_backtest": True,
+            "run_history": True,
+            "risk_audit": True,
+            "live_trading": False,
+            "tdx_compile": False,
+            "stock_pool_parse": True,
+        },
     }
 
 
@@ -296,7 +238,7 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
 
     strategy_id = body.strategy_id
     if StrategyRegistry.get(strategy_id) is None:
-        strategy_id = "macd_momentum"
+        raise ValueError(f"策略不存在: {body.strategy_id}")
     strategy = StrategyRegistry.create(strategy_id, body.params)
     if strategy is None:
         raise ValueError(f"策略不存在: {body.strategy_id}")
@@ -312,6 +254,7 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
     performance = result.performance or {}
     now = datetime.now()
     run_id = f"local-{now.strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"
+    final_equity = float(performance.get("final_equity") or (result.equity_curve[-1] if result.equity_curve else body.initial_capital))
     equity_curve = [
         {"date": date, "equity": equity, "value": equity}
         for date, equity in zip(result.dates, result.equity_curve)
@@ -329,14 +272,36 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
             "win_rate": performance.get("win_rate", 0.0),
             "trade_count": performance.get("total_trades", len(result.trades)),
             "profit_factor": performance.get("profit_factor", 0.0),
+            "sortino_ratio": performance.get("sortino_ratio", 0.0),
+            "calmar_ratio": performance.get("calmar_ratio", 0.0),
+            "volatility": performance.get("volatility", 0.0),
+            "initial_capital": body.initial_capital,
+            "final_equity": final_equity,
+            "trading_days": performance.get("trading_days", len(bars)),
         },
         "equity_curve": equity_curve,
         "trades": result.trades,
+        "risk_violations": result.risk_violations,
+        "summary": {
+            "bar_count": len(bars),
+            "trade_count": performance.get("total_trades", len(result.trades)),
+            "risk_violation_count": len(result.risk_violations),
+            "start_date": bars[0]["date"] if bars else body.start_date,
+            "end_date": bars[-1]["date"] if bars else body.end_date,
+            "data_source": data_source,
+            "data_source_label": (
+                "本地样例行情"
+                if data_source == "local_preview"
+                else "实时数据源" if data_source == "provider" else "本地行情库"
+            ),
+        },
         "started_at": now.isoformat(),
         "finished_at": now.isoformat(),
-        "source_status": "local_fallback",
+        "source_status": "local",
         "data_source": data_source,
         "degraded": data_source == "local_preview",
+        "engine": "local",
+        "params": strategy.params,
         "message": (
             "已使用本地样例行情完成回测，仅用于功能预览。"
             if data_source == "local_preview"
@@ -355,9 +320,13 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
             "started_at": now.isoformat(),
             "finished_at": now.isoformat(),
             "source_status": payload["source_status"],
+            "data_source": data_source,
         },
     )
     del _local_runs[20:]
+    _local_run_details[run_id] = payload
+    for stale_run_id in list(_local_run_details.keys())[50:]:
+        _local_run_details.pop(stale_run_id, None)
     return payload
 
 
@@ -392,6 +361,27 @@ class LiveStopBody(BaseModel):
     run_id: str = Field(description="运行ID")
 
 
+def run_local_backtest_payload(
+    strategy_id: str,
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    initial_capital: float = 1000000.0,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run the built-in local backtest engine and return the API payload."""
+    return _run_local_backtest(
+        BacktestRequestBody(
+            strategy_id=strategy_id,
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            initial_capital=initial_capital,
+            params=params or {},
+        )
+    )
+
+
 # ============================================================
 # 端点
 # ============================================================
@@ -400,45 +390,28 @@ class LiveStopBody(BaseModel):
 @router.get("/status")
 async def get_status():
     """获取回测能力状态"""
-    svc = _get_service()
-    try:
-        status = await svc.get_status()
-    except JinceError:
-        status = None
-    data = _local_status_payload(status)
+    data = _local_status_payload()
     return ApiResponse(
         success=True,
         data=data,
-        message=(
-            "外部回测服务已连接。"
-            if data["external_connected"]
-            else "外部服务未运行，已启用本地回测引擎。"
-        ),
+        message="本地回测引擎可用。",
     )
 
 
 @router.get("/strategies")
 async def list_strategies():
     """获取策略列表"""
-    svc = _get_service()
-    try:
-        strategies = await svc.list_strategies()
-        return ApiResponse(
-            success=True,
-            data={"strategies": [s.model_dump() for s in strategies]},
-        )
-    except JinceError as e:
-        fallback_strategies = _builtin_strategy_data()
-        return _jince_failure_response(
-            e,
-            data={
-                "strategies": fallback_strategies,
-                "can_run_backtest": True,
-                "local_backtest_available": True,
-                "execution_mode": "local",
-            },
-            degraded_success=True,
-        )
+    return ApiResponse(
+        success=True,
+        data={
+            "strategies": _builtin_strategy_data(),
+            "can_run_backtest": True,
+            "local_backtest_available": True,
+            "execution_mode": "local",
+            "source_status": "local",
+            "degraded": False,
+        },
+    )
 
 
 @router.get("/strategies/{strategy_name}")
@@ -461,114 +434,78 @@ async def list_builtin_strategies():
 @router.post("/strategies/reload")
 async def reload_strategies():
     """重载策略"""
-    svc = _get_service()
-    try:
-        result = await svc.reload_strategies()
-        return ApiResponse(success=True, data=result)
-    except JinceError as e:
-        return _jince_failure_response(
-            e,
-            data={
-                "reloaded": len(_builtin_strategy_data()),
-                "strategies": _builtin_strategy_data(),
-                "can_run_backtest": True,
-                "local_backtest_available": True,
-                "execution_mode": "local",
-            },
-            degraded_success=True,
-        )
+    strategies = _builtin_strategy_data()
+    return ApiResponse(
+        success=True,
+        data={
+            "reloaded": len(strategies),
+            "strategies": strategies,
+            "can_run_backtest": True,
+            "local_backtest_available": True,
+            "execution_mode": "local",
+            "source_status": "local",
+            "degraded": False,
+        },
+        message=f"已加载 {len(strategies)} 个本地策略。",
+    )
 
 
 @router.post("/backtest")
 async def run_backtest(body: BacktestRequestBody):
     """发起回测"""
-    svc = _get_service()
     try:
-        result = await svc.run_backtest(
-            strategy_id=body.strategy_id,
-            symbol=body.symbol,
-            start_date=body.start_date,
-            end_date=body.end_date,
-            initial_capital=body.initial_capital,
-            params=body.params,
-        )
-        return ApiResponse(success=True, data=result.model_dump())
-    except JinceError as e:
-        try:
-            return ApiResponse(
-                success=True,
-                data=_run_local_backtest(body),
-                message=_external_unavailable_text(),
-            )
-        except Exception as local_error:
-            return _jince_failure_response(
-                e,
-                data={"local_error": str(local_error)},
-            )
+        result = _run_local_backtest(body)
+        return ApiResponse(success=True, data=result, message=result.get("message"))
     except Exception as e:
         return ApiResponse(
             success=False,
             error=str(e),
-            error_code="QUANT_BACKTEST_ERROR",
+            error_code="LOCAL_BACKTEST_ERROR",
         )
 
 
 @router.post("/live/start")
 async def start_live(body: LiveStartBody):
     """启动实盘"""
-    svc = _get_service()
-    try:
-        result = await svc.start_live(
-            strategy_id=body.strategy_id,
-            symbol=body.symbol,
-            params=body.params,
-            capital=body.capital,
-        )
-        return ApiResponse(success=True, data=result)
-    except JinceError as e:
-        return _jince_failure_response(e)
+    return ApiResponse(
+        success=False,
+        error="本地量化实验室暂未接入实盘执行，只支持历史回测。",
+        error_code="LOCAL_LIVE_NOT_IMPLEMENTED",
+        data={"strategy_id": body.strategy_id, "symbol": body.symbol},
+    )
 
 
 @router.post("/live/stop")
 async def stop_live(body: LiveStopBody):
     """停止实盘"""
-    svc = _get_service()
-    try:
-        result = await svc.stop_live(body.run_id)
-        return ApiResponse(success=True, data=result)
-    except JinceError as e:
-        return _jince_failure_response(e)
+    return ApiResponse(
+        success=False,
+        error="本地量化实验室暂未接入实盘执行，无需停止实盘任务。",
+        error_code="LOCAL_LIVE_NOT_IMPLEMENTED",
+        data={"run_id": body.run_id},
+    )
 
 
 @router.get("/runs")
 async def list_runs():
     """获取运行记录"""
-    svc = _get_service()
-    try:
-        runs = await svc.list_runs()
-        return ApiResponse(
-            success=True,
-            data={"runs": [r.model_dump() for r in runs]},
-        )
-    except JinceError as e:
-        return _jince_failure_response(
-            e,
-            data={
-                "runs": _local_runs,
-                "can_run_backtest": True,
-                "local_backtest_available": True,
-                "execution_mode": "local",
-            },
-            degraded_success=True,
-        )
+    return ApiResponse(
+        success=True,
+        data={
+            "runs": _local_runs,
+            "can_run_backtest": True,
+            "local_backtest_available": True,
+            "execution_mode": "local",
+            "source_status": "local",
+            "degraded": False,
+        },
+    )
 
 
 @router.get("/runs/{run_id}")
 async def get_run(run_id: str):
     """获取运行详情"""
-    svc = _get_service()
-    try:
-        result = await svc.get_run(run_id)
-        return ApiResponse(success=True, data=result.model_dump())
-    except JinceError as e:
-        return _jince_failure_response(e)
+    result = _local_run_details.get(run_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"运行记录不存在: {run_id}")
+    return ApiResponse(success=True, data=result)

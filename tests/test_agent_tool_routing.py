@@ -181,8 +181,8 @@ class TestQuantBacktestTool:
         assert tool is not None
         assert tool.tool_type == "calculator"
 
-    def test_backtest_tool_disconnected(self):
-        """Jince 未连接时工具返回错误而非崩溃"""
+    def test_backtest_tool_local_engine_handles_unknown_strategy(self):
+        """本地回测工具对未知策略返回清晰错误而非崩溃"""
         router = ToolRouter()
         result = router.call_tool(
             "quant_backtest",
@@ -191,10 +191,23 @@ class TestQuantBacktestTool:
             start_date="2024-01-01",
             end_date="2024-12-31",
         )
-        # 未连接 Jince 时应该返回 error
         assert result.data is not None
-        # 可能成功（如果 mock）或 error（如果连接失败）
-        assert "error" in result.data or "run_id" in result.data
+        assert "error" in result.data
+
+    def test_backtest_tool_runs_local_engine(self):
+        """本地回测工具可直接返回回测结果"""
+        router = ToolRouter()
+        result = router.call_tool(
+            "quant_backtest",
+            strategy_id="macd_momentum",
+            symbol="600519",
+            start_date="2024-01-01",
+            end_date="2024-12-31",
+        )
+        assert result.data is not None
+        assert result.data["status"] == "completed"
+        assert result.data["source_status"] == "local"
+        assert result.data["run_id"].startswith("local-")
 
 
 class TestFundMetricsTool:

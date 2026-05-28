@@ -21,11 +21,11 @@
 
 - Modify `backend/factors/generator.py`: fix fund-flow factor computation and expose missing/degraded dimensions.
 - Modify `tests/test_factors.py`: add regression for correct `fetch_individual_fund_flow` + `summarize_fund_flow` call chain and degraded/missing metadata.
-- Modify `backend/api/quant.py`: make `strategies` and `runs` degrade consistently with `/status`.
-- Modify `tests/test_quant_api.py`: assert degraded success for strategies/runs when Jince is unavailable.
+- Modify `backend/api/quant.py`: make `strategies`, `runs`, and `backtest` use the built-in local engine consistently.
+- Modify `tests/test_quant_api.py`: assert local engine status, strategies, run history, and clear local errors.
 - Modify `apps/web/src/components/Workbench.tsx`: map fund-flow summary fields correctly and show degraded state.
 - Modify `apps/web/src/components/ReportGenerator.tsx`: format factors as natural language, map fund-flow fields correctly, account for degraded inputs, and scroll report sections from the directory.
-- Modify `apps/web/src/components/Backtesting.tsx`: make offline Jince/demo state explicit and remove external noise image dependency.
+- Modify `apps/web/src/components/Backtesting.tsx`: make local engine state explicit and remove external noise image dependency.
 - Modify `apps/web/src/components/EvidenceChain.tsx` and `apps/web/src/components/Portfolio.tsx`: add clear demo/local-sample labels when backend data is empty or demo data is being shown.
 - Modify `apps/web/src/App.tsx`: remove external `grainy-gradients.vercel.app/noise.svg` dependency.
 - Optional docs after fixes: update `CHANGELOG.md` only if release prep resumes. Do not publish in this remediation pass.

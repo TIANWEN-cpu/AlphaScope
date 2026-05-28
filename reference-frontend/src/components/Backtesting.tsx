@@ -61,7 +61,7 @@ export function Backtesting() {
             >
               {activeTab === tab.id && (
                 <motion.div 
-                  layoutId="jince-tab"
+                  layoutId="quant-tab"
                   className="absolute inset-0 bg-white/10 rounded-lg shadow-sm border border-white/10"
                   initial={false}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
