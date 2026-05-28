@@ -114,7 +114,7 @@ class ToolRouter:
             ToolDefinition(
                 id="quant_backtest",
                 name="量化回测",
-                description="通过 Jince 引擎运行策略回测，返回收益率/夏普/回撤等指标",
+                description="通过外部回测服务运行策略回测，返回收益率/夏普/回撤等指标",
                 tool_type="calculator",
                 handler=self._tool_quant_backtest,
             )

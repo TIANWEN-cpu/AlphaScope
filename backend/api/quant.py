@@ -29,26 +29,51 @@ def _jince_failure_response(
     *,
     degraded_success: bool = False,
 ):
-    """Return a structured API response for unavailable Jince operations."""
-    error_code = (
-        "JINCE_DISCONNECTED"
-        if isinstance(error, JinceConnectionError)
-        else getattr(error, "code", "JINCE_ERROR")
-    )
+    """Return a structured API response for unavailable external backtest operations."""
+    public_code = _public_quant_error_code(error)
+    public_error = _public_quant_error_message(error, degraded_success=degraded_success)
     payload = data or {}
     if degraded_success:
         payload["degraded"] = True
         payload["source_status"] = "unavailable"
+    payload.setdefault("external_error", public_error)
     return ApiResponse(
         success=degraded_success,
-        error=str(error),
-        error_code=error_code,
+        error=public_error,
+        error_code=public_code,
         data=payload,
     )
 
 
 def _external_unavailable_text() -> str:
     return "外部服务未运行，已使用本地回测引擎。"
+
+
+def _public_quant_error_code(error: JinceError) -> str:
+    raw_code = str(getattr(error, "code", "") or "")
+    if isinstance(error, JinceConnectionError) or raw_code == "JINCE_CONNECTION_ERROR":
+        return "EXTERNAL_BACKTEST_DISCONNECTED"
+    if "TIMEOUT" in raw_code:
+        return "EXTERNAL_BACKTEST_TIMEOUT"
+    if "HTTP" in raw_code:
+        return "EXTERNAL_BACKTEST_HTTP_ERROR"
+    if "STRATEGY" in raw_code:
+        return "EXTERNAL_BACKTEST_STRATEGY_NOT_FOUND"
+    return "EXTERNAL_BACKTEST_ERROR"
+
+
+def _public_quant_error_message(error: JinceError, *, degraded_success: bool = False) -> str:
+    code = _public_quant_error_code(error)
+    suffix = "，已使用本地回测引擎。" if degraded_success else "。"
+    if code == "EXTERNAL_BACKTEST_DISCONNECTED":
+        return f"外部回测服务未运行{suffix}"
+    if code == "EXTERNAL_BACKTEST_TIMEOUT":
+        return f"外部回测服务响应超时{suffix}"
+    if code == "EXTERNAL_BACKTEST_HTTP_ERROR":
+        return f"外部回测服务请求失败{suffix}"
+    if code == "EXTERNAL_BACKTEST_STRATEGY_NOT_FOUND":
+        return "策略不存在，请选择可用策略后重试。"
+    return f"外部回测服务暂不可用{suffix}"
 
 
 def _get_service() -> JinceService:

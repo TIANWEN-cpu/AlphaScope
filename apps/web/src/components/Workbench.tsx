@@ -75,7 +75,7 @@ const priceStatusMessage = (
   if (result.error === '请求已取消') {
     return `${label} 行情请求已取消`;
   }
-  return normalizeDisplayError(result.error, `${label} 行情接口暂不可用`);
+  return normalizeDisplayError(result.error, `${label} 行情服务暂时无响应`);
 };
 
 const averageClose = (bars: PriceBar[], index: number, window: number): number | null => {
@@ -871,7 +871,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
         setFactorPanel({
           ...EMPTY_FACTOR_PANEL,
           state: result.success ? 'empty' : 'error',
-          message: '后端因子接口暂不可用，请检查 /api/factors 数据源。',
+          message: '后端因子服务暂时无响应，请检查 /api/factors 数据源。',
         });
       }
     }
@@ -1149,7 +1149,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
   const isPriceUp = Number(currentChange) >= 0;
   const periodDataHint = priceBars.length
     ? `${chartPeriod} ${priceBars.length} 条${chartFrequency === '1mo' && priceBars.length < 5 ? '，样本偏少' : ''}${chartFrequency === '1w' && priceBars.length < 8 ? '，样本偏少' : ''}`
-    : '等待后端行情';
+    : '行情待加载';
 
   return (
     <motion.div 
@@ -1242,7 +1242,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                    <span className="text-emerald-400/90 flex items-center gap-2"><div className="w-2 h-0.5 bg-emerald-400/90"></div>MA20: {latestChartPoint?.ma20 ? displayNumber(Number(latestChartPoint.ma20)) : '--'}</span>
                  </>
                )}
-               <span className="text-neutral-500 ml-auto">{isMarketLoadingWithData ? `正在加载 ${activePeriod}，当前显示 ${chartPeriod}` : priceBars.length ? `VOL: ${formatVolume(Number(latestChartPoint?.volume || 0))} · ${periodDataHint}` : '等待后端行情'}</span>
+               <span className="text-neutral-500 ml-auto">{isMarketLoadingWithData ? `正在加载 ${activePeriod}，当前显示 ${chartPeriod}` : priceBars.length ? `VOL: ${formatVolume(Number(latestChartPoint?.volume || 0))} · ${periodDataHint}` : '行情待加载'}</span>
             </div>
 
              {/* Chart Area */}
@@ -1252,7 +1252,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                    {marketState === 'loading'
                      ? `正在同步 ${stockName} (${symbol}) 行情...`
                      : marketState === 'error'
-                       ? '行情接口暂不可用，请点击刷新或稍后重试。'
+                       ? '行情服务暂时无响应，请点击刷新或稍后重试。'
                        : '暂无后端行情数据，请点击刷新或稍后重试。'}
                  </div>
                )}
@@ -1319,7 +1319,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
                         {newsState === 'loading'
                           ? `正在同步 ${stockName} (${symbol}) 新闻...`
                           : newsState === 'error'
-                            ? '新闻接口暂不可用，请点击刷新或稍后重试。'
+                            ? '新闻服务暂时无响应，请点击刷新或稍后重试。'
                             : '暂无后端新闻数据，请点击刷新或稍后重试。'}
                       </div>
                     ) : newsItems.map((news, i) => (

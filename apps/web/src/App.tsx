@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useState } from 'react';
-import { AnimatePresence } from 'motion/react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Workbench } from './components/Workbench';
@@ -72,6 +71,68 @@ export default function App() {
     };
   }, [activeStock]);
 
+  const renderCurrentTab = () => {
+    if (currentTab === 'dashboard' || currentTab === 'workbench') {
+      return (
+        <Fragment key={`workbench-${stockViewKey}`}>
+          <Workbench symbol={activeStock.symbol} stockName={activeStock.name} />
+        </Fragment>
+      );
+    }
+    if (currentTab === 'agents' || currentTab === 'experts') {
+      return <AgentsSystem key="agents" />;
+    }
+    if (currentTab === 'market') {
+      return (
+        <Fragment key={`portfolio-${stockViewKey}`}>
+          <Portfolio symbol={activeStock.symbol} stockName={activeStock.name} />
+        </Fragment>
+      );
+    }
+    if (currentTab === 'tasks') {
+      return (
+        <Fragment key={`backtesting-${stockViewKey}`}>
+          <Backtesting symbol={activeStock.symbol} stockName={activeStock.name} />
+        </Fragment>
+      );
+    }
+    if (currentTab === 'fund_dca') {
+      return <FundDcaLab key="fund_dca" />;
+    }
+    if (currentTab === 'news') {
+      return (
+        <Fragment key={`news-${stockViewKey}`}>
+          <NewsAggregator symbol={activeStock.symbol} stockName={activeStock.name} />
+        </Fragment>
+      );
+    }
+    if (currentTab === 'chart') {
+      return (
+        <Fragment key={`chart-${stockViewKey}`}>
+          <MultimodalChart symbol={activeStock.symbol} stockName={activeStock.name} />
+        </Fragment>
+      );
+    }
+    if (currentTab === 'detailed') {
+      return (
+        <Fragment key={`report-${stockViewKey}`}>
+          <ReportGenerator symbol={activeStock.symbol} stockName={activeStock.name} />
+        </Fragment>
+      );
+    }
+    if (currentTab === 'saved') {
+      return (
+        <Fragment key={`evidence-${stockViewKey}`}>
+          <EvidenceChain symbol={activeStock.symbol} stockName={activeStock.name} />
+        </Fragment>
+      );
+    }
+    if (currentTab === 'settings') {
+      return <Settings key="settings" />;
+    }
+    return <PlaceholderModule key="placeholder" tab={currentTab} />;
+  };
+
   return (
     <div className="flex h-screen w-full bg-[#050505] text-neutral-300 font-sans selection:bg-indigo-500/30 overflow-hidden relative">
       {/* Absolute background effects */}
@@ -103,55 +164,7 @@ export default function App() {
           
           <main className="flex-1 overflow-hidden relative">
             <div className="h-full overflow-y-auto custom-scrollbar">
-              <AnimatePresence mode="wait">
-              {(currentTab === 'dashboard' || currentTab === 'workbench') && (
-                <Fragment key={`workbench-${stockViewKey}`}>
-                  <Workbench symbol={activeStock.symbol} stockName={activeStock.name} />
-                </Fragment>
-              )}
-              {(currentTab === 'agents' || currentTab === 'experts') && (
-                <AgentsSystem key="agents" />
-              )}
-              {currentTab === 'market' && (
-                <Fragment key={`portfolio-${stockViewKey}`}>
-                  <Portfolio symbol={activeStock.symbol} stockName={activeStock.name} />
-                </Fragment>
-              )}
-              {currentTab === 'tasks' && (
-                <Fragment key={`backtesting-${stockViewKey}`}>
-                  <Backtesting symbol={activeStock.symbol} stockName={activeStock.name} />
-                </Fragment>
-              )}
-              {currentTab === 'fund_dca' && (
-                <FundDcaLab key="fund_dca" />
-              )}
-              {currentTab === 'news' && (
-                <Fragment key={`news-${stockViewKey}`}>
-                  <NewsAggregator symbol={activeStock.symbol} stockName={activeStock.name} />
-                </Fragment>
-              )}
-              {currentTab === 'chart' && (
-                <Fragment key={`chart-${stockViewKey}`}>
-                  <MultimodalChart symbol={activeStock.symbol} stockName={activeStock.name} />
-                </Fragment>
-              )}
-              {currentTab === 'detailed' && (
-                <Fragment key={`report-${stockViewKey}`}>
-                  <ReportGenerator symbol={activeStock.symbol} stockName={activeStock.name} />
-                </Fragment>
-              )}
-              {currentTab === 'saved' && (
-                <Fragment key={`evidence-${stockViewKey}`}>
-                  <EvidenceChain symbol={activeStock.symbol} stockName={activeStock.name} />
-                </Fragment>
-              )}
-              {currentTab === 'settings' && (
-                <Settings key="settings" />
-              )}
-              {!['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'settings'].includes(currentTab) && (
-                <PlaceholderModule key="placeholder" tab={currentTab} />
-              )}
-            </AnimatePresence>
+              {renderCurrentTab()}
           </div>
         </main>
       </div>

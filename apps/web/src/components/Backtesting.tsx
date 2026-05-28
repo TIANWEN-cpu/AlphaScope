@@ -74,7 +74,7 @@ const TABS = [
   { id: 'compare', label: '运行记录', icon: Activity },
 ];
 
-const BACKTEST_SERVICE_OFFLINE_STATUS = '外部服务未运行：已切换为本地回测引擎。';
+const BACKTEST_SERVICE_UNAVAILABLE_STATUS = '外部服务未运行：已切换为本地回测引擎。';
 const BACKTEST_SERVICE_START_HINT = '请启动外部回测服务，并确认 http://localhost:8888 提供 /api/status、/api/strategies 和 /api/backtest。';
 
 const isRawBacktestServiceError = (value: unknown) => {
@@ -87,6 +87,7 @@ const formatDisplayText = (value: unknown, fallback = '') => {
   const serviceNamePattern = new RegExp(['jin', 'ce'].join(''), 'gi');
   const servicePackagePattern = new RegExp(['jin', '-ce', '-zhi', '-suan'].join(''), 'gi');
   return text
+    .replace(/JINCE_[A-Z_]+/g, 'EXTERNAL_BACKTEST_ERROR')
     .replace(servicePackagePattern, '外部回测服务')
     .replace(serviceNamePattern, '外部回测服务');
 };
@@ -108,9 +109,9 @@ const formatQuantStatusText = (
 
   const rawError = fallbackError || String(data.error || '');
   if (!rawError || isRawBacktestServiceError(rawError)) {
-    return BACKTEST_SERVICE_OFFLINE_STATUS;
+    return BACKTEST_SERVICE_UNAVAILABLE_STATUS;
   }
-  return `${BACKTEST_SERVICE_OFFLINE_STATUS} ${BACKTEST_SERVICE_START_HINT}`;
+  return `${BACKTEST_SERVICE_UNAVAILABLE_STATUS} ${BACKTEST_SERVICE_START_HINT}`;
 };
 
 export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: BacktestingProps) {
@@ -142,7 +143,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
       ? '本地回测引擎待运行'
       : quantUnavailable
         ? '回测能力不可用'
-      : '等待后端回测';
+      : '回测待运行';
 
   useEffect(() => {
     setStrategyParams(buildDefaultParams(selectedStrategy));
@@ -446,7 +447,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                     <ShieldAlert className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
                   </div>
                   <h3 className="text-3xl font-mono font-medium text-white">{formatMetricPct(metrics, 'max_drawdown')}</h3>
-                  <p className="text-[11px] font-mono text-emerald-400 mt-2">{hasBacktestResult ? '后端指标' : '等待后端回测'} · 阈值 -15%</p>
+                  <p className="text-[11px] font-mono text-emerald-400 mt-2">{hasBacktestResult ? '后端指标' : '回测待运行'} · 阈值 -15%</p>
                 </div>
                 <div className="bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-2xl p-6 shadow-xl hover:-translate-y-1 transition-transform group">
                   <div className="flex justify-between items-center mb-4">
@@ -462,7 +463,7 @@ export function Backtesting({ symbol = '600519', stockName = '贵州茅台' }: B
                     <BarChart className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
                   </div>
                   <h3 className="text-3xl font-mono font-medium text-white">{formatSharpe(metrics)}</h3>
-                  <p className="text-[11px] font-mono text-neutral-500 mt-2">{hasBacktestResult ? '后端回测指标' : '等待后端回测'}</p>
+                  <p className="text-[11px] font-mono text-neutral-500 mt-2">{hasBacktestResult ? '后端回测指标' : '回测待运行'}</p>
                 </div>
               </div>
 

@@ -12,14 +12,14 @@ class JinceError(Exception):
 class JinceConnectionError(JinceError):
     """连接失败"""
 
-    def __init__(self, message: str = "无法连接到 Jince 服务"):
+    def __init__(self, message: str = "无法连接到外部回测服务"):
         super().__init__(message, code="JINCE_CONNECTION_ERROR")
 
 
 class JinceTimeoutError(JinceError):
     """请求超时"""
 
-    def __init__(self, message: str = "Jince 服务请求超时"):
+    def __init__(self, message: str = "外部回测服务请求超时"):
         super().__init__(message, code="JINCE_TIMEOUT")
 
 

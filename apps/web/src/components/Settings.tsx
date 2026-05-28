@@ -25,7 +25,7 @@ const SETTING_TABS = [
   { id: 'data', label: '数据管理', icon: Database },
 ];
 
-type ApiStatus = 'online' | 'offline' | 'checking';
+type ApiStatus = 'online' | 'error' | 'checking';
 type NoticeType = 'info' | 'success' | 'warning' | 'error';
 
 interface Notice {
@@ -132,7 +132,7 @@ export function Settings() {
 
     const [healthResult, providersResult] = await Promise.allSettled([api.health(), api.providers()]);
 
-    setApiStatus(healthResult.status === 'fulfilled' && healthResult.value.success ? 'online' : 'offline');
+    setApiStatus(healthResult.status === 'fulfilled' && healthResult.value.success ? 'online' : 'error');
 
     if (providersResult.status === 'fulfilled' && providersResult.value.success) {
       const loadedProviders = providersResult.value.data?.providers || [];
@@ -345,7 +345,7 @@ export function Settings() {
                             ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
                             : 'text-rose-400 bg-rose-500/10 border-rose-500/20'
                       )}>
-                        {apiStatus === 'online' ? 'ONLINE' : apiStatus === 'checking' ? 'CHECKING' : 'OFFLINE'}
+                        {apiStatus === 'online' ? 'ONLINE' : apiStatus === 'checking' ? 'CHECKING' : 'ERROR'}
                       </span>
                     </div>
 
@@ -381,7 +381,11 @@ export function Settings() {
                       const isBusy = savingId === provider.id || testingId === provider.id || deletingId === provider.id;
 
                       return (
-                        <div key={`${providerKey}-${index}`} className="space-y-4 p-5 rounded-2xl bg-black/20 border border-white/5">
+                        <form
+                          key={`${providerKey}-${index}`}
+                          className="space-y-4 p-5 rounded-2xl bg-black/20 border border-white/5"
+                          onSubmit={(event) => event.preventDefault()}
+                        >
                           <div className="flex items-center justify-between gap-4">
                             <div>
                               <h4 className="text-sm font-medium text-neutral-200 flex items-center gap-2">
@@ -391,6 +395,7 @@ export function Settings() {
                               <p className="text-xs text-neutral-500 mt-1">测试连接前请先保存配置。</p>
                             </div>
                             <button
+                              type="button"
                               onClick={() => updateProviderForm(index, { enabled: !provider.enabled })}
                               className={cn(
                                 'text-[10px] font-mono px-2 py-1 rounded border transition-colors',
@@ -443,6 +448,8 @@ export function Settings() {
                             <span className="text-xs text-neutral-400">API Key</span>
                             <input
                               type="password"
+                              name={`api_key_${provider.id || index}`}
+                              autoComplete="new-password"
                               value={provider.api_key}
                               onChange={(event) => updateProviderForm(index, { api_key: event.target.value })}
                               placeholder={provider.api_key_masked || 'sk-...'}
@@ -455,6 +462,7 @@ export function Settings() {
 
                           <div className="flex flex-wrap justify-end gap-3 pt-2">
                             <button
+                              type="button"
                               onClick={() => handleDeleteProvider(provider, index)}
                               disabled={isBusy}
                               className="px-4 py-2 bg-white/5 hover:bg-rose-500/10 text-neutral-300 hover:text-rose-300 rounded-xl text-xs font-medium transition-colors border border-white/5 hover:border-rose-500/20 flex items-center gap-2 disabled:opacity-50"
@@ -463,6 +471,7 @@ export function Settings() {
                               {deletingId === provider.id ? '删除中...' : provider.isNew ? '移除' : '删除'}
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleTestProvider(provider)}
                               disabled={isBusy}
                               className="px-4 py-2 bg-white/5 hover:bg-white/10 text-neutral-300 rounded-xl text-xs font-medium transition-colors border border-white/5 flex items-center gap-2 disabled:opacity-50"
@@ -471,6 +480,7 @@ export function Settings() {
                               {testingId === provider.id ? '测试中...' : '测试连接'}
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleSaveProvider(provider)}
                               disabled={isBusy}
                               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-medium transition-colors border border-indigo-500 flex items-center gap-2 disabled:opacity-50"
@@ -479,7 +489,7 @@ export function Settings() {
                               {savingId === provider.id ? '保存中...' : '保存'}
                             </button>
                           </div>
-                        </div>
+                        </form>
                       );
                     })}
                   </div>

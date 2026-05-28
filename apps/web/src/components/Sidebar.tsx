@@ -98,13 +98,14 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
                       key={tab.id}
                       onClick={() => setCurrentTab(tab.id)}
                       className={cn(
-                        'h-11 flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
+                        'h-11 w-full flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
                         isExpanded ? 'px-3 justify-start' : 'justify-center',
                         isActive 
                           ? 'text-indigo-400' 
                           : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
                       )}
                       title={!isExpanded ? tab.label : undefined}
+                      aria-label={tab.label}
                     >
                       <div className="w-[22px] flex items-center justify-center flex-shrink-0 relative z-10">
                         <Icon className={cn("w-[22px] h-[22px] transition-transform duration-300", isActive ? "scale-110" : "group-hover:scale-110")} strokeWidth={isActive ? 2.5 : 2} />
@@ -154,13 +155,14 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
         <button 
           onClick={() => setCurrentTab('settings')}
           className={cn(
-            'h-11 flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
+            'h-11 w-full flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
             isExpanded ? 'px-3 justify-start' : 'justify-center',
             currentTab === 'settings'
               ? 'text-indigo-400' 
               : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
           )}
           title={!isExpanded ? '属性设置' : undefined}
+          aria-label="属性设置"
         >
           <div className="w-[22px] flex items-center justify-center flex-shrink-0 relative z-10">
              <Settings className={cn("w-[22px] h-[22px] transition-transform duration-300", currentTab === 'settings' ? "scale-110" : "group-hover:scale-110")} strokeWidth={currentTab === 'settings' ? 2.5 : 2} />
@@ -203,9 +205,10 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
         <button 
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
-            'h-11 flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0 text-neutral-500 hover:text-neutral-300 hover:bg-white/5',
+            'h-11 w-full flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0 text-neutral-500 hover:text-neutral-300 hover:bg-white/5',
             isExpanded ? 'px-3 justify-end' : 'justify-center'
           )}
+          aria-label={isExpanded ? '收起侧边栏' : '展开侧边栏'}
         >
           {isExpanded ? (
             <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />

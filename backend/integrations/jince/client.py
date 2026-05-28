@@ -53,13 +53,13 @@ class JinceClient:
             raise JinceTimeoutError()
         except httpx.HTTPStatusError as e:
             raise JinceError(
-                f"Jince HTTP {e.response.status_code}: {e.response.text}",
+                f"外部回测服务 HTTP {e.response.status_code}: {e.response.text}",
                 code="JINCE_HTTP_ERROR",
             )
         except JinceError:
             raise
         except Exception as e:
-            raise JinceError(f"Jince 请求异常: {e}")
+            raise JinceError(f"外部回测服务请求异常: {e}")
 
     # ---- 公开 API ----
 

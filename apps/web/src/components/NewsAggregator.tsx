@@ -543,7 +543,7 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                   {newsState === 'loading'
                     ? `正在同步 ${stockName} (${symbol}) 新闻与公告...`
                     : newsState === 'error'
-                      ? '后端资讯接口暂不可用，请稍后刷新重试。'
+                      ? '后端资讯服务暂时无响应，请稍后刷新重试。'
                       : news.length === 0
                         ? `后端暂无 ${stockName} (${symbol}) 新闻或公告。`
                         : `未能检索到包含关键字 "${searchQuery}" 的核心公告或数据，请重置过滤项。`}

@@ -35,7 +35,7 @@ def _mock_status_connected():
 
 
 def _mock_status_disconnected():
-    return JinceStatus(connected=False, error="Jince 服务未启动")
+    return JinceStatus(connected=False, error="外部回测服务未运行")
 
 
 def _mock_strategies():
@@ -116,7 +116,8 @@ class TestQuantStrategies:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert data["error_code"] == "JINCE_DISCONNECTED"
+        assert data["error_code"] == "EXTERNAL_BACKTEST_DISCONNECTED"
+        assert "Jince" not in (data["error"] or "")
         names = [strategy["name"] for strategy in data["data"]["strategies"]]
         assert "macd_momentum" in names
         assert data["data"]["degraded"] is True
@@ -126,14 +127,15 @@ class TestQuantStrategies:
     async def test_strategies_http_error_returns_structured_failure(self, client):
         mock_svc = AsyncMock(spec=JinceService)
         mock_svc.list_strategies.side_effect = JinceError(
-            "Jince HTTP 503: ", code="JINCE_HTTP_ERROR"
+            "外部回测服务 HTTP 503: ", code="JINCE_HTTP_ERROR"
         )
         with patch("backend.api.quant._get_service", return_value=mock_svc):
             resp = await client.get("/api/quant/strategies")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert data["error_code"] == "JINCE_HTTP_ERROR"
+        assert data["error_code"] == "EXTERNAL_BACKTEST_HTTP_ERROR"
+        assert "Jince" not in (data["error"] or "")
         names = [strategy["name"] for strategy in data["data"]["strategies"]]
         assert "macd_momentum" in names
         assert data["data"]["degraded"] is True
@@ -161,7 +163,7 @@ class TestQuantReload:
         with patch("backend.api.quant._get_service", return_value=mock_svc):
             resp = await client.post("/api/quant/strategies/reload")
         assert resp.json()["success"] is True
-        assert resp.json()["error_code"] == "JINCE_DISCONNECTED"
+        assert resp.json()["error_code"] == "EXTERNAL_BACKTEST_DISCONNECTED"
         assert resp.json()["data"]["local_backtest_available"] is True
 
 
@@ -278,7 +280,8 @@ class TestQuantRuns:
             resp = await client.get("/api/quant/runs")
         data = resp.json()
         assert data["success"] is True
-        assert data["error_code"] == "JINCE_DISCONNECTED"
+        assert data["error_code"] == "EXTERNAL_BACKTEST_DISCONNECTED"
+        assert "Jince" not in (data["error"] or "")
         assert isinstance(data["data"]["runs"], list)
         assert data["data"]["local_backtest_available"] is True
         assert data["data"]["degraded"] is True
@@ -288,14 +291,15 @@ class TestQuantRuns:
     async def test_runs_http_error_returns_structured_failure(self, client):
         mock_svc = AsyncMock(spec=JinceService)
         mock_svc.list_runs.side_effect = JinceError(
-            "Jince HTTP 503: ", code="JINCE_HTTP_ERROR"
+            "外部回测服务 HTTP 503: ", code="JINCE_HTTP_ERROR"
         )
         with patch("backend.api.quant._get_service", return_value=mock_svc):
             resp = await client.get("/api/quant/runs")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert data["error_code"] == "JINCE_HTTP_ERROR"
+        assert data["error_code"] == "EXTERNAL_BACKTEST_HTTP_ERROR"
+        assert "Jince" not in (data["error"] or "")
         assert isinstance(data["data"]["runs"], list)
         assert data["data"]["local_backtest_available"] is True
         assert data["data"]["degraded"] is True

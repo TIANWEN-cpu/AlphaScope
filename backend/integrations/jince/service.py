@@ -36,7 +36,7 @@ class JinceService:
             raw = await self.client.get_status()
             return normalize_status(raw)
         except JinceConnectionError:
-            return JinceStatus(connected=False, error="Jince 服务未启动")
+            return JinceStatus(connected=False, error="外部回测服务未运行")
         except Exception as e:
             return JinceStatus(connected=False, error=str(e))
 

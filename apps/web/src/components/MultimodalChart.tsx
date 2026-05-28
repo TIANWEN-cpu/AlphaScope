@@ -384,7 +384,7 @@ export function MultimodalChart({ symbol = '600519', stockName = '贵州茅台' 
   const [chartData, setChartData] = useState(() => generateInteractiveChartData(35, 1720));
   const [selectedPreset, setSelectedPreset] = useState(CHART_PRESETS[0]);
   const [technicalSnapshot, setTechnicalSnapshot] = useState<TechnicalSnapshot | null>(null);
-  const [chartStatus, setChartStatus] = useState('正在等待后端行情数据');
+  const [chartStatus, setChartStatus] = useState('正在同步行情数据');
   const [showMA, setShowMA] = useState(true);
   const [showBB, setShowBB] = useState(false);
   const [secondaryIndicator, setSecondaryIndicator] = useState<'rsi' | 'macd'>('macd');

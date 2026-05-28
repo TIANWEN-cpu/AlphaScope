@@ -31,7 +31,7 @@ async def check_jince_health(
         return {
             "status": "disconnected",
             "version": None,
-            "error": "Jince 服务未启动",
+            "error": "外部回测服务未运行",
         }
     except Exception as e:
         return {
