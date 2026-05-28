@@ -18,7 +18,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { api } from '../lib/api';
+import { api, normalizeDisplayError } from '../lib/api';
 
 interface ReportSection {
   title: string;
@@ -163,14 +163,14 @@ function readSource<T>(
   if (settled.status === 'rejected') {
     return {
       data: fallback,
-      status: { key, label: SOURCE_LABELS[key], ok: false, empty: false, error: settled.reason instanceof Error ? settled.reason.message : String(settled.reason || '请求失败') },
+      status: { key, label: SOURCE_LABELS[key], ok: false, empty: false, error: normalizeDisplayError(settled.reason, '请求失败') },
     };
   }
   const response = settled.value;
   if (!response.success) {
     return {
       data: fallback,
-      status: { key, label: SOURCE_LABELS[key], ok: false, empty: false, error: response.error || response.message || '接口返回失败' },
+      status: { key, label: SOURCE_LABELS[key], ok: false, empty: false, error: normalizeDisplayError(response.error || response.message, '接口返回失败') },
     };
   }
   const data = response.data ?? fallback;
@@ -373,7 +373,7 @@ export function ReportGenerator({ symbol = '600519', stockName = '贵州茅台' 
     setArchiveStatus(
       archiveSaveResult.success && archiveSaveResult.data
         ? `已归档：${archiveSaveResult.data.saved ? archiveSaveResult.data.path : archiveSaveResult.data.reason}`
-        : `归档失败：${archiveSaveResult.error || '未知错误'}`,
+        : `归档失败：${normalizeDisplayError(archiveSaveResult.error, '未知错误')}`,
     );
     setIsGenerating(false);
   };

@@ -2,45 +2,16 @@
 
 from __future__ import annotations
 
-import queue
-import threading
-from typing import Any, Callable, TypeVar
+from typing import Any
 
 from fastapi import APIRouter
 
+from backend.provider_timeout import call_with_timeout
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/fund-flow", tags=["fund-flow"])
 
-_T = TypeVar("_T")
 FUND_FLOW_TIMEOUT_SECONDS = 8.0
-
-
-def _call_with_timeout(
-    fn: Callable[[], _T], timeout: float = FUND_FLOW_TIMEOUT_SECONDS
-) -> _T:
-    """Run a blocking provider call without letting a request hang indefinitely."""
-
-    result_queue: queue.Queue[tuple[bool, Any]] = queue.Queue(maxsize=1)
-
-    def worker() -> None:
-        try:
-            result_queue.put((True, fn()), block=False)
-        except Exception as exc:
-            try:
-                result_queue.put((False, exc), block=False)
-            except queue.Full:
-                pass
-
-    thread = threading.Thread(target=worker, name="fund-flow-provider", daemon=True)
-    thread.start()
-    try:
-        ok, payload = result_queue.get(timeout=timeout)
-    except queue.Empty as exc:
-        raise TimeoutError("fund-flow provider timed out") from exc
-    if ok:
-        return payload
-    raise payload
 
 
 def _empty_summary(recent_days: int = 5) -> dict[str, Any]:
@@ -113,7 +84,11 @@ def get_fund_flow(symbol: str, days: int = 30):
     }
 
     try:
-        df = _call_with_timeout(lambda: fetch_individual_fund_flow(symbol, days=days))
+        df = call_with_timeout(
+            lambda: fetch_individual_fund_flow(symbol, days=days),
+            FUND_FLOW_TIMEOUT_SECONDS,
+            name="fund-flow-provider",
+        )
     except TimeoutError as exc:
         return _degraded_response(
             base_payload,
@@ -193,7 +168,11 @@ def get_market_fund_flow(days: int = 30):
     }
 
     try:
-        df = _call_with_timeout(lambda: fetch_market_fund_flow(days=days))
+        df = call_with_timeout(
+            lambda: fetch_market_fund_flow(days=days),
+            FUND_FLOW_TIMEOUT_SECONDS,
+            name="fund-flow-provider",
+        )
     except TimeoutError as exc:
         return _degraded_response(
             base_payload,

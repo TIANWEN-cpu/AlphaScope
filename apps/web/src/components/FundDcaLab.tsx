@@ -33,7 +33,7 @@ import {
   Send
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { api } from '../lib/api';
+import { api, normalizeDisplayError } from '../lib/api';
 import { SafeResponsiveContainer } from './SafeResponsiveContainer';
 
 // --- Types ---
@@ -953,7 +953,7 @@ export function FundDcaLab() {
     });
 
     if (!result.success || !result.data) {
-      setBackendStatus(result.error || '后端定投模拟失败，保留本地模拟结果');
+      setBackendStatus(normalizeDisplayError(result.error, '后端定投模拟失败，保留本地模拟结果'));
       return;
     }
 

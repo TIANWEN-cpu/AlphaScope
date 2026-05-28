@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from backend.integrations.jince.errors import JinceConnectionError, JinceError
 from backend.integrations.jince.service import JinceService
+from backend.provider_timeout import call_with_timeout
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/quant", tags=["quant"])
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/api/quant", tags=["quant"])
 # 默认服务实例（可被覆盖）
 _service: Optional[JinceService] = None
 _local_runs: list[dict[str, Any]] = []
+QUANT_PROVIDER_TIMEOUT_SECONDS = 8.0
 
 
 def _jince_failure_response(
@@ -229,16 +231,20 @@ def _load_local_bars(
     try:
         from backend.providers.registry import get_registry
 
-        provider_bars = get_registry().get(
-            data_type="prices",
-            market=get_market(normalized_symbol),
-            symbol=normalized_symbol,
-            limit=limit,
-            start_date=start_date.replace("-", ""),
-            end_date=end_date.replace("-", ""),
-            period="daily",
-            frequency="1d",
-            adjust="",
+        provider_bars = call_with_timeout(
+            lambda: get_registry().get(
+                data_type="prices",
+                market=get_market(normalized_symbol),
+                symbol=normalized_symbol,
+                limit=limit,
+                start_date=start_date.replace("-", ""),
+                end_date=end_date.replace("-", ""),
+                period="daily",
+                frequency="1d",
+                adjust="",
+            ),
+            QUANT_PROVIDER_TIMEOUT_SECONDS,
+            name="quant-price-provider",
         )
         if provider_bars:
             save_price_bars(provider_bars)

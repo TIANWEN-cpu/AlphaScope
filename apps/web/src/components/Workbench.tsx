@@ -3,7 +3,7 @@ import { Bot, Maximize2, RefreshCw, Send, Zap, Clock, LineChart as LineChartIcon
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
-import { api, NewsRecord, PriceBar } from '../lib/api';
+import { api, NewsRecord, normalizeDisplayError, PriceBar } from '../lib/api';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 type MetricTone = 'up' | 'down' | 'neutral';
@@ -75,7 +75,7 @@ const priceStatusMessage = (
   if (result.error === '请求已取消') {
     return `${label} 行情请求已取消`;
   }
-  return result.error || `${label} 行情接口暂不可用`;
+  return normalizeDisplayError(result.error, `${label} 行情接口暂不可用`);
 };
 
 const averageClose = (bars: PriceBar[], index: number, window: number): number | null => {
@@ -1000,7 +1000,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
       }
       setChatError('');
     } catch (error) {
-      setChatError(error instanceof Error ? error.message : '无法切换全屏模式');
+      setChatError(normalizeDisplayError(error, '无法切换全屏模式'));
     }
   };
 
@@ -1050,7 +1050,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
           msg.id === responseId ? { ...msg, content: result.data?.report || '视觉分析完成，但报告为空。' } : msg
         )));
       } else {
-        const message = result.error || '视觉分析失败';
+        const message = normalizeDisplayError(result.error, '视觉分析失败');
         setChatError(message);
         setMessages(prev => prev.map(msg => (
           msg.id === responseId ? { ...msg, content: `视觉分析失败：${message}` } : msg
@@ -1123,7 +1123,7 @@ export function Workbench({ symbol = '600519', stockName = '贵州茅台' }: Wor
         },
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : '后端分析服务暂不可用';
+      const message = normalizeDisplayError(error, '后端分析服务暂不可用');
       setChatError(message);
       setMessages(prev => prev.map(msg => (
         msg.id === responseId

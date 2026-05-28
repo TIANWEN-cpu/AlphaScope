@@ -33,7 +33,7 @@ def client():
 @pytest.mark.anyio
 async def test_fund_flow_timeout_returns_degraded_success(client):
     with patch(
-        "backend.api.fund_flow._call_with_timeout", side_effect=TimeoutError("slow")
+        "backend.api.fund_flow.call_with_timeout", side_effect=TimeoutError("slow")
     ):
         resp = await client.get("/api/fund-flow/600519?days=30")
 
