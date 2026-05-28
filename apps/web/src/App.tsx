@@ -15,6 +15,7 @@ import { Settings } from './components/Settings';
 import { FundDcaLab } from './components/FundDcaLab';
 import { StockSelection } from './types';
 import { api } from './lib/api';
+import { AlertTriangle, X } from 'lucide-react';
 
 const DEFAULT_STOCK: StockSelection = {
   symbol: '600519',
@@ -30,7 +31,24 @@ const needsStockIdentityRefresh = (stock: StockSelection) =>
 export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [activeStock, setActiveStock] = useState<StockSelection>(DEFAULT_STOCK);
+  const [archiveCapabilityWarning, setArchiveCapabilityWarning] = useState('');
   const stockViewKey = `${activeStock.symbol}-${activeStock.name}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    api.capabilities().then((capabilities) => {
+      if (cancelled) return;
+      if (!capabilities.archivePost) {
+        setArchiveCapabilityWarning(
+          '后端需重启/版本过旧：当前 /api/archive 不支持 POST，研报归档可能失败。请重启 8000 后端并确认使用本地最新提交。',
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!needsStockIdentityRefresh(activeStock)) return;
@@ -68,6 +86,20 @@ export default function App() {
         
         <div className="flex-1 flex flex-col min-w-0">
           <TopBar activeStock={activeStock} onStockChange={setActiveStock} />
+          {archiveCapabilityWarning && (
+            <div className="mx-4 mt-3 flex items-center gap-3 rounded-lg border border-yellow-400/20 bg-yellow-400/10 px-4 py-3 text-xs text-yellow-100 shadow-lg shadow-black/20">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-300" />
+              <span className="min-w-0 flex-1 leading-relaxed">{archiveCapabilityWarning}</span>
+              <button
+                type="button"
+                onClick={() => setArchiveCapabilityWarning('')}
+                className="rounded p-1 text-yellow-200/70 transition-colors hover:bg-yellow-400/10 hover:text-yellow-100"
+                aria-label="关闭后端版本提示"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
           
           <main className="flex-1 overflow-hidden relative">
             <div className="h-full overflow-y-auto custom-scrollbar">

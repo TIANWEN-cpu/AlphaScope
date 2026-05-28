@@ -280,6 +280,39 @@ async def test_get_prices(client):
 
 
 @pytest.mark.anyio
+async def test_get_prices_returns_degraded_timeout_metadata(client):
+    """GET /api/prices/{symbol} Provider 超时时返回结构化降级信息"""
+    from backend.schemas.api import ApiResponse
+
+    with (
+        patch("backend.price_store.get_prices", return_value=[]),
+        patch(
+            "backend.api.prices.fetch_prices",
+            return_value=ApiResponse(
+                success=False,
+                data={
+                    "symbol": "600519",
+                    "fetched": 0,
+                    "degraded": True,
+                    "source_status": "timeout",
+                },
+                error="行情源响应超时，请稍后重试",
+                error_code="PRICE_PROVIDER_TIMEOUT",
+            ),
+        ),
+    ):
+        resp = await client.get("/api/prices/600519")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["error_code"] == "PRICE_PROVIDER_TIMEOUT"
+    assert data["data"]["total"] == 0
+    assert data["data"]["degraded"] is True
+    assert data["data"]["source_status"] == "timeout"
+
+
+@pytest.mark.anyio
 async def test_fetch_prices_passes_symbol_to_provider(client):
     """POST /api/prices/{symbol}/fetch 使用 symbol 参数调用 Provider"""
     mock_registry = MagicMock()
@@ -304,6 +337,24 @@ async def test_fetch_prices_passes_symbol_to_provider(client):
     assert kwargs["symbol"] == "600519"
     assert kwargs["adjust"] == ""
     assert "query" not in kwargs
+
+
+@pytest.mark.anyio
+async def test_fetch_prices_provider_timeout(client):
+    """POST /api/prices/{symbol}/fetch Provider 超时不阻塞接口"""
+    with (
+        patch("backend.price_store.normalize_symbol", return_value="600519"),
+        patch("backend.api.prices._fetch_provider_bars", side_effect=TimeoutError),
+        patch("backend.price_store.save_price_bars") as mock_save,
+    ):
+        resp = await client.post("/api/prices/600519/fetch?days=30")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error_code"] == "PRICE_PROVIDER_TIMEOUT"
+    assert data["data"]["source_status"] == "timeout"
+    mock_save.assert_not_called()
 
 
 @pytest.mark.anyio

@@ -83,9 +83,11 @@ class TestQuantStatus:
         data = resp.json()
         assert data["success"] is True
         assert data["data"]["connected"] is False
+        assert data["data"]["can_run_backtest"] is True
+        assert data["data"]["local_backtest_available"] is True
         assert data["data"]["degraded"] is True
-        assert data["data"]["source_status"] == "unavailable"
-        assert data["error_code"] == "JINCE_DISCONNECTED"
+        assert data["data"]["source_status"] == "local_fallback"
+        assert data["error_code"] is None
 
 
 # ========== GET /api/quant/strategies ==========
@@ -158,8 +160,9 @@ class TestQuantReload:
         mock_svc.reload_strategies.side_effect = JinceConnectionError()
         with patch("backend.api.quant._get_service", return_value=mock_svc):
             resp = await client.post("/api/quant/strategies/reload")
-        assert resp.json()["success"] is False
+        assert resp.json()["success"] is True
         assert resp.json()["error_code"] == "JINCE_DISCONNECTED"
+        assert resp.json()["data"]["local_backtest_available"] is True
 
 
 # ========== POST /api/quant/backtest ==========
@@ -202,8 +205,11 @@ class TestQuantBacktest:
                     "end_date": "2024-12-31",
                 },
             )
-        assert resp.json()["success"] is False
-        assert resp.json()["error_code"] == "JINCE_DISCONNECTED"
+        data = resp.json()
+        assert data["success"] is True
+        assert data["data"]["status"] == "completed"
+        assert data["data"]["source_status"] == "local_fallback"
+        assert data["data"]["metrics"]["trade_count"] >= 0
 
 
 # ========== POST /api/quant/live/start ==========
@@ -273,7 +279,8 @@ class TestQuantRuns:
         data = resp.json()
         assert data["success"] is True
         assert data["error_code"] == "JINCE_DISCONNECTED"
-        assert data["data"]["runs"] == []
+        assert isinstance(data["data"]["runs"], list)
+        assert data["data"]["local_backtest_available"] is True
         assert data["data"]["degraded"] is True
         assert data["data"]["source_status"] == "unavailable"
 
@@ -289,7 +296,8 @@ class TestQuantRuns:
         data = resp.json()
         assert data["success"] is True
         assert data["error_code"] == "JINCE_HTTP_ERROR"
-        assert data["data"]["runs"] == []
+        assert isinstance(data["data"]["runs"], list)
+        assert data["data"]["local_backtest_available"] is True
         assert data["data"]["degraded"] is True
         assert data["data"]["source_status"] == "unavailable"
 

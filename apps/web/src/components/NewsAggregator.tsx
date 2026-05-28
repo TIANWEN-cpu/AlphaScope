@@ -133,6 +133,17 @@ const mapNewsRecord = (item: NewsRecord): NewsItem => ({
   publishedAt: item.published_at,
 });
 
+const newsItemIdentity = (item: NewsItem) =>
+  [
+    item.category,
+    item.id,
+    item.source,
+    item.publishedAt || item.time,
+  ].filter(Boolean).join(':');
+
+const newsItemKey = (item: NewsItem, index: number) =>
+  `${newsItemIdentity(item)}:${index}`;
+
 const mapRelatedNewsFallback = (item: NewsRecord): NewsItem => ({
   ...mapNewsRecord(item),
   category: 'announcement',
@@ -203,31 +214,34 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
       setSelectedArticle(null);
       setDataStatus(`正在同步 ${stockName} (${symbol}) 新闻与公告...`);
       try {
-        const [newsResult, announcementResult] = await Promise.allSettled([
-          api.news(symbol, 30, { signal: controller.signal }),
-          api.announcements(symbol, 12, { signal: controller.signal }),
-        ]);
-
-        if (!isCurrent()) return;
-
-        const failures = [
-          getApiFailure('新闻', newsResult),
-          getApiFailure('公告', announcementResult),
-        ].filter(Boolean);
         const nextItems: NewsItem[] = [];
-        if (newsResult.status === 'fulfilled' && newsResult.value.success && newsResult.value.data?.news?.length) {
-          nextItems.push(...newsResult.value.data.news.map(mapNewsRecord));
+        const failures: string[] = [];
+
+        const newsResult = await api.news(symbol, 30, { signal: controller.signal });
+        if (!isCurrent()) return;
+        if (newsResult.success && newsResult.data?.news?.length) {
+          nextItems.push(...newsResult.data.news.map(mapNewsRecord));
+          setNews(nextItems);
+          setSelectedArticle(nextItems[0]);
+          setNewsState('ready');
+          setDataStatus(`已接入 ${nextItems.length} 条后端新闻，正在补充公告通道...`);
+        } else if (!newsResult.success) {
+          failures.push(`新闻接口失败：${newsResult.error || newsResult.message || '未知错误'}`);
         }
-        if (announcementResult.status === 'fulfilled' && announcementResult.value.success && announcementResult.value.data?.announcements?.length) {
-          nextItems.push(...announcementResult.value.data.announcements.map(mapAnnouncementRecord));
+
+        const announcementResult = await api.announcements(symbol, 12, { signal: controller.signal });
+        if (!isCurrent()) return;
+        if (announcementResult.success && announcementResult.data?.announcements?.length) {
+          nextItems.push(...announcementResult.data.announcements.map(mapAnnouncementRecord));
         } else if (
-          announcementResult.status === 'fulfilled'
-          && announcementResult.value.success
-          && announcementResult.value.data?.degraded
-          && announcementResult.value.data.related_news?.length
+          announcementResult.success
+          && announcementResult.data?.degraded
+          && announcementResult.data.related_news?.length
         ) {
-          nextItems.push(...announcementResult.value.data.related_news.map(mapRelatedNewsFallback));
-          failures.push(`公告源降级：${announcementResult.value.error || announcementResult.value.data.source_status || '使用相关新闻替代'}`);
+          nextItems.push(...announcementResult.data.related_news.map(mapRelatedNewsFallback));
+          failures.push(`公告源降级：${announcementResult.error || announcementResult.data.source_status || '使用相关新闻替代'}`);
+        } else if (!announcementResult.success) {
+          failures.push(`公告接口失败：${announcementResult.error || announcementResult.message || '未知错误'}`);
         }
 
         if (nextItems.length) {
@@ -536,10 +550,10 @@ export function NewsAggregator({ symbol = '600519', stockName = '贵州茅台' }
                 </motion.div>
               ) : (
                 filteredNews.map((item, idx) => {
-                  const isCurSelected = selectedArticle?.id === item.id;
+                  const isCurSelected = selectedArticle ? newsItemIdentity(selectedArticle) === newsItemIdentity(item) : false;
                   return (
                     <motion.div
-                      key={item.id}
+                      key={newsItemKey(item, idx)}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: idx * 0.04 }}

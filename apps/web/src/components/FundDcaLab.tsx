@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  ResponsiveContainer, 
   ComposedChart, 
   Line, 
   Area, 
@@ -35,6 +34,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { api } from '../lib/api';
+import { SafeResponsiveContainer } from './SafeResponsiveContainer';
 
 // --- Types ---
 interface FundProfile {
@@ -1711,7 +1711,7 @@ export function FundDcaLab() {
                   SANDBOX COMPARATIVE ASSETS CURVES (RMB MULTIPLIERS)
                 </div>
                 
-                <ResponsiveContainer width="100%" height="95%">
+                <SafeResponsiveContainer className="h-[95%] w-full min-w-0" minHeight={300}>
                   <ComposedChart data={simulationData} margin={{ top: 25, right: 10, left: -15, bottom: 0 }}>
                     <defs>
                       <linearGradient id="areaColor" x1="0" y1="0" x2="0" y2="1">
@@ -1766,7 +1766,7 @@ export function FundDcaLab() {
                     <Line name="期初一次性全额购买模型" type="monotone" dataKey="lumpSumValue" stroke="#f43f5e" strokeWidth={1.25} strokeDasharray="3 3" dot={false} opacity={0.7} />
                     <Line name="基准大指数对比参考" type="monotone" dataKey="benchmarkValue" stroke="#eab308" strokeWidth={1} strokeDasharray="4 4" dot={false} opacity={0.6} />
                   </ComposedChart>
-                </ResponsiveContainer>
+                </SafeResponsiveContainer>
               </div>
             )}
 

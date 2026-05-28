@@ -3,6 +3,7 @@ export interface ApiResponse<T> {
   data?: T | null;
   error?: string | null;
   message?: string | null;
+  error_code?: string | null;
 }
 
 export interface PriceBar {
@@ -20,6 +21,15 @@ export interface PriceBar {
   prev_close?: number;
   frequency?: string;
   source?: string;
+}
+
+export interface PriceSeriesResult {
+  symbol: string;
+  frequency?: string;
+  bars: PriceBar[];
+  total: number;
+  degraded?: boolean;
+  source_status?: string;
 }
 
 export interface NewsRecord {
@@ -232,6 +242,56 @@ export interface StockResolveResult {
   source?: string;
 }
 
+export interface BackendCapabilities {
+  archivePost: boolean;
+  version?: string;
+  error?: string;
+}
+
+const requestTimeouts = new WeakMap<AbortSignal, number>();
+const timedOutSignals = new WeakSet<AbortSignal>();
+
+function normalizeRequestError(error: unknown, signal?: AbortSignal): string {
+  if (signal && timedOutSignals.has(signal)) {
+    return "请求超时，请稍后重试";
+  }
+  const message = error instanceof Error ? error.message : "API request failed";
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "请求已取消";
+  }
+  if (/aborted|abort/i.test(message)) {
+    return "请求已取消";
+  }
+  return message || "API request failed";
+}
+
+export function withTimeout(options: RequestInit = {}, timeoutMs = 12000): RequestInit {
+  const externalSignal = options.signal;
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => {
+    timedOutSignals.add(controller.signal);
+    controller.abort();
+  }, timeoutMs);
+  requestTimeouts.set(controller.signal, timer);
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+  }
+
+  return {
+    ...options,
+    signal: controller.signal,
+    headers: {
+      ...(options.headers || {}),
+      "X-AI-Finance-Client-Timeout": String(timeoutMs),
+    },
+  };
+}
+
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000"
@@ -272,10 +332,49 @@ async function request<T>(
     }
     return payload;
   } catch (error) {
+    const signal = options.signal;
     return {
       success: false,
-      error: error instanceof Error ? error.message : "API request failed",
+      error: normalizeRequestError(error, signal),
       data: null,
+    };
+  } finally {
+    const signal = options.signal;
+    if (signal) {
+      const timer = requestTimeouts.get(signal);
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        requestTimeouts.delete(signal);
+      }
+      timedOutSignals.delete(signal);
+    }
+  }
+}
+
+export async function checkBackendCapabilities(): Promise<BackendCapabilities> {
+  try {
+    const response = await fetch(buildUrl("/openapi.json"), {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      return {
+        archivePost: false,
+        error: `OpenAPI capability check failed: HTTP ${response.status}`,
+      };
+    }
+    const schema = await response.json() as {
+      info?: { version?: string };
+      paths?: Record<string, Record<string, unknown>>;
+    };
+    const archiveMethods = schema.paths?.["/api/archive"] || {};
+    return {
+      archivePost: Boolean(archiveMethods.post),
+      version: schema.info?.version,
+    };
+  } catch (error) {
+    return {
+      archivePost: false,
+      error: error instanceof Error ? error.message : "Capability check failed",
     };
   }
 }
@@ -352,10 +451,11 @@ export async function streamChat(
 export const api = {
   baseUrl: API_BASE_URL,
   health: () => request<{ status: string; version: string }>("/health"),
+  capabilities: checkBackendCapabilities,
   prices: (symbol: string, limit = 80, frequency = "1d", options: RequestInit = {}) =>
-    request<{ symbol: string; bars: PriceBar[]; total: number }>(
+    request<PriceSeriesResult>(
       `/api/prices/${encodeURIComponent(symbol)}`,
-      options,
+      withTimeout(options, frequency === "intraday" ? 15000 : 12000),
       { limit, frequency },
     ),
   latestPrice: (symbol: string, options: RequestInit = {}) =>
@@ -411,9 +511,9 @@ export const api = {
   resolveStock: (query: string, options: RequestInit = {}) =>
     request<StockResolveResult>("/api/stocks/resolve", options, { q: query }),
   priceFetch: (symbol: string, days = 120, options: RequestInit = {}) =>
-    request<{ symbol: string; fetched: number }>(
+    request<{ symbol: string; fetched: number; degraded?: boolean; source_status?: string }>(
       `/api/prices/${encodeURIComponent(symbol)}/fetch`,
-      { ...options, method: "POST" },
+      withTimeout({ ...options, method: "POST" }, 12000),
       { days },
     ),
   technical: (symbol: string, limit = 250) =>

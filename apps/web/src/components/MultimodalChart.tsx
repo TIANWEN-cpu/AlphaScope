@@ -18,9 +18,10 @@ import {
   Flame,
   Zap
 } from 'lucide-react';
-import { ResponsiveContainer, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Cell, ReferenceLine, Tooltip } from 'recharts';
+import { ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Cell, ReferenceLine, Tooltip } from 'recharts';
 import { cn } from '../lib/utils';
 import { api, PriceBar, TechnicalSnapshot } from '../lib/api';
+import { SafeResponsiveContainer } from './SafeResponsiveContainer';
 
 interface MultimodalChartProps {
   symbol?: string;
@@ -787,7 +788,7 @@ export function MultimodalChart({ symbol = '600519', stockName = '贵州茅台' 
                 <div className="flex-1 bg-white/[0.01] border border-white/5 rounded-2xl overflow-hidden flex flex-col p-4 bg-black/40 min-h-0 min-w-0">
                   {/* Top Chart Box */}
                   <div className="flex-1 min-h-0 relative">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <SafeResponsiveContainer minHeight={220}>
                       <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
                         <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 9, fontFamily: 'monospace' }} stroke="#ffffff" strokeOpacity={0.03} />
@@ -814,7 +815,7 @@ export function MultimodalChart({ symbol = '600519', stockName = '贵州茅台' 
                         {/* Financially accurate Candlestick using Custom shape */}
                         <Bar dataKey="close" barSize={6} shape={<Candlestick />} />
                       </ComposedChart>
-                    </ResponsiveContainer>
+                    </SafeResponsiveContainer>
                   </div>
 
                   {/* Horizontal Sep */}
@@ -822,7 +823,7 @@ export function MultimodalChart({ symbol = '600519', stockName = '贵州茅台' 
 
                   {/* Secondary Chart Box */}
                   <div className="h-28 flex-shrink-0 min-h-0">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <SafeResponsiveContainer minHeight={112}>
                       <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                         <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
                         <XAxis dataKey="date" hide />
@@ -846,7 +847,7 @@ export function MultimodalChart({ symbol = '600519', stockName = '贵州茅台' 
                           <ReferenceLine y={30} stroke="#10b981" strokeOpacity={0.3} strokeDasharray="3 3" label={{ value: '超卖 30', fill: '#10b981', fontSize: 8, position: 'insideRight' }} />
                         )}
                       </ComposedChart>
-                    </ResponsiveContainer>
+                    </SafeResponsiveContainer>
                   </div>
                 </div>
               </motion.div>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { Briefcase, ArrowUpRight, DollarSign, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { api, FundPortfolio, FundPortfolioHolding } from '../lib/api';
+import { SafeResponsiveContainer } from './SafeResponsiveContainer';
 
 interface PortfolioProps {
   symbol?: string;
@@ -88,22 +89,22 @@ export function Portfolio(_props: PortfolioProps) {
         setShowingLocalSample(false);
         setStatusText(`已接入后端基金组合：${portfolio.name || '默认组合'}`);
       } else {
-        setPortfolioData([]);
-        setRecentTrades([]);
+        setPortfolioData(PORTFOLIO_DATA);
+        setRecentTrades(toHoldingRows(PORTFOLIO_DATA));
         setBackendTotalValue(null);
         setHasBackendHoldings(false);
-        setShowingLocalSample(false);
-        setStatusText(`后端组合 ${portfolio.name || '默认组合'} 暂无持仓；当前不展示演示持仓。`);
+        setShowingLocalSample(true);
+        setStatusText(`后端组合 ${portfolio.name || '默认组合'} 暂无持仓；当前显示本地预览样例，未写入后端。`);
       }
       setPortfolioCount(result.data.total || result.data.portfolios.length);
     } else {
-      setPortfolioData([]);
-      setRecentTrades([]);
+      setPortfolioData(PORTFOLIO_DATA);
+      setRecentTrades(toHoldingRows(PORTFOLIO_DATA));
       setBackendTotalValue(null);
       setHasBackendHoldings(false);
-      setShowingLocalSample(false);
+      setShowingLocalSample(true);
       setPortfolioCount(0);
-      setStatusText(result.error || '后端暂无基金组合；当前不展示演示持仓。');
+      setStatusText(result.error || '后端暂无基金组合；当前显示本地预览样例，未写入后端。');
     }
   };
 
@@ -185,16 +186,14 @@ export function Portfolio(_props: PortfolioProps) {
       {!hasBackendHoldings && (
         <div className="mb-8 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
           <p className="flex-1 text-xs text-neutral-400">
-            后端没有可用持仓时，页面保持真实空态。可以写入一个示例组合，或只在当前浏览器中载入本地样例预览布局。
+            后端没有可用持仓时，页面会显示本地预览样例，避免整页空白。可以写入一个示例组合，让后端持久化真实测试数据。
           </p>
           <button onClick={createDemoPortfolio} className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold border border-indigo-500 flex items-center gap-2">
             <Plus className="w-4 h-4" /> 创建示例基金组合
           </button>
-          {!showingLocalSample && (
-            <button onClick={loadLocalSample} className="px-5 py-2.5 rounded-xl bg-yellow-400/10 hover:bg-yellow-400/15 text-yellow-300 text-xs font-semibold border border-yellow-400/20">
-              仅预览本地样例
-            </button>
-          )}
+          <button onClick={loadLocalSample} className="px-5 py-2.5 rounded-xl bg-yellow-400/10 hover:bg-yellow-400/15 text-yellow-300 text-xs font-semibold border border-yellow-400/20">
+            {showingLocalSample ? '刷新本地预览' : '仅预览本地样例'}
+          </button>
         </div>
       )}
 
@@ -202,8 +201,8 @@ export function Portfolio(_props: PortfolioProps) {
         <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 shadow-lg backdrop-blur-md">
           <h3 className="text-xs font-mono uppercase tracking-widest text-neutral-400 mb-6 flex items-center gap-2 pb-3 border-b border-white/5">基金配置</h3>
           <div className="h-64 flex items-center">
-            <ResponsiveContainer width="100%" height="100%">
-              {portfolioData.length ? (
+            {portfolioData.length ? (
+              <SafeResponsiveContainer className="h-full w-full min-w-0" minHeight={256}>
                 <PieChart>
                   <Pie
                     data={portfolioData}
@@ -225,12 +224,12 @@ export function Portfolio(_props: PortfolioProps) {
                     formatter={(value: number) => `¥${value.toLocaleString()}`}
                   />
                 </PieChart>
-              ) : (
-                <div className="flex h-full w-full items-center justify-center rounded-xl border border-white/5 bg-black/20 px-6 text-center text-xs text-neutral-500">
-                  暂无后端持仓，未绘制配置图。
-                </div>
-              )}
-            </ResponsiveContainer>
+              </SafeResponsiveContainer>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center rounded-xl border border-white/5 bg-black/20 px-6 text-center text-xs text-neutral-500">
+                暂无后端持仓，未绘制配置图。
+              </div>
+            )}
             <div className="w-1/2 ml-4">
               {portfolioData.map(item => (
                 <div key={item.name} className="flex justify-between items-center mb-3">

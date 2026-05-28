@@ -39,6 +39,23 @@ function fromResolvedStock(input: string, current: StockSelection): StockSelecti
   return parsed;
 }
 
+function priceFetchStatus(result: Awaited<ReturnType<typeof api.priceFetch>>) {
+  if (result.success) {
+    return `行情刷新完成：${result.data?.fetched || 0} 条`;
+  }
+  if (
+    result.error_code === 'PRICE_PROVIDER_TIMEOUT' ||
+    result.data?.source_status === 'timeout' ||
+    /timeout|超时/i.test(result.error || '')
+  ) {
+    return '行情源响应超时，已保留可用缓存';
+  }
+  if (result.error === '请求已取消') {
+    return '行情刷新已取消';
+  }
+  return result.error || '行情刷新失败';
+}
+
 export function TopBar({ activeStock, onStockChange }: TopBarProps) {
   const [searchValue, setSearchValue] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -66,11 +83,7 @@ export function TopBar({ activeStock, onStockChange }: TopBarProps) {
       setSearchValue('');
 
       const fetched = await api.priceFetch(nextStock.symbol, 120);
-      setSearchStatus(
-        fetched.success
-          ? `已切换 ${nextStock.name}，同步 ${fetched.data?.fetched || 0} 条行情`
-          : `已切换 ${nextStock.name}，行情拉取失败`,
-      );
+      setSearchStatus(`已切换 ${nextStock.name}，${priceFetchStatus(fetched)}`);
     } catch {
       onStockChange(parsed);
       setSearchStatus(`已切换 ${parsed.name}，后端同步失败`);
@@ -83,7 +96,7 @@ export function TopBar({ activeStock, onStockChange }: TopBarProps) {
     setIsSearching(true);
     setSearchStatus(`正在刷新 ${activeStock.name} 行情...`);
     const result = await api.priceFetch(activeStock.symbol, 120);
-    setSearchStatus(result.success ? `行情刷新完成：${result.data?.fetched || 0} 条` : result.error || '行情刷新失败');
+    setSearchStatus(priceFetchStatus(result));
     setIsSearching(false);
   };
 
