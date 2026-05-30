@@ -1,6 +1,6 @@
 # Architecture (v0.40)
 
-This document describes the system architecture and data flow of AI-Finance.
+This document describes the system architecture and data flow of 研策中枢 AlphaScope.
 
 ## System Overview
 

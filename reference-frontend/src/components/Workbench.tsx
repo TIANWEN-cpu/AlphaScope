@@ -49,7 +49,7 @@ export function Workbench() {
       id: '1',
       role: 'agent',
       agentName: 'System',
-      content: '欢迎使用 AI-Finance 多 Agent 分析工作台。当前标的：**贵州茅台** (600519)。请选择分析模式并输入问题。',
+      content: '欢迎使用 研策中枢 AlphaScope 多 Agent 分析工作台。当前标的：**贵州茅台** (600519)。请选择分析模式并输入问题。',
       timestamp: new Date().toISOString(),
     }
   ]);

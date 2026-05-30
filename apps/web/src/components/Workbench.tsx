@@ -140,7 +140,7 @@ export function Workbench() {
       id: 'welcome',
       role: 'agent',
       agentName: 'System',
-      content: `欢迎使用 AI-Finance 多 Agent 分析工作台。当前标的：**${currentStock.name}** (${currentStock.symbol})。请选择分析模式并输入问题。`,
+      content: `欢迎使用研策中枢 AlphaScope 多 Agent 分析工作台。当前标的：**${currentStock.name}** (${currentStock.symbol})。请选择分析模式并输入问题。`,
       timestamp: new Date().toISOString(),
     }
   ]);
@@ -216,7 +216,7 @@ export function Workbench() {
         ...prev.map((msg) => msg.id === 'welcome'
           ? {
               ...msg,
-              content: `欢迎使用 AI-Finance 多 Agent 分析工作台。当前标的：**${resolved.name}** (${resolved.symbol})。请选择分析模式并输入问题。`,
+              content: `欢迎使用研策中枢 AlphaScope 多 Agent 分析工作台。当前标的：**${resolved.name}** (${resolved.symbol})。请选择分析模式并输入问题。`,
             }
           : msg),
         {

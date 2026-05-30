@@ -1,7 +1,7 @@
-# AI-Finance 前端与接口检修审计文档
+# 研策中枢 AlphaScope 前端与接口检修审计文档
 
 生成日期：2026-05-24  
-项目目录：`D:\AI-FInance\AI--FINANCE`
+项目目录：`D:\研策中枢 AlphaScope\AlphaScope`
 
 ## 一、当前结论
 
@@ -11,7 +11,7 @@
 
 ## 二、实际验证结果
 
-在 `D:\AI-FInance\AI--FINANCE` 下执行验证：
+在 `D:\研策中枢 AlphaScope\AlphaScope` 下执行验证：
 
 | 项目 | 结果 | 说明 |
 |---|---:|---|

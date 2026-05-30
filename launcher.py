@@ -1,5 +1,5 @@
 """
-AI-Finance 启动器
+研策中枢 AlphaScope 启动器
 
 PyInstaller 打包入口。负责：
 1. 设置 Python 路径（将打包的 backend/ 加入 sys.path）
@@ -68,12 +68,12 @@ def ensure_env_file(root: Path):
     if not env_file.exists():
         if env_example.exists():
             shutil.copy2(env_example, env_file)
-            print(f"[AI-Finance] 已创建 .env 配置文件: {env_file}")
-            print("[AI-Finance] 请编辑 .env 文件，填入您的 API Key")
+            print(f"[AlphaScope] 已创建 .env 配置文件: {env_file}")
+            print("[AlphaScope] 请编辑 .env 文件，填入您的 API Key")
         else:
             # 创建最小 .env
             env_file.write_text(
-                "# AI-Finance API Keys\n"
+                "# AlphaScope API Keys\n"
                 "# 请填入您的 API Key\n"
                 "DEEPSEEK_API_KEY=\n"
                 "CLAUDE_API_KEY=\n"
@@ -82,13 +82,13 @@ def ensure_env_file(root: Path):
                 "SENSENOVA_API_KEY=\n",
                 encoding="utf-8",
             )
-            print(f"[AI-Finance] 已创建 .env 模板: {env_file}")
+            print(f"[AlphaScope] 已创建 .env 模板: {env_file}")
 
 
 def main():
     """主入口"""
     print("=" * 50)
-    print("  AI-Finance - 金融 AI 分析工作台")
+    print("  研策中枢 AlphaScope - 金融 AI 分析工作台")
     print("  Multi-Agent Financial Analysis Workbench")
     print("=" * 50)
     print()
@@ -97,8 +97,8 @@ def main():
     ensure_directories(root)
     ensure_env_file(root)
 
-    print(f"[AI-Finance] 项目目录: {root}")
-    print("[AI-Finance] 正在启动...")
+    print(f"[AlphaScope] 项目目录: {root}")
+    print("[AlphaScope] 正在启动...")
     print()
 
     # 构建 Streamlit 启动参数
@@ -134,7 +134,7 @@ def main():
 
         streamlit.run()
     except KeyboardInterrupt:
-        print("\n[AI-Finance] 已停止")
+        print("\n[AlphaScope] 已停止")
     except Exception as e:
         print(f"\n[错误] 启动失败: {e}")
         input("按 Enter 键退出...")

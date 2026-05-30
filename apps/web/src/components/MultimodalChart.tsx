@@ -308,7 +308,7 @@ export function MultimodalChart() {
       source: visionSource,
       savedAt: new Date().toISOString(),
     };
-    window.localStorage.setItem('ai-finance:last-vision-diagnosis', JSON.stringify(record));
+    window.localStorage.setItem('alphascope:last-vision-diagnosis', JSON.stringify(record));
     setSaveMessage('诊断记录已保存到本地预览缓存。');
   };
 

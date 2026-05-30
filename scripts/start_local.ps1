@@ -1,4 +1,4 @@
-﻿# AI-Finance 本地启动脚本
+# 研策中枢 AlphaScope 本地启动脚本
 # 用法: powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1 [-WithStreamlit] [-FirstRun]
 
 param(
@@ -11,7 +11,7 @@ $ProjectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Pa
 $PidsFile = Join-Path $ProjectRoot ".local_pids.json"
 $FirstRunFile = Join-Path $ProjectRoot ".first_run_complete"
 
-Write-Host "AI-Finance 本地启动" -ForegroundColor Cyan
+Write-Host "研策中枢 AlphaScope 本地启动" -ForegroundColor Cyan
 Write-Host "==================`n"
 
 # 首次运行检测

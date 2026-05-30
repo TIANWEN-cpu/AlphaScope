@@ -1,4 +1,4 @@
-# AI-Finance Agent Mode Configuration (v0.12)
+# 研策中枢 AlphaScope Agent Mode Configuration (v0.12)
 # Declarative model/agent configuration for Standard/Deep/Auto modes
 # Replaces hardcoded AGENT_MODEL_CONFIG in llm_agents.py
 

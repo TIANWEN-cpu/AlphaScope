@@ -40,7 +40,7 @@ class RedditProvider(BaseProvider):
                 self._client = praw.Reddit(
                     client_id=os.getenv("REDDIT_CLIENT_ID", ""),
                     client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
-                    user_agent="AI-Finance/1.0",
+                    user_agent="AlphaScope/1.0",
                 )
             except ImportError:
                 logger.warning("PRAW not installed, Reddit provider unavailable")

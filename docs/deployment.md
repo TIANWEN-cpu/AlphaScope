@@ -1,4 +1,4 @@
-﻿# 部署文档
+# 部署文档
 
 ## 快速启动
 
@@ -6,8 +6,8 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git
-cd AI--FINANCE
+git clone https://github.com/TIANWEN-cpu/AlphaScope.git
+cd AlphaScope
 
 # 2. 安装依赖
 pip install -r requirements.txt
@@ -70,7 +70,7 @@ curl http://localhost:3000/                # Frontend
 ```bash
 pip install pyinstaller
 python build.py
-# 输出: dist/AI-Finance/AI-Finance.exe
+# 输出: dist/AlphaScope/AlphaScope.exe
 
 # 制作安装包: 用 Inno Setup 打开 installer/setup.iss
 ```
@@ -117,8 +117,8 @@ jobs:
     - npm run lint
 
   docker-build:     # 依赖 lint-and-test + web-build
-    - docker build -t ai-finance:test .
-    - docker run --rm ai-finance:test python -c "import backend"
+    - docker build -t alphascope:test .
+    - docker run --rm alphascope:test python -c "import backend"
 ```
 
 ## Makefile 命令

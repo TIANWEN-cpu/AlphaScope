@@ -69,7 +69,7 @@ ALL_METHODS = [
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate a new AI-Finance provider")
+    parser = argparse.ArgumentParser(description="Generate a new AlphaScope provider")
     parser.add_argument("--name", required=True, help="Provider name (snake_case)")
     parser.add_argument(
         "--markets", default="CN", help="Comma-separated markets (CN,HK,US,ALL)"

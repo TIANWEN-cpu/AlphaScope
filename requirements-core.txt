@@ -1,4 +1,4 @@
-# AI-Finance Core Runtime Dependencies
+# 研策中枢 AlphaScope Core Runtime Dependencies
 # Install: pip install -r requirements-core.txt
 
 streamlit==1.57.0

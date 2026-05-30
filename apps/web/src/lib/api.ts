@@ -1,5 +1,5 @@
 /**
- * Base API module for AI-Finance frontend.
+ * Base API module for the 研策中枢 AlphaScope frontend.
  */
 
 // We can read from environment variables or default to localhost:8000 for local dev

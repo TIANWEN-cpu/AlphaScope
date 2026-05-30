@@ -171,7 +171,7 @@ export function Backtesting() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'ai-finance-stock-pool.csv';
+    anchor.download = 'alphascope-stock-pool.csv';
     anchor.click();
     URL.revokeObjectURL(url);
     setActionMessage('已导出股票池 CSV，可用于复盘或导入其他量化工具。');

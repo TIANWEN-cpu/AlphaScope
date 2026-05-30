@@ -32,7 +32,7 @@ class SECProvider(BaseProvider):
         super().__init__()
         self._user_agent = os.environ.get(
             "SEC_USER_AGENT",
-            "AI-Finance research@example.com",
+            "AlphaScope research@example.com",
         )
         self._headers = {"User-Agent": self._user_agent}
         self._ticker_cik_map: dict[str, str] = {}

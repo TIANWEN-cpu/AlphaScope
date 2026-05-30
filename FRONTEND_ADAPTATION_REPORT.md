@@ -1,15 +1,15 @@
-# AI-Finance 前端适配与交互整改报告
+# 研策中枢 AlphaScope 前端适配与交互整改报告
 
 生成日期：2026-05-24  
-项目目录：`D:\AI-FInance\AI--FINANCE`  
-前端目录：`D:\AI-FInance\AI--FINANCE\apps\web`  
-用户前端来源：`C:\Users\admin\Desktop\ai-finance-workbench (2)`  
+项目目录：`D:\研策中枢 AlphaScope\AlphaScope`  
+前端目录：`D:\研策中枢 AlphaScope\AlphaScope\apps\web`  
+用户前端来源：`C:\Users\admin\Desktop\alphascope-workbench (2)`  
 本地前端地址：`http://127.0.0.1:3000`  
 本地后端地址：`http://127.0.0.1:8000`
 
 ## 一、总体目标
 
-本次工作目标是将主项目 `AI--FINANCE` 的前端替换为用户编写的 `ai-finance-workbench (2)` 前端，并在保留原前端视觉、动画、排版和模块结构的基础上，把大量静态展示改造成可操作、可请求后端、可反馈状态的实用工作台。
+本次工作目标是将主项目 `AlphaScope` 的前端替换为用户编写的 `alphascope-workbench (2)` 前端，并在保留原前端视觉、动画、排版和模块结构的基础上，把大量静态展示改造成可操作、可请求后端、可反馈状态的实用工作台。
 
 重点整改范围包括：
 
@@ -321,7 +321,7 @@
 
 ## 三、删除了哪些文件
 
-说明：这些删除发生在主项目 `D:\AI-FInance\AI--FINANCE\apps\web` 的旧 Next.js 前端中，用于替换为用户提供的 Vite React 前端。没有删除 `docs/` 目录下的文档文件，`docs/` 下只是做了内容更新。
+说明：这些删除发生在主项目 `D:\研策中枢 AlphaScope\AlphaScope\apps\web` 的旧 Next.js 前端中，用于替换为用户提供的 Vite React 前端。没有删除 `docs/` 目录下的文档文件，`docs/` 下只是做了内容更新。
 
 ### 1. 删除的旧前端配置文件
 
@@ -374,7 +374,7 @@
 删除原因：
 
 - 这些是旧 Next.js 前端的一组面板组件。
-- 用户要求将项目整体前端换成 `ai-finance-workbench (2)` 中的新前端。
+- 用户要求将项目整体前端换成 `alphascope-workbench (2)` 中的新前端。
 - 新前端对应的新组件已经加入，例如：
   - `Workbench.tsx`
   - `NewsAggregator.tsx`

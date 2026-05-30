@@ -1,6 +1,6 @@
 # Evaluation
 
-How we assess the quality of AI-Finance's analysis output.
+How we assess the quality of 研策中枢 AlphaScope's analysis output.
 
 ## Current Test Coverage
 

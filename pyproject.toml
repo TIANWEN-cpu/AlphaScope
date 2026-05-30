@@ -1,7 +1,7 @@
 [project]
-name = "ai-finance"
+name = "alphascope"
 version = "0.47"
-description = "Multi-Agent Financial Analysis Workbench"
+description = "AlphaScope multi-agent financial analysis workbench"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11,<3.13"
@@ -20,7 +20,7 @@ classifiers = [
 api = ["fastapi>=0.115.0,<1.0", "uvicorn>=0.34.0,<1.0"]
 rag = ["chromadb==0.6.3"]
 dev = ["pytest==8.4.0", "ruff==0.11.10"]
-all = ["ai-finance[api,rag,dev]"]
+all = ["alphascope[api,rag,dev]"]
 
 [tool.ruff]
 line-length = 120

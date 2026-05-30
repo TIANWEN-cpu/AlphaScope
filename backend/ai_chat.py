@@ -345,7 +345,7 @@ def export_to_markdown(session: ChatSession) -> str:
         lines.append("")
 
     lines += [
-        f"*由 AI-Finance v0.7 AI 咨询模块自动生成,模型 {session.provider}/{session.model}*",
+        f"*由研策中枢 AlphaScope AI 咨询模块自动生成,模型 {session.provider}/{session.model}*",
     ]
     return "\n".join(lines)
 

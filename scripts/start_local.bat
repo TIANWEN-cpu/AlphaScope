@@ -1,9 +1,9 @@
 @echo off
-title AI-Finance Local
+title AlphaScope Local
 cd /d "%~dp0.."
 
 echo ========================================
-echo   AI-Finance 本地启动
+echo   研策中枢 AlphaScope 本地启动
 echo ========================================
 echo.
 

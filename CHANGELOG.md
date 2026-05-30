@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 ## v1.5.0 - 2026-05-30
 
@@ -18,7 +18,7 @@
 
 ### 品牌迁移与本地体验稳定性
 
-- 项目正式更名为「研策中枢 AlphaScope」，README、前端 README、clone 地址和 Release 链接迁移到 `https://github.com/TIANWEN-cpu/AI--FINANCE`。
+- 项目正式更名为「研策中枢 AlphaScope」，README、前端 README、clone 地址和 Release 链接迁移到 `https://github.com/TIANWEN-cpu/AlphaScope`。
 - 修复本地回测入口在后端短暂离线或策略状态过期后卡死的问题；点击运行会自动刷新本地回测状态和策略列表。
 - 回测页新增“刷新状态”，并在本地 quant 接口不可用时给出明确诊断提示。
 - 新闻模块刷新失败时保留上次成功结果，不再直接清空列表；空态提供“重新同步”。
@@ -73,7 +73,7 @@
 
 ### Windows 一键包
 
-- 新增 `AI-Finance-Setup.bat` 一键安装启动器
+- 新增 `AlphaScope-Setup.bat` 一键安装启动器
 - 新增 `scripts/install_deps.ps1` 自动依赖安装
 - 新增 `scripts/create_shortcut.ps1` 桌面快捷方式创建
 - 增强 `scripts/check_env.py` 支持 `--fix` 自动修复

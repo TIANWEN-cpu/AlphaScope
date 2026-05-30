@@ -1,4 +1,4 @@
-# AI-Finance Vite Frontend
+# 研策中枢 AlphaScope Vite Frontend
 
 FROM node:20-alpine AS deps
 WORKDIR /app

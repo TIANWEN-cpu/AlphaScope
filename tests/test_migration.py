@@ -12,7 +12,7 @@ def test_data_dir_constant():
     from backend.project_paths import DATA_DIR
 
     assert DATA_DIR.name == "data"
-    assert DATA_DIR.parent.name == "AI--FINANCE" or DATA_DIR.parent.exists()
+    assert DATA_DIR.parent.name == "AlphaScope" or DATA_DIR.parent.exists()
 
 
 def test_db_dir_constant():

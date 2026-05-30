@@ -1,5 +1,5 @@
 """
-AI-Finance 一键构建脚本
+研策中枢 AlphaScope 一键构建脚本
 
 将项目打包成 Windows 可执行文件。
 
@@ -7,8 +7,8 @@ AI-Finance 一键构建脚本
     python build.py
 
 输出:
-    dist/AI-Finance/  — 可独立运行的程序目录
-    dist/AI-Finance/AI-Finance.exe  — 主程序
+    dist/AlphaScope/  — 可独立运行的程序目录
+    dist/AlphaScope/AlphaScope.exe  — 主程序
 
 后续步骤（可选）:
     用 Inno Setup 编译 installer/setup.iss 生成安装包
@@ -20,7 +20,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-DIST_DIR = ROOT / "dist" / "AI-Finance"
+DIST_DIR = ROOT / "dist" / "AlphaScope"
 
 
 def check_pyinstaller():
@@ -46,7 +46,7 @@ def clean_build():
 
 def run_pyinstaller():
     """执行 PyInstaller 打包"""
-    spec_file = ROOT / "ai_finance.spec"
+    spec_file = ROOT / "alphascope.spec"
     if not spec_file.exists():
         print(f"[错误] 找不到 spec 文件: {spec_file}")
         return False
@@ -103,10 +103,10 @@ def copy_runtime_files():
     # 创建 README
     readme = DIST_DIR / "使用说明.txt"
     readme.write_text(
-        "AI-Finance - 金融 AI 分析工作台\n"
+        "研策中枢 AlphaScope - 金融 AI 分析工作台\n"
         "================================\n\n"
         "首次使用:\n"
-        "1. 双击 AI-Finance.exe 启动\n"
+        "1. 双击 AlphaScope.exe 启动\n"
         "2. 程序会自动打开浏览器\n"
         "3. 编辑 .env 文件填入您的 API Key\n\n"
         "API Key 配置:\n"
@@ -131,7 +131,7 @@ def copy_runtime_files():
 
 def print_summary():
     """打印构建摘要"""
-    exe_path = DIST_DIR / "AI-Finance.exe"
+    exe_path = DIST_DIR / "AlphaScope.exe"
     size_mb = 0
     if exe_path.exists():
         size_mb = sum(f.stat().st_size for f in DIST_DIR.rglob("*") if f.is_file()) / (
@@ -159,7 +159,7 @@ def print_summary():
 def main():
     print()
     print("=" * 50)
-    print("  AI-Finance 构建脚本")
+    print("  研策中枢 AlphaScope 构建脚本")
     print("=" * 50)
     print()
 

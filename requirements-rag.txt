@@ -1,4 +1,4 @@
-# AI-Finance RAG / Vector Store Dependencies (optional)
+# 研策中枢 AlphaScope RAG / Vector Store Dependencies (optional)
 # Install: pip install -r requirements-core.txt -r requirements-rag.txt
 # Note: chromadb requires C++ Build Tools on Windows.
 # If installation fails, RAG features will be disabled gracefully.
