@@ -176,11 +176,11 @@ def check_dirs(auto_create: bool = False) -> bool:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="AI-Finance 环境检查")
+    parser = argparse.ArgumentParser(description="研策中枢 AlphaScope 环境检查")
     parser.add_argument("--fix", action="store_true", help="自动修复问题")
     args = parser.parse_args()
 
-    print("AI-Finance 环境检查\n")
+    print("研策中枢 AlphaScope 环境检查\n")
     checks = [
         check_python(),
         check_node(),

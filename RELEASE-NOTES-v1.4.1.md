@@ -1,4 +1,4 @@
-# AI-Finance v1.4.1
+# 研策中枢 AlphaScope v1.4.1
 
 > 2026-05-27
 

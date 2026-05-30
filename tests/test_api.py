@@ -27,7 +27,7 @@ async def test_root(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
-    assert data["data"]["service"] == "AI-Finance API"
+    assert data["data"]["service"] == "研策中枢 AlphaScope API"
 
 
 @pytest.mark.anyio

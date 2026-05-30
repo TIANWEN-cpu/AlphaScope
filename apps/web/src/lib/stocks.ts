@@ -38,7 +38,7 @@ interface BackendStockSearchResponse {
   total: number;
 }
 
-const STOCK_CACHE_KEY = 'ai-finance:resolved-stock-cache';
+const STOCK_CACHE_KEY = 'alphascope:resolved-stock-cache';
 const stockMemoryCache = new Map<string, StockTarget>();
 
 const stockAliases: Record<string, string> = {

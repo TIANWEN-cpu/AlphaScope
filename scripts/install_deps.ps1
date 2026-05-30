@@ -1,10 +1,10 @@
-﻿# AI-Finance 依赖安装脚本
+# 研策中枢 AlphaScope 依赖安装脚本
 # 用法: powershell -ExecutionPolicy Bypass -File scripts/install_deps.ps1
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 
-Write-Host "AI-Finance 依赖安装" -ForegroundColor Cyan
+Write-Host "研策中枢 AlphaScope 依赖安装" -ForegroundColor Cyan
 Write-Host "====================`n"
 
 # 1. 检查 Python

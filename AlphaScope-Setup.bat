@@ -1,9 +1,9 @@
 @echo off
-title AI-Finance Setup
+title AlphaScope Setup
 cd /d "%~dp0"
 
 echo ========================================
-echo   AI-Finance 一键安装
+echo   研策中枢 AlphaScope 一键安装
 echo ========================================
 echo.
 echo 本脚本将自动完成以下步骤：

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def startup():
     """应用启动时调用"""
-    logger.info("[Startup] AI-Finance 启动初始化...")
+    logger.info("[Startup] AlphaScope 启动初始化...")
 
     # 1. Schema 升级
     _upgrade_schema()

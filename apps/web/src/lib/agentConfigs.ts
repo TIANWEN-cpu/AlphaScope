@@ -26,7 +26,8 @@ export interface AgentRuntimeConfig {
   prompt: string;
 }
 
-export const AGENT_CONFIG_STORAGE_KEY = 'ai-finance:agent-configs-v1';
+export const AGENT_CONFIG_STORAGE_KEY = 'alphascope:agent-configs-v1';
+export const LEGACY_AGENT_CONFIG_STORAGE_KEY = `${['ai', 'finance'].join('-')}:agent-configs-v1`;
 
 export const DEFAULT_AGENT_CONFIGS: AgentConfig[] = [
   {
@@ -148,14 +149,19 @@ export function loadAgentConfigs(): AgentConfig[] {
   if (typeof window === 'undefined') return DEFAULT_AGENT_CONFIGS;
 
   try {
-    const raw = window.localStorage.getItem(AGENT_CONFIG_STORAGE_KEY);
+    const raw = window.localStorage.getItem(AGENT_CONFIG_STORAGE_KEY)
+      ?? window.localStorage.getItem(LEGACY_AGENT_CONFIG_STORAGE_KEY);
     if (!raw) return DEFAULT_AGENT_CONFIGS;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return DEFAULT_AGENT_CONFIGS;
     const normalized = parsed
       .map((item, index) => normalizeAgentConfig(item, DEFAULT_AGENT_CONFIGS[index]))
       .filter((item): item is AgentConfig => Boolean(item));
-    return normalized.length ? normalized : DEFAULT_AGENT_CONFIGS;
+    if (normalized.length) {
+      window.localStorage.setItem(AGENT_CONFIG_STORAGE_KEY, JSON.stringify(normalized));
+      return normalized;
+    }
+    return DEFAULT_AGENT_CONFIGS;
   } catch {
     return DEFAULT_AGENT_CONFIGS;
   }

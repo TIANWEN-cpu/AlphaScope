@@ -205,7 +205,7 @@ export function Settings({ initialTab }: SettingsProps) {
   };
 
   const saveSettings = () => {
-    window.localStorage.setItem('ai-finance:ui-settings', JSON.stringify(settings));
+    window.localStorage.setItem('alphascope:ui-settings', JSON.stringify(settings));
     saveAgentConfigs(agentConfigs);
     setSavedMessage(`已保存 ${activeTitle}，${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`);
   };
@@ -221,7 +221,7 @@ export function Settings({ initialTab }: SettingsProps) {
     }
 
     setSettings(DEFAULT_SETTINGS);
-    window.localStorage.removeItem('ai-finance:ui-settings');
+    window.localStorage.removeItem('alphascope:ui-settings');
     setSavedMessage('已恢复默认配置');
   };
 

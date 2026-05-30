@@ -1,4 +1,4 @@
-"""标准化数据模型 - AI-Finance v0.40"""
+"""标准化数据模型 - 研策中枢 AlphaScope v0.40"""
 
 from .announcement import Announcement
 from .evidence import AgentReport, EvidenceBundle, EvidenceItem

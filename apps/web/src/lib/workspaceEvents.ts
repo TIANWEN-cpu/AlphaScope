@@ -1,7 +1,8 @@
 import { findStockTarget, StockTarget } from './stocks';
 
-export const STOCK_SELECTED_EVENT = 'ai-finance:stock-selected';
-const STORAGE_KEY = 'ai-finance:selected-stock';
+export const STOCK_SELECTED_EVENT = 'alphascope:stock-selected';
+const STORAGE_KEY = 'alphascope:selected-stock';
+const LEGACY_STORAGE_KEY = `${['ai', 'finance'].join('-')}:selected-stock`;
 
 export interface StockSelectedPayload {
   stock: StockTarget;
@@ -35,7 +36,7 @@ export function subscribeStockSelected(handler: (payload: StockSelectedPayload) 
 }
 
 export function getPersistedStock(): StockTarget | undefined {
-  const raw = window.localStorage.getItem(STORAGE_KEY);
+  const raw = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!raw) return undefined;
 
   try {
@@ -44,9 +45,11 @@ export function getPersistedStock(): StockTarget | undefined {
       return undefined;
     }
     const local = findStockTarget(parsed.symbol);
-    return local?.source === 'symbol-fallback'
+    const stock = local?.source === 'symbol-fallback'
       ? parsed as StockTarget
       : local ?? parsed as StockTarget;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stock));
+    return stock;
   } catch {
     return undefined;
   }

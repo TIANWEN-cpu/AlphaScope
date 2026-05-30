@@ -34,7 +34,7 @@ class WikipediaViewsProvider(BaseProvider):
         import requests
 
         url = f"{self.BASE_URL}{endpoint}"
-        headers = {"User-Agent": "AI-Finance/1.0 (https://github.com/ai-finance)"}
+        headers = {"User-Agent": "AlphaScope/1.0 (https://github.com/TIANWEN-cpu/AlphaScope)"}
         resp = requests.get(url, headers=headers, params=params or {}, timeout=15)
         resp.raise_for_status()
         return resp.json()

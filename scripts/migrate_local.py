@@ -62,7 +62,7 @@ def _migrate_dir(src: Path, dst: Path) -> bool:
 
 
 def main() -> int:
-    print("AI-Finance 数据迁移")
+    print("研策中枢 AlphaScope 数据迁移")
     print("=" * 40)
     print(f"项目根目录: {PROJECT_ROOT}\n")
 

@@ -1,6 +1,6 @@
-# AI-Finance Web Workbench
+# 研策中枢 AlphaScope Web Workbench
 
-Vite + React 19 frontend for the AI-Finance multi-agent research workspace.
+Vite + React 19 frontend for the 研策中枢 AlphaScope multi-agent research workspace.
 
 ## Highlights
 
@@ -39,6 +39,6 @@ npm run build
 
 ## User Notes
 
-- Agent configuration is stored in browser localStorage under `ai-finance:agent-configs-v1`.
+- Agent configuration is stored in browser localStorage under `alphascope:agent-configs-v1`, with automatic migration from the old key.
 - Enabled agent runtime settings are sent with analysis requests through the `agent_configs` payload field.
 - The app is a research and review tool. It does not provide investment advice and all outputs must be independently verified.

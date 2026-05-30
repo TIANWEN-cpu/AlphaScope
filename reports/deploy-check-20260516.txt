@@ -1,4 +1,4 @@
-﻿=== Python 环境 ===
+=== Python 环境 ===
 Python 3.12.10
 === 核心包导入 ===
 OK openbb unknown

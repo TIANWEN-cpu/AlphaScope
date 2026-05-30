@@ -89,7 +89,7 @@ python scripts/check_env.py
 ## 目录结构
 
 ```
-AI--FINANCE/
+AlphaScope/
 ├── data/               # 运行时数据（gitignore）
 │   ├── db/             # SQLite 数据库
 │   ├── cache/          # 缓存、ChromaDB

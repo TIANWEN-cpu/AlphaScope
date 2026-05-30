@@ -1,11 +1,11 @@
-# AI--FINANCE 项目交接文档 (v1.0.1)
+# AlphaScope 项目交接文档 (v1.0.1)
 
 ## 项目概述
 
-AI--FINANCE 是一个多 Agent 金融分析工作台，通过异构 LLM 模型协作产出投资研究。
+AlphaScope 是一个多 Agent 金融分析工作台，通过异构 LLM 模型协作产出投资研究。
 
-- GitHub: https://github.com/TIANWEN-cpu/AI--FINANCE
-- 本地路径: D:\AI-FInance\AI--FINANCE
+- GitHub: https://github.com/TIANWEN-cpu/AlphaScope
+- 本地路径: D:\研策中枢 AlphaScope\AlphaScope
 - 分支: main
 - 最新版本: v1.0.1
 - CI: 全绿 (lint-and-test + web-build + docker-build)

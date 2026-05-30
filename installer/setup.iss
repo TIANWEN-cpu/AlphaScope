@@ -1,21 +1,21 @@
-; AI-Finance Inno Setup 安装脚本
+; 研策中枢 AlphaScope Inno Setup 安装脚本
 ;
 ; 使用方式:
-;   1. 先运行 python build.py 生成 dist/AI-Finance/
+;   1. 先运行 python build.py 生成 dist/AlphaScope/
 ;   2. 用 Inno Setup 6 打开此文件
 ;   3. 点击 编译 → 生成安装包
 ;
-; 输出: installer-output/AI-Finance-Setup.exe
+; 输出: installer-output/AlphaScope-Setup.exe
 
-#define MyAppName "AI-Finance"
-#define MyAppNameCN "AI-Finance 金融分析工作台"
+#define MyAppName "AlphaScope"
+#define MyAppNameCN "研策中枢 AlphaScope"
 #define MyAppVersion "0.38"
 #define MyAppPublisher "TIANWEN"
-#define MyAppURL "https://github.com/TIANWEN-cpu/AI--FINANCE"
-#define MyAppExeName "AI-Finance.exe"
+#define MyAppURL "https://github.com/TIANWEN-cpu/AlphaScope"
+#define MyAppExeName "AlphaScope.exe"
 
 ; PyInstaller 输出目录（build.py 的输出）
-#define SourceDir "..\dist\AI-Finance"
+#define SourceDir "..\dist\AlphaScope"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -31,7 +31,7 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 LicenseFile=..\LICENSE
 OutputDir=installer-output
-OutputBaseFilename=AI-Finance-Setup-{#MyAppVersion}
+OutputBaseFilename=AlphaScope-Setup-{#MyAppVersion}
 SetupIconFile=
 Compression=lzma2/ultra64
 SolidCompression=yes

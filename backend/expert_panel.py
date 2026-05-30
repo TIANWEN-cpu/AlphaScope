@@ -1602,7 +1602,7 @@ def export_md(
         f"# {stock_name}({symbol}) 专家圆桌纪要",
         "",
         f"> 召开时间: {now}  ",
-        f"> 工作台: AI-Finance v2.0{team_tag} · 专家圆桌",
+        f"> 工作台: 研策中枢 AlphaScope v2.0{team_tag} · 专家圆桌",
         "",
         "## 投票汇总",
         "",
@@ -1672,7 +1672,7 @@ def export_md(
 
     lines += [
         "",
-        f"*由 AI-Finance v2.0 专家圆桌模块自动生成,数据来自 akshare {today}*",
+        f"*由研策中枢 AlphaScope v2.0 专家圆桌模块自动生成,数据来自 akshare {today}*",
     ]
     return "\n".join(lines)
 

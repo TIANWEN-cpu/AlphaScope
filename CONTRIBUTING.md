@@ -1,12 +1,12 @@
 # Contributing
 
-Thanks for your interest in contributing to AI-Finance.
+Thanks for your interest in contributing to 研策中枢 AlphaScope.
 
 ## Getting Started
 
 ```bash
-git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git
-cd AI--FINANCE
+git clone https://github.com/TIANWEN-cpu/AlphaScope.git
+cd AlphaScope
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt

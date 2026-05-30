@@ -1,4 +1,4 @@
-"""Provider 插件体系 - AI-Finance v0.15
+"""Provider 插件体系 - 研策中枢 AlphaScope v0.15
 
 所有数据源统一抽象为 Provider 插件, 支持:
 - 统一接口: get_news/get_reports/get_announcements/get_prices/get_fundamentals

@@ -50,8 +50,8 @@ if HAS_FASTAPI:
     api_version = "1.1.4"
 
     app = FastAPI(
-        title="AI-Finance API",
-        description="金融 AI 分析工作台 API — 多 Agent 异构分析、专家团、K线图视觉分析",
+        title="研策中枢 AlphaScope API",
+        description="研策中枢 AlphaScope API — 多 Agent 异构分析、专家团、K线图视觉分析",
         version=api_version,
     )
 
@@ -130,7 +130,7 @@ if HAS_FASTAPI:
             success=True,
             data={
                 "status": "ok",
-                "service": "AI-Finance API",
+                "service": "研策中枢 AlphaScope API",
                 "version": api_version,
             },
         )

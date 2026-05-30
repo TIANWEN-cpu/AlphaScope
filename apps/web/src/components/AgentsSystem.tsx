@@ -19,6 +19,8 @@ import {
   AgentConfig,
   AgentIconKey,
   getEnabledAgentRuntimeConfigs,
+  AGENT_CONFIG_STORAGE_KEY,
+  LEGACY_AGENT_CONFIG_STORAGE_KEY,
   loadAgentConfigs,
   saveAgentConfigs,
 } from '../lib/agentConfigs';
@@ -51,7 +53,7 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
       setAgents(Array.isArray(configs) ? configs : loadAgentConfigs());
     };
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'ai-finance:agent-configs-v1') {
+      if (event.key === AGENT_CONFIG_STORAGE_KEY || event.key === LEGACY_AGENT_CONFIG_STORAGE_KEY) {
         setAgents(loadAgentConfigs());
       }
     };

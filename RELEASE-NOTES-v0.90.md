@@ -58,8 +58,8 @@ CI: 全绿
 ## 文件结构
 
 ```
-AI--FINANCE/
-├── AI-Finance-Setup.bat      # 一键安装启动器
+AlphaScope/
+├── AlphaScope-Setup.bat      # 一键安装启动器
 ├── apps/web/                  # Next.js 主前端
 ├── backend/                   # FastAPI 后端
 ├── config/                    # 配置文件
@@ -75,7 +75,7 @@ AI--FINANCE/
 
 ### Windows 一键安装
 1. 下载并解压项目
-2. 双击 `AI-Finance-Setup.bat`
+2. 双击 `AlphaScope-Setup.bat`
 3. 按提示完成安装
 4. 编辑 `.env` 填入 API Key
 5. 双击桌面快捷方式启动
@@ -125,4 +125,4 @@ scripts/start_local.bat
 
 ## 反馈
 
-- GitHub Issues: https://github.com/TIANWEN-cpu/AI--FINANCE/issues
+- GitHub Issues: https://github.com/TIANWEN-cpu/AlphaScope/issues

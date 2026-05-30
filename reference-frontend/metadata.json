@@ -1,5 +1,5 @@
 {
-  "name": "AI Finance Workbench",
+  "name": "研策中枢 AlphaScope Workbench",
   "description": "Multi-agent financial research workspace with news intelligence, configurable expert agents, reporting, backtesting, portfolio and fund analysis modules.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

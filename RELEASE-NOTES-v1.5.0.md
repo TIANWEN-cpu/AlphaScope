@@ -1,4 +1,4 @@
-# AI-Finance v1.5.0
+# 研策中枢 AlphaScope v1.5.0
 
 发布日期：2026-05-30
 
@@ -38,7 +38,7 @@ npm run build
 
 ## 升级提示
 
-- Agent 配置保存在浏览器 localStorage 键 `ai-finance:agent-configs-v1` 中。
+- Agent 配置保存在浏览器 localStorage 键 `alphascope:agent-configs-v1` 中；旧版缓存键会自动迁移。
 - 如需恢复默认 Agent 编排，可进入系统设置 -> Agent 编排，点击“恢复默认”。
 - 后端若要消费用户自定义 Agent，需要读取分析请求体中的 `agent_configs` 字段。
 

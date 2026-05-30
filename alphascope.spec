@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-AI-Finance PyInstaller spec file
+研策中枢 AlphaScope PyInstaller spec file
 
-构建命令: pyinstaller ai_finance.spec --clean
-输出目录: dist/AI-Finance/
+构建命令: pyinstaller alphascope.spec --clean
+输出目录: dist/AlphaScope/
 """
 
 import os
@@ -144,7 +144,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='AI-Finance',
+    name='AlphaScope',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -166,5 +166,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='AI-Finance',
+    name='AlphaScope',
 )

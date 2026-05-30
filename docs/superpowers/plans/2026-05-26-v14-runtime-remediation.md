@@ -1,4 +1,4 @@
-﻿# v1.4 Runtime Remediation Implementation Plan
+# v1.4 Runtime Remediation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -74,7 +74,7 @@ Add this test to `tests/test_factors.py` inside `class TestFactorGenerator`:
 Run:
 
 ```powershell
-Push-Location "D:/AI-Finance/AI--FINANCE-v1.4"; python -m pytest tests/test_factors.py::TestFactorGenerator::test_fund_flow_uses_fetched_dataframe_for_summary; Pop-Location
+Push-Location "D:/研策中枢 AlphaScope/AlphaScope-v1.4"; python -m pytest tests/test_factors.py::TestFactorGenerator::test_fund_flow_uses_fetched_dataframe_for_summary; Pop-Location
 ```
 
 Expected: FAIL because current code calls `summarize_fund_flow(symbol, days=5)` and never calls `fetch_individual_fund_flow`.
@@ -138,7 +138,7 @@ Keep the existing score calculation below this block.
 Run:
 
 ```powershell
-Push-Location "D:/AI-Finance/AI--FINANCE-v1.4"; python -m pytest tests/test_factors.py; Pop-Location
+Push-Location "D:/研策中枢 AlphaScope/AlphaScope-v1.4"; python -m pytest tests/test_factors.py; Pop-Location
 ```
 
 Expected: PASS.
@@ -146,8 +146,8 @@ Expected: PASS.
 - [ ] **Step 6: Commit Task 1**
 
 ```powershell
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" add backend/factors/generator.py tests/test_factors.py
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" add backend/factors/generator.py tests/test_factors.py
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" commit -m @'
 fix: compute fund-flow factor from fetched data
 
 Co-Authored-By: SuLi <3508137206@qq.com>
@@ -211,7 +211,7 @@ And:
 Run:
 
 ```powershell
-Push-Location "D:/AI-Finance/AI--FINANCE-v1.4"; python -m pytest tests/test_quant_api.py -q; Pop-Location
+Push-Location "D:/研策中枢 AlphaScope/AlphaScope-v1.4"; python -m pytest tests/test_quant_api.py -q; Pop-Location
 ```
 
 Expected: new tests FAIL because endpoints currently return `success=false`.
@@ -246,7 +246,7 @@ This keeps existing list endpoint structure while making it frontend-friendly.
 Run:
 
 ```powershell
-Push-Location "D:/AI-Finance/AI--FINANCE-v1.4"; python -m pytest tests/test_quant_api.py; Pop-Location
+Push-Location "D:/研策中枢 AlphaScope/AlphaScope-v1.4"; python -m pytest tests/test_quant_api.py; Pop-Location
 ```
 
 Expected: PASS.
@@ -254,8 +254,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit Task 2**
 
 ```powershell
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" add backend/api/quant.py tests/test_quant_api.py
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" add backend/api/quant.py tests/test_quant_api.py
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" commit -m @'
 fix: degrade quant list endpoints when quant engine is offline
 
 Co-Authored-By: SuLi <3508137206@qq.com>
@@ -300,7 +300,7 @@ In `loadFundFlow()`, replace the successful `setFundItems([...])` block with:
 Run:
 
 ```powershell
-Push-Location "D:/AI-Finance/AI--FINANCE-v1.4/apps/web"; npm run lint; Pop-Location
+Push-Location "D:/研策中枢 AlphaScope/AlphaScope-v1.4/apps/web"; npm run lint; Pop-Location
 ```
 
 Expected: PASS.
@@ -308,8 +308,8 @@ Expected: PASS.
 - [ ] **Step 4: Commit Task 3**
 
 ```powershell
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" add apps/web/src/components/Workbench.tsx
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" add apps/web/src/components/Workbench.tsx
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" commit -m @'
 fix: show degraded fund-flow state in workbench
 
 Co-Authored-By: SuLi <3508137206@qq.com>
@@ -428,7 +428,7 @@ Where `statuses` are derived/read, ensure sources with `data.degraded === true` 
 Run:
 
 ```powershell
-Push-Location "D:/AI-Finance/AI--FINANCE-v1.4/apps/web"; npm run lint; npm run build; Pop-Location
+Push-Location "D:/研策中枢 AlphaScope/AlphaScope-v1.4/apps/web"; npm run lint; npm run build; Pop-Location
 ```
 
 Expected: PASS build with only existing large chunk warning.
@@ -436,8 +436,8 @@ Expected: PASS build with only existing large chunk warning.
 - [ ] **Step 9: Commit Task 4**
 
 ```powershell
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" add apps/web/src/components/ReportGenerator.tsx
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" add apps/web/src/components/ReportGenerator.tsx
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" commit -m @'
 fix: improve report factor summaries and navigation
 
 Co-Authored-By: SuLi <3508137206@qq.com>
@@ -509,7 +509,7 @@ In `Portfolio.tsx`, add a similar banner near the top of the page:
 Run:
 
 ```powershell
-Push-Location "D:/AI-Finance/AI--FINANCE-v1.4/apps/web"; npm run lint; npm run build; Pop-Location
+Push-Location "D:/研策中枢 AlphaScope/AlphaScope-v1.4/apps/web"; npm run lint; npm run build; Pop-Location
 ```
 
 Expected: PASS build with only existing large chunk warning.
@@ -517,8 +517,8 @@ Expected: PASS build with only existing large chunk warning.
 - [ ] **Step 7: Commit Task 5**
 
 ```powershell
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" add apps/web/src/App.tsx apps/web/src/components/Backtesting.tsx apps/web/src/components/EvidenceChain.tsx apps/web/src/components/Portfolio.tsx
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" add apps/web/src/App.tsx apps/web/src/components/Backtesting.tsx apps/web/src/components/EvidenceChain.tsx apps/web/src/components/Portfolio.tsx
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" commit -m @'
 fix: label demo data and remove broken noise asset
 
 Co-Authored-By: SuLi <3508137206@qq.com>
@@ -574,7 +574,7 @@ Expected:
 Run:
 
 ```powershell
-Push-Location "D:/AI-Finance/AI--FINANCE-v1.4/apps/web"; npm run lint; npm run build; Pop-Location
+Push-Location "D:/研策中枢 AlphaScope/AlphaScope-v1.4/apps/web"; npm run lint; npm run build; Pop-Location
 ```
 
 Expected: PASS with only large chunk warning.
@@ -584,8 +584,8 @@ Expected: PASS with only large chunk warning.
 Run:
 
 ```powershell
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" status --short
-git -C "D:/AI-Finance/AI--FINANCE-v1.4" grep -n "sk-<redacted-test-key>" -- . ':!artifacts' ':!data' ':!.venv' ':!apps/web/node_modules'
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" status --short
+git -C "D:/研策中枢 AlphaScope/AlphaScope-v1.4" grep -n "sk-<redacted-test-key>" -- . ':!artifacts' ':!data' ':!.venv' ':!apps/web/node_modules'
 ```
 
 Expected: status only includes intended tracked changes or `?? artifacts/`; grep finds nothing.

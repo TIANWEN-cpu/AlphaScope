@@ -1,6 +1,6 @@
 # API 文档
 
-AI-Finance FastAPI 后端提供 27 个 REST 端点。
+研策中枢 AlphaScope FastAPI 后端提供 27 个 REST 端点。
 
 启动方式：
 ```bash

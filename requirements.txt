@@ -1,4 +1,4 @@
-# AI-Finance Dependencies (v0.40)
+# 研策中枢 AlphaScope Dependencies (v0.40)
 # Full install:  pip install -r requirements.txt
 # Core only:     pip install -r requirements-core.txt
 # API server:    pip install -r requirements-api.txt

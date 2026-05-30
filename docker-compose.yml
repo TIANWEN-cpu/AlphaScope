@@ -1,4 +1,4 @@
-# AI-Finance Docker Compose (v0.40.7)
+# 研策中枢 AlphaScope Docker Compose (v0.40.7)
 # Services: Streamlit Dashboard + FastAPI API + Vite Frontend + Redis cache
 #
 # Usage:
@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ai-finance-app
+    container_name: alphascope-app
     ports:
       - "8501:8501"
     volumes:
@@ -46,14 +46,14 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - ai-finance-net
+      - alphascope-net
 
   # FastAPI API Backend (port 8000)
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ai-finance-api
+    container_name: alphascope-api
     command: ["python", "-m", "uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
@@ -84,7 +84,7 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - ai-finance-net
+      - alphascope-net
 
   # Vite Frontend (port 3000)
   web:
@@ -93,7 +93,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: http://localhost:8000
-    container_name: ai-finance-web
+    container_name: alphascope-web
     ports:
       - "3000:3000"
     environment:
@@ -111,12 +111,12 @@ services:
           cpus: "0.25"
           memory: 128M
     networks:
-      - ai-finance-net
+      - alphascope-net
 
   # Redis cache layer
   redis:
     image: redis:7-alpine
-    container_name: ai-finance-redis
+    container_name: alphascope-redis
     ports:
       - "6379:6379"
     volumes:
@@ -136,11 +136,11 @@ services:
           cpus: "0.25"
           memory: 128M
     networks:
-      - ai-finance-net
+      - alphascope-net
 
 volumes:
   redis-data:
 
 networks:
-  ai-finance-net:
+  alphascope-net:
     driver: bridge
