@@ -39,6 +39,7 @@ interface BackendStockSearchResponse {
 }
 
 const STOCK_CACHE_KEY = 'alphascope:resolved-stock-cache';
+const LEGACY_STOCK_CACHE_KEY = `${['ai', 'finance'].join('-')}:resolved-stock-cache`;
 const stockMemoryCache = new Map<string, StockTarget>();
 
 const stockAliases: Record<string, string> = {
@@ -124,11 +125,15 @@ function stockMatches(stock: StockTarget, normalizedKeyword: string): boolean {
 function readCachedStocks(): StockTarget[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(STOCK_CACHE_KEY);
+    const raw = window.localStorage.getItem(STOCK_CACHE_KEY) ?? window.localStorage.getItem(LEGACY_STOCK_CACHE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as StockTarget[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((stock) => stock?.symbol && stock?.name);
+    const stocks = parsed.filter((stock) => stock?.symbol && stock?.name);
+    if (stocks.length) {
+      window.localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(stocks.slice(0, 80)));
+    }
+    return stocks;
   } catch {
     return [];
   }

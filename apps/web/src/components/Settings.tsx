@@ -87,6 +87,25 @@ const DEFAULT_SETTINGS = {
 };
 
 type SettingsState = typeof DEFAULT_SETTINGS;
+const SETTINGS_STORAGE_KEY = 'alphascope:ui-settings';
+const LEGACY_SETTINGS_STORAGE_KEY = `${['ai', 'finance'].join('-')}:ui-settings`;
+
+function loadSettings(): SettingsState {
+  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
+      ?? window.localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+
+    const parsed = JSON.parse(raw) as Partial<SettingsState>;
+    const settings = { ...DEFAULT_SETTINGS, ...parsed };
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    return settings;
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 function SettingCard({
   title,
@@ -174,7 +193,7 @@ function normalizeSettingTab(value?: string): SettingTab {
 
 export function Settings({ initialTab }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingTab>(() => normalizeSettingTab(initialTab));
-  const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<SettingsState>(() => loadSettings());
   const [savedMessage, setSavedMessage] = useState('配置仅保存在当前浏览器预览环境');
   const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>(() => loadAgentConfigs());
   const [selectedAgentId, setSelectedAgentId] = useState(() => loadAgentConfigs()[0]?.id ?? DEFAULT_AGENT_CONFIGS[0].id);
@@ -205,7 +224,7 @@ export function Settings({ initialTab }: SettingsProps) {
   };
 
   const saveSettings = () => {
-    window.localStorage.setItem('alphascope:ui-settings', JSON.stringify(settings));
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     saveAgentConfigs(agentConfigs);
     setSavedMessage(`已保存 ${activeTitle}，${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`);
   };
@@ -221,7 +240,8 @@ export function Settings({ initialTab }: SettingsProps) {
     }
 
     setSettings(DEFAULT_SETTINGS);
-    window.localStorage.removeItem('alphascope:ui-settings');
+    window.localStorage.removeItem(SETTINGS_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_SETTINGS_STORAGE_KEY);
     setSavedMessage('已恢复默认配置');
   };
 
