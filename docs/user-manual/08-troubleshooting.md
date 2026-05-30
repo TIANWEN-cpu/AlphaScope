@@ -1,4 +1,4 @@
-# 常见问题与故障排除
+﻿# 常见问题与故障排除
 
 ---
 
@@ -277,7 +277,7 @@ python scripts/restore_local.py backup/
 
 ### GitHub Issues
 
-1. 访问 [GitHub Issues](https://github.com/TIANWEN-cpu/AlphaScope/issues)
+1. 访问 [GitHub Issues](https://github.com/TIANWEN-cpu/AI--FINANCE/issues)
 2. 搜索已有问题
 3. 创建新 Issue
 
@@ -296,3 +296,4 @@ python scripts/restore_local.py backup/
 - [安装指南](01-installation.md) - 重新安装
 - [快速开始](02-quickstart.md) - 快速上手
 - [模型接入配置](03-model-config.md) - 配置 LLM
+

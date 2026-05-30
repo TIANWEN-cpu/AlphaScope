@@ -1,6 +1,6 @@
 {
   "name": "AI Finance Workbench",
-  "description": "Multi-agent quantitative financial analysis workspace connected to the AI-Finance FastAPI backend.",
+  "description": "Multi-agent financial research workbench with news intelligence, configurable expert agents, evidence tracking, reporting, backtesting, portfolio, fund and DCA analysis modules.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

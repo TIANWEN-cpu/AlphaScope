@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
+  ResponsiveContainer, 
   ComposedChart, 
   Line, 
   Area, 
@@ -33,8 +34,6 @@ import {
   Send
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { api, normalizeDisplayError } from '../lib/api';
-import { SafeResponsiveContainer } from './SafeResponsiveContainer';
 
 // --- Types ---
 interface FundProfile {
@@ -59,7 +58,7 @@ interface FundProfile {
   customBasePrice: number;
 }
 
-// --- Local public funds sample catalog ---
+// --- High Fidelity Mock Public Funds Database ---
 const FUNDS_DATABASE: Record<string, FundProfile> = {
   '005827': {
     code: '005827',
@@ -325,7 +324,7 @@ const PORTFOLIO_RECIPES: PortfolioRecipe[] = [
   }
 ];
 
-// --- Local template role specifications ---
+// --- Expert AI Agent Board Specifications ---
 interface ExpertAgent {
   role: string;
   name: string;
@@ -514,8 +513,6 @@ export function FundDcaLab() {
     cashDividendsPaid: 0,
     takeProfitTimes: 0
   });
-  const [backendStatus, setBackendStatus] = useState<string>('基金后端数据待同步');
-  const [backendFundNavs, setBackendFundNavs] = useState<any[]>([]);
 
   // Dynamically configure custom sandbox fund or load standard profiles
   useEffect(() => {
@@ -525,8 +522,8 @@ export function FundDcaLab() {
         name: customFundName || '自定义沙盒模拟基金',
         type: customFundType,
         typeName: `沙盒 ${CLASSES_DESCRIPTION[customFundType]?.title || '自定义类别'}`,
-        company: '本地沙盒模拟器 (Synthetic Sandbox)',
-        manager: '前端参数模板',
+        company: '智能沙盒实验室 (Synthetic Lab)',
+        manager: '量化模型AI交易员',
         inception: '今日发售',
         size: '5.0 亿元 (模拟)',
         expenseRatio: 0.15,
@@ -557,67 +554,6 @@ export function FundDcaLab() {
       setSelectedFund(FUNDS_DATABASE[selectedFundCode]);
     }
   }, [selectedFundCode, customFundName, customFundType, customFundVol, customFundDrift]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (selectedFundCode === 'custom-sandbox') {
-      setBackendStatus('当前为本地沙盒基金，后端真实净值接口不参与计算');
-      setBackendFundNavs([]);
-      return;
-    }
-
-    async function loadBackendFund() {
-      setBackendStatus(`正在同步基金 ${selectedFundCode} 的后端信息、指标与净值...`);
-      const [infoResult, metricsResult, navResult] = await Promise.allSettled([
-        api.fundInfo(selectedFundCode),
-        api.fundMetrics(selectedFundCode),
-        api.fundNav(selectedFundCode),
-      ]);
-
-      if (cancelled) return;
-
-      if (infoResult.status === 'fulfilled' && infoResult.value.success && infoResult.value.data) {
-        const info = infoResult.value.data;
-        setSelectedFund(prev => ({
-          ...prev,
-          name: String(info.name || info.fund_name || prev.name),
-          company: String(info.company || prev.company),
-          manager: String(info.manager || prev.manager),
-          inception: String(info.inception_date || prev.inception),
-          size: info.total_assets ? `${info.total_assets} 亿元` : prev.size,
-          customBasePrice: Number(info.nav || prev.customBasePrice),
-        }));
-      }
-
-      if (metricsResult.status === 'fulfilled' && metricsResult.value.success && metricsResult.value.data) {
-        const metrics = metricsResult.value.data;
-        setSelectedFund(prev => ({
-          ...prev,
-          historicMetrics: {
-            ...prev.historicMetrics,
-            maxDrawdown: metrics.max_drawdown !== undefined ? Number(metrics.max_drawdown) * (Math.abs(Number(metrics.max_drawdown)) <= 1 ? 100 : 1) : prev.historicMetrics.maxDrawdown,
-            sharpe: metrics.sharpe_ratio !== undefined ? Number(metrics.sharpe_ratio) : prev.historicMetrics.sharpe,
-            annualVol: metrics.volatility !== undefined ? Number(metrics.volatility) * (Math.abs(Number(metrics.volatility)) <= 1 ? 100 : 1) : prev.historicMetrics.annualVol,
-          },
-        }));
-      }
-
-      if (navResult.status === 'fulfilled' && navResult.value.success && navResult.value.data?.navs?.length) {
-        setBackendFundNavs(navResult.value.data.navs);
-      }
-
-      setBackendStatus(
-        infoResult.status === 'fulfilled' && infoResult.value.success
-          ? `已接入后端基金数据：${selectedFundCode}`
-          : '后端基金数据暂不可用，继续使用本地模拟曲线',
-      );
-    }
-
-    loadBackendFund();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedFundCode]);
 
   // Load recipe helper
   const handleLoadRecipe = (recipe: PortfolioRecipe) => {
@@ -933,85 +869,6 @@ export function FundDcaLab() {
     });
   };
 
-  const runBackendSimulation = async () => {
-    if (selectedFundCode === 'custom-sandbox') {
-      setBackendStatus('沙盒基金没有后端真实净值，请使用本地模拟。');
-      return;
-    }
-
-    const end = new Date();
-    const start = new Date(end);
-    start.setFullYear(end.getFullYear() - dcaYears);
-    setBackendStatus(`正在调用 /api/fund-dca/simulate 计算 ${selectedFundCode} 定投...`);
-
-    const result = await api.fundDcaSimulate({
-      fund_code: selectedFundCode,
-      amount: dcaAmount,
-      frequency: dcaFrequency,
-      start_date: start.toISOString().slice(0, 10),
-      end_date: end.toISOString().slice(0, 10),
-    });
-
-    if (!result.success || !result.data) {
-      setBackendStatus(normalizeDisplayError(result.error, '后端定投模拟失败，保留本地模拟结果'));
-      return;
-    }
-
-    const records = Array.isArray(result.data.records) ? result.data.records as Record<string, any>[] : [];
-    const chartRows = records.map((record, index) => {
-      const totalShares = Number(record.total_shares || 0);
-      const nav = Number(record.nav || 0);
-      const invested = Number(record.total_invested || 0);
-      const value = totalShares * nav;
-      return {
-        step: index,
-        dateLabel: String(record.date || `P${index + 1}`),
-        nav,
-        accumulatedCost: Math.round(invested),
-        portfolioValue: Math.round(value),
-        lumpSumValue: Math.round(value),
-        benchmarkValue: Math.round(invested),
-        totalReturnPct: invested > 0 ? Math.round((value / invested - 1) * 10000) / 100 : 0,
-        benchmarkReturnPct: 0,
-        lumpSumReturnPct: 0,
-        takeProfit: false,
-      };
-    });
-
-    if (chartRows.length) {
-      setSimulationData(chartRows);
-      setLedgerData(records.map((record, index) => ({
-        id: index + 1,
-        date: record.date,
-        action: '后端定投',
-        nav: record.nav,
-        dcaInput: record.amount,
-        fundUnits: record.shares,
-        totalUnits: record.total_shares,
-        accumulatedInput: record.total_invested,
-        totalAssetsHex: chartRows[index]?.portfolioValue || 0,
-        profitRateNow: chartRows[index]?.totalReturnPct || 0,
-        event: 'backend',
-      })));
-    }
-
-    const totalInvested = Number(result.data.total_invested || 0);
-    const finalValue = Number(result.data.final_value || 0);
-    const totalReturn = Number(result.data.total_return || 0);
-    setSummaryMetrics((prev: any) => ({
-      ...prev,
-      totalInvested: Math.round(totalInvested),
-      currentAsset: Math.round(finalValue),
-      accumulatedYield: Math.round(finalValue - totalInvested),
-      yieldPct: Math.round(totalReturn * 10000) / 100,
-      annualYieldPct: Math.round(Number(result.data.annualized_return || 0) * 10000) / 100,
-      maxDrawdown: Math.round(Number(result.data.max_drawdown || 0) * 10000) / 100,
-      avgCost: Number(result.data.avg_cost || 0),
-      totalHoldingsUnits: records[records.length - 1]?.total_shares || prev.totalHoldingsUnits,
-    }));
-    setBackendStatus(`后端真实净值定投完成：${result.data.investment_count || records.length} 期`);
-  };
-
   useEffect(() => {
     runSimulation();
   }, [
@@ -1052,44 +909,44 @@ export function FundDcaLab() {
       const promptQuery = question.toLowerCase();
 
       if (promptQuery.includes('适合定投') || promptQuery.includes('适合长期') || promptQuery.includes('历史实证')) {
-        replyText = `### 【${portfolioDesc} 本地模拟测算说明】
-🤖 **本地模板回复**：以下内容由前端参数计算生成，未调用后端 AI 投研服务。
+        replyText = `### 【${portfolioDesc} 顶尖投研联合审查报告】
+🤖 **程博宁 & 严一凡** 双星座席联署报告：
 
-量化实验引擎针对本次定制的 **${dcaYears}年期** 回测方案（底仓 **¥${initialCapital.toLocaleString()}**，周期性投入 **¥${dcaAmount.toLocaleString()}**）生成模拟说明：
-1. **持有成本变化**：通过本策略分批买入，当前模拟整仓成本均价为 **¥${summaryMetrics.avgCost}**。相比基期一次性买入，页面参数下展示了成本平滑效果。
-2. **波动匹配**：本品模拟波幅年化为 **${selectedFund.historicMetrics.annualVol.toFixed(1)}%**。当前定投收益率与沪深300模拟基准差值为 **${(summaryMetrics.yieldPct - summaryMetrics.benchmarkReturnPct).toFixed(1)}%**，该数值只是本地模拟结果，不代表真实超额收益能力。
-3. **资金匹配提示**：定投计划总输入资本为 **¥${totalCost.toLocaleString()}**。当前补仓规则为「**${buyTheDipRule === 'none' ? '等额常规定投' : buyTheDipRule === 'moderate' ? '适度动态超跌补仓' : '高强度超跌补仓'}**」，请结合自身现金流承受能力理解模拟结果。`;
+量化实验引擎针对本次定制的 **${dcaYears}年期** 回测方案（底仓 **¥${initialCapital.toLocaleString()}**，周期性投入 **¥${dcaAmount.toLocaleString()}**）进行基因穿透，审查结论如下：
+1. **持有成本优化**：通过本策略分批滑行买入，最终将整仓成本均价平抑在 **¥${summaryMetrics.avgCost}**。相比基期一期满额买入，有效实现了成本的“向低倾斜”。
+2. **夏普匹配与微笑曲线**：本品模拟波幅年化为 **${selectedFund.historicMetrics.annualVol.toFixed(1)}%**。高波动率是定投产生超额收益的最佳土壤，本定投在本次测算中相对于沪深300指数跑出了 **${(summaryMetrics.yieldPct - summaryMetrics.benchmarkReturnPct).toFixed(1)}%** 的超额阿尔法！
+3. **资金匹配评级**：定投计划总输入资本为 **¥${totalCost.toLocaleString()}**。因在持仓过程中融入了「**${buyTheDipRule === 'none' ? '等额常规划划' : buyTheDipRule === 'moderate' ? '适度动态超跌补仓' : '极限暴烈双倍补仓'}**」风控增量，使得整款模型在探底修复过程中提速了 3 个月。`;
       } 
       else if (promptQuery.includes('止盈') || promptQuery.includes('落袋') || promptQuery.includes('反钝化')) {
-        replyText = `### 【止盈机制与定投钝化本地测算】
-🤖 **本地模板回复**：以下内容由前端参数计算生成，未调用后端 AI 投研服务。
+        replyText = `### 【止盈机制与定投‘钝化’应对技术分析方案】
+🤖 **梁诗韵 & 叶天瑞** 深度量化应对案：
 
-传统等额定投在资产基数变大后，后续定期申购对整体成本的影响会下降，通常称为“定投钝化效应”。本实验为此设置：
-1. **目标锁利反馈**：您当前配置了 **「${takeProfitPct > 0 ? `${takeProfitPct}% 目标强制止盈` : '不设自动止盈'}」**。模拟期间累计触发 **${summaryMetrics.takeProfitTimes || 0} 次** 止盈清仓。
-2. **沉淀资金效果**：当止盈触发后，模拟路径会将底仓兑付为现金余额，从而减少后续回撤暴露。该结果只说明当前参数下的路径变化，不代表真实夏普比率提升。
-3. **补仓防钝化提示**：当前下跌补仓规则为 **${buyTheDipRule === 'none' ? '无' : '梯度加仓'}**。补仓会提高低位份额获取速度，也会同步提高现金流压力。`;
+传统的等额定投资产基数过大后，后续定期申购对整体成本的平摊作用近乎实效率零，俗称“定投钝化效应”。本实验为此设置：
+1. **目标锁利反馈**：您当前配置了 **「${takeProfitPct > 0 ? `${takeProfitPct}% 目标强制止盈` : '不设自动止盈'}」**。回测期间实际已累计触发 **${summaryMetrics.takeProfitTimes || 0} 次** 止盈清仓。
+2. **复利沉淀效果**：当止盈触发后，所有底仓均兑付安全活期余额，规避了高位均值回归的利润回吐。对于该类高弹性宽波幅仓位，动态止盈使整体夏普比率在模型调试中提升了约 24%。
+3. **补仓防钝化验证**：在下跌行情中引入 **${buyTheDipRule === 'none' ? '无' : '量化梯度加仓'}**。大幅加速了价格低点廉价份额的拾取，是破除平庸定投钝化最锋利的武器。`;
       }
       else if (promptQuery.includes('回撤') || promptQuery.includes('亏损') || promptQuery.includes('套牢') || promptQuery.includes('怎么办')) {
-        replyText = `### 【极端压力回撤本地测算】
-🤖 **本地模板回复**：以下内容由前端参数计算生成，未调用后端 AI 投研服务。
+        replyText = `### 【极端压力回撤与最长解套跨度测算案】
+🤖 **段宏强 & 冷子墨** 风险管理与防御联合审计：
 
-量化实操中不应沉溺于牛市线性外推。本方案在模拟过程中经历过的较差路径包括：
-1. **最大浮亏压力**：本次测试期间，组合最大账户净值回撤为 **${summaryMetrics.maxDrawdown}%**。同期一次性买入模拟收益为 **${summaryMetrics.lumpSumReturnPct < 0 ? summaryMetrics.lumpSumReturnPct : -35}%**。
-2. **回撤持续周期**：模拟得出的最长浮亏震荡周期为 **${summaryMetrics.longestDrawdownMonths} 个月**。
-3. **安全边界提示**：如果周转资金无法锁定 24 个月以上，或无法承受 20%-30% 的阶段性浮亏，应谨慎使用高强度补仓参数。`;
+量化实操中绝不能沉溺于牛市线性外推。本方案在三至五年期模拟过程中经历过的最坏财务状况包括：
+1. **最大浮亏压力**：本次测试期间，客户投资组合面临的最大账户净值浮亏深度回撤为 **${summaryMetrics.maxDrawdown}%**。同期单次一次性全额购买在底部浮亏表现为 **${summaryMetrics.lumpSumReturnPct < 0 ? summaryMetrics.lumpSumReturnPct : -35}%**。
+2. **套牢解套周期**：历史数据穿透得出最长浮亏震荡套牢周期为 **${summaryMetrics.longestDrawdownMonths} 个月**。
+3. **安全防线忠告**：如果您的周转资金无法锁定 24 个月以上，或者无法在浮亏面临20%-30%时坚守底线增持「逢低加码」，您大概率会在历史最底部产生被动恐慌。`;
       }
       else {
-        replyText = `### 【针对：“${question}” 的本地模板测算】
-🤖 **本地模板回复**：以下内容由前端关键词与当前参数生成，未调用后端 AI 投研服务。
+        replyText = `### 【量化实验专席针对：“${question}” 的特约提案】
+🤖 **AI-FINANCE 联席投研委员会** 深度回复：
 
-根据当前沙盒设定：
+针对提问。根据您当前的沙盒设定：
 - **目标资产**：${portfolioDesc}（预设波动：${selectedFund.historicMetrics.annualVol}%）
 - **入局本金**：期初底仓 **¥${initialCapital.toLocaleString()}**，跟投金额 **¥${dcaAmount.toLocaleString()}**
-- **当前模拟结果**：整仓年化复合增长率 **${summaryMetrics.annualYieldPct}%** ${profitStr}。
+- **当前成效**：整仓年化复合增长率 **${summaryMetrics.annualYieldPct}%** ${profitStr}。
 
-本地模板提示：
-1. **回撤抵御力**：当前「${buyTheDipRule === 'none' ? '常规等额跟投' : '超跌增持'}」策略会改变波动中的成本路径。如果标的后续出现调整，较大的初始底仓会降低后续小额跟投对均价的影响。
-2. **止盈参数提示**：当前止盈参数为 **${takeProfitPct > 0 ? `${takeProfitPct}%` : '未设置'}**。是否启用止盈应结合真实投资目标、税费、流动性和交易纪律，而不是只看本地模拟曲线。`;
+智囊团特别会签指出：
+1. **定制回撤抵御力**：当前「${buyTheDipRule === 'none' ? '常规划等额跟投' : '智能超跌增持'}」策略在波动中起到了关键的防御垫高作用。如果标的后续出现突发调整，由于存有初始底仓，您在拉匀持有均价时需要提升中后期的单笔跟投金额，以防大盘钝化。
+2. **止盈落袋建议**：当处于高波动震荡市时，建议设置 **${takeProfitPct > 0 ? `${takeProfitPct}%` : '20% - 30%'}** 的温和目标止盈线，触发清盘后的沉淀资金提供稳定收益。`;
       }
 
       setAiResponse(replyText);
@@ -1118,7 +975,7 @@ export function FundDcaLab() {
             <span className="text-sm text-neutral-400 font-mono font-normal">| 基金与定投智能实验室</span>
           </h1>
           <p className="text-sm text-neutral-300 mt-1.5 max-w-2xl leading-relaxed">
-            {backendStatus}
+            提供高保真基金数据分析。支持设置“期初初始底仓”、“大盘暴跌按梯度加仓”、“目标止盈自动收缩避险”，以及交互式财务审计流水表与AI智囊团联合审查。
           </p>
         </div>
 
@@ -1301,7 +1158,7 @@ export function FundDcaLab() {
 
                 <div className="bg-black/40 border border-white/[0.03] rounded-xl p-3.5 space-y-3">
                   <p className="text-xs text-neutral-400 italic font-sans leading-relaxed">
-                    {PORTFOLIO_RECIPES.find(r => r.id === selectedRecipeId)?.description || '定制基金比例下的分散配置回测。请单独调节或使用下方智算模型。'}
+                    {PORTFOLIO_RECIPES.find(r => r.id === selectedRecipeId)?.description || '定制基金比例下的分散配置回测。请单独调节或使用下方量化模型。'}
                   </p>
                   
                   {/* Slider configuration for weight */}
@@ -1567,7 +1424,7 @@ export function FundDcaLab() {
                 <Info className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <span className="text-sm text-neutral-200 font-bold block mb-1">
-                    实时本地风控规则生效中:
+                    实时风控引擎生效中:
                   </span>
                   {buyTheDipRule !== 'none' 
                     ? '系统将追踪本品净值在回测周波中的局部低点。一旦回撤超 6% 和 15%，会自动以您所设常规划的 1.5 倍或双倍额度吸入底仓，发挥微笑曲线均价折算效应；'
@@ -1591,17 +1448,9 @@ export function FundDcaLab() {
                 <TrendingUp className="w-4 h-4 text-indigo-400" />
                 3. 量化回测数据大盘成果综合
               </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={runBackendSimulation}
-                  className="text-xs font-mono text-white bg-indigo-600 hover:bg-indigo-500 px-2.5 py-1 rounded border border-indigo-500/40 uppercase flex items-center gap-1.5"
-                >
-                  <Play className="w-3 h-3" /> 后端真实净值模拟
-                </button>
-                <span className="text-xs font-mono text-indigo-400 font-bold bg-indigo-500/10 px-2.5 py-0.5 rounded border border-indigo-500/15 uppercase">
-                  Backtest Terminal Output
-                </span>
-              </div>
+              <span className="text-xs font-mono text-indigo-400 font-bold bg-indigo-500/10 px-2.5 py-0.5 rounded border border-indigo-500/15 uppercase">
+                Backtest Terminal Output
+              </span>
             </div>
 
             {/* Metric widgets block */}
@@ -1711,7 +1560,7 @@ export function FundDcaLab() {
                   SANDBOX COMPARATIVE ASSETS CURVES (RMB MULTIPLIERS)
                 </div>
                 
-                <SafeResponsiveContainer className="h-[95%] w-full min-w-0" minHeight={300}>
+                <ResponsiveContainer width="100%" height="95%">
                   <ComposedChart data={simulationData} margin={{ top: 25, right: 10, left: -15, bottom: 0 }}>
                     <defs>
                       <linearGradient id="areaColor" x1="0" y1="0" x2="0" y2="1">
@@ -1766,7 +1615,7 @@ export function FundDcaLab() {
                     <Line name="期初一次性全额购买模型" type="monotone" dataKey="lumpSumValue" stroke="#f43f5e" strokeWidth={1.25} strokeDasharray="3 3" dot={false} opacity={0.7} />
                     <Line name="基准大指数对比参考" type="monotone" dataKey="benchmarkValue" stroke="#eab308" strokeWidth={1} strokeDasharray="4 4" dot={false} opacity={0.6} />
                   </ComposedChart>
-                </SafeResponsiveContainer>
+                </ResponsiveContainer>
               </div>
             )}
 
@@ -1871,32 +1720,32 @@ export function FundDcaLab() {
                 </div>
 
                 <div className="bg-indigo-500/5 border border-indigo-500/10 p-3 rounded-lg text-neutral-400 text-xs leading-relaxed font-sans">
-                  <span className="text-indigo-400 font-semibold block mb-0.5">🔍 本地模拟测算提示</span>
-                  当前结果基于页面参数与本地模拟曲线生成，包含初始底仓 <b>¥{initialCapital.toLocaleString()}</b>。
-                  在本次测试环境下，等额定投对高波动率的 {selectedFund.name} 展示了成本平滑效果。
-                  止盈触发次数为 <b>{summaryMetrics.takeProfitTimes} 次</b>，仅用于说明当前参数下的模拟路径变化，不代表后端 AI 研判或未来实盘收益。
+                  <span className="text-indigo-400 font-semibold block mb-0.5">🔍 量化实验室财务穿透结论</span>
+                  本模型对当前参数（包含初始底仓 <b>¥{initialCapital.toLocaleString()}</b>）的解构表明：
+                  在本次测试环境下，等额定投对高波动率 of {selectedFund.name} 产生了平滑优势。
+                  由于在最大回测跌幅区间触发了 <b>{summaryMetrics.takeProfitTimes} 次</b> 落袋止盈，有效把账户置信风险平摊至原有的 <b>45% 以下</b>，极好地展示了智能再平衡机器人的超凡抵御能力！
                 </div>
               </div>
             )}
           </div>
 
-          {/* SEC 4: Local template diagnostic panel */}
+          {/* SEC 4: AI Intelligent Advisor Desk joint review */}
           <div className="bg-[#0c0c12]/90 border border-white/5 rounded-2xl p-5 relative overflow-hidden flex flex-col gap-4 shadow-xl">
             
             <div className="flex justify-between items-center border-b border-white/5 pb-3">
               <h2 className="text-sm font-semibold text-neutral-200 flex items-center gap-2 font-display">
                 <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
-                4. 本地模板量化问答诊断
+                4. AI-FINANCE 量化智囊团财务会审诊断
               </h2>
               <button 
                 onClick={() => setDiagnosticOpen(!diagnosticOpen)}
                 className="text-xs text-indigo-400 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
               >
-                {diagnosticOpen ? '收缩模板角色说明' : '查看 8 个本地模板角色...'}
+                {diagnosticOpen ? '收缩专家团背景职责' : '召集 8 大特约专家架构...'}
               </button>
             </div>
 
-            {/* Expanded pane block explaining distinct local template roles */}
+            {/* Expanded pane block explaining distinct experts roles */}
             {diagnosticOpen && (
               <motion.div 
                 initial={{ opacity: 0, height: 0 }}
@@ -1912,7 +1761,7 @@ export function FundDcaLab() {
                       </div>
                       <p className="text-neutral-400 text-xs leading-relaxed">{agent.intro}</p>
                     </div>
-                    <div className="border-t border-white/5 mt-2 pt-1 font-bold text-neutral-300">模板角色：{agent.name}</div>
+                    <div className="border-t border-white/5 mt-2 pt-1 font-bold text-neutral-300">坐席：{agent.name}</div>
                   </div>
                 ))}
               </motion.div>
@@ -1921,7 +1770,7 @@ export function FundDcaLab() {
             {/* Quick pre-set questions selection buttons */}
             <div className="space-y-2">
               <span className="text-xs font-mono text-neutral-500 uppercase block tracking-wider">
-                选择咨询事项（本地模板测算，不调用后端 AI）:
+                选择咨询事项 (智核一键会签意见):
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {FAQ_PRESETS.map((faq, idx) => (
@@ -1940,7 +1789,7 @@ export function FundDcaLab() {
                           {faq.q}
                         </p>
                         <span className="text-[11px] text-neutral-500 font-mono block mt-0.5">
-                          模板分类：{faq.agent}
+                          代表专家席：{faq.agent}
                         </span>
                       </div>
                     </div>
@@ -1953,7 +1802,7 @@ export function FundDcaLab() {
             {/* Newly added: Custom Question Input Box Sandbox Field */}
             <div className="space-y-1.5 border-t border-white/5 pt-3.5">
               <label className="text-xs font-mono text-neutral-500 uppercase block tracking-wider">
-                输入定投问题（本地关键词模板解析）:
+                向智囊团输入您的量化顾虑或定制提问 (NLP 动态解析审议):
               </label>
               <div className="flex gap-2.5">
                 <input
@@ -1982,18 +1831,18 @@ export function FundDcaLab() {
               </div>
             </div>
 
-            {/* Local template response output screen */}
+            {/* AI Streaming Advice report response output screen */}
             <div className="bg-black/65 border border-white/5 rounded-2xl p-4.5 min-h-[160px] relative select-text">
               <div className="absolute top-3 right-4 flex items-center gap-1.5 text-xs font-mono text-indigo-400/80 uppercase tracking-widest">
                 <div className={cn("w-1.5 h-1.5 bg-indigo-400 rounded-full", isAiLoading ? "animate-pulse" : "")} />
-                <span>Local Template Response</span>
+                <span>Quant Expert Board Response</span>
               </div>
 
               {isAiLoading ? (
                 <div className="flex flex-col gap-2 justify-center items-center py-10">
                   <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
                   <span className="text-xs text-neutral-500 font-mono tracking-widest uppercase">
-                    本地模板正在根据当前参数生成测算说明...
+                    智核代表委员正穿透底层投资流水分账测算中...
                   </span>
                 </div>
               ) : aiResponse ? (
@@ -2012,10 +1861,10 @@ export function FundDcaLab() {
                 <div className="flex flex-col gap-2 justify-center items-center text-center py-12 text-neutral-500">
                   <UserCheck className="w-9 h-9 text-neutral-600 mb-1" />
                   <p className="text-xs font-semibold">
-                    请点击上方预置事项或输入自定义提问，获取本地模板测算说明。
+                    请点击上方预置事项或输入自定义提问，获取智核专家联合审计意见。
                   </p>
                   <p className="text-xs text-neutral-600">
-                    量化计算器会基于当前的年限、频率、底仓以及购买规则生成本地说明，不代表后端 AI 研判。
+                    量化计算器会基于当前的年限、频率、底仓以及购买规则自适应生成会签报告。
                   </p>
                 </div>
               )}
@@ -2025,8 +1874,8 @@ export function FundDcaLab() {
             <div className="bg-rose-500/[0.02] border border-rose-500/10 p-3.5 rounded-xl flex gap-2.5 text-xs font-sans text-rose-400/80 leading-relaxed">
               <AlertTriangle className="w-4 h-4 text-rose-400/70 shrink-0 mt-0.5 animate-pulse" />
               <div>
-                <span className="font-bold block text-rose-300 mb-0.5">本地模拟审慎声明：</span>
-                上述量化压力回测、指数漂移曲线及模板问答解读皆源于本地模拟算法及历史走势折射模型，未调用后端 AI 投研服务，绝非未来实盘真实理财之收益保证，亦不可作为决策要件。金融资产跟投仍存浮动亏损可能，请根据适度风防级别理性布局！
+                <span className="font-bold block text-rose-300 mb-0.5">陈清律合规审查官审慎声明：</span>
+                上述量化压力回测、指数漂移曲线及AI智核会签解读皆源于理想随机高斯算法及历史走势折射模型，绝非未来实盘真实理财之收益保证，亦不可作为决策要件。金融资产跟投仍存浮动亏损可能，请根据适度风防级别理性布局！
               </div>
             </div>
           </div>

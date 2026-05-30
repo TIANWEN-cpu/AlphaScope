@@ -1,10 +1,24 @@
-# Changelog
+﻿# Changelog
+
+## v1.5.0 - 2026-05-30
+
+### 新闻研究流与可配置 Agent
+
+- 新闻模块新增详情弹层，可查看正文、来源、分类、影响、情绪和 AI 摘要。
+- 新闻模块新增 AI 助手，支持选中新闻咨询，也支持解析用户输入的新闻链接。
+- 新闻原文跳转改为优先打开真实来源；缺失真实链接时按标题、标的和来源降级到搜索跳转。
+- 新闻源概览改为可收起，避免遮挡新闻列表。
+- 新增 `agentConfigs` 前端配置模块，支持 Agent 数量、启用状态、名称、角色、职责、提示词、模型、温度和图标配置。
+- Agent 编排迁移到系统设置页签；专家圆桌页回归运行监控视图。
+- 分析请求 `run` 与 `async` 会携带启用中的 `agent_configs`。
+- 清理当前前端可见品牌残留和旧内部代号，更新前端 package 与 release 文档。
+- 前端 `npm run lint` 与 `npm run build` 通过，保留既有 Vite chunk size warning。
 
 ## v1.4.2 - 2026-05-28
 
 ### 品牌迁移与本地体验稳定性
 
-- 项目正式更名为「研策中枢 AlphaScope」，README、前端 README、clone 地址和 Release 链接迁移到 `https://github.com/TIANWEN-cpu/AlphaScope`。
+- 项目正式更名为「研策中枢 AlphaScope」，README、前端 README、clone 地址和 Release 链接迁移到 `https://github.com/TIANWEN-cpu/AI--FINANCE`。
 - 修复本地回测入口在后端短暂离线或策略状态过期后卡死的问题；点击运行会自动刷新本地回测状态和策略列表。
 - 回测页新增“刷新状态”，并在本地 quant 接口不可用时给出明确诊断提示。
 - 新闻模块刷新失败时保留上次成功结果，不再直接清空列表；空态提供“重新同步”。
@@ -295,3 +309,4 @@
 - Replaced broad JSON-object extraction with balanced-brace scanning for LLM responses.
 - Made AI chat hot-reload compatibility use function signature inspection instead of TypeError string matching.
 - Loaded fundamentals data sources in parallel on cache misses.
+

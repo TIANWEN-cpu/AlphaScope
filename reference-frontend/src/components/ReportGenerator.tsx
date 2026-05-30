@@ -59,7 +59,7 @@ export function ReportGenerator() {
     },
     {
       id: 'quant',
-      title: '三、 金策量化多因子测绘 (Quantitative Factor Evaluation)',
+      title: '三、 量化多因子测绘 (Quantitative Factor Evaluation)',
       content: '因子动量归因分析表明，该股票近期在【高避险红利因子】和【资产报酬率(RSI)超跌反弹因子】上暴露度最高。技术层面上，本标的在遭遇1460元箱体大级别底支撑后，成交量显著收缩，并在MA20均线构建稳健整编上升信道，MACD零轴下方底背离成立，出现典型的阻力翻转底托盘多头回撤终极信号。'
     },
     {
@@ -315,7 +315,7 @@ export function ReportGenerator() {
                       <div className="text-center pb-6 border-b border-white/5 flex flex-col items-center gap-2 select-none">
                         <Award className="w-9 h-9 text-indigo-400 opacity-60" />
                         <h1 className="text-xl font-display font-bold text-white tracking-widest uppercase">
-                          金策投研体系正式上市公司评测书 (AI-FINANCIAL NOTE)
+                          AI 投研体系正式上市公司评测书 (AI-FINANCIAL NOTE)
                         </h1>
                         <p className="text-[10px] font-mono tracking-widest text-[#6366f1] font-semibold">
                           编号: GZ-MT-2026-0524 • 授信主体: 核心分析助理网络
@@ -374,7 +374,7 @@ export function ReportGenerator() {
                       {/* Disclaimers & Footwear signature */}
                       <div className="border-t border-white/5 pt-6 text-[9px] text-neutral-500 leading-normal text-left font-mono">
                         <strong className="text-neutral-400 block mb-1">合规特别披露与风险保障免责:</strong>
-                        本研报系由金策 AI 模拟宏观及动量多套件助理对特定市场信源与因子协方差进行中性自动化排版编排，绝不构成对于任何个体用户具体可承载资金敞口的最终投资决议引荐。证券投资面临客观回撤与极端流动性波动隐患，用户据本草案进行操作而诱发之商业亏损须自负其责。
+                        本研报系由 AI 模拟宏观及动量多套件助理对特定市场信源与因子协方差进行中性自动化排版编排，绝不构成对于任何个体用户具体可承载资金敞口的最终投资决议引荐。证券投资面临客观回撤与极端流动性波动隐患，用户据本草案进行操作而诱发之商业亏损须自负其责。
                       </div>
 
                     </div>

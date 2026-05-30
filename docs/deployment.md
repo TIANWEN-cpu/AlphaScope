@@ -1,4 +1,4 @@
-# 部署文档
+﻿# 部署文档
 
 ## 快速启动
 
@@ -6,8 +6,8 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/TIANWEN-cpu/AlphaScope.git
-cd AlphaScope
+git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git
+cd AI--FINANCE
 
 # 2. 安装依赖
 pip install -r requirements.txt
@@ -134,3 +134,4 @@ make web-build   # 构建 Vite React 前端
 make docker-up   # Docker 启动
 make check       # lint + test
 ```
+

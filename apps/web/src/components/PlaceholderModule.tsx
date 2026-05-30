@@ -1,8 +1,10 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Activity, Cpu, Code2, Database } from 'lucide-react';
+import { Activity, ArrowLeft, CheckCircle2, Cpu } from 'lucide-react';
 
 export const PlaceholderModule: React.FC<{ tab: string }> = ({ tab }) => {
+  const label = tab === 'workbench' ? '对话式研究' : tab;
+
   return (
     <motion.div 
       initial={{ opacity: 0, scale: 0.98 }}
@@ -33,31 +35,31 @@ export const PlaceholderModule: React.FC<{ tab: string }> = ({ tab }) => {
           </motion.div>
         </div>
 
-        <h2 className="text-3xl font-display font-medium text-white mb-2 tracking-tight uppercase">
-          {tab} Module
+        <h2 className="text-3xl font-display font-medium text-white mb-2 tracking-tight">
+          {label}
         </h2>
         <h3 className="text-[11px] uppercase font-mono tracking-[0.2em] text-indigo-400 mb-6 flex items-center gap-2 justify-center">
           <Activity className="w-3.5 h-3.5" />
-          Under Construction
+          模块正在接入
         </h3>
 
         <p className="text-sm text-neutral-400 leading-relaxed max-w-md mx-auto mb-8">
-          The <span className="text-white font-medium">{tab.toUpperCase()}</span> module is currently disabled in your access tier or undergoing infrastructure upgrades. 
+          该入口已纳入产品路线，但当前副本前端还没有独立页面。你可以先从左侧进入“对话式研究”“K线/多模态解析”或“研究报告生成”继续工作。
         </p>
 
         <div className="grid grid-cols-2 gap-4 w-full font-mono text-[10px]">
           <div className="flex flex-col gap-1 p-4 bg-black/20 rounded-xl border border-white/5 text-left transition-colors hover:bg-black/40">
-            <span className="text-neutral-500">SYSTEM STATUS</span>
+            <span className="text-neutral-500">页面状态</span>
             <span className="text-emerald-400 flex items-center gap-1.5 font-medium text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.5)] animate-pulse"></span>
-              ONLINE
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              已识别
             </span>
           </div>
           <div className="flex flex-col gap-1 p-4 bg-black/20 rounded-xl border border-white/5 text-left transition-colors hover:bg-black/40">
-            <span className="text-neutral-500">API GATEWAY</span>
+            <span className="text-neutral-500">建议动作</span>
             <span className="text-amber-500 flex items-center gap-1.5 font-medium text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]"></span>
-              PENDING
+              <ArrowLeft className="w-3.5 h-3.5" />
+              使用左侧导航
             </span>
           </div>
         </div>

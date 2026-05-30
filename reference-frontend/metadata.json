@@ -1,6 +1,6 @@
 {
   "name": "AI Finance Workbench",
-  "description": "Multi-agent quantitative financial analysis workspace integrating AI-Finance strategies with Jin-ce-zhi-suan's private data backtesting and multi-agent hierarchy.",
+  "description": "Multi-agent financial research workspace with news intelligence, configurable expert agents, reporting, backtesting, portfolio and fund analysis modules.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

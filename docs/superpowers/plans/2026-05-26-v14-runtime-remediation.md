@@ -1,4 +1,4 @@
-# v1.4 Runtime Remediation Implementation Plan
+﻿# v1.4 Runtime Remediation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -156,7 +156,7 @@ Co-Authored-By: SuLi <3508137206@qq.com>
 
 ---
 
-### Task 2: Make quant Jince list endpoints degrade consistently
+### Task 2: Make quant quant list endpoints degrade consistently
 
 **Files:**
 - Modify: `backend/api/quant.py:96-183`
@@ -168,18 +168,18 @@ In `tests/test_quant_api.py`, add tests under the existing quant API classes:
 
 ```python
     @pytest.mark.anyio
-    async def test_list_strategies_degrades_when_jince_unavailable(self, client):
-        from backend.integrations.jince.errors import JinceConnectionError
+    async def test_list_strategies_degrades_when_Quant_unavailable(self, client):
+        from backend.integrations.Quant.errors import QuantConnectionError
 
         mock_service = AsyncMock()
-        mock_service.list_strategies.side_effect = JinceConnectionError("Jince HTTP 503")
+        mock_service.list_strategies.side_effect = QuantConnectionError("Quant HTTP 503")
         with patch("backend.api.quant._get_service", return_value=mock_service):
             resp = await client.get("/api/quant/strategies")
 
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert data["error_code"] == "JINCE_DISCONNECTED"
+        assert data["error_code"] == "Quant_DISCONNECTED"
         assert data["data"]["strategies"] == []
         assert data["data"]["degraded"] is True
         assert data["data"]["source_status"] == "unavailable"
@@ -189,18 +189,18 @@ And:
 
 ```python
     @pytest.mark.anyio
-    async def test_list_runs_degrades_when_jince_unavailable(self, client):
-        from backend.integrations.jince.errors import JinceConnectionError
+    async def test_list_runs_degrades_when_Quant_unavailable(self, client):
+        from backend.integrations.Quant.errors import QuantConnectionError
 
         mock_service = AsyncMock()
-        mock_service.list_runs.side_effect = JinceConnectionError("Jince HTTP 503")
+        mock_service.list_runs.side_effect = QuantConnectionError("Quant HTTP 503")
         with patch("backend.api.quant._get_service", return_value=mock_service):
             resp = await client.get("/api/quant/runs")
 
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert data["error_code"] == "JINCE_DISCONNECTED"
+        assert data["error_code"] == "Quant_DISCONNECTED"
         assert data["data"]["runs"] == []
         assert data["data"]["degraded"] is True
         assert data["data"]["source_status"] == "unavailable"
@@ -218,15 +218,15 @@ Expected: new tests FAIL because endpoints currently return `success=false`.
 
 - [ ] **Step 3: Implement degraded helper**
 
-In `backend/api/quant.py`, replace `_jince_failure_response()` with:
+In `backend/api/quant.py`, replace `_Quant_failure_response()` with:
 
 ```python
-def _jince_failure_response(error: JinceError, data: dict[str, Any] | None = None):
-    """Return a structured degraded API response for unavailable Jince operations."""
+def _Quant_failure_response(error: QuantError, data: dict[str, Any] | None = None):
+    """Return a structured degraded API response for unavailable quant operations."""
     error_code = (
-        "JINCE_DISCONNECTED"
-        if isinstance(error, JinceConnectionError)
-        else getattr(error, "code", "JINCE_ERROR")
+        "Quant_DISCONNECTED"
+        if isinstance(error, QuantConnectionError)
+        else getattr(error, "code", "Quant_ERROR")
     )
     payload = data or {}
     payload["degraded"] = True
@@ -256,7 +256,7 @@ Expected: PASS.
 ```powershell
 git -C "D:/AI-Finance/AI--FINANCE-v1.4" add backend/api/quant.py tests/test_quant_api.py
 git -C "D:/AI-Finance/AI--FINANCE-v1.4" commit -m @'
-fix: degrade quant list endpoints when Jince is offline
+fix: degrade quant list endpoints when quant engine is offline
 
 Co-Authored-By: SuLi <3508137206@qq.com>
 '@
@@ -474,10 +474,10 @@ Replace the `grainy-gradients.vercel.app/noise.svg` div in `Backtesting.tsx` wit
 
 - [ ] **Step 3: Add quant offline copy**
 
-In `Backtesting.tsx`, locate where `statusText` or `connected` status is displayed. Ensure when status contains Jince disconnected/degraded, the UI includes this exact user-facing text:
+In `Backtesting.tsx`, locate where `statusText` or `connected` status is displayed. Ensure when status contains quant engine disconnected/degraded, the UI includes this exact user-facing text:
 
 ```text
-Jince 量化引擎离线，当前收益曲线与指标为本地演示样例。
+量化引擎离线，当前收益曲线与指标为本地演示样例。
 ```
 
 Use existing state; do not add a new backend call.
@@ -566,7 +566,7 @@ foreach($ep in $endpoints){
 Expected:
 - fund-flow may still be degraded but clearly says so.
 - factors include `degraded_inputs` / `missing_dimensions` when fund-flow is unavailable.
-- quant list endpoints return `success=true` with degraded empty lists when Jince is offline.
+- quant list endpoints return `success=true` with degraded empty lists when quant engine is offline.
 - fund search still returns 000001.
 
 - [ ] **Step 3: Verify frontend build**
@@ -606,3 +606,4 @@ Report:
 - Spec coverage: covers fund-flow display, factor fund-flow bug, report quality/scrolling, quant offline degradation, demo labeling, 404 asset removal, and verification. It intentionally does not solve Chinese mojibake or real provider availability in this pass.
 - Placeholder scan: no TBD/TODO placeholders remain.
 - Type consistency: backend uses existing `ApiResponse`; frontend uses existing `Record<string, unknown>` patterns and string-valued cards.
+

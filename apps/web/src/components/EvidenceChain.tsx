@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Bookmark, 
@@ -18,7 +18,8 @@ import {
   Trash2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { api, EvidenceRecord, normalizeDisplayError } from '../lib/api';
+import { STOCK_UNIVERSE, StockTarget, findStockTarget, formatStockLabel } from '../lib/stocks';
+import { dispatchStockSelected, getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
 
 interface EvidenceNode {
   id: string;
@@ -29,153 +30,78 @@ interface EvidenceNode {
   time: string;
   content: string;
   verifiedBy: string;
-  localOnly?: boolean;
 }
 
-interface EvidenceBundle {
-  claim: string;
-  evidence?: EvidenceRecord[];
-  confidence?: number;
-  source_count?: number;
-  trust_score?: number;
-  decay_factor?: number;
-  contradictions?: Array<string | Record<string, unknown>>;
+function buildEvidenceNodes(stock: StockTarget): EvidenceNode[] {
+  const isChip = /半导体|存储|芯片|光模块/i.test(stock.sector) || stock.symbol.startsWith('301666');
+  const isConsumption = /白酒|消费/i.test(stock.sector);
+  const shortSymbol = stock.symbol.split('.')[0];
+
+  return [
+    {
+      id: `${shortSymbol}-fundamental-1`,
+      title: isChip ? `${stock.name} 研发投入与存储控制器产品线构成核心壁垒` : isConsumption ? `${stock.name} 高毛利与品牌渠道构成核心护城河` : `${stock.name} 财务质量与主营韧性进入核心观察区`,
+      pillar: 'fundamental',
+      weight: isChip ? 8 : 9,
+      source: `${stock.name} ${shortSymbol} 定期报告与招股说明书摘录`,
+      time: '2026-05-22 17:30',
+      content: isChip
+        ? `${stock.name} 所在的${stock.sector}赛道对固件、主控算法和客户认证周期依赖较强，需重点核验研发费用率、存货周转和大客户订单稳定性。`
+        : `${stock.name} 当前核心论据来自主营盈利质量、现金流覆盖和渠道去化，需与最新公告、经销商库存和行业价格带交叉验证。`,
+      verifiedBy: '基本面分析助手'
+    },
+    {
+      id: `${shortSymbol}-fundamental-2`,
+      title: isChip ? '国产替代与企业级存储需求为中期成长弹性提供支撑' : '收入结构变化与渠道效率改善提供利润弹性',
+      pillar: 'fundamental',
+      weight: 8,
+      source: `${stock.name} 产业链调研纪要`,
+      time: '2026-05-23 10:15',
+      content: isChip
+        ? '企业级 SSD、工业控制和信创服务器链条的订单节奏决定收入兑现速度，需持续跟踪渠道库存、客户认证和价格竞争。'
+        : '直营、重点客户或高毛利产品占比提升会改善单品利润率，但需要与行业需求和竞品价格共同核验。',
+      verifiedBy: '基本面分析助手'
+    },
+    {
+      id: `${shortSymbol}-quant-1`,
+      title: `${stock.symbol} 量价波动进入短周期技术确认区`,
+      pillar: 'quant',
+      weight: 7,
+      source: `${stock.symbol} 行情多周期量价归因指标`,
+      time: '2026-05-23 12:44',
+      content: '短周期均线、成交量和换手率同步抬升时，才可把题材热度转化为趋势确认；若放量冲高后回落，需要降低权重。',
+      verifiedBy: '量化策略专家'
+    },
+    {
+      id: `${shortSymbol}-sentiment-1`,
+      title: isChip ? '大基金与国产算力链热度对半导体存储形成情绪映射' : '行业政策与消费复苏预期影响风险偏好',
+      pillar: 'sentiment',
+      weight: isChip ? 8 : 7,
+      source: `${stock.sector} 主题热度与舆情监测`,
+      time: '2026-05-23 14:30',
+      content: isChip
+        ? '大基金三期、AI 服务器和数据中心扩容预期会推升半导体存储关注度，但主题交易需警惕估值与业绩兑现错配。'
+        : '宏观风险偏好和行业景气会影响估值中枢，需避免把短期情绪直接等同为基本面改善。',
+      verifiedBy: '宏观趋势分析师'
+    },
+    {
+      id: `${shortSymbol}-liquidity-1`,
+      title: `${stock.name} 主力资金与换手结构需持续跟踪`,
+      pillar: 'liquidity',
+      weight: 8,
+      source: `${stock.symbol} 交易所盘后资金与龙虎榜跟踪`,
+      time: '2026-05-23 15:10',
+      content: '若机构席位、融资余额和大单净流入共同改善，则流动性论据权重上调；若仅为短线游资拉升，则纳入待核验观察。',
+      verifiedBy: '数据情报收集员'
+    }
+  ];
 }
 
-interface EvidenceChainResult {
-  bundles: EvidenceBundle[];
-  totalSources: number;
-  averageConfidence: number;
-  contradictionCount: number;
-}
-
-interface EvidenceChainProps {
-  symbol?: string;
-  stockName?: string;
-}
-
-const pillarFromEvidenceType = (type?: string): EvidenceNode['pillar'] => {
-  const value = (type || '').toLowerCase();
-  if (value.includes('price') || value.includes('quant')) return 'quant';
-  if (value.includes('news') || value.includes('announcement')) return 'sentiment';
-  if (value.includes('fund_flow') || value.includes('liquidity')) return 'liquidity';
-  return 'fundamental';
-};
-
-const evidenceTypeFromPillar = (pillar: EvidenceNode['pillar']) => {
-  if (pillar === 'quant') return 'price';
-  if (pillar === 'sentiment') return 'news';
-  if (pillar === 'liquidity') return 'fund_flow';
-  return 'fundamental';
-};
-
-const formatPercent = (value?: number) => {
-  const num = Number(value ?? 0);
-  const normalized = Math.abs(num) <= 1 ? num * 100 : num;
-  return `${Math.round(normalized)}%`;
-};
-
-const normalizeEvidenceChainResult = (data: Record<string, unknown>): EvidenceChainResult => {
-  const rawBundles = Array.isArray(data.bundles) ? data.bundles : [];
-  const bundles = rawBundles.map((bundle) => bundle as EvidenceBundle);
-  const sourceTotal = bundles.reduce((sum, bundle) => {
-    const explicitCount = Number(bundle.source_count);
-    if (Number.isFinite(explicitCount) && explicitCount > 0) return sum + explicitCount;
-    return sum + (Array.isArray(bundle.evidence) ? bundle.evidence.length : 0);
-  }, 0);
-  const confidenceTotal = bundles.reduce((sum, bundle) => sum + Number(bundle.confidence || 0), 0);
-  const contradictionCount = bundles.reduce((sum, bundle) => (
-    sum + (Array.isArray(bundle.contradictions) ? bundle.contradictions.length : 0)
-  ), 0);
-
-  return {
-    bundles,
-    totalSources: sourceTotal,
-    averageConfidence: bundles.length ? confidenceTotal / bundles.length : 0,
-    contradictionCount,
-  };
-};
-
-const contradictionText = (item: string | Record<string, unknown>) => {
-  if (typeof item === 'string') return item;
-  return String(item.claim || item.summary || item.title || item.reason || JSON.stringify(item));
-};
-
-const mapEvidenceRecord = (item: EvidenceRecord): EvidenceNode => ({
-  id: item.id,
-  title: item.title,
-  pillar: pillarFromEvidenceType(item.evidence_type),
-  weight: Math.max(1, Math.round(Number(item.confidence || item.relevance || 0.7) * 10)),
-  source: item.source || '证据库',
-  time: String(item.data_date || item.created_at || new Date().toISOString()).replace('T', ' ').slice(0, 16),
-  content: item.content_summary || item.claim || item.title,
-  verifiedBy: item.evidence_type || '后端证据库',
-});
-
-const DEFAULT_NODES: EvidenceNode[] = [
-  {
-    id: '1',
-    title: '毛利率高居 91.8% 上游绝对议价权',
-    pillar: 'fundamental',
-    weight: 9,
-    source: '贵州茅台 2026-Q1 季度财报',
-    time: '2026-05-22 17:30',
-    content: '基本面分析师核对：最新销售净利润率达 51.2%历史同期高点位，主营现金返流比超 120%，确定为一级核心护城河论证。',
-    verifiedBy: '基本面分析助手',
-    localOnly: true
-  },
-  {
-    id: '2',
-    title: '直销与数字商城「i茅台」销售占比拔高至 44.1%',
-    pillar: 'fundamental',
-    weight: 8,
-    source: '直销配额去化数据监测研报',
-    time: '2026-05-23 10:15',
-    content: '相比传统低利润率代理商层级，直销配额每吨多释放逾30%附加值。直营商城活跃付费买家超历史均值高限，利润增量因子触发。',
-    verifiedBy: '基本面分析助手',
-    localOnly: true
-  },
-  {
-    id: '3',
-    title: 'MA5 均线上穿 MA10 均线确立技术金叉',
-    pillar: 'quant',
-    weight: 7,
-    source: '行情多周期量价归因指标',
-    time: '2026-05-23 12:44',
-    content: '自 1460 阶段重底盘起稳后，高频均线呈多头排列回归，MACD零轴下方底背离指标双针探底金叉抬升，符合量度超跌逆转判定。',
-    verifiedBy: '量化策略专家',
-    localOnly: true
-  },
-  {
-    id: '4',
-    title: '大基金三期 3440 亿落地促发科技及大容量股情绪底托盘',
-    pillar: 'sentiment',
-    weight: 8,
-    source: '大基金三期落地事件另类舆情监测',
-    time: '2026-05-23 14:30',
-    content: '虽然并非直接入主食品饮料，但作为万亿级别国家资金底座催化，成功逆转了此前低迷不振的流动性挤压，风险溢价（RP）因风险偏好骤升而降低。',
-    verifiedBy: '宏观趋势分析师',
-    localOnly: true
-  },
-  {
-    id: '5',
-    title: '北向及中长周期配置型外资连续四个交易日单边净买入',
-    pillar: 'liquidity',
-    weight: 8,
-    source: '交易所盘末及北上主板跨境透视',
-    time: '2026-05-23 15:10',
-    content: '北上主力配置方向中，上证蓝筹红利名录买进重仓茅台、招行居于前三，中单与超大单主力呈现同步多头的坚决吸筹，非中小散户游资出击。',
-    verifiedBy: '数据情报收集员',
-    localOnly: true
-  }
-];
-
-export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }: EvidenceChainProps) {
-  const [evidenceNodes, setEvidenceNodes] = useState<EvidenceNode[]>([]);
-  const [selectedStock, setSelectedStock] = useState(`${stockName} (${symbol})`);
+export function EvidenceChain() {
+  const initialStock = getPersistedStock() ?? STOCK_UNIVERSE[0];
+  const [selectedTarget, setSelectedTarget] = useState<StockTarget>(initialStock);
+  const [customNodes, setCustomNodes] = useState<EvidenceNode[]>([]);
   const [selectedNode, setSelectedNode] = useState<EvidenceNode | null>(null);
-  const [statusText, setStatusText] = useState('证据链后端待同步');
-  const [chainResult, setChainResult] = useState<EvidenceChainResult | null>(null);
   
   // Custom new node states
   const [isAdding, setIsAdding] = useState(false);
@@ -184,38 +110,26 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
   const [newWeight, setNewWeight] = useState(7);
   const [newSource, setNewSource] = useState('财联社/Wind 精梳');
   const [newContent, setNewContent] = useState('');
-  const targetSymbol = selectedStock.match(/\d{5,6}/)?.[0] || symbol;
+
+  const selectedStock = formatStockLabel(selectedTarget);
+  const generatedNodes = useMemo(() => buildEvidenceNodes(selectedTarget), [selectedTarget]);
+  const evidenceNodes = useMemo(() => [...customNodes, ...generatedNodes], [customNodes, generatedNodes]);
+  const stockOptions = useMemo(
+    () => [selectedTarget, ...STOCK_UNIVERSE].filter((stock, index, list) => (
+      list.findIndex((item) => item.symbol === stock.symbol) === index
+    )),
+    [selectedTarget],
+  );
 
   useEffect(() => {
-    setSelectedStock(`${stockName} (${symbol})`);
-  }, [symbol, stockName]);
+    const next = evidenceNodes[0] ?? null;
+    setSelectedNode((current) => current && evidenceNodes.some((node) => node.id === current.id) ? current : next);
+  }, [evidenceNodes]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadEvidence() {
-      setStatusText(`正在同步 ${selectedStock} 后端证据库...`);
-      const result = await api.evidenceList(targetSymbol, 80);
-      if (cancelled) return;
-
-      if (result.success && result.data?.evidence?.length) {
-        const nodes = result.data.evidence.map(mapEvidenceRecord);
-        setEvidenceNodes(nodes);
-        setSelectedNode(nodes[0] || null);
-        setStatusText(`已接入 ${nodes.length} 条持久化证据`);
-      } else {
-        setEvidenceNodes(DEFAULT_NODES);
-        setSelectedNode(DEFAULT_NODES[0]);
-        setChainResult(null);
-        setStatusText(normalizeDisplayError(result.error, '后端暂无证据；当前显示本地预览样例，新增论据后会写入后端。'));
-      }
-    }
-
-    loadEvidence();
-    return () => {
-      cancelled = true;
-    };
-  }, [targetSymbol, selectedStock]);
+  useEffect(() => subscribeStockSelected(({ stock }) => {
+    setSelectedTarget(findStockTarget(stock.symbol) ?? stock);
+    setCustomNodes([]);
+  }), []);
 
   const pillars = [
     { id: 'fundamental', label: '基本面支撑 (Fundamental)', icon: FileText, color: 'border-rose-500/30 text-rose-450 bg-rose-500/5' },
@@ -224,23 +138,11 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
     { id: 'liquidity', label: '主力资金流 (Liquidity Flow)', icon: Coins, color: 'border-amber-500/30 text-amber-400 bg-amber-500/5' }
   ];
 
-  const handleAddEvidence = async (e: React.FormEvent) => {
+  const handleAddEvidence = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newContent.trim()) return;
 
-    const response = await api.evidenceCreate({
-      evidence_type: evidenceTypeFromPillar(newPillar),
-      title: newTitle,
-      source: newSource,
-      claim: newTitle,
-      content_summary: newContent,
-      symbols: [targetSymbol],
-      confidence: Number(newWeight) / 10,
-      relevance: Number(newWeight) / 10,
-      data_date: new Date().toISOString().slice(0, 10),
-    });
-
-    const newNode: EvidenceNode = response.success && response.data ? mapEvidenceRecord(response.data) : {
+    const newNode: EvidenceNode = {
       id: Date.now().toString(),
       title: newTitle,
       pillar: newPillar,
@@ -248,65 +150,21 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
       source: newSource,
       time: new Date().toISOString().replace('T', ' ').substring(0, 16),
       content: newContent,
-      verifiedBy: '人工审计分析师',
-      localOnly: true
+      verifiedBy: '人工审计分析师'
     };
 
-    setEvidenceNodes(prev => [newNode, ...prev]);
+    setCustomNodes(prev => [newNode, ...prev]);
     setSelectedNode(newNode);
-    setStatusText(response.success ? '证据已写入后端证据库' : normalizeDisplayError(response.error, '后端写入失败，已在当前会话临时保留'));
     setNewTitle('');
     setNewContent('');
     setIsAdding(false);
   };
 
-  const handleDeleteEvidence = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteEvidence = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const node = evidenceNodes.find(item => item.id === id);
-    if (node?.localOnly) {
-      setEvidenceNodes(prev => prev.filter(item => item.id !== id));
-      if (selectedNode?.id === id) {
-        setSelectedNode(null);
-      }
-      setStatusText('本地样例论据已从当前视图移除');
-      return;
-    }
-    const response = await api.evidenceDelete(id);
-    if (response.success) {
-      setEvidenceNodes(prev => prev.filter(item => item.id !== id));
-      if (selectedNode?.id === id) {
-        setSelectedNode(null);
-      }
-      setStatusText('证据已从后端删除');
-    } else {
-      setStatusText(normalizeDisplayError(response.error, '证据删除失败'));
-    }
-  };
-
-  const handleBuildChain = async () => {
-    if (!evidenceNodes.length) {
-      setChainResult(null);
-      setStatusText('暂无证据可构建，请先追加论据或显式载入本地样例。');
-      return;
-    }
-    setStatusText('正在调用后端构建证据链...');
-    const payload = evidenceNodes.map(node => ({
-      id: node.id,
-      title: node.title,
-      evidence_type: evidenceTypeFromPillar(node.pillar),
-      source: node.source,
-      claim: node.title,
-      content_summary: node.content,
-      confidence: node.weight / 10,
-      symbols: [targetSymbol],
-    })) as EvidenceRecord[];
-    const result = await api.evidenceChain(payload);
-    if (result.success && result.data) {
-      setChainResult(normalizeEvidenceChainResult(result.data));
-      setStatusText('证据链构建完成');
-    } else {
-      setChainResult(null);
-      setStatusText(normalizeDisplayError(result.error, '证据链构建失败'));
+    setCustomNodes(prev => prev.filter(item => item.id !== id));
+    if (selectedNode?.id === id) {
+      setSelectedNode(null);
     }
   };
 
@@ -314,12 +172,6 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
   const totalWeight = evidenceNodes.reduce((sum, n) => sum + n.weight, 0);
   const maxPotentialWeight = evidenceNodes.length * 10;
   const compositeScore = Math.round(maxPotentialWeight > 0 ? (totalWeight / maxPotentialWeight) * 100 : 0);
-  const loadLocalSamples = () => {
-    setEvidenceNodes(DEFAULT_NODES);
-    setSelectedNode(DEFAULT_NODES[0]);
-    setChainResult(null);
-    setStatusText('已载入本地样例，仅用于界面演示，不代表后端证据库。');
-  };
 
   return (
     <motion.div 
@@ -334,24 +186,30 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 flex-shrink-0">
         <div>
           <h2 className="text-2xl font-display font-medium text-white flex items-center gap-3">
-            <Bookmark className="w-6.5 h-6.5 text-indigo-400" />
+            <Bookmark className="w-6 h-6 text-indigo-400" />
             投研决策证据链终端 (Evidence Chain Vault)
           </h2>
           <p className="text-xs text-neutral-500 mt-1.5 font-mono">
-            {statusText}
+            严格遵循可证伪性的学术级证据溯源面板，将专家圆桌论证、量化回测溢价与实时信源在链上织网对齐。
           </p>
         </div>
 
         {/* Global Stock Switcher */}
         <select 
-          value={selectedStock}
-          onChange={e => setSelectedStock(e.target.value)}
+          value={selectedTarget.symbol}
+          onChange={e => {
+            const stock = stockOptions.find((item) => item.symbol === e.target.value);
+            if (stock) {
+              setSelectedTarget(stock);
+              setCustomNodes([]);
+              dispatchStockSelected(stock, 'system');
+            }
+          }}
           className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500/50"
         >
-          <option value={selectedStock}>{selectedStock}</option>
-          <option value="贵州茅台 (600519.SH)">贵州茅台 (600519.SH)</option>
-          <option value="宁德时代 (300750.SZ)">宁德时代 (300750.SZ)</option>
-          <option value="招商银行 (600036.SH)">招商银行 (600036.SH)</option>
+          {stockOptions.map((stock) => (
+            <option key={stock.symbol} value={stock.symbol}>{formatStockLabel(stock)}</option>
+          ))}
         </select>
       </div>
 
@@ -388,35 +246,21 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
 
           <div>
             <h3 className="text-neutral-100 text-sm font-semibold tracking-wide">
-              {selectedStock} 证据覆盖与权重指数
+              {selectedStock} 论据综合看多溢价指数
             </h3>
             <p className="text-xs text-neutral-400 mt-1 max-w-xl">
-              当前视图包含 <strong className="text-white font-medium">{evidenceNodes.length} 件决策链单据</strong>。该指数只衡量已加载证据的覆盖与权重，不直接代表买卖评级。
+              结合当前已收集并由辅助Agent交叉认证的 <strong className="text-white font-medium">{evidenceNodes.length} 件决策链单据</strong>，复合多维数学模型给出的综合看多推荐置信度。
             </p>
           </div>
         </div>
 
         {/* Append node action toggle */}
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={handleBuildChain}
-            className="px-4.5 py-2.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-neutral-200 border border-white/10 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer"
-          >
-            <MessageSquare className="w-4 h-4" /> 构建证据链
-          </button>
-          <button 
-            onClick={() => setIsAdding(!isAdding)}
-            className="px-4.5 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> 追加核心决策论据
-          </button>
-          <button
-            onClick={loadLocalSamples}
-            className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-yellow-400/10 hover:bg-yellow-400/15 text-yellow-300 border border-yellow-400/20 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer"
-          >
-            刷新本地样例
-          </button>
-        </div>
+        <button 
+          onClick={() => setIsAdding(!isAdding)}
+          className="px-4.5 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer"
+        >
+          <Plus className="w-4 h-4" /> 追加核心决策论据
+        </button>
       </div>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-0 overflow-hidden">
@@ -507,7 +351,7 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
                   <button
                     type="button"
                     onClick={() => setIsAdding(false)}
-                    className="flex-1 py-3 text-xs rounded-xl bg-white/5 border border-white-5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    className="flex-1 py-3 text-xs rounded-xl bg-white/5 border border-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                   >
                     取消
                   </button>
@@ -569,11 +413,6 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
                             <span className="line-clamp-1 flex-1 pr-4">{node.title}</span>
                             
                             <div className="flex items-center gap-2 flex-shrink-0 shrink-0">
-                              {node.localOnly && (
-                                <span className="text-[9px] font-mono font-bold px-1 rounded bg-yellow-400/10 text-yellow-300 border border-yellow-400/20">
-                                  样例
-                                </span>
-                              )}
                               <span className="text-[9px] font-mono font-bold px-1 rounded bg-[#6366f1]/15 text-indigo-400 border border-[#6366f1]/10">
                                 W {node.weight}
                               </span>
@@ -613,60 +452,6 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 text-xs text-neutral-400 leading-relaxed pr-1 flex flex-col">
-            {chainResult && (
-              <div className="mb-4 space-y-3 rounded-xl border border-indigo-500/10 bg-indigo-500/5 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-mono uppercase tracking-widest text-indigo-300">证据链摘要</p>
-                    <p className="mt-1 text-[11px] text-neutral-400">后端已聚合论断、来源、可信度与矛盾项。</p>
-                  </div>
-                  <span className={cn(
-                    "rounded-md border px-2 py-1 text-[10px] font-mono",
-                    chainResult.contradictionCount
-                      ? "border-yellow-400/20 bg-yellow-400/10 text-yellow-300"
-                      : "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
-                  )}>
-                    {chainResult.contradictionCount ? `${chainResult.contradictionCount} 个矛盾项` : '未发现矛盾'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center font-mono">
-                  <div className="rounded-lg border border-white/5 bg-black/25 p-2">
-                    <span className="block text-[9px] text-neutral-500">论断束</span>
-                    <strong className="text-sm text-white">{chainResult.bundles.length}</strong>
-                  </div>
-                  <div className="rounded-lg border border-white/5 bg-black/25 p-2">
-                    <span className="block text-[9px] text-neutral-500">来源数</span>
-                    <strong className="text-sm text-white">{chainResult.totalSources}</strong>
-                  </div>
-                  <div className="rounded-lg border border-white/5 bg-black/25 p-2">
-                    <span className="block text-[9px] text-neutral-500">平均可信度</span>
-                    <strong className="text-sm text-white">{formatPercent(chainResult.averageConfidence)}</strong>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {chainResult.bundles.slice(0, 4).map((bundle, index) => (
-                    <div key={`${bundle.claim}-${index}`} className="rounded-lg border border-white/5 bg-black/25 p-2.5">
-                      <div className="mb-2 flex items-start justify-between gap-2">
-                        <p className="line-clamp-2 text-[11px] font-medium text-neutral-200">{bundle.claim || `证据束 ${index + 1}`}</p>
-                        <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-mono text-indigo-300">
-                          {formatPercent(bundle.confidence)}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-[9px] font-mono text-neutral-500">
-                        <span>来源 {bundle.source_count ?? bundle.evidence?.length ?? 0}</span>
-                        <span>可信评分 {Number(bundle.trust_score ?? 0).toFixed(2)}</span>
-                        <span>时效衰减 {Number(bundle.decay_factor ?? 0).toFixed(2)}</span>
-                      </div>
-                      {!!bundle.contradictions?.length && (
-                        <div className="mt-2 rounded border border-yellow-400/10 bg-yellow-400/5 p-2 text-[10px] text-yellow-200">
-                          {bundle.contradictions.slice(0, 2).map(contradictionText).join('；')}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
             <AnimatePresence mode="wait">
               {selectedNode ? (
                 <motion.div 
@@ -677,9 +462,6 @@ export function EvidenceChain({ symbol = '600519', stockName = '贵州茅台' }:
                   <div className="bg-black/30 border border-white/5 rounded-xl p-3.5">
                     <span className="text-[9px] font-mono uppercase tracking-widest text-neutral-500 block mb-1">选论论断</span>
                     <h4 className="text-sm text-neutral-200 font-semibold leading-relaxed text-left">{selectedNode.title}</h4>
-                    {selectedNode.localOnly && (
-                      <p className="mt-2 text-[10px] text-yellow-300 font-mono">本地样例，仅用于界面演示，未写入后端证据库。</p>
-                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-center text-[10px] font-mono">

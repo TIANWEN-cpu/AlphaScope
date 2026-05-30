@@ -1,4 +1,4 @@
-# 安装指南
+﻿# 安装指南
 
 ## 环境准备
 
@@ -48,15 +48,15 @@ npm --version
 
 ### 方式二：下载发布包
 
-1. 前往 [GitHub Releases](https://github.com/TIANWEN-cpu/AlphaScope/releases)
+1. 前往 [GitHub Releases](https://github.com/TIANWEN-cpu/AI--FINANCE/releases)
 2. 下载最新版本的压缩包
 3. 解压到任意目录
 
 ### 方式三：Git 克隆
 
 ```bash
-git clone https://github.com/TIANWEN-cpu/AlphaScope.git
-cd AlphaScope
+git clone https://github.com/TIANWEN-cpu/AI--FINANCE.git
+cd AI--FINANCE
 ```
 
 ---
@@ -175,3 +175,4 @@ pkill -f "vite"
 ## 下一步
 
 安装完成后，请继续阅读[快速开始](02-quickstart.md)了解首次使用流程。
+

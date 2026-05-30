@@ -1158,7 +1158,7 @@ export function FundDcaLab() {
 
                 <div className="bg-black/40 border border-white/[0.03] rounded-xl p-3.5 space-y-3">
                   <p className="text-xs text-neutral-400 italic font-sans leading-relaxed">
-                    {PORTFOLIO_RECIPES.find(r => r.id === selectedRecipeId)?.description || '定制基金比例下的分散配置回测。请单独调节或使用下方智算模型。'}
+                    {PORTFOLIO_RECIPES.find(r => r.id === selectedRecipeId)?.description || '定制基金比例下的分散配置回测。请单独调节或使用下方量化模型。'}
                   </p>
                   
                   {/* Slider configuration for weight */}

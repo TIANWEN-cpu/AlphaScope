@@ -1,4 +1,4 @@
-# 研策中枢 AlphaScope 用户手册
+﻿# 研策中枢 AlphaScope 用户手册
 
 > 本地运行的 AI 投研与量化决策工作台
 
@@ -45,5 +45,6 @@
 
 ## 快速链接
 
-- [GitHub 仓库](https://github.com/TIANWEN-cpu/AlphaScope)
-- [问题反馈](https://github.com/TIANWEN-cpu/AlphaScope/issues)
+- [GitHub 仓库](https://github.com/TIANWEN-cpu/AI--FINANCE)
+- [问题反馈](https://github.com/TIANWEN-cpu/AI--FINANCE/issues)
+
