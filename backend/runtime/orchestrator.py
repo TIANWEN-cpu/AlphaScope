@@ -138,14 +138,14 @@ def _build_model_status(
         failure_text += " " + _sanitize_model_error(chairman_summary)
 
     auth_error = _is_auth_error(failure_text)
-    degraded = bool(failed_agents) or bool(critic_block and not critic_block.get("ok", True))
+    degraded = bool(failed_agents) or bool(
+        critic_block and not critic_block.get("ok", True)
+    )
     if chairman_summary and "失败" in chairman_summary:
         degraded = True
 
     if total and not ok_agents:
-        message = (
-            "本次专家模型全部未能完成推理，页面展示的是系统基于真实行情快照生成的结构化投研底稿。"
-        )
+        message = "本次专家模型全部未能完成推理，页面展示的是系统基于真实行情快照生成的结构化投研底稿。"
     elif failed_agents:
         message = f"本次 {len(failed_agents)} 个专家席位未完成模型推理，已保留成功席位并降级生成报告。"
     else:
@@ -237,7 +237,9 @@ def _build_research_report_body(
             if risk_text and len(risk_lines) < 5:
                 risk_lines.append(f"- {risk_text}")
     if model_status.get("degraded"):
-        risk_lines.append("- 本次模型推理链路降级，所有方向性结论都应在修复 API 配置后复核。")
+        risk_lines.append(
+            "- 本次模型推理链路降级，所有方向性结论都应在修复 API 配置后复核。"
+        )
 
     critic_text = ""
     if critic_block and critic_block.get("ok"):
@@ -480,7 +482,9 @@ def run_agents_with_mode(
                     "summary": {"buy": buy, "sell": sell, "hold": hold},
                 },
                 stock_data.get("name", ""),
-                vendor=((global_ai_settings or {}).get("chairman") or {}).get("provider"),
+                vendor=((global_ai_settings or {}).get("chairman") or {}).get(
+                    "provider"
+                ),
                 model=((global_ai_settings or {}).get("chairman") or {}).get("model"),
             )
         except Exception as e:

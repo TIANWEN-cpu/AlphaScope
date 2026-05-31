@@ -169,7 +169,9 @@ async def list_provider_models(provider_id: str):
             api_key=provider["api_key"], base_url=provider["base_url"], timeout=15.0
         )
         models = client.models.list()
-        model_list = [_public_model(m) for m in (models.data or []) if getattr(m, "id", "")]
+        model_list = [
+            _public_model(m) for m in (models.data or []) if getattr(m, "id", "")
+        ]
         return ApiResponse(success=True, data={"models": model_list})
     except Exception as e:
         return ApiResponse(success=False, error=f"获取模型列表失败: {e}")

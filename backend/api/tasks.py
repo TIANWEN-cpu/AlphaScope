@@ -100,7 +100,11 @@ def _build_analysis_stock_data(symbol: str, stock_name: str) -> dict[str, Any]:
     )
     period_high = max((_as_float(bar.get("high")) for bar in period_bars), default=0.0)
     period_low = min(
-        (_as_float(bar.get("low")) for bar in period_bars if _as_float(bar.get("low")) > 0),
+        (
+            _as_float(bar.get("low"))
+            for bar in period_bars
+            if _as_float(bar.get("low")) > 0
+        ),
         default=0.0,
     )
     total_amount = sum(_as_float(bar.get("amount")) for bar in period_bars) / 100000000

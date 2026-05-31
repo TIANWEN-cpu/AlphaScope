@@ -30,6 +30,7 @@ def _safe_float_for_api(value: Any, default: float = 0.0) -> float:
     except (TypeError, ValueError):
         return default
 
+
 try:
     from fastapi import FastAPI, File, HTTPException, Request, UploadFile
     from fastapi.middleware.cors import CORSMiddleware

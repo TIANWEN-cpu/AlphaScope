@@ -414,7 +414,10 @@ def run_custom_agents(
     enable_critic: bool = True,
 ) -> Dict[str, Any]:
     """并行运行任意数量的页面自定义 Agent;并可选地批量调用 Critic 审稿。"""
-    from backend.runtime.context_builder import build_market_brief, fetch_evidence_context
+    from backend.runtime.context_builder import (
+        build_market_brief,
+        fetch_evidence_context,
+    )
 
     symbol = str(stock_data.get("symbol") or "")
     stock_name = str(stock_data.get("name") or "")
@@ -543,7 +546,10 @@ def run_custom_agents(
             from backend.agents.chairman import summarize_with_chairman
 
             chairman_summary = summarize_with_chairman(
-                {"agents": results, "summary": {"buy": buy, "sell": sell, "hold": hold}},
+                {
+                    "agents": results,
+                    "summary": {"buy": buy, "sell": sell, "hold": hold},
+                },
                 stock_data.get("name", ""),
                 vendor=chairman_settings.get("provider"),
                 model=chairman_settings.get("model"),

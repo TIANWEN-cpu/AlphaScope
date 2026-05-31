@@ -309,7 +309,9 @@ def _coerce_preference_value(section: str, key: str, value: Any) -> Any:
     if isinstance(default, int):
         return _coerce_int(section, key, value, default)
     if isinstance(default, dict):
-        return copy.deepcopy(value) if isinstance(value, dict) else copy.deepcopy(default)
+        return (
+            copy.deepcopy(value) if isinstance(value, dict) else copy.deepcopy(default)
+        )
     text = str(value if value is not None else default).strip()
     if section == "general" and key == "language":
         return text if text in {"zh-CN", "en-US"} else default
@@ -570,7 +572,9 @@ def test_connection(provider_id: str) -> dict[str, Any]:
             except Exception:
                 existing = {}
             existing["models"] = model_items
-            existing["default_model"] = generation_model or _preferred_model_id(model_ids)
+            existing["default_model"] = generation_model or _preferred_model_id(
+                model_ids
+            )
             save_provider(
                 provider_id=provider["id"],
                 name=provider["name"],

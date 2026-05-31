@@ -84,7 +84,11 @@ async def get_latest_price(symbol: str):
     """获取最新价格"""
     from backend.price_periods import fetch_intraday_prices
     from backend.price_quality import filter_incompatible_price_bars
-    from backend.price_store import get_latest_price as _latest, get_market, get_prices as _get
+    from backend.price_store import (
+        get_latest_price as _latest,
+        get_market,
+        get_prices as _get,
+    )
 
     if get_market(symbol) == "CN":
         intraday_bars = fetch_intraday_prices(symbol, limit=1)
