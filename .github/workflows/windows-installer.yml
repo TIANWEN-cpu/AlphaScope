@@ -41,6 +41,9 @@ jobs:
         run: choco install innosetup --no-progress -y
 
       - name: Build portable app and installer
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
         run: python build.py --installer --zip
 
       - name: Upload installer artifact
