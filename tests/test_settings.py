@@ -300,8 +300,14 @@ def test_app_preferences_are_persisted_and_sanitized():
                     "use_unified_model": False,
                     "unified": {"providerId": "mimo", "modelId": "mimo-v2.5"},
                     "routes": {
-                        "vision_extract": {"providerId": "mimo", "modelId": "mimo-v2.5"},
-                        "report": {"providerId": "deepseek", "modelId": "deepseek-reasoner"},
+                        "vision_extract": {
+                            "providerId": "mimo",
+                            "modelId": "mimo-v2.5",
+                        },
+                        "report": {
+                            "providerId": "deepseek",
+                            "modelId": "deepseek-reasoner",
+                        },
                     },
                 },
                 "unknown": {"x": 1},

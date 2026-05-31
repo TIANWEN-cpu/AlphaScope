@@ -274,7 +274,9 @@ def _resolved_a_share_result(
     }
 
 
-def _resolved_hk_result(raw_query: str, code: str, name: str, source: str) -> dict[str, Any]:
+def _resolved_hk_result(
+    raw_query: str, code: str, name: str, source: str
+) -> dict[str, Any]:
     return {
         "query": raw_query,
         "symbol": code,
@@ -526,15 +528,23 @@ def resolve_stock(query: str) -> dict[str, Any]:
             )
 
     for symbol, name in _process_hk_name_map().items():
-        if cleaned and (cleaned in symbol or cleaned in name.upper() or name.upper() in cleaned):
+        if cleaned and (
+            cleaned in symbol or cleaned in name.upper() or name.upper() in cleaned
+        ):
             return _resolved_hk_result(raw_query, symbol, name, "akshare_stock_hk_spot")
 
     for symbol, name in _load_persisted_hk_name_map().items():
-        if cleaned and (cleaned in symbol or cleaned in name.upper() or name.upper() in cleaned):
-            return _resolved_hk_result(raw_query, symbol, name, "local_hk_stock_name_cache")
+        if cleaned and (
+            cleaned in symbol or cleaned in name.upper() or name.upper() in cleaned
+        ):
+            return _resolved_hk_result(
+                raw_query, symbol, name, "local_hk_stock_name_cache"
+            )
 
     for symbol, name in _hk_name_map().items():
-        if cleaned and (cleaned in symbol or cleaned in name.upper() or name.upper() in cleaned):
+        if cleaned and (
+            cleaned in symbol or cleaned in name.upper() or name.upper() in cleaned
+        ):
             return _resolved_hk_result(raw_query, symbol, name, "akshare_stock_hk_spot")
 
     return {
