@@ -2,7 +2,27 @@
 
 ## 快速启动
 
-### 方式一：本地开发
+### 方式一：Windows 安装包（推荐给普通用户）
+
+发布页下载 `AlphaScope-Setup-*.exe` 后双击安装即可。安装包包含后端运行时和已构建的 Web 前端，启动后会自动打开浏览器。
+
+开发者生成安装包：
+
+```powershell
+python -m pip install -r requirements-api.txt pyinstaller
+python build.py --installer
+```
+
+输出：
+
+```text
+dist/AlphaScope/AlphaScope.exe
+installer/installer-output/AlphaScope-Setup-1.5.0.exe
+```
+
+如果机器没有 Inno Setup，仍可用 `python build.py --zip` 生成便携版目录和压缩包。
+
+### 方式二：本地开发
 
 ```bash
 # 1. 克隆项目
@@ -16,17 +36,14 @@ pip install -r requirements.txt
 cp .env.example .env
 # 编辑 .env，至少配置 DEEPSEEK_API_KEY
 
-# 4. 启动 Streamlit 界面
-python -m streamlit run frontend/dashboard.py --server.port 8501
-
-# 5. (可选) 启动 FastAPI 后端
+# 4. 启动 FastAPI 后端
 uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 
-# 6. (可选) 启动 Vite React 前端
+# 5. 启动 Vite React 前端
 cd apps/web && npm install && npm run dev
 ```
 
-### 方式二：Docker Compose
+### 方式三：Docker Compose
 
 ```bash
 cp .env.example .env
@@ -63,16 +80,6 @@ docker-compose ps                    # 查看服务状态
 curl http://localhost:8501/_stcore/health  # Streamlit
 curl http://localhost:8000/health          # FastAPI
 curl http://localhost:3000/                # Frontend
-```
-
-### 方式三：Windows .exe
-
-```bash
-pip install pyinstaller
-python build.py
-# 输出: dist/AlphaScope/AlphaScope.exe
-
-# 制作安装包: 用 Inno Setup 打开 installer/setup.iss
 ```
 
 ## 依赖分层

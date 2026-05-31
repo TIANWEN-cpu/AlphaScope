@@ -11,6 +11,7 @@ Runtime Orchestrator: 模式感知的 Agent 编排。
 """
 
 import logging
+import re
 from dataclasses import asdict
 from typing import Dict, Any, Optional, List
 
@@ -35,6 +36,251 @@ CARD_STYLE_MAP = {
     "risk": "risk",
     "retail": "macro",
 }
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _format_price(value: Any) -> str:
+    number = _safe_float(value)
+    return f"¥{number:.2f}" if number else "N/A"
+
+
+def _format_pct(value: Any) -> str:
+    number = _safe_float(value)
+    return f"{number:+.2f}%"
+
+
+def _sanitize_model_error(message: Any) -> str:
+    text = str(message or "").strip()
+    if not text:
+        return ""
+    try:
+        from backend.security.log_sanitizer import sanitize_log_message
+
+        text = sanitize_log_message(text)
+    except Exception:
+        pass
+    text = re.sub(
+        r"(api\s*key\s*[:：]?\s*)[^,\s'\"}]+",
+        r"\1[REDACTED]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(r"sk-[A-Za-z0-9_\-]{8,}", "[REDACTED]", text)
+    text = re.sub(r"\s+", " ", text)
+    return text[:220]
+
+
+def _is_auth_error(text: str) -> bool:
+    return bool(
+        re.search(
+            r"401|unauthori[sz]ed|authentication|authenticat|api\s*key|invalid\s*key|鉴权|认证|密钥",
+            text or "",
+            re.IGNORECASE,
+        )
+    )
+
+
+def _clean_agent_reason(reason: Any) -> str:
+    text = str(reason or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
+    text = re.sub(r"^json\s*", "", text, flags=re.IGNORECASE).strip()
+    if text.startswith("{"):
+        try:
+            import json
+
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and parsed.get("reason"):
+                text = str(parsed.get("reason") or "")
+        except Exception:
+            match = re.search(r'"reason"\s*:\s*"([^"]+)', text, re.DOTALL)
+            if match:
+                text = match.group(1)
+            else:
+                text = re.sub(r"[{}\"]", "", text)
+    text = re.sub(r"\\n", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text or text in {"{", "}"}:
+        return "模型返回内容未能稳定结构化，建议在修复模型配置后复核。"
+    return text[:140]
+
+
+def _build_model_status(
+    results: Dict[str, Any],
+    critic_block: Optional[dict] = None,
+    chairman_summary: Optional[str] = None,
+) -> dict[str, Any]:
+    total = len(results)
+    ok_agents = [r for r in results.values() if r.get("ok")]
+    failed_agents = [
+        {
+            "key": r.get("key", ""),
+            "name": r.get("name", r.get("key", "Agent")),
+            "reason": _sanitize_model_error(r.get("reason", "")),
+        }
+        for r in results.values()
+        if not r.get("ok")
+    ]
+    failure_text = " ".join(item["reason"] for item in failed_agents)
+    if critic_block and not critic_block.get("ok", True):
+        failure_text += " " + _sanitize_model_error(critic_block.get("error", ""))
+    if chairman_summary and "失败" in chairman_summary:
+        failure_text += " " + _sanitize_model_error(chairman_summary)
+
+    auth_error = _is_auth_error(failure_text)
+    degraded = bool(failed_agents) or bool(critic_block and not critic_block.get("ok", True))
+    if chairman_summary and "失败" in chairman_summary:
+        degraded = True
+
+    if total and not ok_agents:
+        message = (
+            "本次专家模型全部未能完成推理，页面展示的是系统基于真实行情快照生成的结构化投研底稿。"
+        )
+    elif failed_agents:
+        message = f"本次 {len(failed_agents)} 个专家席位未完成模型推理，已保留成功席位并降级生成报告。"
+    else:
+        message = "模型推理完成。"
+    if auth_error:
+        message += " 检测到疑似 API Key / Provider 鉴权问题，请到系统设置检查 Base URL、API Key 和模型名。"
+
+    return {
+        "status": "degraded" if degraded else "ok",
+        "degraded": degraded,
+        "failure_type": "auth" if auth_error else ("model" if degraded else ""),
+        "message": message,
+        "ok_agents": len(ok_agents),
+        "total_agents": total,
+        "failed_agents": failed_agents[:6],
+        "action": "打开系统设置，重新检测 Provider 连通性和模型列表后再生成研报。"
+        if auth_error
+        else "建议检查模型路由、额度、网络或稍后重试。",
+    }
+
+
+def _trend_view(stock_data: Dict[str, Any]) -> str:
+    close = _safe_float(stock_data.get("close"))
+    ma5 = _safe_float(stock_data.get("ma5"))
+    ma20 = _safe_float(stock_data.get("ma20"))
+    ma60 = _safe_float(stock_data.get("ma60"))
+    day_change = _safe_float(stock_data.get("day_change"))
+    period_change = _safe_float(stock_data.get("period_change"))
+
+    if not close:
+        return "行情数据不足，暂不做趋势判断。"
+    if ma5 and ma20 and close >= ma5 >= ma20 and period_change > 0:
+        return "短中期均线保持偏强排列，趋势仍以强势震荡或上行为主。"
+    if ma20 and ma60 and close < ma20 < ma60:
+        return "价格位于中期均线下方，趋势偏弱，需要等待重新站上关键均线。"
+    if abs(day_change) >= 5:
+        return "单日波动较大，短线情绪占比较高，追价前需要确认成交与次日承接。"
+    return "均线结构未形成单边确认，当前更适合按区间震荡和风险收益比处理。"
+
+
+def _build_research_report_body(
+    stock_data: Dict[str, Any],
+    results: Dict[str, Any],
+    summary: Dict[str, Any],
+    model_status: Dict[str, Any],
+    critic_block: Optional[dict] = None,
+    chairman_summary: Optional[str] = None,
+) -> str:
+    name = stock_data.get("name") or "未知标的"
+    symbol = stock_data.get("symbol") or ""
+    close = stock_data.get("close")
+    day_change = stock_data.get("day_change")
+    period_change = stock_data.get("period_change")
+    high = stock_data.get("period_high")
+    low = stock_data.get("period_low")
+    days = int(stock_data.get("days") or 0)
+    ma5 = stock_data.get("ma5", "N/A")
+    ma20 = stock_data.get("ma20", "N/A")
+    ma60 = stock_data.get("ma60", "N/A")
+    volume = _safe_float(stock_data.get("volume"))
+    amount = _safe_float(stock_data.get("total_amount"))
+    final = summary.get("final", "建议观望")
+    avg_conf = _safe_float(summary.get("avg_confidence"))
+    if avg_conf <= 1:
+        avg_conf *= 100
+
+    ok_agents = [r for r in results.values() if r.get("ok")]
+    failed_count = len(results) - len(ok_agents)
+    agent_lines = []
+    for r in results.values():
+        state = "完成" if r.get("ok") else "未完成"
+        reason = _clean_agent_reason(r.get("reason"))
+        if not r.get("ok"):
+            reason = "模型调用未完成，需检查 Provider 后重新生成。"
+        agent_lines.append(
+            f"- {r.get('name', r.get('key', 'Agent'))}: {state}; 信号 {r.get('signal', '观望')}; "
+            f"置信度 {_safe_float(r.get('confidence')):.0f}%。{reason[:120]}"
+        )
+    if not agent_lines:
+        agent_lines.append("- 暂无启用专家席位。")
+
+    risk_lines = [
+        "- 价格和均线只能说明交易状态，不能替代财务、订单、利润率和估值约束。",
+        "- 若后续成交量无法配合当前涨跌幅，短线信号可能快速失效。",
+    ]
+    for r in ok_agents:
+        for risk in r.get("risks") or []:
+            risk_text = str(risk).strip()
+            if risk_text and len(risk_lines) < 5:
+                risk_lines.append(f"- {risk_text}")
+    if model_status.get("degraded"):
+        risk_lines.append("- 本次模型推理链路降级，所有方向性结论都应在修复 API 配置后复核。")
+
+    critic_text = ""
+    if critic_block and critic_block.get("ok"):
+        div = critic_block.get("divergence") or {}
+        critic_text = str(div.get("summary") or div.get("main_axis") or "").strip()
+    elif critic_block and critic_block.get("error"):
+        critic_text = "风控复核模型未完成，暂以系统规则提示为主。"
+    else:
+        critic_text = "未返回独立风控复核，当前风险部分来自行情和专家席位摘要。"
+
+    chairman_note = ""
+    if chairman_summary and "失败" not in chairman_summary:
+        chairman_note = f"\n\n【投委会主席补充】\n{chairman_summary.strip()}"
+
+    return f"""【完整研报正文】
+
+一、核心结论
+- 标的: {name} ({symbol})
+- 综合评级: {final}
+- 平均置信度: {avg_conf:.1f}%
+- 生成状态: {model_status.get("message", "模型推理完成。")}
+- 操作含义: 当前报告先给出研究框架和风险收益约束；若模型链路降级，不建议把它视为最终投资结论。
+
+二、行情与趋势判断
+- 最新价: {_format_price(close)}，当日涨跌 {_format_pct(day_change)}。
+- 近 {days or 30} 日区间涨跌 {_format_pct(period_change)}，区间高低点 {_format_price(high)} / {_format_price(low)}。
+- 均线: MA5 {ma5}，MA20 {ma20}，MA60 {ma60}。
+- 成交: 当日成交量 {volume:,.0f} 手，区间成交额 {amount:.2f} 亿元。
+- 趋势解读: {_trend_view(stock_data)}
+
+三、多智能体会签摘要
+- 专家席位: {len(ok_agents)} / {len(results)} 完成，{failed_count} 个席位降级。
+{chr(10).join(agent_lines)}
+
+四、风控与反证
+{chr(10).join(risk_lines)}
+- 风控复核: {critic_text}
+
+五、后续跟踪清单
+- 重新检测 Provider 连通性后，补跑专家推理、主席摘要和 Critic 反证。
+- 补充财务质量、行业景气、公告事件、研报评级和资金流向证据，避免只依赖 K 线结论。
+- 重点观察价格是否继续站稳 MA20、成交是否放大、以及负面新闻或公告是否改变原有假设。{chairman_note}
+"""
 
 
 def _managed_agent_to_runtime_config(raw: dict) -> dict:
@@ -140,18 +386,28 @@ def run_agents_with_mode(
         if bool(a.get("enabled", True))
     ]
     if not active:
+        model_status = _build_model_status({})
+        summary = {
+            "final": "建议观望",
+            "buy": 0,
+            "sell": 0,
+            "hold": 0,
+            "avg_confidence": 0,
+        }
         return {
             "agents": {},
-            "summary": {
-                "final": "建议观望",
-                "buy": 0,
-                "sell": 0,
-                "hold": 0,
-                "avg_confidence": 0,
-            },
+            "summary": summary,
             "brief": brief,
+            "research_report": _build_research_report_body(
+                stock_data,
+                {},
+                summary,
+                model_status,
+            ),
             "agent_order": [],
             "critic": None,
+            "chairman_summary": None,
+            "model_status": model_status,
             "mode": mode.value,
             "mode_name": config.name,
         }
@@ -195,12 +451,13 @@ def run_agents_with_mode(
         try:
             from backend.critic import run_batch_critic
 
+            critic_settings = (global_ai_settings or {}).get("critic") or {}
             critic_block = run_batch_critic(
                 stock_name=stock_data.get("name", "未知标的"),
                 market_brief=brief,
                 agent_results={k: r for k, r in results.items() if r.get("ok")},
-                vendor=config.critic_provider,
-                model=config.critic_model,
+                vendor=critic_settings.get("provider") or config.critic_provider,
+                model=critic_settings.get("model") or config.critic_model,
             )
             for ag_key, review in (critic_block.get("agents") or {}).items():
                 if ag_key in results:
@@ -223,23 +480,38 @@ def run_agents_with_mode(
                     "summary": {"buy": buy, "sell": sell, "hold": hold},
                 },
                 stock_data.get("name", ""),
+                vendor=((global_ai_settings or {}).get("chairman") or {}).get("provider"),
+                model=((global_ai_settings or {}).get("chairman") or {}).get("model"),
             )
         except Exception as e:
-            chairman_summary = f"主席总结生成失败: {e}"
+            chairman_summary = f"主席总结生成失败: {_sanitize_model_error(e)}"
+
+    summary = {
+        "final": final,
+        "buy": buy,
+        "sell": sell,
+        "hold": hold,
+        "avg_confidence": avg_conf,
+    }
+    model_status = _build_model_status(results, critic_block, chairman_summary)
+    research_report = _build_research_report_body(
+        stock_data,
+        results,
+        summary,
+        model_status,
+        critic_block,
+        chairman_summary,
+    )
 
     return {
         "agents": results,
-        "summary": {
-            "final": final,
-            "buy": buy,
-            "sell": sell,
-            "hold": hold,
-            "avg_confidence": avg_conf,
-        },
+        "summary": summary,
         "brief": brief,
         "agent_order": [cfg.key for cfg in active],
         "critic": critic_block,
         "chairman_summary": chairman_summary,
+        "research_report": research_report,
+        "model_status": model_status,
         "mode": mode.value,
         "mode_name": config.name,
     }

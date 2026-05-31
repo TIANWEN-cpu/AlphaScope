@@ -81,15 +81,38 @@ export interface AgentOpinion {
   signal: 'BUY' | 'SELL' | 'HOLD';
   confidence: number;
   reason: string;
+  name?: string;
+  vendor?: string;
+  model?: string;
   risk_points?: string[];
   evidence_refs?: string[];
 }
 
+export interface AnalysisModelStatus {
+  status?: 'ok' | 'degraded' | string;
+  degraded?: boolean;
+  failure_type?: 'auth' | 'model' | string;
+  message?: string;
+  ok_agents?: number;
+  total_agents?: number;
+  failed_agents?: Array<{
+    key?: string;
+    name?: string;
+    reason?: string;
+  }>;
+  action?: string;
+}
+
 export interface AnalysisResult {
   summary?: string;
+  brief?: string;
+  research_report?: string;
+  mode?: string;
+  mode_name?: string;
   agents: Record<string, AgentOpinion>;
   critic?: string;
   chairman_summary?: string;
+  model_status?: AnalysisModelStatus;
   evidence: ProviderEvidence[];
   provider_traces: ProviderTrace[];
   source_appendix: SourceAppendixItem[];

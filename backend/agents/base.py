@@ -194,14 +194,19 @@ def get_default_agent_configs(include_chairman: bool = False) -> List[dict]:
 
 
 def _agent_config_from_dict(raw: dict) -> AgentConfig:
+    key = str(raw.get("key") or raw.get("id") or "custom_agent").strip()
+    instruction = (
+        raw.get("instruction")
+        or raw.get("prompt")
+        or raw.get("system_prompt")
+        or "请基于市场简报输出投资信号、置信度和理由。"
+    )
     return AgentConfig(
-        key=(raw.get("key") or "custom_agent").strip().replace(" ", "_"),
+        key=key.replace(" ", "_"),
         name=raw.get("name", "自定义 Agent"),
         avatar=raw.get("avatar", "🤖"),
         role=raw.get("role", "你是一位专业投资分析 Agent。"),
-        instruction=raw.get(
-            "instruction", "请基于市场简报输出投资信号、置信度和理由。"
-        ),
+        instruction=instruction,
         provider=raw.get("provider", "deepseek"),
         model=raw.get("model", "deepseek-chat"),
         api_key=raw.get("api_key", ""),

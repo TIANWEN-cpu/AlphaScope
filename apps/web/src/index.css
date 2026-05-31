@@ -8,6 +8,35 @@
 }
 
 @layer utilities {
+  .settings-ui {
+    font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", "Source Han Sans SC", ui-sans-serif, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+
+  select {
+    color-scheme: dark;
+    background-color: rgba(5, 5, 8, 0.92);
+  }
+
+  select option {
+    background-color: #090a10;
+    color: #e5e7eb;
+  }
+
+  select option:checked,
+  select option:hover {
+    background-color: rgba(99, 102, 241, 0.28);
+    color: #ffffff;
+  }
+
+  select option:disabled {
+    color: #52525b;
+  }
+
+  input[type="range"] {
+    accent-color: #6366f1;
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -23,4 +52,3 @@
     background: rgba(255, 255, 255, 0.2);
   }
 }
-

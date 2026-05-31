@@ -35,6 +35,13 @@ def _default_llm_identity(preferred: Optional[str] = None) -> tuple[str, str]:
         return preferred or "deepseek", "deepseek-chat"
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class AnalysisMode(Enum):
     FREE = "free"
     STANDARD = "standard"
@@ -405,6 +412,8 @@ class ChatOrchestrator:
         expert_team_id: Optional[str] = None,
         global_ai_settings: Optional[dict] = None,
         mode_override: Optional[str] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
         image_base64: Optional[str] = None,
         image_mime_type: str = "image/png",
     ) -> dict:
@@ -442,6 +451,13 @@ class ChatOrchestrator:
         conv = self._store.get_conversation(conversation_id)
         if not conv:
             return {"mode": "error", "content": "对话不存在"}
+
+        if provider or model:
+            resolved_provider = provider or conv.get("provider") or ""
+            resolved_provider, default_model = _default_llm_identity(resolved_provider)
+            resolved_model = model or conv.get("model") or default_model
+            self._store.update_model(conversation_id, resolved_provider, resolved_model)
+            conv = {**conv, "provider": resolved_provider, "model": resolved_model}
 
         # --- NLU 意图检测 ---
         intent = detect_intent(user_input, stock_data)
@@ -566,15 +582,36 @@ class ChatOrchestrator:
         # 获取或创建 chat session
         if conversation_id not in self._chat_sessions:
             provider = conv.get("provider") or ""
-            provider, _model = _default_llm_identity(provider)
-            self._chat_sessions[conversation_id] = new_session(
+            provider, default_model = _default_llm_identity(provider)
+            model = conv.get("model") or default_model
+            session = new_session(
                 stock_symbol=conv.get("stock_symbol", ""),
                 stock_name=conv.get("stock_name", ""),
                 ctx=ctx,
                 provider=provider,
+                model=model,
             )
+            stored_messages = self._store.get_messages(conversation_id)
+            if (
+                stored_messages
+                and stored_messages[-1].get("role") == "user"
+                and (stored_messages[-1].get("content") or "").strip()
+                == user_input.strip()
+            ):
+                stored_messages = stored_messages[:-1]
+            for message in stored_messages:
+                role = message.get("role")
+                content = message.get("content")
+                if role in {"user", "assistant"} and content:
+                    session.append(role, content)
+            self._chat_sessions[conversation_id] = session
+        else:
+            session = self._chat_sessions[conversation_id]
+            if conv.get("provider"):
+                session.provider = conv.get("provider") or session.provider
+            if conv.get("model"):
+                session.model = conv.get("model") or session.model
 
-        session = self._chat_sessions[conversation_id]
         session = send_message(session, user_input)
         self._chat_sessions[conversation_id] = session
 
@@ -585,7 +622,12 @@ class ChatOrchestrator:
                 reply = msg.content
                 break
 
-        return {"mode": "free", "content": reply}
+        return {
+            "mode": "free",
+            "content": reply,
+            "provider": session.provider,
+            "model": session.model,
+        }
 
     def _handle_agent_mode(
         self,

@@ -152,11 +152,13 @@ def new_session(
     stock_name: str,
     ctx: Optional[dict] = None,
     provider: Optional[str] = None,
+    model: Optional[str] = None,
     api_key: Optional[str] = None,
 ) -> ChatSession:
     """创建新会话:首条 system message 已拼接好,可直接调 send_message"""
     ctx = ctx or {}
-    provider, model = _llm_agents.get_configured_provider(provider)
+    provider, default_model = _llm_agents.get_configured_provider(provider)
+    model = model or default_model
 
     sys_prompt = build_system_prompt(stock_symbol, stock_name, ctx)
     session = ChatSession(

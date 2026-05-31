@@ -12,7 +12,10 @@ export const AgentOpinionCards: React.FC<Props> = ({ agents }) => {
 
   if (agentEntries.length === 0) return null;
 
-  const formatAgentName = (agentId: string) => {
+  const formatAgentName = (agentId: string, opinion: AgentOpinion) => {
+    const name = opinion.name?.trim();
+    if (name && !/^custom_agent$/i.test(name)) return name;
+    if (/^custom_agent$/i.test(agentId)) return '专家会签席位';
     if (/agent$/i.test(agentId.trim())) return agentId;
     return `${agentId} Agent`;
   };
@@ -36,7 +39,7 @@ export const AgentOpinionCards: React.FC<Props> = ({ agents }) => {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-white uppercase tracking-wider flex items-center gap-2">
                 <Fingerprint className="w-4 h-4 text-indigo-400" />
-                {formatAgentName(agentId)}
+                {formatAgentName(agentId, opinion)}
               </h3>
               <span className={cn('px-2 py-0.5 rounded border text-[10px] font-bold', signalBg, signalColor)}>
                 {opinion.signal}
@@ -57,8 +60,14 @@ export const AgentOpinionCards: React.FC<Props> = ({ agents }) => {
             </div>
 
             <p className="text-xs text-neutral-300 leading-relaxed flex-grow">
-              {opinion.reason}
+              {opinion.reason || '该席位没有返回可展示的分析正文。'}
             </p>
+
+            {(opinion.vendor || opinion.model) && (
+              <div className="mt-3 text-[10px] text-neutral-500">
+                {[opinion.vendor, opinion.model].filter(Boolean).join(' / ')}
+              </div>
+            )}
 
             {opinion.risk_points && opinion.risk_points.length > 0 && (
               <div className="mt-3 pt-3 border-t border-white/5">

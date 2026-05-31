@@ -14,7 +14,11 @@ from backend.agents.base import AGENT_MODEL_CONFIG
 
 
 def summarize_with_chairman(
-    results: Dict[str, Any], stock_name: str, api_key: Optional[str] = None
+    results: Dict[str, Any],
+    stock_name: str,
+    api_key: Optional[str] = None,
+    vendor: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> str:
     """
     主席角色：综合所有 Agent 给出最终投资建议（用 Claude Opus 顶级模型）。
@@ -41,7 +45,9 @@ def summarize_with_chairman(
 
 字数控制在 280 字以内，使用 markdown 格式。"""
 
-    vendor, model = AGENT_MODEL_CONFIG["chairman"]
+    default_vendor, default_model = AGENT_MODEL_CONFIG["chairman"]
+    vendor = vendor or default_vendor
+    model = model or default_model
     fallback_vendor, fallback_model = get_configured_provider()
     messages = [
         {

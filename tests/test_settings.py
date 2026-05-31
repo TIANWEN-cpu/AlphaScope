@@ -296,6 +296,14 @@ def test_app_preferences_are_persisted_and_sanitized():
                     "theme": "unknown",
                 },
                 "data": {"news_limit": 500},
+                "ai_models": {
+                    "use_unified_model": False,
+                    "unified": {"providerId": "mimo", "modelId": "mimo-v2.5"},
+                    "routes": {
+                        "vision_extract": {"providerId": "mimo", "modelId": "mimo-v2.5"},
+                        "report": {"providerId": "deepseek", "modelId": "deepseek-reasoner"},
+                    },
+                },
                 "unknown": {"x": 1},
             }
         )
@@ -305,7 +313,15 @@ def test_app_preferences_are_persisted_and_sanitized():
     assert saved["general"]["refresh_interval"] == 10
     assert saved["general"]["theme"] == "dark"
     assert saved["data"]["news_limit"] == 100
+    assert saved["ai_models"]["use_unified_model"] is False
+    assert saved["ai_models"]["routes"]["vision_extract"]["modelId"] == "mimo-v2.5"
     assert loaded == saved
+
+
+def test_mimo_model_is_detected_as_vision_capable():
+    from backend.settings_store import _model_capabilities
+
+    assert _model_capabilities("mimo-v2.5")["vision"] is True
 
 
 @pytest.mark.anyio

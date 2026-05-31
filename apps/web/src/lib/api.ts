@@ -2,9 +2,12 @@
  * Base API module for the 研策中枢 AlphaScope frontend.
  */
 
-// We can read from environment variables or default to localhost:8000 for local dev
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-export const API_KEY = import.meta.env.VITE_API_KEY || '';
+const runtimeConfig = typeof window !== 'undefined' ? window.__ALPHASCOPE_CONFIG__ : undefined;
+
+// Runtime config is written by the packaged desktop launcher. Vite env remains
+// the development and Docker fallback.
+export const API_BASE_URL = runtimeConfig?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+export const API_KEY = runtimeConfig?.apiKey || import.meta.env.VITE_API_KEY || '';
 
 export interface ApiResponse<T = any> {
   success: boolean;

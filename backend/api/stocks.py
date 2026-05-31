@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from backend.schemas.api import ApiResponse
-from backend.stock_resolver import resolve_stock
+from backend.stock_resolver import resolve_stock, search_stocks
 
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
 
@@ -16,6 +16,13 @@ def resolve_stock_query(q: str):
     result = resolve_stock(q)
     if not result.get("symbol"):
         return ApiResponse(success=False, data=result, error="未识别到有效股票代码")
+    return ApiResponse(success=True, data=result)
+
+
+@router.get("/search")
+def search_stock_query(q: str, limit: int = 8):
+    """搜索股票代码或公司名称，给前端实时建议使用。"""
+    result = search_stocks(q, limit=limit)
     return ApiResponse(success=True, data=result)
 
 

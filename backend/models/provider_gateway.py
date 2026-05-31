@@ -66,9 +66,55 @@ MODEL_PREFERENCE_HINTS = (
     "sensenova",
     "flash",
     "chat",
+    "instruct",
+    "reason",
+    "pro",
     "gpt",
     "moonshot",
 )
+
+NON_CHAT_MODEL_HINTS = (
+    "embedding",
+    "embed",
+    "bge-",
+    "bge_",
+    "gte-",
+    "gte_",
+    "jina-embeddings",
+    "text-embedding",
+    "text_embedding",
+    "tts",
+    "voice",
+    "audio",
+    "speech",
+)
+
+
+def _is_text_chat_model(model_id: str) -> bool:
+    model = model_id.lower()
+    return not any(token in model for token in NON_CHAT_MODEL_HINTS)
+
+
+def _chat_model_score(model_id: str) -> int:
+    model = model_id.lower()
+    if not _is_text_chat_model(model_id):
+        return -1000
+    score = 0
+    if "pro" in model:
+        score += 45
+    if "chat" in model:
+        score += 35
+    if "instruct" in model:
+        score += 30
+    if "reason" in model:
+        score += 25
+    if "flash" in model:
+        score += 20
+    if "2.5" in model or "v2.5" in model:
+        score += 18
+    if "omni" in model:
+        score -= 15
+    return score
 
 
 # ============== Provider 配置加载 ==============
@@ -263,10 +309,28 @@ def _models_from_config_json(config_json: Any) -> list[str]:
     return model_ids
 
 
+def _default_model_from_config_json(config_json: Any) -> str:
+    if not config_json:
+        return ""
+    try:
+        parsed = (
+            json.loads(config_json) if isinstance(config_json, str) else config_json
+        )
+    except Exception:
+        return ""
+    if not isinstance(parsed, dict):
+        return ""
+    return str(parsed.get("default_model") or "").strip()
+
+
 def _model_from_provider_config(provider: str, cfg: dict[str, Any]) -> str:
     """Choose a likely chat model for built-in or user-saved providers."""
     if provider in DEFAULT_PROVIDER_MODELS:
         return DEFAULT_PROVIDER_MODELS[provider]
+
+    default_model = _default_model_from_config_json(cfg.get("config_json"))
+    if default_model and _chat_model_score(default_model) >= 0:
+        return default_model
 
     model_ids = _models_from_config_json(cfg.get("config_json"))
     raw_models = cfg.get("models")
@@ -283,10 +347,9 @@ def _model_from_provider_config(provider: str, cfg: dict[str, Any]) -> str:
             deduped.append(normalized)
             seen_models.add(normalized)
 
-    for hint in MODEL_PREFERENCE_HINTS:
-        for model_id in deduped:
-            if hint in model_id.lower():
-                return model_id
+    text_models = [model_id for model_id in deduped if _is_text_chat_model(model_id)]
+    if text_models:
+        return max(text_models, key=_chat_model_score)
     if deduped:
         return deduped[0]
 
@@ -542,12 +605,25 @@ def _call_with(
         temperature=temperature,
     )
     cfg = get_vendor_config(vendor, api_key, base_url)
-    if json_mode and cfg and cfg.get("supports_json_mode"):
+    use_response_format = bool(json_mode and cfg and cfg.get("supports_json_mode"))
+    if use_response_format:
         kwargs["response_format"] = {"type": "json_object"}
     resp = client.chat.completions.create(**kwargs)
     # 记录成本（透明，不影响返回值）
     _record_cost(resp, vendor, model, agent_key, mode, conversation_id)
-    return resp.choices[0].message.content or ""
+    content = resp.choices[0].message.content or ""
+    if use_response_format and not content.strip():
+        retry_kwargs = dict(kwargs)
+        retry_kwargs.pop("response_format", None)
+        logger.warning(
+            "empty JSON-mode response from %s/%s; retrying without response_format",
+            vendor,
+            model,
+        )
+        retry_resp = client.chat.completions.create(**retry_kwargs)
+        _record_cost(retry_resp, vendor, model, agent_key, mode, conversation_id)
+        return retry_resp.choices[0].message.content or ""
+    return content
 
 
 # 公共别名：所有新模块统一通过 call_llm 调用

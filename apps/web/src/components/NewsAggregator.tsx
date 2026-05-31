@@ -19,6 +19,8 @@ import {
   Link2,
   MessageCircle,
   Send,
+  Settings2,
+  RefreshCw,
   X,
   ChevronDown,
   ChevronUp
@@ -27,6 +29,16 @@ import { cn } from '../lib/utils';
 import { STOCK_UNIVERSE, StockTarget, findStockTarget, formatStockLabel } from '../lib/stocks';
 import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
 import { fetchApi } from '../lib/api';
+import {
+  buildModelOptions,
+  getModelKey,
+  getRouteSelection,
+  loadAiModelRoutesFromApi,
+  loadLocalAiModelRoutes,
+  ModelOption,
+  ModelProvider,
+} from '../lib/aiModelRouting';
+import { ThemedSelect } from './ThemedSelect';
 
 interface NewsItem {
   id: string;
@@ -107,6 +119,12 @@ interface NewsUrlParsePayload {
   sentiment?: number;
   importance?: number;
   category?: string;
+}
+
+interface ChatResponse {
+  content?: string;
+  provider?: string;
+  model?: string;
 }
 
 const SOURCE_TIER_MAP: Record<string, NewsItem['sourceTier']> = {
@@ -624,7 +642,16 @@ const CALENDAR_EVENTS = [
   }
 ];
 
-export function NewsAggregator() {
+interface NewsAggregatorProps {
+  onOpenModelSettings?: () => void;
+}
+
+function formatModelOption(option?: ModelOption) {
+  if (!option) return '未配置';
+  return `${option.providerName} / ${option.modelId}`;
+}
+
+export function NewsAggregator({ onOpenModelSettings }: NewsAggregatorProps) {
   const [currentStock, setCurrentStock] = useState<StockTarget>(() => getPersistedStock() ?? STOCK_UNIVERSE[0]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSourceTier, setSelectedSourceTier] = useState<NewsItem['sourceTier'] | 'all'>('all');
@@ -639,6 +666,9 @@ export function NewsAggregator() {
   const [isSourceMatrixExpanded, setIsSourceMatrixExpanded] = useState<boolean>(false);
   const [assistantInput, setAssistantInput] = useState<string>('');
   const [linkInput, setLinkInput] = useState<string>('');
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [newsModels, setNewsModels] = useState<ModelOption[]>([]);
+  const [selectedNewsModelKey, setSelectedNewsModelKey] = useState('');
   const [assistantMessages, setAssistantMessages] = useState<NewsAssistantMessage[]>([
     {
       id: 'news-assistant-welcome',
@@ -664,6 +694,7 @@ export function NewsAggregator() {
   });
   const fallbackNews = useMemo(() => buildNewsFeed(currentStock), [currentStock]);
   const news = useMemo(() => mergeNewsItems(remoteNews, fallbackNews), [remoteNews, fallbackNews]);
+  const selectedNewsModel = newsModels.find((model) => model.key === selectedNewsModelKey) ?? newsModels[0];
 
   useEffect(() => subscribeStockSelected(({ stock }) => {
     setCurrentStock(findStockTarget(stock.symbol) ?? stock);
@@ -674,6 +705,38 @@ export function NewsAggregator() {
     setSelectedSourceTier('all');
     setSelectedSource('');
   }), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadModels() {
+      try {
+        const result = await fetchApi<{ providers: ModelProvider[] }>('/api/settings/providers');
+        if (cancelled) return;
+        const providers = result.providers || [];
+        const routes = await loadAiModelRoutesFromApi().catch(() => loadLocalAiModelRoutes());
+        if (cancelled) return;
+        const models = buildModelOptions(providers, 'chat');
+        const routeKey = getModelKey(getRouteSelection(routes, providers, 'news'));
+        setNewsModels(models);
+        setSelectedNewsModelKey((current) => (
+          current && models.some((model) => model.key === current)
+            ? current
+            : routeKey && models.some((model) => model.key === routeKey)
+              ? routeKey
+              : models[0]?.key || ''
+        ));
+      } catch {
+        if (!cancelled) {
+          setNewsModels([]);
+          setSelectedNewsModelKey('');
+        }
+      }
+    }
+    void loadModels();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -833,23 +896,89 @@ export function NewsAggregator() {
     const url = sourceUrlForArticle(item, currentStock);
     window.open(url, '_blank', 'noopener,noreferrer');
   };
-  const askAboutArticle = (question: string) => {
+  const askAboutArticle = async (question: string) => {
     const trimmed = question.trim();
-    if (!trimmed) return;
+    if (!trimmed || assistantLoading) return;
     const userMessage: NewsAssistantMessage = {
       id: `news-user-${Date.now()}`,
       role: 'user',
       content: trimmed,
       timestamp: new Date().toISOString(),
     };
+    const pendingId = `news-assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const assistantMessage: NewsAssistantMessage = {
-      id: `news-assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      id: pendingId,
       role: 'assistant',
-      content: buildNewsAssistantAnswer(selectedArticle, trimmed, currentStock),
+      content: selectedNewsModel
+        ? `正在调用新闻助手模型：${formatModelOption(selectedNewsModel)}`
+        : '当前没有可用新闻助手模型。请到系统设置 > 模型路由中配置新闻助手模型。',
       timestamp: new Date().toISOString(),
     };
     setAssistantMessages((prev) => [...prev, userMessage, assistantMessage]);
     setAssistantInput('');
+    if (!selectedNewsModel) return;
+    setAssistantLoading(true);
+    try {
+      const article = selectedArticle;
+      const result = await fetchApi<ChatResponse>('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          message: [
+            '你是证券新闻投研助手。请基于选中新闻和当前标的回答用户问题，必须区分已验证事实、待核验线索和推断。',
+            '不要编造原文没有的信息；如果证据不足，明确说明需要打开原文或公告核验。',
+            '',
+            `用户问题：${trimmed}`,
+            `当前标的：${formatStockLabel(currentStock)}`,
+            article ? [
+              `新闻标题：${article.title}`,
+              `来源：${article.source} / ${article.sourceTier}`,
+              `情绪：${sentimentLabel(article.sentiment)}，影响分：${article.impactScore}%`,
+              `原文链接：${article.sourceUrl || '无'}`,
+              `新闻正文/摘要：${article.content}`,
+              `系统初筛：${article.aiSummary}`,
+            ].join('\n') : '未选中新闻。',
+          ].join('\n'),
+          mode: 'free',
+          stock_symbol: currentStock.symbol,
+          stock_name: currentStock.name,
+          provider: selectedNewsModel.providerId,
+          model: selectedNewsModel.modelId,
+          context: {
+            news_title: article?.title,
+            news_source: article?.source,
+            news_tier: article?.sourceTier,
+          },
+        }),
+      });
+      const content = result.content?.trim() || '模型没有返回内容，请检查 Provider 权限、余额或 Base URL。';
+      setAssistantMessages((prev) => prev.map((message) => (
+        message.id === pendingId
+          ? {
+              ...message,
+              content: `模型调用：${result.provider || selectedNewsModel.providerId} / ${result.model || selectedNewsModel.modelId}\n\n${content}`,
+              timestamp: new Date().toISOString(),
+            }
+          : message
+      )));
+    } catch (error) {
+      const fallback = buildNewsAssistantAnswer(selectedArticle, trimmed, currentStock);
+      setAssistantMessages((prev) => prev.map((message) => (
+        message.id === pendingId
+          ? {
+              ...message,
+              content: [
+                `新闻助手模型调用失败：${error instanceof Error ? error.message : String(error || '未知错误')}`,
+                '',
+                '本地规则兜底如下，未冒充真实 AI：',
+                fallback,
+              ].join('\n'),
+              timestamp: new Date().toISOString(),
+            }
+          : message
+      )));
+    } finally {
+      setAssistantLoading(false);
+    }
   };
   const parseNewsLink = async () => {
     const trimmed = linkInput.trim();
@@ -915,6 +1044,9 @@ export function NewsAggregator() {
         timestamp: new Date().toISOString(),
       },
     ]);
+    if (selectedNewsModel) {
+      setAssistantInput(`请分析这条新闻链接对 ${currentStock.name} 的影响，并列出需要核验的关键事实`);
+    }
     setLinkInput('');
   };
   const selectFirstVisibleArticle = () => {
@@ -1539,9 +1671,29 @@ export function NewsAggregator() {
                       <MessageCircle className="h-3.5 w-3.5" />
                       咨询这条新闻
                     </div>
-                    {selectedArticle && (
-                      <span className="truncate text-[9px] text-neutral-500">{selectedArticle.source}</span>
-                    )}
+                    <button
+                      type="button"
+                      onClick={onOpenModelSettings}
+                      className="inline-flex items-center gap-1 rounded border border-white/10 bg-white/[0.03] px-2 py-1 text-[9px] text-neutral-400 transition-colors hover:border-violet-400/40 hover:text-violet-100"
+                    >
+                      <Settings2 className="h-3 w-3" />
+                      模型设置
+                    </button>
+                  </div>
+                  <div className="mb-3 flex items-center gap-2">
+                    <ThemedSelect
+                      data-testid="news-assistant-model-select"
+                      value={selectedNewsModel?.key || ''}
+                      onChange={setSelectedNewsModelKey}
+                      disabled={!newsModels.length || assistantLoading}
+                      className="min-w-0 flex-1"
+                      buttonClassName="h-8 rounded-lg bg-black/35 px-2 text-[10px] focus-visible:border-violet-400/50"
+                      menuClassName="text-xs"
+                      options={newsModels.length ? newsModels.map((model) => ({
+                        value: model.key,
+                        label: formatModelOption(model),
+                      })) : [{ value: '', label: '请先在系统设置中添加模型', disabled: true }]}
+                    />
                   </div>
                   <div className="mb-3 max-h-44 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                     {assistantMessages.map((message) => (
@@ -1570,16 +1722,18 @@ export function NewsAggregator() {
                         }
                       }}
                       placeholder={selectedArticle ? "问：这条新闻是利好还是风险？" : "先选一条新闻再提问..."}
+                      disabled={assistantLoading}
                       className="min-h-[42px] min-w-0 flex-1 resize-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-neutral-200 outline-none transition-colors placeholder:text-neutral-600 focus:border-violet-400/50"
                     />
                     <button
                       type="button"
                       data-testid="news-assistant-send"
                       onClick={() => askAboutArticle(assistantInput)}
+                      disabled={assistantLoading || !assistantInput.trim()}
                       className="inline-flex h-[42px] w-[42px] flex-shrink-0 items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/10 text-violet-100 transition-colors hover:bg-violet-500/20"
                       title="发送"
                     >
-                      <Send className="h-4 w-4" />
+                      {assistantLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>

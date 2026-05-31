@@ -62,6 +62,20 @@ DEFAULT_APP_PREFERENCES: dict[str, dict[str, Any]] = {
         "prefer_local_cache": True,
         "auto_fetch_missing": True,
     },
+    "knowledge": {
+        "enabled": True,
+        "shared_knowledge": True,
+        "agent_memory": True,
+        "auto_write_agent_memory": True,
+        "embedding_provider_id": "",
+        "embedding_model": "",
+        "memory_retention_days": 90,
+    },
+    "ai_models": {
+        "use_unified_model": True,
+        "unified": {},
+        "routes": {},
+    },
 }
 
 _INT_LIMITS: dict[tuple[str, str], tuple[int, int]] = {
@@ -70,6 +84,7 @@ _INT_LIMITS: dict[tuple[str, str], tuple[int, int]] = {
     ("network", "retry_count"): (0, 5),
     ("data", "news_limit"): (5, 100),
     ("data", "price_cache_days"): (30, 3650),
+    ("knowledge", "memory_retention_days"): (1, 3650),
 }
 
 _MODEL_PREFERENCE_HINTS = (
@@ -77,8 +92,49 @@ _MODEL_PREFERENCE_HINTS = (
     "sensenova",
     "flash",
     "chat",
+    "instruct",
+    "reason",
+    "pro",
     "gpt",
     "moonshot",
+)
+
+_EMBEDDING_MODEL_HINTS = (
+    "embedding",
+    "embed",
+    "bge-",
+    "bge_",
+    "gte-",
+    "gte_",
+    "jina-embeddings",
+    "text-embedding",
+    "text_embedding",
+)
+
+_VISION_MODEL_HINTS = (
+    "vision",
+    "visual",
+    "multimodal",
+    "multi-modal",
+    "mimo",
+    "omni",
+    "vl",
+    "llava",
+    "qwen-vl",
+    "gpt-4o",
+    "gpt-4.1",
+    "claude-3",
+    "claude-sonnet",
+    "claude-opus",
+    "gemini",
+)
+
+_NON_CHAT_MODEL_HINTS = (
+    *_EMBEDDING_MODEL_HINTS,
+    "tts",
+    "voice",
+    "audio",
+    "speech",
 )
 
 
@@ -159,11 +215,60 @@ def _clean_provider_name(provider_id: str, name: str, base_url: str) -> str:
 
 def _preferred_model_id(model_ids: list[str]) -> str:
     """Pick a likely chat model from a provider model listing."""
-    for hint in _MODEL_PREFERENCE_HINTS:
-        for model_id in model_ids:
-            if hint in model_id.lower():
-                return model_id
+    text_models = [model_id for model_id in model_ids if _is_text_chat_model(model_id)]
+    if text_models:
+        return max(text_models, key=_chat_model_score)
     return model_ids[0] if model_ids else ""
+
+
+def _is_text_chat_model(model_id: str) -> bool:
+    model = model_id.lower()
+    return not any(token in model for token in _NON_CHAT_MODEL_HINTS)
+
+
+def _chat_model_score(model_id: str) -> int:
+    model = model_id.lower()
+    if not _is_text_chat_model(model_id):
+        return -1000
+    score = 0
+    if "pro" in model:
+        score += 45
+    if "chat" in model:
+        score += 35
+    if "instruct" in model:
+        score += 30
+    if "reason" in model:
+        score += 25
+    if "flash" in model:
+        score += 20
+    if "2.5" in model or "v2.5" in model:
+        score += 18
+    if "omni" in model:
+        score -= 15
+    return score
+
+
+def _ranked_text_model_ids(model_ids: list[str]) -> list[str]:
+    return sorted(
+        [model_id for model_id in model_ids if _is_text_chat_model(model_id)],
+        key=_chat_model_score,
+        reverse=True,
+    )
+
+
+def _model_capabilities(model_id: str) -> dict[str, bool]:
+    model = model_id.lower()
+    embedding = any(token in model for token in _EMBEDDING_MODEL_HINTS)
+    vision = any(token in model for token in _VISION_MODEL_HINTS)
+    return {"vision": bool(vision and not embedding), "embedding": bool(embedding)}
+
+
+def _model_config_item(model_id: str, owned_by: str = "") -> dict[str, Any]:
+    return {
+        "id": model_id,
+        "owned_by": owned_by,
+        "capabilities": _model_capabilities(model_id),
+    }
 
 
 def _ensure_table(conn) -> None:
@@ -203,6 +308,8 @@ def _coerce_preference_value(section: str, key: str, value: Any) -> Any:
         return _coerce_bool(value)
     if isinstance(default, int):
         return _coerce_int(section, key, value, default)
+    if isinstance(default, dict):
+        return copy.deepcopy(value) if isinstance(value, dict) else copy.deepcopy(default)
     text = str(value if value is not None else default).strip()
     if section == "general" and key == "language":
         return text if text in {"zh-CN", "en-US"} else default
@@ -406,16 +513,64 @@ def test_connection(provider_id: str) -> dict[str, Any]:
             timeout=15.0,
         )
         models = client.models.list()
-        model_ids = [m.id for m in (models.data or [])][:10]
+        model_items = [
+            _model_config_item(
+                str(getattr(m, "id", "") or "").strip(),
+                str(getattr(m, "owned_by", "") or "").strip(),
+            )
+            for m in (models.data or [])[:10]
+            if str(getattr(m, "id", "") or "").strip()
+        ]
+        model_ids = [item["id"] for item in model_items]
+        generation_model = ""
+        generation_preview = ""
         if model_ids:
+            generation_candidates = _ranked_text_model_ids(model_ids) or model_ids
+            generation_errors: list[str] = []
+            for candidate_model in generation_candidates[:4]:
+                try:
+                    completion = client.chat.completions.create(
+                        model=candidate_model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are a concise connectivity checker.",
+                            },
+                            {
+                                "role": "user",
+                                "content": "Reply with exactly: OK",
+                            },
+                        ],
+                        max_tokens=16,
+                        temperature=0,
+                    )
+                    content = completion.choices[0].message.content or ""
+                    if content.strip():
+                        generation_model = candidate_model
+                        generation_preview = content.strip()[:80]
+                        break
+                    generation_errors.append(f"{candidate_model}: empty response")
+                except Exception as exc:
+                    generation_errors.append(f"{candidate_model}: {str(exc)[:120]}")
+
+            if not generation_model:
+                return {
+                    "success": False,
+                    "models": model_items,
+                    "error": (
+                        "模型列表可用，但真实生成测试失败；请检查该模型的调用权限、余额或默认模型。"
+                        f" 最近错误: {'; '.join(generation_errors[-2:])}"
+                    ),
+                }
+
             try:
                 existing = json.loads(provider.get("config_json") or "{}")
                 if not isinstance(existing, dict):
                     existing = {}
             except Exception:
                 existing = {}
-            existing["models"] = model_ids
-            existing["default_model"] = _preferred_model_id(model_ids)
+            existing["models"] = model_items
+            existing["default_model"] = generation_model or _preferred_model_id(model_ids)
             save_provider(
                 provider_id=provider["id"],
                 name=provider["name"],
@@ -426,8 +581,10 @@ def test_connection(provider_id: str) -> dict[str, Any]:
             )
         return {
             "success": True,
-            "models": model_ids,
-            "message": f"连接成功，发现 {len(model_ids)} 个模型",
+            "models": model_items,
+            "generation_model": generation_model,
+            "generation_preview": generation_preview,
+            "message": f"连接成功，发现 {len(model_ids)} 个模型，生成测试通过: {generation_model}",
         }
     except Exception as e:
         return {"success": False, "error": f"连接失败: {e}"}

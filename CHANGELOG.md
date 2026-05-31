@@ -4,6 +4,9 @@
 
 ### 新闻研究流与可配置 Agent
 
+- 新增新版 Windows 一键安装包构建链路，`python build.py --installer` 会构建 React Web、打包 FastAPI 桌面启动器并生成 Inno Setup 安装包。
+- 打包版启动器改为自动启动本地 FastAPI 和静态 Web 前端，自动写入运行时 API 地址并打开浏览器。
+- 新增 GitHub Actions `Windows Installer` 工作流，可为 tag/release 生成 `AlphaScope-Setup-*.exe` 和便携 zip。
 - 新闻模块新增详情弹层，可查看正文、来源、分类、影响、情绪和 AI 摘要。
 - 新闻模块新增 AI 助手，支持选中新闻咨询，也支持解析用户输入的新闻链接。
 - 新闻原文跳转改为优先打开真实来源；缺失真实链接时按标题、标的和来源降级到搜索跳转。

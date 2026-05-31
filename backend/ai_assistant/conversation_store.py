@@ -139,6 +139,31 @@ class ConversationStore:
             self._conn.commit()
             return cur.lastrowid
 
+    def update_model(
+        self, conversation_id: str, provider: str = "", model: str = ""
+    ) -> None:
+        """更新对话使用的 Provider / Model。"""
+        fields = []
+        values = []
+        if provider:
+            fields.append("provider = ?")
+            values.append(provider)
+        if model:
+            fields.append("model = ?")
+            values.append(model)
+        if not fields:
+            return
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        fields.append("updated_at = ?")
+        values.append(now)
+        values.append(conversation_id)
+        with self._db_lock:
+            self._conn.execute(
+                f"UPDATE ai_conversations SET {', '.join(fields)} WHERE id = ?",
+                values,
+            )
+            self._conn.commit()
+
     def get_conversation(self, conversation_id: str) -> Optional[dict]:
         """加载对话头信息"""
         row = self._conn.execute(

@@ -361,6 +361,7 @@ async def test_fetch_prices_provider_timeout(client):
 async def test_get_latest_price_not_found(client):
     """GET /api/prices/{symbol}/latest 无数据"""
     with (
+        patch("backend.price_periods.fetch_intraday_prices", return_value=[]),
         patch("backend.price_store.get_prices", return_value=[]),
         patch("backend.price_store.get_latest_price", return_value=None),
         patch("backend.api.prices.fetch_prices") as mock_fetch,
@@ -384,6 +385,7 @@ async def test_get_latest_price_found(client):
         "volume": 1000,
     }
     with (
+        patch("backend.price_periods.fetch_intraday_prices", return_value=[]),
         patch("backend.price_store.get_prices", return_value=[mock_bar]),
         patch("backend.price_store.get_latest_price", return_value=mock_bar),
         patch("backend.api.prices.fetch_prices") as mock_fetch,
@@ -498,6 +500,7 @@ async def test_get_latest_price_prefers_daily_bar(client):
         "frequency": "1mo",
     }
     with (
+        patch("backend.price_periods.fetch_intraday_prices", return_value=[]),
         patch(
             "backend.price_store.get_prices", return_value=[daily]
         ) as mock_get_prices,
@@ -512,3 +515,31 @@ async def test_get_latest_price_prefers_daily_bar(client):
     mock_get_prices.assert_called_once_with(
         symbol="600519", frequency="1d", limit=20, include_incompatible=True
     )
+
+
+@pytest.mark.anyio
+async def test_get_latest_price_prefers_intraday_bar(client):
+    """GET /api/prices/{symbol}/latest 盘中优先返回最新分时价格"""
+    intraday = {
+        "symbol": "600519",
+        "date": "2026-05-25 14:59",
+        "open": 10,
+        "high": 10.8,
+        "low": 9.9,
+        "close": 10.7,
+        "change_pct": 7.0,
+        "frequency": "intraday",
+        "source": "akshare_intraday",
+    }
+    with (
+        patch("backend.price_store.get_market", return_value="CN"),
+        patch("backend.price_periods.fetch_intraday_prices", return_value=[intraday]),
+        patch("backend.price_store.get_prices") as mock_get_prices,
+    ):
+        resp = await client.get("/api/prices/600519/latest")
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["frequency"] == "intraday"
+    assert data["close"] == 10.7
+    mock_get_prices.assert_not_called()

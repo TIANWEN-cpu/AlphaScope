@@ -23,6 +23,13 @@ from typing import AsyncGenerator, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_float_for_api(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
 try:
     from fastapi import FastAPI, File, HTTPException, Request, UploadFile
     from fastapi.middleware.cors import CORSMiddleware
@@ -318,6 +325,8 @@ if HAS_FASTAPI:
                 stock_data=stock_data,
                 expert_team_id=req.expert_team_id,
                 mode_override=mode_override,
+                provider=(req.provider or "").strip() or None,
+                model=(req.model or "").strip() or None,
             )
         except Exception as e:
             logger.exception("Chat stream failed: %s", e)
@@ -332,6 +341,65 @@ if HAS_FASTAPI:
                 "X-Accel-Buffering": "no",
             },
         )
+
+    @app.post("/api/chat", response_model=ApiResponse[dict[str, Any]])
+    def chat(req: ChatRequest):
+        """真实模型对话。用于主工作台聊天框的非流式调用。"""
+        from backend.ai_assistant.orchestrator import (
+            AnalysisMode as ChatAnalysisMode,
+            ChatOrchestrator,
+        )
+
+        orch = ChatOrchestrator()
+        try:
+            requested_mode = ChatAnalysisMode(req.mode)
+        except ValueError:
+            requested_mode = ChatAnalysisMode.FREE
+
+        provider = (req.provider or "").strip()
+        model = (req.model or "").strip()
+        conv_id = req.conversation_id
+        if not conv_id:
+            conv_id = orch.new_conversation(
+                stock_symbol=req.stock_symbol or "",
+                stock_name=req.stock_name or "",
+                mode=requested_mode,
+                provider=provider,
+                model=model,
+            )
+
+        stock_data = None
+        if req.stock_symbol:
+            context = req.context or {}
+            stock_data = {
+                "symbol": req.stock_symbol,
+                "name": req.stock_name or "",
+                "close": _safe_float_for_api(context.get("close")),
+                "day_change": _safe_float_for_api(context.get("day_change")),
+                "period_change": _safe_float_for_api(context.get("period_change")),
+                "ma5": context.get("ma5", "N/A"),
+                "ma20": context.get("ma20", "N/A"),
+                "ma60": context.get("ma60", "N/A"),
+                "fund_dir": str(context.get("fund_dir") or "暂无主力资金数据"),
+                "data_date": str(context.get("data_date") or ""),
+            }
+
+        try:
+            result = orch.send_message(
+                conversation_id=conv_id,
+                user_input=req.message,
+                stock_data=stock_data,
+                expert_team_id=req.expert_team_id,
+                mode_override=requested_mode.value,
+                provider=provider or None,
+                model=model or None,
+            )
+        except Exception as e:
+            logger.exception("Chat failed: %s", e)
+            raise HTTPException(status_code=500, detail="模型调用失败") from e
+
+        result["conversation_id"] = conv_id
+        return ApiResponse(success=True, data=result)
 
     # ============== 分析 API ==============
 

@@ -71,7 +71,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Build Docker image
-      run: docker build -t ai-finance:test .
+      run: docker build -t alphascope:test .
 
     - name: Verify Docker image
-      run: docker run --rm ai-finance:test python -c "import backend; print('OK')"
+      run: docker run --rm alphascope:test python -c "import backend; print('OK')"

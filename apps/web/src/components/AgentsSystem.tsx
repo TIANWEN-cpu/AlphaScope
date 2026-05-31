@@ -234,7 +234,9 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
                     {agent.description}
                   </p>
                   <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-mono">
-                    <span className="rounded border border-white/5 bg-white/[0.03] px-2 py-1 text-neutral-500">{agent.model}</span>
+                    <span className="rounded border border-white/5 bg-white/[0.03] px-2 py-1 text-neutral-500">
+                      {agent.provider ? `${agent.provider} / ${agent.model}` : agent.model}
+                    </span>
                     <span className="rounded border border-white/5 bg-white/[0.03] px-2 py-1 text-neutral-500">
                       温度 {agent.temperature.toFixed(2)}
                     </span>
