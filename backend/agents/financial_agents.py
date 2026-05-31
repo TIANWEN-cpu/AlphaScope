@@ -12,6 +12,7 @@ Financial Agents: Agent 执行逻辑。
 """
 
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from typing import Dict, Any, Optional, List
@@ -42,6 +43,69 @@ except Exception:
 
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_agent_error(error: Any) -> str:
+    text = str(error or "").strip()
+    if not text:
+        return ""
+    try:
+        from backend.security.log_sanitizer import sanitize_log_message
+
+        text = sanitize_log_message(text)
+    except Exception:
+        pass
+    text = re.sub(
+        r"(api\s*key\s*[:：]?\s*)[^,\s'\"}]+",
+        r"\1[REDACTED]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(r"sk-[A-Za-z0-9_\-]{8,}", "[REDACTED]", text)
+    text = re.sub(r"\s+", " ", text)
+    if re.search(
+        r"401|unauthori[sz]ed|authentication|authenticat|api\s*key|invalid\s*key|鉴权|认证|密钥",
+        text,
+        re.IGNORECASE,
+    ):
+        return "模型鉴权失败，请在系统设置中检查 Provider Base URL、API Key 和模型名。"
+    return text[:180]
+
+
+def _fallback_text_to_agent_result(text: str) -> Dict[str, Any]:
+    """Turn a non-JSON model reply into a conservative Agent result."""
+    clean_text = re.sub(r"\s+", " ", (text or "").strip())
+    if not clean_text:
+        return {}
+
+    signal = "观望"
+    if re.search(r"卖出|减持|看空|下行|风险较高|bear|sell|short", clean_text, re.I):
+        signal = "卖出"
+    elif re.search(r"买入|增持|看多|上行|机会|bull|buy|long", clean_text, re.I):
+        signal = "买入"
+
+    confidence = 50
+    confidence_match = re.search(r"(\d{1,3})\s*(?:%|/100|分|置信)", clean_text)
+    if confidence_match:
+        confidence = max(0, min(100, int(confidence_match.group(1))))
+    elif signal != "观望":
+        confidence = 55
+
+    return {
+        "signal": signal,
+        "confidence": confidence,
+        "reason": clean_text[:220],
+        "structured_fallback": True,
+        "evidence": [
+            {
+                "type": "other",
+                "claim": "模型返回了自然语言分析，系统已进行结构化兜底。",
+                "data_date": "",
+            }
+        ],
+        "invalid_if": "模型未返回严格 JSON，建议复核原始回答。",
+        "risks": ["结构化解析降级，结论需人工复核"],
+    }
 
 
 def _candidate_models(
@@ -115,7 +179,9 @@ def run_one_agent(
 
             if not data or not data.get("signal"):
                 last_err = f"{VENDORS.get(vd, {}).get('label', vd)} 未返回有效 JSON"
-                continue
+                data = _fallback_text_to_agent_result(text)
+                if not data:
+                    continue
 
             valid = _validate_agent_output(data or {})
             return {
@@ -133,10 +199,11 @@ def run_one_agent(
                     "label", primary_vendor
                 ),
                 "fallback_used": vd != primary_vendor,
+                "structured_fallback": bool(data.get("structured_fallback")),
                 "ok": True,
             }
         except Exception as e:
-            last_err = str(e)[:120]
+            last_err = _sanitize_agent_error(e)
             continue
 
     return {
@@ -222,6 +289,7 @@ def run_custom_agent(
     market_brief: str,
     api_key: Optional[str] = None,
     global_ai_settings: Optional[dict] = None,
+    memory_context: str = "",
 ) -> Dict[str, Any]:
     """运行单个页面自定义 Agent。"""
     cfg = _agent_config_from_dict(agent_raw)
@@ -236,6 +304,7 @@ def run_custom_agent(
             "role": "user",
             "content": (
                 f"{cfg.instruction}\n\n{market_brief}\n\n"
+                f"{memory_context}\n\n"
                 "【输出要求】请用 JSON 返回,字段:\n"
                 "- signal: 买入|卖出|观望\n"
                 "- confidence: 0-100 整数\n"
@@ -293,7 +362,9 @@ def run_custom_agent(
                 data = _extract_json(text)
             if not data or not data.get("signal"):
                 last_err = f"{vd} 未返回有效 JSON"
-                continue
+                data = _fallback_text_to_agent_result(text)
+                if not data:
+                    continue
             valid = _validate_agent_output(data)
             return {
                 "key": cfg.key,
@@ -310,11 +381,12 @@ def run_custom_agent(
                     "label", primary_vendor
                 ),
                 "fallback_used": vd != primary_vendor,
+                "structured_fallback": bool(data.get("structured_fallback")),
                 "ok": True,
                 "card_style": cfg.card_style,
             }
         except Exception as e:
-            last_err = str(e)[:120]
+            last_err = _sanitize_agent_error(e)
             continue
     return {
         "key": cfg.key,
@@ -342,9 +414,31 @@ def run_custom_agents(
     enable_critic: bool = True,
 ) -> Dict[str, Any]:
     """并行运行任意数量的页面自定义 Agent;并可选地批量调用 Critic 审稿。"""
-    from backend.runtime.context_builder import build_market_brief
+    from backend.runtime.context_builder import build_market_brief, fetch_evidence_context
 
-    brief = build_market_brief(stock_data)
+    symbol = str(stock_data.get("symbol") or "")
+    stock_name = str(stock_data.get("name") or "")
+    preferences = {}
+    try:
+        from backend.settings_store import get_app_preferences
+
+        preferences = get_app_preferences()
+    except Exception:
+        preferences = {}
+    knowledge_preferences = preferences.get("knowledge", {})
+    evidence_context = ""
+    knowledge_enabled = knowledge_preferences.get("enabled", True)
+    if knowledge_enabled and knowledge_preferences.get("shared_knowledge", True):
+        evidence_context = fetch_evidence_context(symbol, stock_name)
+    brief = build_market_brief(stock_data, evidence_context=evidence_context)
+    memory_context = ""
+    if knowledge_enabled and knowledge_preferences.get("agent_memory", True):
+        try:
+            from backend.agent_memory import build_agent_memory_context
+
+            memory_context = build_agent_memory_context(symbol, stock_name)
+        except Exception:
+            memory_context = ""
     api_keys = api_keys or {}
     active = [
         _agent_config_from_dict(a)
@@ -374,6 +468,7 @@ def run_custom_agents(
                 brief,
                 api_keys.get(cfg.key),
                 global_ai_settings,
+                memory_context,
             ): cfg.key
             for cfg in active
         }
@@ -433,6 +528,29 @@ def run_custom_agents(
                 "error": str(e)[:200],
             }
 
+    if knowledge_enabled and knowledge_preferences.get("auto_write_agent_memory", True):
+        try:
+            from backend.agent_memory import save_agent_run_memory
+
+            save_agent_run_memory(stock_data, results)
+        except Exception:
+            pass
+
+    chairman_summary = None
+    chairman_settings = (global_ai_settings or {}).get("chairman") or {}
+    if chairman_settings.get("provider") and chairman_settings.get("model"):
+        try:
+            from backend.agents.chairman import summarize_with_chairman
+
+            chairman_summary = summarize_with_chairman(
+                {"agents": results, "summary": {"buy": buy, "sell": sell, "hold": hold}},
+                stock_data.get("name", ""),
+                vendor=chairman_settings.get("provider"),
+                model=chairman_settings.get("model"),
+            )
+        except Exception as exc:
+            chairman_summary = f"主席总结生成失败: {exc}"
+
     return {
         "agents": results,
         "summary": {
@@ -445,6 +563,7 @@ def run_custom_agents(
         "brief": brief,
         "agent_order": [cfg.key for cfg in active],
         "critic": critic_block,
+        "chairman_summary": chairman_summary,
     }
 
 

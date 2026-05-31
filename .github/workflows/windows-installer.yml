@@ -1,0 +1,64 @@
+name: Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --prefer-binary -r requirements-api.txt pyinstaller
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build portable app and installer
+        run: python build.py --installer --zip
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AlphaScope-Windows-Installer
+          path: |
+            installer/installer-output/AlphaScope-Setup-*.exe
+            dist/AlphaScope-portable.zip
+
+      - name: Attach assets to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${env:GITHUB_REF_NAME}" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "${env:GITHUB_REF_NAME}" --title "${env:GITHUB_REF_NAME}" --generate-notes
+          }
+          gh release upload "${env:GITHUB_REF_NAME}" installer/installer-output/AlphaScope-Setup-*.exe --clobber
+          gh release upload "${env:GITHUB_REF_NAME}" dist/AlphaScope-portable.zip --clobber

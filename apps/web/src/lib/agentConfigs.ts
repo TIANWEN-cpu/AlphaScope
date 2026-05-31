@@ -11,6 +11,7 @@ export interface AgentConfig {
   description: string;
   iconKey: AgentIconKey;
   enabled: boolean;
+  provider: string;
   model: string;
   temperature: number;
   prompt: string;
@@ -21,6 +22,7 @@ export interface AgentRuntimeConfig {
   name: string;
   role: string;
   description: string;
+  provider: string;
   model: string;
   temperature: number;
   prompt: string;
@@ -39,6 +41,7 @@ export const DEFAULT_AGENT_CONFIGS: AgentConfig[] = [
     description: '整合多源新闻与宏观经济数据，提供全球经济周期与市场大势预判。',
     iconKey: 'macro',
     enabled: true,
+    provider: '',
     model: 'gpt-4.1',
     temperature: 0.25,
     prompt: '你是宏观趋势分析师，关注政策、利率、汇率、流动性、产业周期与跨市场风险。请用可核验事实支撑判断，并明确哪些宏观变量会改变结论。',
@@ -52,6 +55,7 @@ export const DEFAULT_AGENT_CONFIGS: AgentConfig[] = [
     description: '深度剖析公司财务报表、盈利能力、成长性及行业竞争格局。',
     iconKey: 'fundamental',
     enabled: true,
+    provider: '',
     model: 'gpt-4.1',
     temperature: 0.2,
     prompt: '你是基本面分析助手，负责拆解收入、利润、现金流、资产负债、竞争格局和估值假设。请优先引用公告和财报口径，避免把未经证实的传闻当作事实。',
@@ -65,6 +69,7 @@ export const DEFAULT_AGENT_CONFIGS: AgentConfig[] = [
     description: '基于海量市场数据，发掘统计套利机会，构建并回测多因子选股模型。',
     iconKey: 'quant',
     enabled: true,
+    provider: '',
     model: 'gpt-4.1',
     temperature: 0.15,
     prompt: '你是量化策略专家，关注因子暴露、回测稳定性、样本外表现、交易成本和拥挤度。请区分统计相关与可交易信号，并指出模型失效条件。',
@@ -78,6 +83,7 @@ export const DEFAULT_AGENT_CONFIGS: AgentConfig[] = [
     description: '实时监控持仓风险敞口，评估最大回撤并确保交易符合风控阈值。',
     iconKey: 'risk',
     enabled: true,
+    provider: '',
     model: 'gpt-4.1',
     temperature: 0.1,
     prompt: '你是风险合规顾问，优先识别公告风险、财务异常、流动性压力、黑天鹅事件、仓位暴露和合规边界。请把风险等级、触发条件和缓释动作说清楚。',
@@ -91,6 +97,7 @@ export const DEFAULT_AGENT_CONFIGS: AgentConfig[] = [
     description: '结构化与非结构化数据聚合，从研报、公告和新闻中提取关键实体。',
     iconKey: 'data',
     enabled: true,
+    provider: '',
     model: 'gpt-4.1-mini',
     temperature: 0.2,
     prompt: '你是数据情报收集员，负责汇总行情、公告、新闻、研报和舆情线索。请输出结构化要点、时间戳、来源可信度和仍需核验的问题。',
@@ -104,6 +111,7 @@ export const DEFAULT_AGENT_CONFIGS: AgentConfig[] = [
     description: '评估策略信号的执行成本、滑点、流动性和订单路径，不生成实盘指令。',
     iconKey: 'execution',
     enabled: true,
+    provider: '',
     model: 'gpt-4.1-mini',
     temperature: 0.15,
     prompt: '你是交易执行评估助手，只评估模拟执行路径、流动性、滑点、盘口冲击和风控约束。不得生成实盘下单指令，必须保留人工确认步骤。',
@@ -139,6 +147,7 @@ function normalizeAgentConfig(value: unknown, fallback?: AgentConfig): AgentConf
     description: safeString(input.description, base.description),
     iconKey,
     enabled: typeof input.enabled === 'boolean' ? input.enabled : true,
+    provider: typeof input.provider === 'string' ? input.provider : base.provider,
     model: safeString(input.model, base.model),
     temperature: safeTemperature(input.temperature, base.temperature),
     prompt: safeString(input.prompt, base.prompt),
@@ -188,6 +197,7 @@ export function createCustomAgentConfig(index: number): AgentConfig {
     description: '面向特定投研问题的自定义分析席位。',
     iconKey: 'custom',
     enabled: true,
+    provider: '',
     model: 'gpt-4.1-mini',
     temperature: 0.3,
     prompt: '你是自定义金融研究 Agent，请围绕用户指定标的进行结构化分析，明确证据来源、核心判断、反证条件和风险边界。',
@@ -197,11 +207,12 @@ export function createCustomAgentConfig(index: number): AgentConfig {
 export function getEnabledAgentRuntimeConfigs(configs: AgentConfig[] = loadAgentConfigs()): AgentRuntimeConfig[] {
   return configs
     .filter((agent) => agent.enabled)
-    .map(({ id, name, role, description, model, temperature, prompt }) => ({
+    .map(({ id, name, role, description, provider, model, temperature, prompt }) => ({
       id,
       name,
       role,
       description,
+      provider,
       model,
       temperature,
       prompt,

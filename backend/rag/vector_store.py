@@ -4,13 +4,66 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 from backend.project_paths import CACHE_DIR
 
 CHROMA_DIR = CACHE_DIR / "chroma_db"
+
+
+class _OpenAIEmbeddingFunction:
+    """Chroma embedding adapter backed by a configured OpenAI-compatible provider."""
+
+    def __init__(self, *, provider_id: str, model: str, base_url: str, api_key: str) -> None:
+        self.provider_id = provider_id
+        self.model = model
+        self.base_url = base_url
+        self.api_key = api_key
+
+    def __call__(self, input):  # Chroma validates this exact parameter name.
+        from openai import OpenAI
+
+        client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=30.0)
+        response = client.embeddings.create(model=self.model, input=list(input))
+        return [item.embedding for item in response.data]
+
+
+def _configured_embedding_function() -> tuple[Optional[_OpenAIEmbeddingFunction], str]:
+    try:
+        from backend.settings_store import get_app_preferences, get_provider
+
+        knowledge = get_app_preferences().get("knowledge", {})
+        if not knowledge.get("enabled", True):
+            return None, "default"
+
+        provider_id = str(knowledge.get("embedding_provider_id") or "").strip()
+        model = str(knowledge.get("embedding_model") or "").strip()
+        if not provider_id or not model:
+            return None, "default"
+
+        provider = get_provider(provider_id)
+        if not provider or not provider.get("enabled", True):
+            return None, "default"
+        base_url = str(provider.get("base_url") or "").strip()
+        api_key = str(provider.get("api_key") or "").strip()
+        if not base_url or not api_key:
+            return None, "default"
+
+        signature = f"{provider_id}:{model}:{base_url}"
+        return (
+            _OpenAIEmbeddingFunction(
+                provider_id=provider_id,
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+            ),
+            signature,
+        )
+    except Exception as exc:
+        logger.debug("自定义嵌入模型配置读取失败，回退 Chroma 默认 embedding: %s", exc)
+        return None, "default"
 
 
 class VectorStore:
@@ -37,6 +90,7 @@ class VectorStore:
         CHROMA_DIR.mkdir(parents=True, exist_ok=True)
         self._client = None
         self._collections: dict = {}
+        self._collection_signatures: dict[str, str] = {}
 
     def _get_client(self):
         if self._client is None:
@@ -52,14 +106,19 @@ class VectorStore:
 
     def get_collection(self, name: str):
         """获取或创建 collection"""
-        if name not in self._collections:
+        embedding_function, signature = _configured_embedding_function()
+        if name not in self._collections or self._collection_signatures.get(name) != signature:
             client = self._get_client()
             if client is None:
                 raise RuntimeError("chromadb 未安装，无法创建向量集合")
-            self._collections[name] = client.get_or_create_collection(
-                name=name,
-                metadata={"hnsw:space": "cosine"},
-            )
+            kwargs: dict[str, Any] = {
+                "name": name,
+                "metadata": {"hnsw:space": "cosine"},
+            }
+            if embedding_function is not None:
+                kwargs["embedding_function"] = embedding_function
+            self._collections[name] = client.get_or_create_collection(**kwargs)
+            self._collection_signatures[name] = signature
         return self._collections[name]
 
     def add_documents(

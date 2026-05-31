@@ -6,6 +6,7 @@ from backend.price_periods import (
     _compatible_previous_close,
     _is_cn_trading_minute,
     aggregate_price_bars,
+    default_daily_window_days,
     fetch_intraday_prices,
     latest_bar_date,
     normalize_frequency,
@@ -22,6 +23,12 @@ def test_normalize_frequency_aliases():
     assert normalize_frequency("1M") == "1mo"
     assert normalize_frequency("monthly") == "1mo"
     assert normalize_frequency("unknown") == "1d"
+
+
+def test_default_daily_window_days_extends_weekly_and_monthly_history():
+    assert default_daily_window_days(156, "1w") >= 1122
+    assert default_daily_window_days(120, "1mo") >= 3930
+    assert default_daily_window_days(80, "1d") == 160
 
 
 def test_aggregate_weekly_bars_uses_true_ohlc_and_sums_volume():

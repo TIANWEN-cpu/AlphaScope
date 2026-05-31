@@ -46,6 +46,19 @@ def _float_value(value) -> float:
         return 0.0
 
 
+def _normalize_hk_symbol(symbol: str) -> str:
+    digits = "".join(ch for ch in str(symbol or "") if ch.isdigit())
+    if not digits:
+        return ""
+    return digits[:5].zfill(5)
+
+
+def _looks_like_hk_symbol(symbol: str) -> bool:
+    raw = str(symbol or "").strip().upper()
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    return ".HK" in raw or raw.startswith("HK") or len(digits) == 5
+
+
 class AkShareProvider(BaseProvider):
     name = "akshare"
     markets = ["CN", "ALL"]
@@ -224,6 +237,10 @@ class AkShareProvider(BaseProvider):
         symbol = query.get("symbol", "")
         if not symbol:
             return []
+        market = str(query.get("market") or "").upper()
+        if market == "HK" or _looks_like_hk_symbol(symbol):
+            return self._get_hk_prices(query)
+
         frequency = str(query.get("frequency") or "").lower()
         period = query.get("period") or {"1w": "weekly", "1mo": "monthly"}.get(
             frequency, "daily"
@@ -277,6 +294,68 @@ class AkShareProvider(BaseProvider):
         except Exception as e:
             logger.debug("AkShare prices failed: %s", e)
         return self._get_prices_from_tencent(symbol, start_date, end_date)
+
+    def _get_hk_prices(self, query: dict) -> list[dict]:
+        symbol = _normalize_hk_symbol(query.get("symbol", ""))
+        if not symbol:
+            return []
+        start_date = str(query.get("start_date") or "").replace("-", "")
+        end_date = str(query.get("end_date") or "").replace("-", "")
+        adjust = query.get("adjust", "")
+        limit = int(query.get("limit", 120) or 120)
+
+        try:
+            df = _safe(ak.stock_hk_daily, symbol=symbol, adjust=adjust)
+            if df is None or len(df) == 0:
+                return []
+            df = df.copy()
+            if "date" in df.columns:
+                df["date"] = df["date"].astype(str)
+                df = df.sort_values("date")
+                if start_date:
+                    start_text = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]}"
+                    df = df[df["date"] >= start_text]
+                if end_date:
+                    end_text = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}"
+                    df = df[df["date"] <= end_text]
+            df = df.tail(max(1, min(limit, 500)))
+            results = []
+            prev_close = 0.0
+            for _, row in df.iterrows():
+                open_price = _float_value(row.get("open", 0))
+                high = _float_value(row.get("high", 0))
+                low = _float_value(row.get("low", 0))
+                close = _float_value(row.get("close", 0))
+                volume = _float_value(row.get("volume", 0))
+                amount = _float_value(row.get("amount", 0))
+                base = prev_close or open_price or close
+                change_pct = ((close - base) / base * 100) if base else 0.0
+                amplitude = ((high - low) / base * 100) if base else 0.0
+                results.append(
+                    {
+                        "symbol": symbol,
+                        "market": "HK",
+                        "date": str(row.get("date", "")),
+                        "open": open_price,
+                        "high": high,
+                        "low": low,
+                        "close": close,
+                        "volume": volume,
+                        "amount": amount,
+                        "turnover": 0.0,
+                        "amplitude": round(amplitude, 4),
+                        "change_pct": round(change_pct, 4),
+                        "adjust": adjust,
+                        "frequency": "1d",
+                        "source": "akshare:stock_hk_daily",
+                    }
+                )
+                prev_close = close
+            return results
+        except Exception as e:
+            logger.debug("AkShare HK prices failed: %s", e)
+            self._record_failure(f"hk prices: {e}")
+            return []
 
     def _get_prices_from_tencent(
         self,

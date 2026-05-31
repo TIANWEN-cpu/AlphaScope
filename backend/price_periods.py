@@ -316,9 +316,9 @@ def default_daily_window_days(limit: int, frequency: str) -> int:
     """为聚合周期准备足够的日线数据。"""
     normalized = normalize_frequency(frequency)
     if normalized == "1mo":
-        return max(limit * 40, 365)
+        return max(limit * 32 + 90, 730)
     if normalized == "1w":
-        return max(limit * 10, 180)
+        return max(limit * 7 + 30, 365)
     return max(limit * 2, 30)
 
 

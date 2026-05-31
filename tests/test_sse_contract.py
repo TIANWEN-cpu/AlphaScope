@@ -113,6 +113,61 @@ async def test_explicit_mode_overrides_auto_routing(client):
 
 
 @pytest.mark.anyio
+async def test_chat_api_passes_provider_model_and_context(client):
+    """Non-stream chat must use the selected real provider/model."""
+    mock_orch = _mock_orchestrator(
+        {
+            "mode": "free",
+            "content": "real model reply",
+            "provider": "custom-provider",
+            "model": "chat-model",
+        }
+    )
+
+    with patch(
+        "backend.ai_assistant.orchestrator.ChatOrchestrator", return_value=mock_orch
+    ):
+        resp = await client.post(
+            "/api/chat",
+            json={
+                "message": "analyze this",
+                "stock_symbol": "600519.SH",
+                "stock_name": "贵州茅台",
+                "provider": "custom-provider",
+                "model": "chat-model",
+                "context": {
+                    "close": 1513.48,
+                    "day_change": 0.39,
+                    "period_change": 0.39,
+                    "ma5": 1515.2,
+                    "ma20": 1508.7,
+                    "fund_dir": "main inflow",
+                },
+            },
+        )
+
+    data = resp.json()
+    assert resp.status_code == 200
+    assert data["success"] is True
+    assert data["data"]["conversation_id"] == "test-conv-id"
+    assert data["data"]["content"] == "real model reply"
+    assert data["data"]["provider"] == "custom-provider"
+    assert data["data"]["model"] == "chat-model"
+
+    mock_orch.new_conversation.assert_called_once()
+    assert mock_orch.new_conversation.call_args.kwargs["provider"] == "custom-provider"
+    assert mock_orch.new_conversation.call_args.kwargs["model"] == "chat-model"
+
+    kwargs = mock_orch.send_message.call_args.kwargs
+    assert kwargs["provider"] == "custom-provider"
+    assert kwargs["model"] == "chat-model"
+    assert kwargs["mode_override"] == "free"
+    assert kwargs["stock_data"]["symbol"] == "600519.SH"
+    assert kwargs["stock_data"]["close"] == 1513.48
+    assert kwargs["stock_data"]["fund_dir"] == "main inflow"
+
+
+@pytest.mark.anyio
 async def test_content_events_have_type_and_chunk(client):
     """content event 必须包含 type 和 chunk"""
     mock_orch = _mock_orchestrator(

@@ -1,27 +1,104 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { Bot, Maximize2, RefreshCw, Send, Zap, Clock, LineChart as LineChartIcon, Settings2, Sparkles, ChevronDown, ImagePlus } from 'lucide-react';
-import { ResponsiveContainer, ComposedChart, Bar, Line, Area, YAxis, CartesianGrid, Cell } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Cell, Tooltip } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
-import { STOCK_UNIVERSE, StockTarget, findStockTarget, formatStockLabel } from '../lib/stocks';
+import { STOCK_UNIVERSE, StockTarget, findStockTarget, formatStockLabel, resolveStockTarget } from '../lib/stocks';
 import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
+import { fetchApi } from '../lib/api';
+import {
+  buildModelOptions,
+  getModelKey,
+  getRouteSelection,
+  loadAiModelRoutesFromApi,
+  loadLocalAiModelRoutes,
+  ModelProvider,
+} from '../lib/aiModelRouting';
+import { ThemedSelect } from './ThemedSelect';
 
-const generateKlineData = (points: number, basePrice: number = 1500) => {
+interface WorkbenchChartPoint {
+  date: string;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+  wickRange: [number, number];
+  ma5: number;
+  ma10: number;
+  ma20: number;
+  volume: number;
+  amount?: number;
+  change: number;
+  changePct: number;
+  up: boolean;
+  source?: string;
+  frequency?: string;
+}
+
+interface PriceBar {
+  symbol: string;
+  date: string;
+  market?: string;
+  frequency?: string;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+  volume: number;
+  amount?: number;
+  change_pct?: number;
+  previous_close?: number;
+  source?: string;
+}
+
+interface PriceSeriesResponse {
+  symbol: string;
+  frequency: string;
+  bars: PriceBar[];
+  total: number;
+  degraded?: boolean;
+  source_status?: string;
+}
+
+const generateKlineData = (points: number, basePrice: number = 1500, stepDays = 1): WorkbenchChartPoint[] => {
   let currentPrice = basePrice;
   const volatility = Math.max(0.25, Math.min(10, basePrice * 0.012));
-  const maOffset = Math.max(0.2, Math.min(10, basePrice * 0.004));
   const volumeBase = Math.max(80000, basePrice * 2800);
-  return Array.from({ length: points }).map((_, i) => {
-    currentPrice = Math.max(0.1, currentPrice + (Math.random() * volatility * 2 - volatility));
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - (points - 1) * stepDays);
+  const raw = Array.from({ length: points }).map((_, i) => {
+    const open = currentPrice;
+    const close = Math.max(0.1, currentPrice + (Math.random() * volatility * 2 - volatility));
+    const high = Math.max(open, close) + Math.random() * volatility * 0.8;
+    const low = Math.max(0.1, Math.min(open, close) - Math.random() * volatility * 0.8);
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + i * stepDays);
+    currentPrice = close;
     return {
-      date: `05-${String(10 + Math.floor(i / 2)).padStart(2, '0')}`,
-      ma5: currentPrice + maOffset,
-      ma10: currentPrice,
-      ma20: Math.max(0.1, currentPrice - maOffset * 2),
+      date: date.toISOString().slice(0, 10),
+      open: Number(open.toFixed(2)),
+      close: Number(close.toFixed(2)),
+      high: Number(high.toFixed(2)),
+      low: Number(low.toFixed(2)),
+      wickRange: [Number(low.toFixed(2)), Number(high.toFixed(2))] as [number, number],
       volume: volumeBase + Math.random() * volumeBase * 1.8,
-      up: Math.random() > 0.48,
+      change: Number((close - open).toFixed(2)),
+      changePct: Number((((close - open) / open) * 100).toFixed(2)),
+      up: close >= open,
+    };
+  });
+  return raw.map((item, index) => {
+    const slice5 = raw.slice(Math.max(0, index - 4), index + 1);
+    const slice10 = raw.slice(Math.max(0, index - 9), index + 1);
+    const slice20 = raw.slice(Math.max(0, index - 19), index + 1);
+    return {
+      ...item,
+      ma5: Number((slice5.reduce((sum, point) => sum + point.close, 0) / slice5.length).toFixed(2)),
+      ma10: Number((slice10.reduce((sum, point) => sum + point.close, 0) / slice10.length).toFixed(2)),
+      ma20: Number((slice20.reduce((sum, point) => sum + point.close, 0) / slice20.length).toFixed(2)),
+      source: 'local-preview',
     };
   });
 };
@@ -90,6 +167,17 @@ type AnalysisModeId = typeof ANALYSIS_MODES[number]['id'];
 
 type PanelTabId = 'news' | 'finance' | 'funds' | 'quant';
 
+interface ChatResponse {
+  conversation_id: string;
+  mode: string;
+  content: string;
+  provider?: string;
+  model?: string;
+  detected_intent?: string;
+  auto_routed?: boolean;
+  error?: boolean;
+}
+
 const PANEL_TABS: Array<{ id: PanelTabId; label: string; icon: typeof Zap }> = [
   { id: 'news', label: '实时资讯', icon: Zap },
   { id: 'finance', label: '核心财务', icon: Clock },
@@ -104,6 +192,11 @@ const QUANT_FACTORS = [
   { label: '证据完整度', value: 'B', desc: '需继续补公告、资金流和估值来源。' },
 ];
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error || '未知错误');
+}
+
 function formatMessageHtml(content: string) {
   return content
     .replace(/&/g, '&amp;')
@@ -113,17 +206,254 @@ function formatMessageHtml(content: string) {
     .replace(/\n/g, '<br/>');
 }
 
-function formatPrice(value: number) {
+function stripSymbolSuffix(symbol: string) {
+  return String(symbol || '').trim().split('.')[0];
+}
+
+function formatAxisDate(value: string) {
+  const text = String(value || '');
+  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(text)) return text.slice(5, 16);
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(5, 10);
+  return text;
+}
+
+function getMinimumPeriodBars(period: string) {
+  if (period === '月K') return 6;
+  if (period === '周K') return 12;
+  return 2;
+}
+
+function shouldShowMovingAverage(period: string, dataLength: number, windowSize: number) {
+  if (period === '月K' || period === '周K') {
+    return dataLength >= windowSize;
+  }
+  return dataLength >= 2;
+}
+
+function formatPricePayloadMessage(payload: PriceSeriesResponse, periodLabel: string) {
+  if (payload.source_status === 'short_history') {
+    return `${periodLabel}样本不足，仅显示上市以来可用K线`;
+  }
+  if (payload.degraded) {
+    return '行情源降级，使用可用缓存';
+  }
+  return '真实行情已同步';
+}
+
+function formatPrice(value?: number) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '--';
   return value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatVolume(value: number) {
-  if (value >= 100000000) return `${(value / 100000000).toFixed(2)}亿`;
-  if (value >= 10000) return `${(value / 10000).toFixed(1)}万`;
-  return Math.round(value).toLocaleString('zh-CN');
+function formatVolume(value?: number) {
+  const number = Number(value || 0);
+  if (number >= 100000000) return `${(number / 100000000).toFixed(2)}亿`;
+  if (number >= 10000) return `${(number / 10000).toFixed(1)}万`;
+  return Math.round(number).toLocaleString('zh-CN');
 }
 
-export function Workbench() {
+function getWorkbenchPriceDomain(data: WorkbenchChartPoint[], fallback: number): [number, number] {
+  const values = data.flatMap((point) => [
+    point.open,
+    point.close,
+    point.high,
+    point.low,
+    point.ma5,
+    point.ma10,
+    point.ma20,
+  ]).filter((value) => Number.isFinite(value));
+  const baseValues = values.length ? values : [fallback || 1];
+  const min = Math.min(...baseValues);
+  const max = Math.max(...baseValues);
+  const range = Math.max(max - min, Math.abs(max) * 0.01, 1);
+  const padding = Math.max(range * 0.08, 0.01);
+  return [Math.max(0, min - padding), max + padding];
+}
+
+function enrichWorkbenchData(rawBars: PriceBar[]): WorkbenchChartPoint[] {
+  const bars = [...rawBars].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return bars.map((bar, index) => {
+    const open = Number(bar.open || 0);
+    const close = Number(bar.close || 0);
+    const high = Number(bar.high || Math.max(open, close));
+    const low = Number(bar.low || Math.min(open, close));
+    const previousClose = index > 0
+      ? Number(bars[index - 1].close || open)
+      : Number(bar.previous_close || 0) || (
+        typeof bar.change_pct === 'number' && Number.isFinite(bar.change_pct) && bar.change_pct !== -100
+          ? close / (1 + bar.change_pct / 100)
+          : open
+      );
+    const base = previousClose || open || close || 1;
+    const change = close - base;
+    const changePct = typeof bar.change_pct === 'number' && Number.isFinite(bar.change_pct)
+      ? bar.change_pct
+      : (change / base) * 100;
+    const slice5 = bars.slice(Math.max(0, index - 4), index + 1);
+    const slice10 = bars.slice(Math.max(0, index - 9), index + 1);
+    const slice20 = bars.slice(Math.max(0, index - 19), index + 1);
+
+    return {
+      date: String(bar.date || ''),
+      open: Number(open.toFixed(2)),
+      close: Number(close.toFixed(2)),
+      high: Number(high.toFixed(2)),
+      low: Number(low.toFixed(2)),
+      wickRange: [Number(low.toFixed(2)), Number(high.toFixed(2))],
+      ma5: Number((slice5.reduce((sum, point) => sum + Number(point.close || 0), 0) / Math.max(1, slice5.length)).toFixed(2)),
+      ma10: Number((slice10.reduce((sum, point) => sum + Number(point.close || 0), 0) / Math.max(1, slice10.length)).toFixed(2)),
+      ma20: Number((slice20.reduce((sum, point) => sum + Number(point.close || 0), 0) / Math.max(1, slice20.length)).toFixed(2)),
+      volume: Number(bar.volume || 0),
+      amount: Number(bar.amount || 0),
+      change: Number(change.toFixed(2)),
+      changePct: Number(changePct.toFixed(2)),
+      up: close >= base,
+      source: bar.source,
+      frequency: bar.frequency,
+    };
+  });
+}
+
+function getFloatingTooltipStyle(
+  coordinate?: { x?: number; y?: number },
+  viewBox?: { x?: number; y?: number; width?: number; height?: number },
+  size: { width: number; height: number } = { width: 188, height: 168 },
+) {
+  if (typeof coordinate?.x !== 'number' || typeof coordinate?.y !== 'number') {
+    return { transform: 'translate(-50%, calc(-100% - 12px))' };
+  }
+
+  const { width, height } = size;
+  const edgePadding = 12;
+  const chartLeft = Number(viewBox?.x ?? 0);
+  const chartTop = Number(viewBox?.y ?? 0);
+  const chartRight = chartLeft + Number(viewBox?.width ?? 0);
+  const nearLeft = coordinate.x - width / 2 < chartLeft + edgePadding;
+  const nearRight = chartRight > chartLeft && coordinate.x + width / 2 > chartRight - edgePadding;
+  const shiftX = nearLeft ? '8px' : nearRight ? 'calc(-100% - 8px)' : '-50%';
+  const shiftY = 'calc(-100% - 12px)';
+
+  return { transform: `translate(${shiftX}, ${shiftY})` };
+}
+
+function WorkbenchChartTooltip({ active, payload, label, coordinate, viewBox }: any) {
+  if (!active || !payload?.length) return null;
+  const data = payload[0].payload as WorkbenchChartPoint;
+  const isUp = data.change >= 0;
+  return (
+    <div
+      style={getFloatingTooltipStyle(coordinate, viewBox, { width: 150, height: 58 })}
+      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10]/88 px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)] backdrop-blur"
+    >
+      <div className="flex items-center justify-between gap-3 font-mono">
+        <span className="truncate text-neutral-200">{label}</span>
+        <span className={isUp ? 'text-rose-400' : 'text-emerald-400'}>
+          {isUp ? '+' : ''}{data.changePct.toFixed(2)}%
+        </span>
+      </div>
+      <div className="mt-1 flex items-center justify-between border-t border-white/5 pt-1 font-mono">
+        <span className="text-neutral-500">量</span>
+        <span className="text-neutral-100">{formatVolume(data.volume)}</span>
+      </div>
+    </div>
+  );
+}
+
+function CompactWorkbenchTooltip({ active, payload, label, coordinate, viewBox }: any) {
+  if (!active || !payload?.length) return null;
+  const data = payload[0].payload as WorkbenchChartPoint;
+  const isUp = data.change >= 0;
+  return (
+    <div
+      style={getFloatingTooltipStyle(coordinate, viewBox, { width: 150, height: 58 })}
+      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10]/88 px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)] backdrop-blur"
+    >
+      <div className="flex items-center justify-between gap-3 font-mono">
+        <span className="truncate text-neutral-200">{label}</span>
+        <span className={isUp ? 'text-rose-400' : 'text-emerald-400'}>
+          {isUp ? '+' : ''}{data.changePct.toFixed(2)}%
+        </span>
+      </div>
+      <div className="mt-1 flex items-center justify-between border-t border-white/5 pt-1 font-mono">
+        <span className={isUp ? 'text-rose-400' : 'text-emerald-400'}>
+          {isUp ? '涨' : '跌'} {isUp ? '+' : ''}{data.change.toFixed(2)}
+        </span>
+        <span className="text-neutral-100">{formatPrice(data.close)}</span>
+      </div>
+    </div>
+  );
+}
+
+function SilentTooltip() {
+  return null;
+}
+
+function WorkbenchCandlestick(props: any) {
+  const { x, y, width, height, payload } = props;
+  const point = payload as WorkbenchChartPoint | undefined;
+  if (!point) return null;
+
+  const color = point.close >= point.open ? '#f43f5e' : '#10b981';
+  const slotX = Number(x || 0);
+  const slotWidth = Math.max(Number(width || 0), 1);
+  const cx = slotX + slotWidth / 2;
+  const yStart = Number(y || 0);
+  const yEnd = yStart + Number(height || 0);
+  const wickTop = Math.min(yStart, yEnd);
+  const wickBottom = Math.max(yStart, yEnd);
+  const wickHeight = Math.max(wickBottom - wickTop, 1);
+  const high = Number(point.high);
+  const low = Number(point.low);
+  const priceToY = (price: number) => {
+    if (!Number.isFinite(high) || !Number.isFinite(low) || high <= low) {
+      return wickTop + wickHeight / 2;
+    }
+    const clamped = Math.max(low, Math.min(high, price));
+    return wickTop + ((high - clamped) / (high - low)) * wickHeight;
+  };
+  const yOpen = priceToY(point.open);
+  const yClose = priceToY(point.close);
+  const rectHeight = Math.max(Math.abs(yOpen - yClose), 1.5);
+  const rectY = Math.max(wickTop, Math.min(Math.min(yOpen, yClose), wickBottom - rectHeight));
+  const bodyWidth = Math.max(3, Math.min(slotWidth * 0.72, 9));
+
+  return (
+    <g>
+      <line x1={cx} y1={wickTop} x2={cx} y2={wickBottom} stroke={color} strokeWidth={1.2} strokeLinecap="round" />
+      <rect
+        x={cx - bodyWidth / 2}
+        y={rectY}
+        width={bodyWidth}
+        height={rectHeight}
+        fill={color}
+        fillOpacity={0.9}
+        stroke={color}
+        strokeWidth={1}
+        rx={0.75}
+      />
+    </g>
+  );
+}
+
+function getPeriodConfig(period: string) {
+  if (period === '分时') return { points: 60, frequency: 'intraday', limit: 120, stepDays: 1 };
+  if (period === '周K') return { points: 104, frequency: '1w', limit: 156, stepDays: 7 };
+  if (period === '月K') return { points: 60, frequency: '1mo', limit: 120, stepDays: 30 };
+  return { points: 40, frequency: '1d', limit: 80, stepDays: 1 };
+}
+
+function getPeriodTestId(period: string) {
+  if (period === '分时') return 'workbench-period-intraday';
+  if (period === '周K') return 'workbench-period-weekly';
+  if (period === '月K') return 'workbench-period-monthly';
+  return 'workbench-period-daily';
+}
+
+interface WorkbenchProps {
+  onOpenModelSettings?: () => void;
+}
+
+export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentStock, setCurrentStock] = useState<StockTarget>(() => getPersistedStock() ?? STOCK_UNIVERSE[0]);
   const [activePeriod, setActivePeriod] = useState('日K');
@@ -135,6 +465,16 @@ export function Workbench() {
   const [autoEvidence, setAutoEvidence] = useState(true);
   const [strictRisk, setStrictRisk] = useState(true);
   const [lastUploadedFile, setLastUploadedFile] = useState('');
+  const [chatProviders, setChatProviders] = useState<ModelProvider[]>([]);
+  const [selectedChatModelKey, setSelectedChatModelKey] = useState('');
+  const [conversationId, setConversationId] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatStatus, setChatStatus] = useState('正在读取系统设置中的模型配置...');
+  const [latestQuote, setLatestQuote] = useState<WorkbenchChartPoint | undefined>();
+  const [hoveredChartPoint, setHoveredChartPoint] = useState<WorkbenchChartPoint | undefined>();
+  const [priceStatus, setPriceStatus] = useState<'loading' | 'live' | 'degraded'>('loading');
+  const [priceMessage, setPriceMessage] = useState('正在同步行情...');
+  const [priceRefreshKey, setPriceRefreshKey] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -147,14 +487,27 @@ export function Workbench() {
   const [input, setInput] = useState('');
   const metrics = getWorkbenchMetrics(currentStock);
   const selectedMode = ANALYSIS_MODES.find((mode) => mode.id === analysisMode) ?? ANALYSIS_MODES[0];
+  const chatModelOptions = useMemo(() => buildModelOptions(chatProviders, 'chat'), [chatProviders]);
+  const selectedChatModel = useMemo(
+    () => chatModelOptions.find((option) => option.key === selectedChatModelKey) ?? chatModelOptions[0],
+    [chatModelOptions, selectedChatModelKey],
+  );
+  const canSendChat = Boolean(input.trim() && selectedChatModel && !chatLoading);
+  const chartLastPoint = chartData[chartData.length - 1];
+  const lastChartPoint = activePeriod === '分时' ? (latestQuote ?? chartLastPoint) : chartLastPoint;
+  const displayPrice = lastChartPoint?.close ?? metrics.price;
+  const displayChange = lastChartPoint?.changePct ?? metrics.change;
+  const displayIsUp = displayChange >= 0;
+  const isPeriodDataTooShort = chartData.length > 0 && chartData.length < getMinimumPeriodBars(activePeriod);
   const chartStats = useMemo(() => {
     const lastPoint = chartData[chartData.length - 1];
     const ma5 = lastPoint?.ma5 ?? metrics.price;
     const ma10 = lastPoint?.ma10 ?? metrics.price;
     const ma20 = lastPoint?.ma20 ?? metrics.price;
-    const values = chartData.flatMap((point) => [point.ma5, point.ma10, point.ma20]);
-    const max = Math.max(...values, metrics.price);
-    const min = Math.min(...values, metrics.price);
+    const values = chartData.flatMap((point) => [point.high, point.low, point.ma5, point.ma10, point.ma20]);
+    const validValues = values.filter((value) => Number.isFinite(value));
+    const max = validValues.length ? Math.max(...validValues) : metrics.price;
+    const min = validValues.length ? Math.min(...validValues) : metrics.price;
     const volume = lastPoint?.volume ?? 0;
     return {
       ma5,
@@ -165,6 +518,26 @@ export function Workbench() {
       volume,
     };
   }, [chartData, metrics.price]);
+  const priceDomain = useMemo(
+    () => getWorkbenchPriceDomain(chartData, metrics.price),
+    [chartData, metrics.price],
+  );
+  const priceSourceLabel = priceStatus === 'live'
+    ? `${lastChartPoint?.source || 'provider'} · ${lastChartPoint?.date || ''}`
+    : priceMessage;
+  const chartSourceLabel = isPeriodDataTooShort
+    ? `${activePeriod}样本不足，仅显示上市以来可用K线`
+    : priceSourceLabel;
+  const displayChartPoint = hoveredChartPoint ?? lastChartPoint;
+  const displayChartPointUp = (displayChartPoint?.change ?? 0) >= 0;
+  const showMa5Line = shouldShowMovingAverage(activePeriod, chartData.length, 5);
+  const showMa10Line = shouldShowMovingAverage(activePeriod, chartData.length, 10);
+  const showMa20Line = shouldShowMovingAverage(activePeriod, chartData.length, 20);
+
+  const handleChartMouseMove = (state: any) => {
+    const point = state?.activePayload?.find((item: any) => item?.payload)?.payload as WorkbenchChartPoint | undefined;
+    if (point) setHoveredChartPoint(point);
+  };
   const stockNews = useMemo(() => {
     const prefix = `${currentStock.name} ${currentStock.symbol}`;
     const sector = currentStock.sector || '当前行业';
@@ -208,10 +581,52 @@ export function Workbench() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadChatProviders() {
+      try {
+        const result = await fetchApi<{ providers: ModelProvider[] }>('/api/settings/providers');
+        if (cancelled) return;
+        const providers = result.providers || [];
+        const options = buildModelOptions(providers, 'chat');
+        const routes = await loadAiModelRoutesFromApi().catch(() => loadLocalAiModelRoutes());
+        const chatRoute = getRouteSelection(routes, providers, 'chat');
+        const routeKey = getModelKey(chatRoute);
+        setChatProviders(providers);
+        setSelectedChatModelKey((current) => (
+          current && options.some((option) => option.key === current)
+            ? current
+            : routeKey && options.some((option) => option.key === routeKey)
+              ? routeKey
+              : options[0]
+                ? options[0].key
+              : ''
+        ));
+        setChatStatus(
+          options.length
+            ? `已连接系统设置 Provider，共 ${options.length} 个可用聊天模型`
+            : '没有可用聊天模型，请先到系统设置添加 Provider 并获取模型列表',
+        );
+      } catch (error) {
+        if (cancelled) return;
+        setChatProviders([]);
+        setSelectedChatModelKey('');
+        setChatStatus(`模型配置读取失败：${getErrorMessage(error)}`);
+      }
+    }
+
+    loadChatProviders();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     return subscribeStockSelected(({ stock }) => {
-      const resolved = findStockTarget(stock.symbol) ?? stock;
+      const resolved = stock.resolved || stock.source === 'backend'
+        ? stock
+        : findStockTarget(stock.symbol) ?? stock;
       setCurrentStock(resolved);
-      setChartData(generateKlineData(40, resolved.startPrice));
       setMessages((prev) => [
         ...prev.map((msg) => msg.id === 'welcome'
           ? {
@@ -230,10 +645,78 @@ export function Workbench() {
     });
   }, []);
 
+  useEffect(() => {
+    if (currentStock.resolved || currentStock.source === 'backend') return;
+    let cancelled = false;
+    const code = stripSymbolSuffix(currentStock.symbol);
+    void resolveStockTarget(code).then((resolved) => {
+      if (cancelled || !resolved) return;
+      if (resolved.symbol !== currentStock.symbol || resolved.name !== currentStock.name || resolved.source !== currentStock.source || resolved.resolved !== currentStock.resolved) {
+        setCurrentStock(resolved);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStock]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const period = getPeriodConfig(activePeriod);
+    const fallback = generateKlineData(period.points, currentStock.startPrice, period.stepDays);
+
+    async function loadPrices() {
+      setPriceStatus('loading');
+      setPriceMessage('正在同步真实行情...');
+      try {
+        const symbol = encodeURIComponent(stripSymbolSuffix(currentStock.symbol));
+        const payload = await fetchApi<PriceSeriesResponse>(
+          `/api/prices/${symbol}?frequency=${period.frequency}&limit=${period.limit}`,
+        );
+        if (cancelled) return;
+        const nextData = payload.bars?.length ? enrichWorkbenchData(payload.bars) : fallback;
+        let nextQuote = nextData[nextData.length - 1];
+        if (period.frequency === 'intraday') {
+          try {
+            const latest = await fetchApi<PriceBar>(`/api/prices/${symbol}/latest`);
+            if (!cancelled && latest?.close) {
+              nextQuote = enrichWorkbenchData([latest])[0];
+              nextQuote.changePct = Number((latest.change_pct || nextQuote.changePct || 0).toFixed(2));
+              setLatestQuote(nextQuote);
+            }
+          } catch {
+            if (!cancelled) setLatestQuote(nextQuote);
+          }
+        } else {
+          setLatestQuote(undefined);
+        }
+        if (cancelled) return;
+        setChartData(nextData);
+        if (payload.bars?.length) {
+          setPriceStatus(payload.degraded ? 'degraded' : 'live');
+          setPriceMessage(formatPricePayloadMessage(payload, activePeriod));
+        } else {
+          setPriceStatus('degraded');
+          setPriceMessage('行情源暂无数据，已切换本地预览');
+          setLatestQuote(undefined);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setChartData(fallback);
+        setLatestQuote(undefined);
+        setPriceStatus('degraded');
+        setPriceMessage(error instanceof Error ? error.message : '行情获取失败，已切换本地预览');
+      }
+    }
+
+    void loadPrices();
+    return () => {
+      cancelled = true;
+    };
+  }, [activePeriod, currentStock, priceRefreshKey]);
+
   const handlePeriodChange = (period: string) => {
     setActivePeriod(period);
-    const points = period === '分时' ? 60 : period === '周K' ? 30 : period === '月K' ? 20 : 40;
-    setChartData(generateKlineData(points, currentStock.startPrice));
   };
 
   const handleModeChange = (mode: AnalysisModeId) => {
@@ -244,9 +727,8 @@ export function Workbench() {
   };
 
   const handleRefreshChart = () => {
-    const points = activePeriod === '分时' ? 60 : activePeriod === '周K' ? 30 : activePeriod === '月K' ? 20 : 40;
-    setChartData(generateKlineData(points, currentStock.startPrice));
-    appendSystemMessage(`已刷新 **${currentStock.name}** (${currentStock.symbol}) 的${activePeriod}行情沙盘，并同步更新均线、成交量与资金标签。`);
+    setPriceRefreshKey((value) => value + 1);
+    appendSystemMessage(`已刷新 **${currentStock.name}** (${currentStock.symbol}) 的${activePeriod}行情，并同步更新均线、成交量与资金标签。`);
   };
 
   const handleFullscreen = async () => {
@@ -271,40 +753,102 @@ export function Workbench() {
     event.target.value = '';
   };
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = async () => {
+    const prompt = input.trim();
+    if (!prompt || chatLoading) return;
 
+    if (!selectedChatModel) {
+      appendSystemMessage('当前没有可用聊天模型。请先到系统设置中添加 Provider、检查连通性并获取模型列表。');
+      return;
+    }
+
+    const now = Date.now();
     const userMsg: ChatMessage = {
-      id: Date.now().toString(),
+      id: `user-${now}`,
       role: 'user',
-      content: input,
+      content: prompt,
+      timestamp: new Date().toISOString(),
+    };
+    const pendingId = `assistant-pending-${now}`;
+    const pendingMsg: ChatMessage = {
+      id: pendingId,
+      role: 'agent',
+      agentName: `${selectedChatModel.providerName}/${selectedChatModel.modelId}`,
+      content: `正在调用真实模型：**${selectedChatModel.providerName} / ${selectedChatModel.modelId}**\n\n已注入当前标的、行情沙盘、资金和分析模式上下文。`,
       timestamp: new Date().toISOString(),
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg, pendingMsg]);
     setInput('');
+    setChatLoading(true);
+    setChatStatus(`正在调用 ${selectedChatModel.providerName} / ${selectedChatModel.modelId}...`);
 
-    setTimeout(() => {
-    setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'agent',
-        agentName: 'System',
-        content: `任务分发：**${input}**\n\n- [分析模式] ${selectedMode.label}：${selectedMode.desc}\n- [基本面助理] 提取 ${currentStock.name} 财报数据...\n- [量化策略专家] 计算当前因子载荷...\n- [风险合规顾问] 检查舆情风险...`,
-        timestamp: new Date().toISOString(),
-      }]);
-    }, 600);
+    try {
+      const result = await fetchApi<ChatResponse>('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          conversation_id: conversationId || undefined,
+          message: prompt,
+          mode: 'free',
+          stock_symbol: currentStock.symbol,
+          stock_name: currentStock.name,
+          provider: selectedChatModel.providerId,
+          model: selectedChatModel.modelId,
+          context: {
+            close: displayPrice,
+            day_change: displayChange,
+            period_change: displayChange,
+            ma5: Number(chartStats.ma5.toFixed(2)),
+            ma20: Number(chartStats.ma20.toFixed(2)),
+            ma60: Number(chartStats.ma20.toFixed(2)),
+            fund_dir: metrics.funds.map((item) => `${item.label}: ${item.value}`).join('；'),
+            data_date: new Date().toLocaleDateString('zh-CN'),
+            analysis_mode: selectedMode.label,
+            auto_evidence: autoEvidence,
+            strict_risk: strictRisk,
+          },
+        }),
+      });
 
-    setTimeout(() => {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 2).toString(),
-        role: 'agent',
-        agentName: 'System',
-        content: `[综合分析报告]\n\n**1. 基本面评分 (8/10)**\n盈利能力强劲，Q1营收达预期，但渠道库存存在微小压力。\n\n**2. 量化诊断 (多头)**\n当前 MA(5) 向上金叉 MA(10)，资金流呈现净流入状态，多因子模型输出看多信号，置信度 85%。\n\n**建议操作：** 继续持有/设逢低买点。`,
-        timestamp: new Date().toISOString(),
-      }]);
-    }, 2500);
+      if (result.conversation_id) {
+        setConversationId(result.conversation_id);
+      }
+
+      const responseProvider = result.provider || selectedChatModel.providerId;
+      const responseModel = result.model || selectedChatModel.modelId;
+      const modelLine = `模型调用：**${responseProvider} / ${responseModel}**`;
+      const content = result.content?.trim()
+        ? `${modelLine}\n\n${result.content.trim()}`
+        : `${modelLine}\n\n模型没有返回内容。请检查该 Provider 的模型权限、余额或 Base URL。`;
+
+      setMessages((prev) => prev.map((msg) => (
+        msg.id === pendingId
+          ? {
+              ...msg,
+              agentName: `${responseProvider}/${responseModel}`,
+              content,
+              timestamp: new Date().toISOString(),
+            }
+          : msg
+      )));
+      setChatStatus(`上次调用成功：${responseProvider} / ${responseModel}`);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setMessages((prev) => prev.map((msg) => (
+        msg.id === pendingId
+          ? {
+              ...msg,
+              agentName: '模型调用失败',
+              content: `模型调用失败：${message}\n\n这不是模拟回复。请检查系统设置中的 Provider、Base URL、API Key、模型名称和网络连通性。`,
+              timestamp: new Date().toISOString(),
+            }
+          : msg
+      )));
+      setChatStatus(`模型调用失败：${message}`);
+    } finally {
+      setChatLoading(false);
+    }
   };
-
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
@@ -320,10 +864,15 @@ export function Workbench() {
             {currentStock.name}
             <span className="shrink-0 rounded border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-xs font-medium tracking-wider text-neutral-300">{currentStock.symbol}</span>
           </h1>
-          <div className="flex min-w-0 flex-wrap items-baseline gap-3 text-rose-500">
-            <span className="font-mono text-3xl font-medium tracking-tight drop-shadow-[0_0_15px_rgba(244,63,94,0.3)] sm:text-4xl">{metrics.price.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            <span className="flex items-center rounded border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 font-mono text-sm font-medium text-rose-500">
-              <span className="rotate-45 mr-1 text-lg leading-none">{metrics.change >= 0 ? '↗' : '↘'}</span>{metrics.change >= 0 ? '+' : ''}{metrics.change.toFixed(2)}%
+          <div className={cn('flex min-w-0 flex-wrap items-baseline gap-3', displayIsUp ? 'text-rose-500' : 'text-emerald-500')}>
+            <span className={cn('font-mono text-3xl font-medium tracking-tight sm:text-4xl', displayIsUp ? 'drop-shadow-[0_0_15px_rgba(244,63,94,0.3)]' : 'drop-shadow-[0_0_15px_rgba(16,185,129,0.25)]')}>
+              {formatPrice(displayPrice)}
+            </span>
+            <span className={cn('flex items-center rounded border px-2 py-0.5 font-mono text-sm font-medium', displayIsUp ? 'border-rose-500/20 bg-rose-500/10 text-rose-500' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500')}>
+              <span className="rotate-45 mr-1 text-lg leading-none">{displayIsUp ? '↗' : '↘'}</span>{displayIsUp ? '+' : ''}{displayChange.toFixed(2)}%
+            </span>
+            <span className={cn('max-w-[22rem] truncate rounded border px-2 py-0.5 align-middle font-mono text-[10px]', priceStatus === 'live' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/20 bg-amber-500/10 text-amber-300')}>
+              {priceStatus === 'loading' ? '同步中' : priceSourceLabel}
             </span>
           </div>
         </div>
@@ -349,11 +898,24 @@ export function Workbench() {
               <div className="flex items-center gap-3">
                  <h2 className="font-semibold text-neutral-200">行情走势</h2>
                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[pulse_2s_ease-in-out_infinite] shadow-[0_0_5px_rgba(16,185,129,0.5)]"></span>
+                 <span className="hidden max-w-[18rem] truncate rounded border border-white/10 bg-black/30 px-2 py-0.5 font-mono text-[10px] text-neutral-500 sm:inline">
+                   {priceStatus === 'loading' ? '正在同步行情' : chartSourceLabel}
+                 </span>
               </div>
+              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRefreshChart}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/40 text-neutral-400 transition-colors hover:bg-white/[0.05] hover:text-neutral-200"
+                title="刷新行情"
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5', priceStatus === 'loading' && 'animate-spin')} />
+              </button>
               <div className="flex rounded-lg border border-white/5 bg-black/40 p-1 shadow-inner">
                 {['分时', '日K', '周K', '月K'].map((period) => (
                   <button 
                     key={period}
+                    data-testid={getPeriodTestId(period)}
                     onClick={() => handlePeriodChange(period)}
                     className={cn(
                       "px-3 py-1.5 text-xs rounded-md font-medium transition-all cursor-pointer sm:px-5",
@@ -364,12 +926,23 @@ export function Workbench() {
                   </button>
                 ))}
               </div>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-white/5 bg-black/20 px-5 py-3 font-mono text-[11px]">
-               <span className="flex items-center gap-2 text-yellow-500/90"><div className="h-0.5 w-2 bg-yellow-500/90"></div>MA5: {formatPrice(chartStats.ma5)}</span>
-               <span className="flex items-center gap-2 text-indigo-400/90"><div className="h-0.5 w-2 bg-indigo-400/90"></div>MA10: {formatPrice(chartStats.ma10)}</span>
-               <span className="flex items-center gap-2 text-emerald-400/90"><div className="h-0.5 w-2 bg-emerald-400/90"></div>MA20: {formatPrice(chartStats.ma20)}</span>
+               <span className={cn('flex items-center gap-2', showMa5Line ? 'text-yellow-500/90' : 'text-neutral-600')}><div className={cn('h-0.5 w-2', showMa5Line ? 'bg-yellow-500/90' : 'bg-neutral-700')}></div>MA5: {showMa5Line ? formatPrice(chartStats.ma5) : '--'}</span>
+               <span className={cn('flex items-center gap-2', showMa10Line ? 'text-indigo-400/90' : 'text-neutral-600')}><div className={cn('h-0.5 w-2', showMa10Line ? 'bg-indigo-400/90' : 'bg-neutral-700')}></div>MA10: {showMa10Line ? formatPrice(chartStats.ma10) : '--'}</span>
+               <span className={cn('flex items-center gap-2', showMa20Line ? 'text-emerald-400/90' : 'text-neutral-600')}><div className={cn('h-0.5 w-2', showMa20Line ? 'bg-emerald-400/90' : 'bg-neutral-700')}></div>MA20: {showMa20Line ? formatPrice(chartStats.ma20) : '--'}</span>
+               {displayChartPoint && (
+                 <span className="min-w-0 truncate rounded border border-white/10 bg-white/[0.03] px-2 py-1 text-neutral-400">
+                   {displayChartPoint.date} · 收 {formatPrice(displayChartPoint.close)} · <span className={displayChartPointUp ? 'text-rose-400' : 'text-emerald-400'}>{displayChartPointUp ? '+' : ''}{displayChartPoint.changePct.toFixed(2)}%</span>
+                 </span>
+               )}
+               {isPeriodDataTooShort && (
+                 <span className="min-w-0 truncate rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-300">
+                   {activePeriod}样本不足：仅 {chartData.length} 根，可能是新股或行情源历史较短
+                 </span>
+               )}
                <span className="text-neutral-500 sm:ml-auto">VOL: {formatVolume(chartStats.volume)}</span>
             </div>
 
@@ -379,29 +952,38 @@ export function Workbench() {
                <div className="absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{formatPrice(chartStats.low)}</div>
              
              <ResponsiveContainer width="100%" height="80%">
-               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                 <defs>
-                   <linearGradient id="colorMa5" x1="0" y1="0" x2="0" y2="1">
-                     <stop offset="5%" stopColor="#eab308" stopOpacity={0.4}/>
-                     <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
-                   </linearGradient>
-                 </defs>
+               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} onMouseMove={handleChartMouseMove}>
                  <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
-                 <YAxis domain={['auto', 'auto']} hide />
-                 <Area type="monotone" dataKey="ma5" stroke="#eab308" strokeWidth={2} fillOpacity={1} fill="url(#colorMa5)" />
-                 <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} />
-                 <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} />
-                 {/* Fake Candlesticks using Bar */}
-                 <Bar dataKey="ma5" barSize={4}>
+                 <XAxis dataKey="date" tickFormatter={formatAxisDate} hide />
+                 <YAxis domain={priceDomain} hide />
+                 <Tooltip
+                   content={<CompactWorkbenchTooltip />}
+                   offset={0}
+                   allowEscapeViewBox={{ x: true, y: true }}
+                   wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
+                   cursor={{ stroke: '#818cf8', strokeOpacity: 0.32, strokeWidth: 1 }}
+                 />
+                 <Bar dataKey="wickRange" barSize={9} shape={<WorkbenchCandlestick />}>
                     {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
+                      <Cell key={`candle-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
                     ))}
                  </Bar>
+                 {showMa5Line && <Line type="monotone" dataKey="ma5" stroke="#eab308" strokeWidth={1.5} dot={false} activeDot={false} />}
+                 {showMa10Line && <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} activeDot={false} />}
+                 {showMa20Line && <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} activeDot={false} />}
                </ComposedChart>
              </ResponsiveContainer>
              
              <ResponsiveContainer width="100%" height="20%">
                <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                 <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={{ fill: '#737373', fontSize: 10 }} stroke="#222" minTickGap={22} />
+                 <Tooltip
+                   content={<WorkbenchChartTooltip />}
+                   offset={0}
+                   allowEscapeViewBox={{ x: true, y: true }}
+                   wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
+                   cursor={{ fill: 'rgba(129,140,248,0.08)' }}
+                 />
                  <Bar dataKey="volume" barSize={4} radius={[2, 2, 0, 0]}>
                     {chartData.map((entry, index) => (
                       <Cell key={`cell-vol-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} fillOpacity={0.4} />
@@ -587,6 +1169,14 @@ export function Workbench() {
             <button data-testid="workbench-fullscreen" onClick={handleFullscreen} className="p-1.5 hover:bg-white/5 rounded-md text-neutral-500 transition-colors" title="切换全屏">
               <Maximize2 className="w-3.5 h-3.5" />
             </button>
+            <button
+              data-testid="workbench-open-model-settings"
+              onClick={onOpenModelSettings}
+              className="p-1.5 hover:bg-white/5 rounded-md text-neutral-500 transition-colors"
+              title="模型路由设置"
+            >
+              <Bot className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
         
@@ -629,6 +1219,36 @@ export function Workbench() {
         </div>
         
         <div className="p-4 border-t border-white/5 bg-black/20 backdrop-blur-md relative z-10">
+          <div className="mb-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2 text-xs text-neutral-300">
+                <Bot className="h-4 w-4 shrink-0 text-indigo-300" />
+                <span className="shrink-0 font-medium text-neutral-100">真实模型</span>
+                <span className="truncate font-mono text-[11px] text-neutral-500">{chatStatus}</span>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenModelSettings}
+                className="rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-[10px] text-neutral-400 transition-colors hover:border-indigo-400/40 hover:text-indigo-200"
+              >
+                设置
+              </button>
+              <ThemedSelect
+                data-testid="workbench-chat-model-select"
+                value={selectedChatModel?.key || ''}
+                onChange={setSelectedChatModelKey}
+                disabled={!chatModelOptions.length || chatLoading}
+                className="min-w-[220px]"
+                buttonClassName="h-8 rounded-lg bg-black/50 px-2 text-xs"
+                menuClassName="text-xs"
+                options={chatModelOptions.length ? chatModelOptions.map((option) => ({
+                  value: option.key,
+                  label: `${option.providerName} / ${option.modelId}${option.vision ? ' · 视觉' : ''}`,
+                  badge: option.vision ? <span className="rounded-full bg-indigo-400/10 px-1.5 py-0.5 text-[9px] text-indigo-200">视觉</span> : undefined,
+                })) : [{ value: '', label: '请先在系统设置获取模型列表', disabled: true }]}
+              />
+            </div>
+          </div>
           <div className="bg-white/[0.03] border border-white/10 rounded-xl overflow-hidden shadow-inner focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
             <textarea 
               value={input}
@@ -666,9 +1286,14 @@ export function Workbench() {
                 <span>ENTER 发送 • SHIFT+ENTER 换行</span>
                 <button 
                   onClick={handleSend}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg border border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all"
+                  disabled={!canSendChat}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-white rounded-lg border border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all",
+                    canSendChat ? "bg-indigo-600 hover:bg-indigo-500" : "cursor-not-allowed bg-neutral-800 text-neutral-500 border-white/10 shadow-none"
+                  )}
                 >
-                  发送 <Send className="w-3.5 h-3.5" />
+                  {chatLoading ? '调用中' : '发送'}
+                  {chatLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>

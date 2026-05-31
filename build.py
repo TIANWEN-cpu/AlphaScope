@@ -1,92 +1,145 @@
-"""
-研策中枢 AlphaScope 一键构建脚本
+"""One-command Windows packaging for 研策中枢 AlphaScope.
 
-将项目打包成 Windows 可执行文件。
-
-使用方式:
+Default:
     python build.py
 
-输出:
-    dist/AlphaScope/  — 可独立运行的程序目录
-    dist/AlphaScope/AlphaScope.exe  — 主程序
+Installer:
+    python build.py --installer
 
-后续步骤（可选）:
-    用 Inno Setup 编译 installer/setup.iss 生成安装包
+Outputs:
+    dist/AlphaScope/                         portable app directory
+    installer/installer-output/*.exe         optional Inno Setup installer
 """
 
-import sys
+from __future__ import annotations
+
+import argparse
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-ROOT = Path(__file__).parent
+APP_NAME = "研策中枢 AlphaScope"
+ROOT = Path(__file__).resolve().parent
+WEB_DIR = ROOT / "apps" / "web"
+WEB_DIST_DIR = WEB_DIR / "dist"
 DIST_DIR = ROOT / "dist" / "AlphaScope"
+INSTALLER_SCRIPT = ROOT / "installer" / "setup.iss"
 
 
-def check_pyinstaller():
-    """检查 PyInstaller 是否安装"""
+def run(cmd: list[str], cwd: Path = ROOT) -> None:
+    print(f"[run] {' '.join(cmd)}")
+    subprocess.run(cmd, cwd=str(cwd), check=True)
+
+
+def npm_command() -> str:
+    npm = shutil.which("npm.cmd") or shutil.which("npm")
+    if not npm:
+        raise RuntimeError(
+            "Node.js/npm not found. Install Node.js 20+ to build the web UI."
+        )
+    return npm
+
+
+def iscc_command() -> str | None:
+    candidates = [
+        shutil.which("ISCC.exe"),
+        shutil.which("iscc.exe"),
+        str(
+            Path.home() / "AppData" / "Local" / "Programs" / "Inno Setup 6" / "ISCC.exe"
+        ),
+        r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        r"C:\Program Files\Inno Setup 6\ISCC.exe",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return candidate
+    return None
+
+
+def check_pyinstaller() -> None:
     try:
         import PyInstaller  # noqa: F401
-
-        print(f"[OK] PyInstaller {PyInstaller.__version__}")
-        return True
-    except ImportError:
-        print("[错误] PyInstaller 未安装")
-        print("  请运行: pip install pyinstaller")
-        return False
+    except ImportError as exc:
+        raise RuntimeError(
+            "PyInstaller is not installed. Run: python -m pip install pyinstaller"
+        ) from exc
+    print(f"[ok] PyInstaller {PyInstaller.__version__}")
 
 
-def clean_build():
-    """清理旧的构建文件"""
-    for d in [ROOT / "build", ROOT / "dist"]:
-        if d.exists():
-            print(f"[清理] 删除 {d}")
-            shutil.rmtree(d, ignore_errors=True)
+def clean_build() -> None:
+    for directory in (ROOT / "build", ROOT / "dist"):
+        if directory.exists():
+            print(f"[clean] {directory}")
+            shutil.rmtree(directory, ignore_errors=True)
 
 
-def run_pyinstaller():
-    """执行 PyInstaller 打包"""
-    spec_file = ROOT / "alphascope.spec"
-    if not spec_file.exists():
-        print(f"[错误] 找不到 spec 文件: {spec_file}")
-        return False
-
-    print("[构建] 正在打包...")
-    print(f"[构建] spec: {spec_file}")
-    print()
-
-    cmd = [
-        sys.executable,
-        "-m",
-        "PyInstaller",
-        str(spec_file),
-        "--clean",
-        "--noconfirm",
-        "--log-level=WARN",
-    ]
-
-    result = subprocess.run(cmd, cwd=str(ROOT))
-    if result.returncode != 0:
-        print(f"\n[错误] PyInstaller 打包失败 (exit code: {result.returncode})")
-        return False
-
-    return True
+def build_web() -> None:
+    npm = npm_command()
+    if not (WEB_DIR / "node_modules").exists():
+        run([npm, "ci"], cwd=WEB_DIR)
+    run([npm, "run", "build"], cwd=WEB_DIR)
+    runtime_config = WEB_DIST_DIR / "runtime-config.js"
+    runtime_config.write_text(
+        "window.__ALPHASCOPE_CONFIG__ = window.__ALPHASCOPE_CONFIG__ || {};\n",
+        encoding="utf-8",
+    )
+    print(f"[ok] Web assets: {WEB_DIST_DIR}")
 
 
-def copy_runtime_files():
-    """复制运行时文件到输出目录"""
+def run_pyinstaller() -> None:
+    check_pyinstaller()
+    if not WEB_DIST_DIR.exists():
+        raise RuntimeError("Web dist is missing. Run the web build first.")
+    run(
+        [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            str(ROOT / "alphascope.spec"),
+            "--clean",
+            "--noconfirm",
+            "--log-level=WARN",
+        ]
+    )
+
+
+def write_readme() -> None:
+    readme = DIST_DIR / "使用说明.txt"
+    readme.write_text(
+        f"{APP_NAME}\n"
+        "================================\n\n"
+        "这是面向普通用户的一键版。\n\n"
+        "启动方式:\n"
+        "1. 双击 AlphaScope.exe。\n"
+        "2. 程序会自动启动本地服务并打开浏览器。\n"
+        "3. 使用期间请保持启动窗口打开；关闭窗口即停止本地服务。\n\n"
+        "首次配置:\n"
+        "1. 第一次启动会自动创建 .env。\n"
+        "2. 如需使用 AI 分析，请在 .env 中填入至少一个模型 API Key。\n"
+        "3. 常用最小配置: DEEPSEEK_API_KEY=your_api_key。\n\n"
+        "本地地址:\n"
+        "  Web: 程序启动后自动打开，默认从 http://127.0.0.1:3000 起查找可用端口。\n"
+        "  API: 默认从 http://127.0.0.1:8000 起查找可用端口。\n\n"
+        "数据目录:\n"
+        "  data/db/       SQLite 数据库\n"
+        "  data/cache/    缓存数据\n"
+        "  data/reports/  分析报告\n"
+        "  data/uploads/  上传文件\n",
+        encoding="utf-8",
+    )
+    print(f"[ok] {readme}")
+
+
+def copy_runtime_files() -> None:
     if not DIST_DIR.exists():
-        print(f"[错误] 输出目录不存在: {DIST_DIR}")
-        return False
+        raise RuntimeError(f"PyInstaller output does not exist: {DIST_DIR}")
 
-    # 复制 .env.example
     env_example = ROOT / ".env.example"
     if env_example.exists():
         shutil.copy2(env_example, DIST_DIR / ".env.example")
-        print(f"[复制] .env.example → {DIST_DIR}")
 
-    # 创建运行时目录
-    for d in [
+    for relative in (
         "data",
         "data/db",
         "data/cache",
@@ -96,91 +149,98 @@ def copy_runtime_files():
         "data/reports/archive",
         "data/uploads",
         "data/logs",
-    ]:
-        (DIST_DIR / d).mkdir(parents=True, exist_ok=True)
-    print("[创建] 运行时目录 (data/db, data/cache, data/reports, data/uploads, data/logs)")
+    ):
+        (DIST_DIR / relative).mkdir(parents=True, exist_ok=True)
 
-    # 创建 README
-    readme = DIST_DIR / "使用说明.txt"
-    readme.write_text(
-        "研策中枢 AlphaScope - 金融 AI 分析工作台\n"
-        "================================\n\n"
-        "首次使用:\n"
-        "1. 双击 AlphaScope.exe 启动\n"
-        "2. 程序会自动打开浏览器\n"
-        "3. 编辑 .env 文件填入您的 API Key\n\n"
-        "API Key 配置:\n"
-        "  DEEPSEEK_API_KEY=sk-xxx   (必需，最低配置)\n"
-        "  CLAUDE_API_KEY=sk-xxx     (可选)\n"
-        "  GPT_API_KEY=sk-xxx        (可选)\n"
-        "  MIMO_API_KEY=xxx          (可选)\n"
-        "  SENSENOVA_API_KEY=xxx     (可选)\n\n"
-        "访问地址:\n"
-        "  http://localhost:8501\n\n"
-        "数据目录:\n"
-        "  data/db/       — SQLite 数据库\n"
-        "  data/cache/    — 缓存数据\n"
-        "  data/reports/  — 分析报告\n"
-        "  data/uploads/  — 上传文件\n",
-        encoding="utf-8",
-    )
-    print("[创建] 使用说明.txt")
-
-    return True
+    write_readme()
 
 
-def print_summary():
-    """打印构建摘要"""
-    exe_path = DIST_DIR / "AlphaScope.exe"
-    size_mb = 0
-    if exe_path.exists():
-        size_mb = sum(f.stat().st_size for f in DIST_DIR.rglob("*") if f.is_file()) / (
-            1024 * 1024
+def build_installer() -> Path | None:
+    iscc = iscc_command()
+    if not iscc:
+        print(
+            "[skip] Inno Setup not found. Install Inno Setup 6 to create a single setup exe."
         )
+        return None
+    run([iscc, str(INSTALLER_SCRIPT)], cwd=ROOT / "installer")
+    output_dir = ROOT / "installer" / "installer-output"
+    installers = sorted(
+        output_dir.glob("AlphaScope-Setup-*.exe"), key=lambda p: p.stat().st_mtime
+    )
+    return installers[-1] if installers else None
+
+
+def portable_zip() -> Path:
+    archive_base = ROOT / "dist" / "AlphaScope-portable"
+    archive_path = Path(
+        shutil.make_archive(str(archive_base), "zip", root_dir=DIST_DIR)
+    )
+    print(f"[ok] Portable zip: {archive_path}")
+    return archive_path
+
+
+def print_summary(installer: Path | None, make_zip: bool) -> None:
+    exe_path = DIST_DIR / "AlphaScope.exe"
+    size_mb = sum(f.stat().st_size for f in DIST_DIR.rglob("*") if f.is_file()) / (
+        1024 * 1024
+    )
 
     print()
-    print("=" * 50)
-    print("  构建完成!")
-    print("=" * 50)
-    print(f"  输出目录: {DIST_DIR}")
-    print(f"  总大小:   {size_mb:.1f} MB")
-    print(f"  主程序:   {exe_path}")
+    print("=" * 60)
+    print("  Build complete")
+    print("=" * 60)
+    print(f"  Portable directory: {DIST_DIR}")
+    print(f"  Main program:       {exe_path}")
+    print(f"  Size:               {size_mb:.1f} MB")
+    if installer:
+        print(f"  Installer:          {installer}")
+    elif make_zip:
+        print("  Installer:          skipped because Inno Setup was not found")
     print()
-    print("  测试运行:")
-    print(f"    双击 {exe_path}")
+    print("  Test locally:")
+    print(f"    {exe_path}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=f"Build {APP_NAME} for Windows")
+    parser.add_argument(
+        "--skip-web", action="store_true", help="reuse existing apps/web/dist"
+    )
+    parser.add_argument(
+        "--installer", action="store_true", help="also build Inno Setup installer"
+    )
+    parser.add_argument("--zip", action="store_true", help="also create a portable zip")
+    parser.add_argument(
+        "--no-clean", action="store_true", help="do not remove build/dist first"
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
     print()
-    print("  制作安装包 (可选):")
-    print("    1. 安装 Inno Setup: https://jrsoftware.org/isinfo.php")
-    print("    2. 打开 installer/setup.iss")
-    print("    3. 点击 编译 → 生成安装包")
+    print("=" * 60)
+    print(f"  {APP_NAME} packaging")
+    print("=" * 60)
     print()
 
+    try:
+        if not args.no_clean:
+            clean_build()
+        if not args.skip_web:
+            build_web()
+        run_pyinstaller()
+        copy_runtime_files()
+        if args.zip:
+            portable_zip()
+        installer = build_installer() if args.installer else None
+        print_summary(installer, args.installer)
+    except Exception as exc:
+        print(f"\n[error] {exc}")
+        return 1
 
-def main():
-    print()
-    print("=" * 50)
-    print("  研策中枢 AlphaScope 构建脚本")
-    print("=" * 50)
-    print()
-
-    # Step 1: 检查依赖
-    if not check_pyinstaller():
-        sys.exit(1)
-
-    # Step 2: 清理
-    clean_build()
-
-    # Step 3: 打包
-    if not run_pyinstaller():
-        sys.exit(1)
-
-    # Step 4: 复制运行时文件
-    if not copy_runtime_files():
-        sys.exit(1)
-
-    # Step 5: 完成
-    print_summary()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

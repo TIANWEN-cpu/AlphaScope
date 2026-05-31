@@ -26,6 +26,11 @@ export default function App() {
     setCurrentTab('settings');
   };
 
+  const openModelSettings = () => {
+    setSettingsInitialTab('models');
+    setCurrentTab('settings');
+  };
+
   return (
     <div className="flex h-screen w-full bg-[#050505] text-neutral-300 font-sans selection:bg-indigo-500/30 overflow-hidden relative">
       {/* Absolute background effects */}
@@ -45,7 +50,7 @@ export default function App() {
             <div className="h-full overflow-y-auto custom-scrollbar">
               <AnimatePresence mode="wait">
               {(currentTab === 'dashboard' || currentTab === 'workbench') && (
-                <Workbench key="workbench" />
+                <Workbench onOpenModelSettings={openModelSettings} />
               )}
               {(currentTab === 'agents' || currentTab === 'experts') && (
                 <AgentsSystem onOpenAgentSettings={openAgentSettings} />
@@ -60,13 +65,13 @@ export default function App() {
                 <FundDcaLab key="fund_dca" />
               )}
               {currentTab === 'news' && (
-                <NewsAggregator key="news" />
+                <NewsAggregator onOpenModelSettings={openModelSettings} />
               )}
               {currentTab === 'chart' && (
-                <MultimodalChart key="chart" />
+                <MultimodalChart onOpenModelSettings={openModelSettings} />
               )}
               {currentTab === 'detailed' && (
-                <ReportGenerator key="detailed" />
+                <ReportGenerator onOpenModelSettings={openModelSettings} />
               )}
               {currentTab === 'saved' && (
                 <EvidenceChain key="saved" />

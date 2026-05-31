@@ -1,6 +1,25 @@
 # 安装指南
 
-## 环境准备
+## 普通用户安装
+
+### Windows 一键安装包（推荐）
+
+1. 前往 [GitHub Releases](https://github.com/TIANWEN-cpu/AlphaScope/releases)。
+2. 下载 `AlphaScope-Setup-*.exe`。
+3. 双击安装包，按提示完成安装。
+4. 安装完成后双击桌面上的“研策中枢 AlphaScope”。
+
+启动后程序会自动打开浏览器。首次使用 AI 分析前，请在安装目录的 `.env` 文件里填写至少一个模型 API Key，例如 `DEEPSEEK_API_KEY`。
+
+安装包已经内置运行时和 Web 页面，不需要手动安装 Python、Node.js、Git，也不需要打开命令行。
+
+### 便携版
+
+如果发布页提供 `AlphaScope-portable.zip`，解压后双击 `AlphaScope.exe` 即可启动。便携版适合放在 U 盘或免安装目录中使用。
+
+---
+
+## 开发者环境准备
 
 ### 1. 安装 Python
 
@@ -38,15 +57,14 @@ npm --version
 
 ## 安装研策中枢 AlphaScope
 
-### 方式一：一键安装（推荐）
+### 方式一：安装包（推荐）
 
-1. 下载项目并解压
-2. 双击 `AlphaScope-Setup.bat`
-3. 按提示完成安装
-4. 桌面会出现 "研策中枢 AlphaScope" 快捷方式
-5. 以后双击快捷方式即可启动
+1. 下载 `AlphaScope-Setup-*.exe`
+2. 双击安装
+3. 桌面会出现“研策中枢 AlphaScope”快捷方式
+4. 以后双击快捷方式即可启动
 
-### 方式二：下载发布包
+### 方式二：下载源码发布包
 
 1. 前往 [GitHub Releases](https://github.com/TIANWEN-cpu/AlphaScope/releases)
 2. 下载最新版本的压缩包

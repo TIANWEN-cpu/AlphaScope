@@ -1,145 +1,360 @@
-"""
-研策中枢 AlphaScope 启动器
+"""Desktop launcher for 研策中枢 AlphaScope.
 
-PyInstaller 打包入口。负责：
-1. 设置 Python 路径（将打包的 backend/ 加入 sys.path）
-2. 创建运行时目录（cache/, reports/）
-3. 初始化 .env 文件
-4. 启动 Streamlit 服务
+The packaged app runs as a small local desktop service:
+- starts the FastAPI backend on an available localhost port,
+- serves the built React frontend from bundled static files,
+- writes runtime-config.js so the frontend talks to the selected API port,
+- opens the user's default browser.
 """
 
+from __future__ import annotations
+
+import argparse
+import json
 import os
-import sys
 import shutil
+import socket
+import sys
+import threading
+import time
+import webbrowser
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
+
+APP_NAME = "研策中枢 AlphaScope"
+DEFAULT_API_PORT = 8000
+DEFAULT_WEB_PORT = 3000
 
 
-def setup_environment():
-    """设置运行时环境"""
-    # 确定项目根目录
-    if getattr(sys, "frozen", False):
-        # PyInstaller 打包模式
-        root = Path(sys.executable).parent
-        meipass = Path(getattr(sys, "_MEIPASS", root))
-        # 将打包的 backend/ 加入 sys.path
-        backend_in_bundle = meipass / "backend"
-        if backend_in_bundle.exists():
-            sys.path.insert(0, str(backend_in_bundle))
-        # 也加入根目录（开发模式兼容）
-        sys.path.insert(0, str(root))
-    else:
-        # 开发模式
-        root = Path(__file__).parent
-        sys.path.insert(0, str(root / "backend"))
-        sys.path.insert(0, str(root))
+class AlphaScopeStaticHandler(SimpleHTTPRequestHandler):
+    """Quiet static file handler with SPA refresh fallback."""
 
-    # Streamlit 环境变量
-    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
-    os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
-    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    os.environ["STREAMLIT_SERVER_PORT"] = "8501"
-    os.environ["STREAMLIT_SERVER_ADDRESS"] = "localhost"
+    def log_message(self, format: str, *args: Any) -> None:
+        return
 
-    return root
+    def copyfile(self, source: Any, outputfile: Any) -> None:
+        try:
+            super().copyfile(source, outputfile)
+        except (BrokenPipeError, ConnectionResetError):
+            return
+
+    def send_head(self) -> Any:
+        translated = Path(self.translate_path(self.path))
+        route_name = Path(self.path.split("?", 1)[0]).name
+        if not translated.exists() and "." not in route_name:
+            self.path = "/index.html"
+        return super().send_head()
 
 
-def ensure_directories(root: Path):
-    """确保运行时目录存在"""
-    dirs = [
-        root / "cache",
-        root / "data" / "db",
-        root / "data" / "cache",
-        root / "data" / "cache" / "fundamentals",
-        root / "data" / "cache" / "chroma_db",
-        root / "data" / "reports",
-        root / "data" / "reports" / "archive",
-        root / "data" / "uploads",
-        root / "data" / "logs",
-    ]
-    for d in dirs:
-        d.mkdir(parents=True, exist_ok=True)
+def is_frozen() -> bool:
+    return bool(getattr(sys, "frozen", False))
 
 
-def ensure_env_file(root: Path):
-    """如果 .env 不存在，从 .env.example 复制"""
+def bundle_root() -> Path:
+    if is_frozen():
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    return Path(__file__).resolve().parent
+
+
+def runtime_root() -> Path:
+    if is_frozen():
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent
+
+
+def add_import_paths(root: Path, bundled: Path) -> None:
+    for candidate in (root, root / "backend", bundled, bundled / "backend"):
+        if candidate.exists():
+            path = str(candidate)
+            if path not in sys.path:
+                sys.path.insert(0, path)
+
+
+def ensure_directories(root: Path) -> None:
+    for relative in (
+        "data",
+        "data/db",
+        "data/cache",
+        "data/cache/fundamentals",
+        "data/cache/chroma_db",
+        "data/reports",
+        "data/reports/archive",
+        "data/uploads",
+        "data/logs",
+    ):
+        (root / relative).mkdir(parents=True, exist_ok=True)
+
+
+def sync_runtime_assets(root: Path, bundled: Path) -> None:
+    for relative in ("config", "prompts", "custom_providers"):
+        source = bundled / relative
+        target = root / relative
+        if source.exists() and source.resolve() != target.resolve():
+            shutil.copytree(source, target, dirs_exist_ok=True)
+
+    web_source = bundled / "apps" / "web" / "dist"
+    web_target = root / "apps" / "web" / "dist"
+    if web_source.exists() and web_source.resolve() != web_target.resolve():
+        shutil.copytree(web_source, web_target, dirs_exist_ok=True)
+
+
+def ensure_env_file(root: Path, bundled: Path) -> None:
     env_file = root / ".env"
-    env_example = root / ".env.example"
+    if env_file.exists():
+        return
 
-    if not env_file.exists():
+    for env_example in (root / ".env.example", bundled / ".env.example"):
         if env_example.exists():
             shutil.copy2(env_example, env_file)
-            print(f"[AlphaScope] 已创建 .env 配置文件: {env_file}")
-            print("[AlphaScope] 请编辑 .env 文件，填入您的 API Key")
-        else:
-            # 创建最小 .env
-            env_file.write_text(
-                "# AlphaScope API Keys\n"
-                "# 请填入您的 API Key\n"
-                "DEEPSEEK_API_KEY=\n"
-                "CLAUDE_API_KEY=\n"
-                "GPT_API_KEY=\n"
-                "MIMO_API_KEY=\n"
-                "SENSENOVA_API_KEY=\n",
-                encoding="utf-8",
-            )
-            print(f"[AlphaScope] 已创建 .env 模板: {env_file}")
+            print(f"[AlphaScope] Created config file: {env_file}")
+            return
+
+    env_file.write_text(
+        "# AlphaScope API Keys\n"
+        "DEEPSEEK_API_KEY=\n"
+        "DEEPSEEK_BASE_URL=https://api.deepseek.com\n"
+        "OPENAI_API_KEY=\n"
+        "CLAUDE_API_KEY=\n"
+        "KIMI_API_KEY=\n",
+        encoding="utf-8",
+    )
+    print(f"[AlphaScope] Created config template: {env_file}")
 
 
-def main():
-    """主入口"""
-    print("=" * 50)
-    print("  研策中枢 AlphaScope - 金融 AI 分析工作台")
-    print("  Multi-Agent Financial Analysis Workbench")
-    print("=" * 50)
-    print()
+def load_dotenv(root: Path) -> None:
+    env_file = root / ".env"
+    if not env_file.exists():
+        return
 
-    root = setup_environment()
-    ensure_directories(root)
-    ensure_env_file(root)
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
 
-    print(f"[AlphaScope] 项目目录: {root}")
-    print("[AlphaScope] 正在启动...")
-    print()
 
-    # 构建 Streamlit 启动参数
-    # 在 frozen 模式下，dashboard.py 在 _MEIPASS 里
-    if getattr(sys, "frozen", False):
-        meipass = Path(getattr(sys, "_MEIPASS", root))
-        dashboard_path = meipass / "frontend" / "dashboard.py"
-    else:
-        dashboard_path = root / "frontend" / "dashboard.py"
+def find_free_port(preferred: int) -> int:
+    for port in range(preferred, preferred + 50):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+            return port
+    raise RuntimeError(f"No free localhost port near {preferred}")
 
-    if not dashboard_path.exists():
-        print(f"[错误] 找不到 dashboard.py: {dashboard_path}")
-        input("按 Enter 键退出...")
-        sys.exit(1)
 
-    # 启动 Streamlit
-    sys.argv = [
-        "streamlit",
-        "run",
-        str(dashboard_path),
-        "--server.port=8501",
-        "--server.headless=true",
-        "--browser.gatherUsageStats=false",
-        "--server.fileWatcherType=none",
-    ]
+def write_runtime_config(web_dir: Path, api_port: int) -> None:
+    api_base_url = f"http://127.0.0.1:{api_port}"
+    payload = {
+        "apiBaseUrl": api_base_url,
+        "apiKey": os.environ.get("VITE_API_KEY", ""),
+        "packaged": is_frozen(),
+    }
+    web_dir.mkdir(parents=True, exist_ok=True)
+    (web_dir / "runtime-config.js").write_text(
+        "window.__ALPHASCOPE_CONFIG__ = "
+        + json.dumps(payload, ensure_ascii=False)
+        + ";\n",
+        encoding="utf-8",
+    )
+
+
+def start_api(api_port: int) -> threading.Thread:
+    import uvicorn
+
+    config = uvicorn.Config(
+        "backend.api.main:app",
+        host="127.0.0.1",
+        port=api_port,
+        log_level="warning",
+        access_log=False,
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, name="alphascope-api", daemon=True)
+    thread.start()
+    return thread
+
+
+def start_web(
+    web_dir: Path, web_port: int
+) -> tuple[ThreadingHTTPServer, threading.Thread]:
+    if not (web_dir / "index.html").exists():
+        raise FileNotFoundError(
+            f"Missing built frontend at {web_dir}. Run npm run build before packaging."
+        )
+
+    handler = partial(AlphaScopeStaticHandler, directory=str(web_dir))
+    server = ThreadingHTTPServer(("127.0.0.1", web_port), handler)
+    thread = threading.Thread(
+        target=server.serve_forever,
+        name="alphascope-web",
+        daemon=True,
+    )
+    thread.start()
+    return server, thread
+
+
+def wait_for_http(port: int, path: str = "/", timeout: float = 30.0) -> bool:
+    deadline = time.time() + timeout
+    request = (
+        f"GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
+    )
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1.5) as sock:
+                sock.sendall(request.encode("ascii"))
+                response = sock.recv(64)
+            if response.startswith(b"HTTP/1."):
+                return True
+        except OSError:
+            time.sleep(0.4)
+    return False
+
+
+def write_pid_file(root: Path, api_port: int, web_port: int) -> None:
+    pid_file = root / ".alphascope_runtime.json"
+    data: dict[str, Any] = {
+        "pid": os.getpid(),
+        "api_port": api_port,
+        "web_port": web_port,
+        "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    pid_file.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def remove_pid_file(root: Path) -> None:
+    try:
+        (root / ".alphascope_runtime.json").unlink()
+    except FileNotFoundError:
+        pass
+
+
+def stop_running_instance(root: Path) -> int:
+    pid_file = root / ".alphascope_runtime.json"
+    if not pid_file.exists():
+        print("[AlphaScope] No running instance marker found.")
+        return 0
 
     try:
-        import streamlit.web.cli as st_cli
+        data = json.loads(pid_file.read_text(encoding="utf-8"))
+        pid = int(data.get("pid", 0))
+    except Exception:
+        pid = 0
 
-        st_cli.main()
-    except (ImportError, AttributeError):
-        import streamlit
+    if not pid:
+        pid_file.unlink(missing_ok=True)
+        print("[AlphaScope] Removed invalid runtime marker.")
+        return 0
 
-        streamlit.run()
+    if pid == os.getpid():
+        print("[AlphaScope] Refusing to stop current process.")
+        return 1
+
+    if sys.platform.startswith("win"):
+        os.system(f"taskkill /PID {pid} /T /F >NUL 2>NUL")
+    else:
+        os.system(f"kill {pid} >/dev/null 2>&1")
+    pid_file.unlink(missing_ok=True)
+    print(f"[AlphaScope] Stop signal sent to PID {pid}.")
+    return 0
+
+
+def configure_runtime_environment(root: Path) -> None:
+    os.environ.setdefault("ALPHASCOPE_PACKAGED", "1" if is_frozen() else "0")
+    os.environ.setdefault("ALPHASCOPE_RUNTIME_ROOT", str(root))
+    os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
+    os.environ.setdefault("STREAMLIT_BROWSER_GATHER_USAGE_STATS", "false")
+
+
+def run() -> int:
+    parser = argparse.ArgumentParser(description=f"{APP_NAME} desktop launcher")
+    parser.add_argument(
+        "--stop", action="store_true", help="stop a running local instance"
+    )
+    parser.add_argument(
+        "--no-browser", action="store_true", help="do not open browser automatically"
+    )
+    args = parser.parse_args()
+
+    root = runtime_root()
+    bundled = bundle_root()
+
+    if args.stop:
+        return stop_running_instance(root)
+
+    add_import_paths(root, bundled)
+    configure_runtime_environment(root)
+    ensure_directories(root)
+    sync_runtime_assets(root, bundled)
+    ensure_env_file(root, bundled)
+    load_dotenv(root)
+
+    api_port = find_free_port(
+        int(os.environ.get("ALPHASCOPE_API_PORT", DEFAULT_API_PORT))
+    )
+    web_port = find_free_port(
+        int(os.environ.get("ALPHASCOPE_WEB_PORT", DEFAULT_WEB_PORT))
+    )
+
+    web_dir = root / "apps" / "web" / "dist"
+    write_runtime_config(web_dir, api_port)
+    write_pid_file(root, api_port, web_port)
+
+    print("=" * 58)
+    print(f"  {APP_NAME}")
+    print("=" * 58)
+    print(f"[AlphaScope] Runtime: {root}")
+    print(f"[AlphaScope] API:     http://127.0.0.1:{api_port}")
+    print(f"[AlphaScope] Web:     http://127.0.0.1:{web_port}")
+    print("[AlphaScope] Starting local services...")
+
+    web_server: ThreadingHTTPServer | None = None
+    try:
+        api_thread = start_api(api_port)
+        web_server, _web_thread = start_web(web_dir, web_port)
+
+        api_ready = wait_for_http(api_port, "/health", timeout=45)
+        web_ready = wait_for_http(web_port, "/", timeout=15)
+        if not api_ready:
+            print(
+                "[AlphaScope] Warning: backend health check timed out; opening UI anyway."
+            )
+        if not web_ready:
+            raise RuntimeError("Frontend service did not become ready.")
+
+        url = f"http://127.0.0.1:{web_port}"
+        if not args.no_browser:
+            webbrowser.open(url)
+
+        print()
+        print("[AlphaScope] Started. Keep this window open while using the app.")
+        print("[AlphaScope] Press Ctrl+C to stop.")
+        while api_thread.is_alive():
+            time.sleep(1)
     except KeyboardInterrupt:
-        print("\n[AlphaScope] 已停止")
-    except Exception as e:
-        print(f"\n[错误] 启动失败: {e}")
-        input("按 Enter 键退出...")
-        sys.exit(1)
+        print("\n[AlphaScope] Stopping...")
+    except Exception as exc:
+        print(f"\n[AlphaScope] Startup failed: {exc}")
+        input("Press Enter to exit...")
+        return 1
+    finally:
+        if web_server is not None:
+            web_server.shutdown()
+            web_server.server_close()
+        remove_pid_file(root)
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(run())

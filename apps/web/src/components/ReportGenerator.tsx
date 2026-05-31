@@ -4,10 +4,18 @@ import {
   FileText, 
   Sparkles, 
   Award, 
-  FileCheck
+  FileCheck,
+  Settings2,
+  AlertTriangle,
+  ClipboardCheck,
+  LineChart,
+  ShieldCheck,
+  Cpu,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { startAsyncAnalysis, getTaskResult, getTaskEventsUrl } from '../lib/analysisAdapter';
+import { startAsyncAnalysis, getTaskResult, getTaskEventsUrl, getTaskStatus } from '../lib/analysisAdapter';
 import { AnalysisResult } from '../types';
 import { DecisionSummary } from './report/DecisionSummary';
 import { AgentOpinionCards } from './report/AgentOpinionCards';
@@ -17,6 +25,18 @@ import { EvidenceAppendix } from './report/EvidenceAppendix';
 import { mockAnalysisResult } from '../lib/mockAnalysisData';
 import { STOCK_UNIVERSE, findStockTarget, formatStockLabel } from '../lib/stocks';
 import { dispatchStockSelected, getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
+import { fetchApi } from '../lib/api';
+import {
+  buildModelOptions,
+  getModelKey,
+  getRouteSelection,
+  loadAiModelRoutesFromApi,
+  loadLocalAiModelRoutes,
+  ModelOption,
+  ModelProvider,
+  routesToGlobalAiSettings,
+} from '../lib/aiModelRouting';
+import { ThemedSelect } from './ThemedSelect';
 
 const REPORT_TEMPLATES = [
   { id: 'standard', name: '标准个股深度评级公司研报', desc: '包含宏观定位，深度报表分析以及三因素量化诊股。' },
@@ -24,16 +44,276 @@ const REPORT_TEMPLATES = [
   { id: 'risk', name: '黑天鹅情绪避险与信用预警评估', desc: '侧重于舆情违约风险、大股东股权质押及账外担保预警。' }
 ];
 
-export function ReportGenerator() {
+interface ReportGeneratorProps {
+  onOpenModelSettings?: () => void;
+}
+
+function formatModelOption(option?: ModelOption) {
+  if (!option) return '未配置';
+  return `${option.providerName} / ${option.modelId}`;
+}
+
+function splitReportParagraphs(text?: string) {
+  return (text || '')
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function cleanReportText(text: string) {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/^-\s+/gm, '')
+    .trim();
+}
+
+function ReportTextBlock({ text }: { text?: string }) {
+  const paragraphs = splitReportParagraphs(text);
+  if (!paragraphs.length) return null;
+
+  return (
+    <div className="space-y-4">
+      {paragraphs.map((paragraph, index) => {
+        const cleaned = cleanReportText(paragraph);
+        const lines = cleaned.split('\n').map((line) => line.trim()).filter(Boolean);
+        const firstLine = lines[0] || '';
+        const isSectionHeading = lines.length === 1 && /^(\d+\.|[一二三四五六七八九十]+、|【.+】)/.test(firstLine);
+        const isListLike = lines.length > 1;
+
+        if (isSectionHeading) {
+          return <h4 key={index} className="pt-2 text-sm font-semibold text-indigo-200">{firstLine}</h4>;
+        }
+
+        if (isListLike) {
+          return (
+            <div key={index} className="space-y-2">
+              <p className="text-sm font-semibold text-neutral-100">{firstLine}</p>
+              <ul className="space-y-2 text-sm leading-relaxed text-neutral-300">
+                {lines.slice(1).map((line, lineIndex) => (
+                  <li key={lineIndex} className="flex gap-2">
+                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-indigo-300/60" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        }
+
+        return (
+          <p key={index} className="whitespace-pre-line text-sm leading-7 text-neutral-300">
+            {cleaned}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReportSection({
+  icon: Icon,
+  title,
+  eyebrow,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  eyebrow?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border-t border-white/5 py-7 first:border-t-0 first:pt-0">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-500/25 bg-indigo-500/10 text-indigo-300">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div>
+          {eyebrow && <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">{eyebrow}</div>}
+          <h3 className="text-base font-semibold text-white">{title}</h3>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ModelStatusNotice({
+  result,
+  onOpenModelSettings,
+}: {
+  result: AnalysisResult;
+  onOpenModelSettings?: () => void;
+}) {
+  const status = result.model_status;
+  if (!status?.degraded) return null;
+
+  const isAuth = status.failure_type === 'auth';
+  return (
+    <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="flex gap-3">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-400/25 bg-amber-400/10 text-amber-300">
+            <Cpu className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-amber-100">
+              {isAuth ? '模型鉴权未通过' : '模型推理链路降级'}
+            </div>
+            <p className="mt-1 max-w-2xl text-xs leading-6 text-amber-100/75">
+              {status.message || '部分 AI 席位没有完成推理，当前研报包含系统结构化底稿。'}
+            </p>
+            {status.action && (
+              <p className="mt-1 text-[11px] leading-5 text-amber-100/55">{status.action}</p>
+            )}
+          </div>
+        </div>
+        {onOpenModelSettings && (
+          <button
+            type="button"
+            onClick={onOpenModelSettings}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-semibold text-amber-100 transition-colors hover:border-amber-200/45 hover:bg-amber-300/15"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            打开模型设置
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ModelQualityPanel({ result }: { result: AnalysisResult }) {
+  const status = result.model_status;
+  const totalAgents = status?.total_agents ?? Object.keys(result.agents).length;
+  const okAgents = status?.ok_agents ?? Object.values(result.agents).filter((agent) => agent.confidence > 0).length;
+  const failedAgents = status?.failed_agents || [];
+  const isDegraded = Boolean(status?.degraded);
+
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.025] p-5">
+      <div className="text-xs uppercase tracking-[0.16em] text-neutral-500">生成质量</div>
+      <dl className="mt-4 space-y-4 text-sm">
+        <div className="flex items-center justify-between gap-4">
+          <dt className="text-neutral-400">专家席位</dt>
+          <dd className="font-mono text-neutral-100">{okAgents}/{totalAgents}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <dt className="text-neutral-400">证据条目</dt>
+          <dd className="font-mono text-neutral-100">{result.evidence.length}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <dt className="text-neutral-400">数据链路</dt>
+          <dd className="font-mono text-neutral-100">{result.provider_traces.length}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <dt className="text-neutral-400">模型状态</dt>
+          <dd className={cn('inline-flex items-center gap-1.5 text-xs font-semibold', isDegraded ? 'text-amber-300' : 'text-emerald-300')}>
+            {isDegraded ? <XCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            {isDegraded ? '降级' : '正常'}
+          </dd>
+        </div>
+      </dl>
+      {failedAgents.length > 0 ? (
+        <div className="mt-5 space-y-2 border-t border-white/5 pt-4">
+          {failedAgents.slice(0, 3).map((agent, index) => (
+            <div key={`${agent.key || agent.name || 'agent'}-${index}`} className="text-[11px] leading-5 text-neutral-500">
+              <span className="text-neutral-300">{agent.name || agent.key || 'Agent'}</span>: {agent.reason}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-5 text-xs leading-6 text-neutral-500">
+          若行情、财务或成交数据为空，报告会保留风控结论，但不应被解释为完整估值报告。
+        </p>
+      )}
+    </div>
+  );
+}
+
+function GeneratedResearchReport({
+  result,
+  onOpenModelSettings,
+}: {
+  result: AnalysisResult;
+  onOpenModelSettings?: () => void;
+}) {
+  const agentCount = Object.keys(result.agents).length;
+  const hasBrief = Boolean(result.brief?.trim());
+  const hasResearchReport = Boolean(result.research_report?.trim());
+  const hasChairmanSummary = Boolean(result.chairman_summary?.trim());
+  const hasCritic = Boolean(result.critic?.trim());
+
+  return (
+    <div className="space-y-1">
+      <ModelStatusNotice result={result} onOpenModelSettings={onOpenModelSettings} />
+
+      {hasResearchReport && (
+        <ReportSection icon={FileText} title="完整研报正文" eyebrow="Research Draft">
+          <div className="rounded-xl border border-indigo-500/15 bg-indigo-500/[0.04] p-5">
+            <ReportTextBlock text={result.research_report} />
+          </div>
+        </ReportSection>
+      )}
+
+      {hasChairmanSummary && (
+        <ReportSection icon={ClipboardCheck} title="投委会决策摘要" eyebrow={result.mode_name || 'AI Research Memo'}>
+          <div className="rounded-xl border border-white/8 bg-white/[0.035] p-5">
+            <ReportTextBlock text={result.chairman_summary} />
+          </div>
+        </ReportSection>
+      )}
+
+      {hasBrief && (
+        <ReportSection icon={LineChart} title="市场与数据快照" eyebrow="Market Snapshot">
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-xl border border-white/8 bg-black/20 p-5">
+              <ReportTextBlock text={result.brief} />
+            </div>
+            <ModelQualityPanel result={result} />
+          </div>
+        </ReportSection>
+      )}
+
+      {result.summary && (
+        <ReportSection icon={FileText} title="综合评级与投票" eyebrow="Decision Matrix">
+          <div className="rounded-xl border border-white/8 bg-white/[0.035] p-5">
+            <ReportTextBlock text={result.summary} />
+          </div>
+        </ReportSection>
+      )}
+
+      {hasCritic && (
+        <ReportSection icon={ShieldCheck} title="风控复核意见" eyebrow="Risk Review">
+          <div className="rounded-xl border border-amber-500/15 bg-amber-500/[0.04] p-5">
+            <ReportTextBlock text={result.critic} />
+          </div>
+        </ReportSection>
+      )}
+    </div>
+  );
+}
+
+export function ReportGenerator({ onOpenModelSettings }: ReportGeneratorProps) {
   const [selectedTarget, setSelectedTarget] = useState(() => getPersistedStock() ?? STOCK_UNIVERSE[0]);
   const selectedStock = formatStockLabel(selectedTarget);
   const [selectedTemplate, setSelectedTemplate] = useState('standard');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
   const [progressPercent, setProgressPercent] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState('');
+  const [generationError, setGenerationError] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [providers, setProviders] = useState<ModelProvider[]>([]);
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
+  const [selectedReportModelKey, setSelectedReportModelKey] = useState('');
   
   const eventSourceRef = useRef<EventSource | null>(null);
+  const pollTimerRef = useRef<number | null>(null);
+  const selectedReportModel = modelOptions.find((option) => option.key === selectedReportModelKey) ?? modelOptions[0];
+  const selectableStocks = [selectedTarget, ...STOCK_UNIVERSE].filter(
+    (stock, index, list) => list.findIndex((item) => item.symbol === stock.symbol) === index,
+  );
 
   // Steps matching the general analysis pipeline
   const steps = [
@@ -44,7 +324,62 @@ export function ReportGenerator() {
     { label: '智能排版与生成', desc: '正在聚合证据链，排版最终投资建议报告...' }
   ];
 
-  // Cleanup SSE on unmount
+  const stopTaskListeners = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    if (pollTimerRef.current !== null) {
+      window.clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  const finishWithError = (message: string) => {
+    stopTaskListeners();
+    setGenerationStatus('生成失败');
+    setGenerationError(message);
+    setIsGenerating(false);
+  };
+
+  const completeTask = async (taskId: string) => {
+    try {
+      stopTaskListeners();
+      setGenerationStep(steps.length);
+      setProgressPercent(100);
+      setGenerationStatus('报告生成完成，正在载入排版结果...');
+      const result = await getTaskResult(taskId, false);
+      setAnalysisResult(result);
+      setIsGenerating(false);
+    } catch (error) {
+      finishWithError(error instanceof Error ? error.message : '报告结果载入失败');
+    }
+  };
+
+  const pollTaskStatus = (taskId: string) => {
+    pollTimerRef.current = window.setTimeout(async () => {
+      try {
+        const snapshot = await getTaskStatus(taskId);
+        const p = Number(snapshot.progress) || 0;
+        setProgressPercent((current) => Math.max(current, p));
+        setGenerationStatus(snapshot.message || `任务状态：${snapshot.status}`);
+        if (snapshot.status === 'success') {
+          await completeTask(taskId);
+          return;
+        }
+        if (snapshot.status === 'failed' || snapshot.status === 'cancelled') {
+          finishWithError(snapshot.error || (snapshot.status === 'cancelled' ? '任务已取消' : '任务执行失败'));
+          return;
+        }
+        pollTaskStatus(taskId);
+      } catch (error) {
+        console.warn('Failed to poll task status', error);
+        pollTaskStatus(taskId);
+      }
+    }, 1500);
+  };
+
+  // Cleanup task listeners on unmount
   useEffect(() => {
     const unsubscribe = subscribeStockSelected(({ stock }) => {
       setSelectedTarget(findStockTarget(stock.symbol) ?? stock);
@@ -52,16 +387,51 @@ export function ReportGenerator() {
 
     return () => {
       unsubscribe();
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+      stopTaskListeners();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadModels() {
+      try {
+        const result = await fetchApi<{ providers: ModelProvider[] }>('/api/settings/providers');
+        if (cancelled) return;
+        const nextProviders = result.providers || [];
+        const routes = await loadAiModelRoutesFromApi().catch(() => loadLocalAiModelRoutes());
+        if (cancelled) return;
+        const options = buildModelOptions(nextProviders, 'chat');
+        const routeKey = getModelKey(getRouteSelection(routes, nextProviders, 'report'));
+        setProviders(nextProviders);
+        setModelOptions(options);
+        setSelectedReportModelKey((current) => (
+          current && options.some((option) => option.key === current)
+            ? current
+            : routeKey && options.some((option) => option.key === routeKey)
+              ? routeKey
+              : options[0]?.key || ''
+        ));
+      } catch {
+        if (!cancelled) {
+          setProviders([]);
+          setModelOptions([]);
+          setSelectedReportModelKey('');
+        }
       }
+    }
+    void loadModels();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
   const startGeneration = async () => {
+    stopTaskListeners();
     setIsGenerating(true);
     setGenerationStep(0);
     setProgressPercent(0);
+    setGenerationStatus('正在提交报告生成任务...');
+    setGenerationError('');
     setAnalysisResult(null);
 
     const symbol = selectedTarget.symbol;
@@ -78,19 +448,43 @@ export function ReportGenerator() {
             clearInterval(interval);
             setGenerationStep(steps.length);
             setProgressPercent(100);
+            setGenerationStatus('报告生成完成');
             setAnalysisResult(mockAnalysisResult);
             setIsGenerating(false);
           } else {
             setGenerationStep(mockStep);
             setProgressPercent(mockStep * 20);
+            setGenerationStatus(steps[mockStep]?.desc || 'AI 正在生成报告...');
           }
         }, 800);
         return;
       }
 
+      const globalAiSettings = selectedReportModel
+        ? routesToGlobalAiSettings({
+            useUnifiedModel: true,
+            unified: {
+              providerId: selectedReportModel.providerId,
+              providerName: selectedReportModel.providerName,
+              modelId: selectedReportModel.modelId,
+            },
+            routes: {
+              report: {
+                providerId: selectedReportModel.providerId,
+                providerName: selectedReportModel.providerName,
+                modelId: selectedReportModel.modelId,
+              },
+            },
+          }, providers, 'report')
+        : undefined;
+
       // Real API Flow with SSE
-      const taskId = await startAsyncAnalysis(symbol, name, 'deep', false);
-      const sseUrl = getTaskEventsUrl();
+      const taskId = await startAsyncAnalysis(symbol, name, 'deep', false, globalAiSettings);
+      setProgressPercent(8);
+      setGenerationStatus(`任务已启动：${taskId}`);
+      pollTaskStatus(taskId);
+
+      const sseUrl = getTaskEventsUrl(taskId);
       const eventSource = new EventSource(sseUrl);
       eventSourceRef.current = eventSource;
 
@@ -105,25 +499,16 @@ export function ReportGenerator() {
               setProgressPercent(p);
               const stepIndex = Math.min(steps.length - 1, Math.floor((p / 100) * steps.length));
               setGenerationStep(stepIndex);
+              setGenerationStatus(data.message || steps[stepIndex]?.desc || 'AI 正在生成报告...');
             } 
             
             else if (data.type === 'task_completed') {
-              eventSource.close();
-              eventSourceRef.current = null;
-              setGenerationStep(steps.length);
-              setProgressPercent(100);
-              
-              // Fetch final result
-              const result = await getTaskResult(taskId, false);
-              setAnalysisResult(result);
-              setIsGenerating(false);
+              await completeTask(taskId);
             }
             
             else if (data.type === 'task_failed' || data.type === 'task_cancelled') {
               console.error('Task failed or cancelled', data);
-              eventSource.close();
-              eventSourceRef.current = null;
-              setIsGenerating(false);
+              finishWithError(data.error || data.message || '报告生成任务失败，请检查后端日志或模型配置。');
             }
           }
         } catch (err) {
@@ -135,12 +520,12 @@ export function ReportGenerator() {
         console.error('SSE Error', err);
         eventSource.close();
         eventSourceRef.current = null;
-        setIsGenerating(false);
+        setGenerationStatus('进度流连接中断，已切换为轮询任务状态...');
       };
 
     } catch (error) {
       console.error(error);
-      setIsGenerating(false);
+      finishWithError(error instanceof Error ? error.message : '报告生成任务启动失败');
     }
   };
 
@@ -172,23 +557,22 @@ export function ReportGenerator() {
           
           <div className="space-y-2">
             <label className="text-xs font-medium text-neutral-400 select-none">研究对象 (Target Stock)</label>
-            <select 
+            <ThemedSelect
               value={selectedStock}
-              onChange={e => {
-                const stock = [selectedTarget, ...STOCK_UNIVERSE].find((item) => formatStockLabel(item) === e.target.value);
+              onChange={(value) => {
+                const stock = selectableStocks.find((item) => formatStockLabel(item) === value);
                 if (stock) {
                   setSelectedTarget(stock);
                   dispatchStockSelected(stock, 'report');
                 }
               }}
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500/50"
-            >
-              {[selectedTarget, ...STOCK_UNIVERSE].filter((stock, index, list) => list.findIndex((item) => item.symbol === stock.symbol) === index).map((stock) => (
-                <option key={stock.symbol} value={formatStockLabel(stock)}>
-                  {formatStockLabel(stock)}
-                </option>
-              ))}
-            </select>
+              buttonClassName="h-10 bg-black/40 px-3 text-xs focus-visible:border-indigo-500/50"
+              menuClassName="text-xs"
+              options={selectableStocks.map((stock) => ({
+                value: formatStockLabel(stock),
+                label: formatStockLabel(stock),
+              }))}
+            />
           </div>
 
           <div className="space-y-2.5">
@@ -215,8 +599,39 @@ export function ReportGenerator() {
             </div>
           </div>
 
+          <div className="rounded-xl border border-white/5 bg-black/20 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-xs font-medium text-neutral-400 select-none">研报模型</label>
+              <button
+                type="button"
+                onClick={onOpenModelSettings}
+                className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-neutral-400 transition-colors hover:border-indigo-400/40 hover:text-indigo-200"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                设置
+              </button>
+            </div>
+            <select
+              data-testid="report-model-select"
+              value={selectedReportModel?.key || ''}
+              onChange={(event) => setSelectedReportModelKey(event.target.value)}
+              disabled={!modelOptions.length || isGenerating}
+              className="h-10 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-xs text-neutral-200 outline-none focus:border-indigo-500/50 disabled:text-neutral-600"
+            >
+              {modelOptions.length ? modelOptions.map((option) => (
+                <option key={option.key} value={option.key}>{formatModelOption(option)}</option>
+              )) : (
+                <option value="">请先在系统设置中添加模型</option>
+              )}
+            </select>
+            <p className="mt-2 text-[10px] leading-relaxed text-neutral-500">
+              该模型会作为研报生成、专家团默认推理和总结审稿的本次默认路由。
+            </p>
+          </div>
+
           <div className="mt-auto pt-4 border-t border-white/5 flex flex-col gap-4">
             <button
+              data-testid="report-generate-button"
               onClick={startGeneration}
               disabled={isGenerating}
               className={cn(
@@ -258,6 +673,11 @@ export function ReportGenerator() {
                 </div>
 
                 <h3 className="text-lg font-semibold text-white mb-2">智能分析与排版中 ({Math.round(progressPercent)}%)</h3>
+                {generationStatus && (
+                  <p className="mb-4 max-w-md text-center text-[11px] leading-relaxed text-neutral-400">
+                    {generationStatus}
+                  </p>
+                )}
                 <div className="w-64 h-1 bg-white/10 rounded-full mb-8 overflow-hidden">
                   <motion.div 
                     className="h-full bg-indigo-500" 
@@ -305,7 +725,7 @@ export function ReportGenerator() {
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="flex-1 flex flex-col min-h-0 bg-[#0c0c0c] overflow-y-auto custom-scrollbar p-6 lg:p-8"
               >
-                <div className="max-w-3xl mx-auto w-full">
+                <div className="mx-auto w-full max-w-5xl">
                   
                   {/* P0: Decision Summary */}
                   <DecisionSummary 
@@ -314,11 +734,13 @@ export function ReportGenerator() {
                     result={analysisResult} 
                   />
 
+                  <GeneratedResearchReport result={analysisResult} onOpenModelSettings={onOpenModelSettings} />
+
                   {/* P0: Agent Opinions */}
-                  <div className="mb-6">
+                  <div className="my-7 border-t border-white/5 pt-7">
                     <h3 className="text-sm font-semibold text-white/80 mb-4 uppercase tracking-wider flex items-center gap-2">
                       <Award className="w-4 h-4 text-indigo-400" />
-                      专家圆桌观点
+                      专家会签明细
                     </h3>
                     <AgentOpinionCards agents={analysisResult.agents} />
                   </div>
@@ -337,18 +759,31 @@ export function ReportGenerator() {
                   <div className="mb-6">
                     <EvidenceAppendix result={analysisResult} />
                   </div>
-
-                  {/* Summary Text */}
-                  {analysisResult.summary && (
-                    <div className="mt-8 pt-8 border-t border-white/5">
-                      <h3 className="text-sm font-semibold text-white/80 mb-4 uppercase tracking-wider">分析摘要 (Summary)</h3>
-                      <p className="text-sm text-neutral-300 leading-relaxed bg-white/5 p-5 rounded-xl border border-white/5">
-                        {analysisResult.summary}
-                      </p>
-                    </div>
-                  )}
-
                 </div>
+              </motion.div>
+            ) : !isGenerating && generationError ? (
+              <motion.div
+                key="error"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex-1 flex flex-col justify-center items-center text-center p-12 text-neutral-500 font-sans gap-4 z-20"
+              >
+                <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shadow-md">
+                  <AlertTriangle className="w-8 h-8 text-rose-300" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-neutral-100">报告生成没有完成</h3>
+                  <p className="mt-2 max-w-lg text-xs leading-relaxed text-neutral-400">
+                    {generationError}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={startGeneration}
+                  className="mt-2 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-2 text-xs font-semibold text-indigo-200 transition-colors hover:border-indigo-400 hover:bg-indigo-500/20"
+                >
+                  重新启动智能整合排版
+                </button>
               </motion.div>
             ) : !isGenerating ? (
               // Idle state

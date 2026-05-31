@@ -1,4 +1,4 @@
-"""设置 API — 模型 Provider 管理端点"""
+"""设置 API - 模型 Provider 管理端点"""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ class ProviderSaveRequest(BaseModel):
     base_url: str = Field(description="API Base URL")
     api_key: str = Field(default="", description="API Key（留空则不更新）")
     enabled: bool = Field(default=True, description="是否启用")
+    config_json: str | None = Field(default=None, description="Provider 扩展配置")
 
 
 class ImportRequest(BaseModel):
@@ -35,6 +36,54 @@ class PreferencesSaveRequest(BaseModel):
 
 def _public_provider(provider: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in provider.items() if key != "api_key"}
+
+
+def _model_capabilities(model_id: str) -> dict[str, bool]:
+    model = model_id.lower()
+    embedding = any(
+        token in model
+        for token in (
+            "embedding",
+            "embed",
+            "bge-",
+            "bge_",
+            "gte-",
+            "gte_",
+            "jina-embeddings",
+            "text-embedding",
+            "text_embedding",
+        )
+    )
+    vision = any(
+        token in model
+        for token in (
+            "vision",
+            "visual",
+            "multimodal",
+            "multi-modal",
+            "mimo",
+            "omni",
+            "vl",
+            "llava",
+            "qwen-vl",
+            "gpt-4o",
+            "gpt-4.1",
+            "claude-3",
+            "claude-sonnet",
+            "claude-opus",
+            "gemini",
+        )
+    )
+    return {"vision": bool(vision and not embedding), "embedding": bool(embedding)}
+
+
+def _public_model(model: Any) -> dict[str, Any]:
+    model_id = str(getattr(model, "id", "") or "").strip()
+    return {
+        "id": model_id,
+        "owned_by": str(getattr(model, "owned_by", "") or "").strip(),
+        "capabilities": _model_capabilities(model_id),
+    }
 
 
 # ============== Endpoints ==============
@@ -76,6 +125,7 @@ async def save_provider(req: ProviderSaveRequest):
         base_url=req.base_url,
         api_key=req.api_key,
         enabled=req.enabled,
+        config_json=req.config_json,
     )
     return ApiResponse(success=True, data=_public_provider(result))
 
@@ -119,10 +169,7 @@ async def list_provider_models(provider_id: str):
             api_key=provider["api_key"], base_url=provider["base_url"], timeout=15.0
         )
         models = client.models.list()
-        model_list = [
-            {"id": m.id, "owned_by": getattr(m, "owned_by", "")}
-            for m in (models.data or [])
-        ]
+        model_list = [_public_model(m) for m in (models.data or []) if getattr(m, "id", "")]
         return ApiResponse(success=True, data={"models": model_list})
     except Exception as e:
         return ApiResponse(success=False, error=f"获取模型列表失败: {e}")

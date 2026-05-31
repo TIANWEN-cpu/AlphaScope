@@ -14,6 +14,15 @@ router = APIRouter(prefix="/api/prices", tags=["prices"])
 logger = logging.getLogger(__name__)
 
 PRICE_PROVIDER_TIMEOUT_SECONDS = 8.0
+MAX_PRICE_FETCH_DAYS = 3650
+
+
+def _minimum_period_bars(frequency: str) -> int:
+    if frequency == "1mo":
+        return 6
+    if frequency == "1w":
+        return 12
+    return 1
 
 
 async def _fetch_provider_bars(sym: str, days: int) -> list[dict]:
@@ -73,8 +82,14 @@ async def normalize_symbol(symbol: str):
 @router.get("/{symbol}/latest")
 async def get_latest_price(symbol: str):
     """获取最新价格"""
+    from backend.price_periods import fetch_intraday_prices
     from backend.price_quality import filter_incompatible_price_bars
-    from backend.price_store import get_latest_price as _latest, get_prices as _get
+    from backend.price_store import get_latest_price as _latest, get_market, get_prices as _get
+
+    if get_market(symbol) == "CN":
+        intraday_bars = fetch_intraday_prices(symbol, limit=1)
+        if intraday_bars:
+            return ApiResponse(success=True, data=intraday_bars[-1])
 
     fetch_result = None
     raw_daily_bars = _get(
@@ -150,8 +165,16 @@ async def get_prices(
     source_status = "ok"
     error = None
     error_code = None
-    if not bars and not start and not end:
-        fetch_result = await fetch_prices(symbol, days=max(1, min(fetch_days, 365)))
+    should_extend_period_history = False
+    if normalized_frequency in {"1w", "1mo"} and bars and not start and not end:
+        should_extend_period_history = (
+            len(aggregate_price_bars(bars, normalized_frequency)) < limit
+        )
+
+    if (not bars or should_extend_period_history) and not start and not end:
+        fetch_result = await fetch_prices(
+            symbol, days=max(1, min(fetch_days, MAX_PRICE_FETCH_DAYS))
+        )
         if not fetch_result.success:
             degraded = True
             error = fetch_result.error
@@ -171,6 +194,9 @@ async def get_prices(
         bars = filter_incompatible_price_bars(raw_bars)
     if normalized_frequency in {"1w", "1mo"}:
         bars = aggregate_price_bars(bars, normalized_frequency)[-limit:]
+        if bars and len(bars) < _minimum_period_bars(normalized_frequency):
+            degraded = True
+            source_status = "short_history"
     return ApiResponse(
         success=True,
         data={
@@ -189,10 +215,13 @@ async def get_prices(
 @router.post("/{symbol}/fetch")
 async def fetch_prices(symbol: str, days: int = 30):
     """从 Provider 拉取并存储 K 线数据"""
-    if days < 1 or days > 365:
+    if days < 1 or days > MAX_PRICE_FETCH_DAYS:
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=400, detail="days 参数必须在 1-365 之间")
+        raise HTTPException(
+            status_code=400,
+            detail=f"days 参数必须在 1-{MAX_PRICE_FETCH_DAYS} 之间",
+        )
     from backend.price_store import normalize_symbol as _norm, save_price_bars
 
     sym = _norm(symbol)

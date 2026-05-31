@@ -353,7 +353,12 @@ class DataPipeline:
             return []
 
         all_results = []
-        collections = ["news_chunks", "report_chunks", "announcement_chunks"]
+        collections = [
+            "news_chunks",
+            "report_chunks",
+            "announcement_chunks",
+            "user_documents",
+        ]
 
         for col in collections:
             try:

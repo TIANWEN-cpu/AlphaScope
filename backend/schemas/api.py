@@ -58,6 +58,11 @@ class ChatRequest(BaseModel):
     stock_symbol: Optional[str] = Field(default=None, description="股票代码")
     stock_name: Optional[str] = Field(default=None, description="股票名称")
     expert_team_id: Optional[str] = Field(default=None, description="专家团ID")
+    provider: Optional[str] = Field(default=None, description="模型 Provider ID")
+    model: Optional[str] = Field(default=None, description="模型 ID")
+    context: Optional[dict[str, Any]] = Field(
+        default=None, description="前端注入的行情、资金和界面上下文"
+    )
 
 
 class AnalysisRequest(BaseModel):
