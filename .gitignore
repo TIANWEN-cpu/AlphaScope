@@ -15,6 +15,7 @@ __pycache__/
 htmlcov/
 build/
 dist/
+installer/installer-output/
 
 # Virtual envs
 venvs/

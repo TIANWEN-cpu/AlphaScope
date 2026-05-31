@@ -6,7 +6,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-113%20APIs-009688)](docs/api.md)
 [![Tests](https://img.shields.io/badge/targeted%20regression-52%20passed-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.5.0-blue)](https://github.com/TIANWEN-cpu/AlphaScope/releases/tag/v1.5.0)
+[![Release](https://img.shields.io/badge/release-v1.6.0-blue)](https://github.com/TIANWEN-cpu/AlphaScope/releases/tag/v1.6.0)
 
 研策中枢 AlphaScope 是一个本地优先的 AI 投研与量化决策工作台。项目把行情、新闻、公告、财务指标、技术分析、多 Agent 研究、证据链、研究报告、量化回测、基金定投和组合管理整合到一个可运行、可测试、可扩展的工程系统中。
 
@@ -78,9 +78,9 @@
 
 ![研策中枢 AlphaScope 研究报告生成器](docs/assets/v1.4.1/report-generator.png)
 
-## v1.5.0 前端工作台更新
+## v1.6.0 前端工作台更新
 
-v1.5.0 聚焦 React 工作台的可用性、新闻研究流、多 Agent 配置、模型路由和一键安装体验。新闻模块补齐详情阅读、原文跳转和 AI 助手；专家团配置迁移到系统设置；模型 Provider 支持自定义 Base URL / API Key / 模型列表；研报生成、K 线诊断和聊天入口也接入统一模型配置。
+v1.6.0 聚焦 React 工作台的可用性、新闻研究流、多 Agent 配置、模型路由和一键安装体验。新闻模块补齐详情阅读、原文跳转和 AI 助手；专家团配置迁移到系统设置；模型 Provider 支持自定义 Base URL / API Key / 模型列表；研报生成、K 线诊断和聊天入口也接入统一模型配置。
 
 ### 新闻研究流
 
@@ -389,7 +389,8 @@ data/                   # 本地运行数据，默认 gitignore
 
 | 版本 | 日期 | 重点 |
 |------|------|------|
-| v1.5.0 | 2026-05-31 | Windows 一键安装包、新闻详情与新闻 AI 助手、Agent 编排迁移到系统设置、自定义 Provider/模型路由、K 线提示框与研报生成增强 |
+| v1.6.0 | 2026-05-31 | Windows 一键安装包、新闻详情与新闻 AI 助手、Agent 编排迁移到系统设置、自定义 Provider/模型路由、K 线提示框与研报生成增强 |
+| v1.5.0 | 2026-05-30 | AlphaScope 品牌与前端工作台过渡发布 |
 | v1.4.2 | 2026-05-28 | 品牌迁移为研策中枢 AlphaScope、本地回测自恢复、新闻乱码与降级体验修复、系统设置偏好持久化 |
 | v1.4.1 | 2026-05-27 | 主力资金改用带超时 Eastmoney 源、缓存降级、资金流因子修复、研报目录滚动与 README 截图 |
 | v1.4.0 | 2026-05-25 | Vite React 工作台、股票搜索联动、SSE 契约修复、Provider 密钥安全、多 Agent 托管配置、新闻/报告/回测真实状态标注 |

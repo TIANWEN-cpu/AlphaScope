@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.5.0 - 2026-05-30
+## v1.6.0 - 2026-05-31
 
 ### 新闻研究流与可配置 Agent
 
@@ -16,6 +16,13 @@
 - 分析请求 `run` 与 `async` 会携带启用中的 `agent_configs`。
 - 清理当前前端可见品牌残留和旧内部代号，更新前端 package 与 release 文档。
 - 前端 `npm run lint` 与 `npm run build` 通过，保留既有 Vite chunk size warning。
+
+## v1.5.0 - 2026-05-30
+
+### AlphaScope 过渡发布
+
+- 项目更名与工作台发布链路整理。
+- 为 v1.6.0 桌面分发、模型路由和新闻/研报体验增强做准备。
 
 ## v1.4.2 - 2026-05-28
 
