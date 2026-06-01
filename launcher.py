@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
 import shutil
 import socket
 import sys
@@ -151,11 +152,16 @@ def find_free_port(preferred: int) -> int:
     raise RuntimeError(f"No free localhost port near {preferred}")
 
 
-def write_runtime_config(web_dir: Path, api_port: int) -> None:
+def generate_local_api_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def write_runtime_config(web_dir: Path, api_port: int, local_api_token: str) -> None:
     api_base_url = f"http://127.0.0.1:{api_port}"
     payload = {
         "apiBaseUrl": api_base_url,
         "apiKey": os.environ.get("VITE_API_KEY", ""),
+        "localApiToken": local_api_token,
         "packaged": is_frozen(),
     }
     web_dir.mkdir(parents=True, exist_ok=True)
@@ -305,9 +311,11 @@ def run() -> int:
     web_port = find_free_port(
         int(os.environ.get("ALPHASCOPE_WEB_PORT", DEFAULT_WEB_PORT))
     )
+    local_api_token = generate_local_api_token()
+    os.environ["ALPHASCOPE_LOCAL_API_TOKEN"] = local_api_token
 
     web_dir = root / "apps" / "web" / "dist"
-    write_runtime_config(web_dir, api_port)
+    write_runtime_config(web_dir, api_port, local_api_token)
     write_pid_file(root, api_port, web_port)
 
     print("=" * 58)
