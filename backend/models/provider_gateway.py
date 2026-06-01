@@ -179,8 +179,10 @@ def _reject_unsafe_resolved_addresses(host: str, port: Optional[int]) -> None:
     try:
         addrinfo = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
-        logger.warning("自定义 Base URL 主机名暂时无法解析，跳过 DNS 地址安全检查: %s", host)
-        return
+        raise ValueError(
+            "自定义 Base URL 主机名 DNS 解析失败，默认禁止连接;"
+            "如需离线或本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1"
+        ) from exc
     for info in addrinfo:
         sockaddr = info[4]
         if not sockaddr:

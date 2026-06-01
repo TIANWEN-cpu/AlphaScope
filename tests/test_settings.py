@@ -45,6 +45,12 @@ def _mock_public_dns(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
 
 
+@pytest.fixture(autouse=True)
+def mock_public_dns_for_settings_tests(monkeypatch):
+    """Settings tests use documentation domains; treat them as public and resolvable."""
+    _mock_public_dns(monkeypatch)
+
+
 @pytest.fixture
 def client():
     transport = ASGITransport(app=app)
