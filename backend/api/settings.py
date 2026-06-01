@@ -132,6 +132,10 @@ async def save_provider(req: ProviderSaveRequest):
         return ApiResponse(success=True, data=_public_provider(result))
     except ValueError as exc:
         return ApiResponse(success=False, error=str(exc))
+    except RuntimeError as exc:
+        if "AI_FINANCE_MASTER_KEY" in str(exc):
+            return ApiResponse(success=False, error=str(exc))
+        raise
 
 
 @router.delete("/providers/{provider_id}")

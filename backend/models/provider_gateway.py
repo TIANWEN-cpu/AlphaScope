@@ -16,6 +16,7 @@ import os
 import json
 import logging
 import re
+import socket
 import threading
 import ipaddress
 from urllib.parse import urlsplit
@@ -156,6 +157,42 @@ def _allow_local_base_url() -> bool:
     }
 
 
+def _is_unsafe_ip_address(ip: ipaddress._BaseAddress) -> bool:
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _reject_unsafe_ip(ip: ipaddress._BaseAddress) -> None:
+    if _is_unsafe_ip_address(ip):
+        raise ValueError(
+            "默认禁止连接内网或本机自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1"
+        )
+
+
+def _reject_unsafe_resolved_addresses(host: str, port: Optional[int]) -> None:
+    try:
+        addrinfo = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        logger.warning("自定义 Base URL 主机名暂时无法解析，跳过 DNS 地址安全检查: %s", host)
+        return
+    for info in addrinfo:
+        sockaddr = info[4]
+        if not sockaddr:
+            continue
+        address = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            continue
+        _reject_unsafe_ip(ip)
+
+
 def validate_custom_base_url(base_url: str) -> str:
     """Reject private/local custom endpoints unless explicitly enabled by environment."""
     normalized = normalize_openai_base_url(base_url)
@@ -172,18 +209,9 @@ def validate_custom_base_url(base_url: str) -> str:
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
+        _reject_unsafe_resolved_addresses(host, parsed.port)
         return normalized
-    if (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-        or ip.is_unspecified
-    ):
-        raise ValueError(
-            "默认禁止连接内网或本机自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1"
-        )
+    _reject_unsafe_ip(ip)
     return normalized
 
 
@@ -380,10 +408,11 @@ def _sync_persisted_providers_once() -> None:
         from backend.settings_store import get_provider, list_providers
 
         for public_provider in list_providers():
-            if public_provider.get("enabled") is False:
-                continue
             provider_id = str(public_provider.get("id") or "").strip()
             if not provider_id:
+                continue
+            if public_provider.get("enabled") is False:
+                VENDORS.pop(provider_id, None)
                 continue
             full_provider = get_provider(provider_id)
             if not full_provider:
