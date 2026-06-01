@@ -66,7 +66,9 @@ def test_launcher_runtime_config_contains_per_run_local_token(tmp_path, monkeypa
     import launcher
 
     monkeypatch.setattr(launcher, "is_frozen", lambda: True)
-    launcher.write_runtime_config(tmp_path, api_port=8123, local_api_token="runtime-secret")
+    launcher.write_runtime_config(
+        tmp_path, api_port=8123, local_api_token="runtime-secret"
+    )
 
     config_text = (tmp_path / "runtime-config.js").read_text(encoding="utf-8")
     payload = json.loads(config_text.split(" = ", 1)[1].rstrip(";\n"))

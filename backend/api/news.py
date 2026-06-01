@@ -126,7 +126,9 @@ async def list_announcements(
 
 
 @router.get("/events/{symbol}")
-async def get_event_summary(symbol: str, days: int = Query(default=30, ge=1, le=MAX_EVENT_DAYS)):
+async def get_event_summary(
+    symbol: str, days: int = Query(default=30, ge=1, le=MAX_EVENT_DAYS)
+):
     """事件摘要（类型分布+情绪）"""
     from backend.news_store import get_event_summary as _summary
 
