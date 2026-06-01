@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import socket
 import sqlite3
 from unittest.mock import patch
 
@@ -35,6 +36,13 @@ MOCK_PROVIDERS = [
         "config_json": "{}",
     },
 ]
+
+
+def _mock_public_dns(monkeypatch):
+    def fake_getaddrinfo(host, port=None, *args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port or 443))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
 
 
 @pytest.fixture
@@ -157,6 +165,40 @@ async def test_save_provider_response_does_not_leak_plaintext_key(client):
     assert "api_key" not in data["data"]
     assert "sk-secret-plaintext" not in resp.text
     assert data["data"]["api_key_masked"] == "sk-s...text"
+
+
+@pytest.mark.anyio
+async def test_save_provider_without_master_key_returns_actionable_failure(client, monkeypatch):
+    """POST save provider must not turn key-vault refusal into an HTTP 500."""
+    from backend import settings_store
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _mock_public_dns(monkeypatch)
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch("backend.settings_store._sync_to_gateway"),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "", "AI_FINANCE_ALLOW_DEV_KEY_FALLBACK": ""},
+            clear=False,
+        ),
+    ):
+        resp = await client.post(
+            "/api/settings/providers",
+            json={
+                "id": "needs-vault-key",
+                "name": "Needs Vault Key",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "sk-needs-master-key",
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is False
+    assert "AI_FINANCE_MASTER_KEY" in data["error"]
 
 
 @pytest.mark.anyio
@@ -684,6 +726,113 @@ def test_legacy_custom_provider_models_hide_disabled_saved_provider():
         models = provider_gateway.get_provider_models("disabled-models")
 
     assert models == []
+
+def test_gateway_startup_sync_disabled_known_provider_suppresses_runtime_vendor():
+    """Disabled saved known providers must override built-in/env runtime entries on startup."""
+    from backend import settings_store
+    from backend.models import provider_gateway
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    original = provider_gateway.VENDORS.get("deepseek")
+    provider_gateway.VENDORS["deepseek"] = {
+        "api_key": "sk-env-deepseek",
+        "base_url": "https://api.deepseek.com/v1",
+        "supports_json_mode": True,
+        "label": "DeepSeek",
+    }
+    try:
+        with (
+            patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+            patch.dict(
+                os.environ,
+                {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+                clear=False,
+            ),
+        ):
+            settings_store._ensure_table(conn)
+            conn.execute(
+                """
+                INSERT INTO model_providers
+                    (id, name, type, base_url, encrypted_api_key, enabled, config_json, created_at, updated_at)
+                VALUES (?, ?, 'openai_compatible', ?, ?, 0, '{}', 1, 1)
+                """,
+                (
+                    "deepseek",
+                    "DeepSeek Disabled",
+                    "https://api.deepseek.com/v1",
+                    settings_store.encrypt_key("sk-saved-deepseek"),
+                ),
+            )
+            conn.commit()
+            provider_gateway._PERSISTED_PROVIDERS_SYNCED = False
+            provider_gateway._PERSISTED_PROVIDERS_SYNCING = False
+
+            provider_gateway._sync_persisted_providers_once()
+
+        assert "deepseek" not in provider_gateway.VENDORS
+        assert all(item["id"] != "deepseek" for item in provider_gateway.get_provider_list())
+        with pytest.raises(RuntimeError, match="未配置完整"):
+            provider_gateway.create_client("deepseek")
+    finally:
+        if original is None:
+            provider_gateway.VENDORS.pop("deepseek", None)
+        else:
+            provider_gateway.VENDORS["deepseek"] = original
+        provider_gateway.clear_client_cache()
+
+
+def test_delete_known_provider_override_restores_clean_builtin_and_clears_cache(monkeypatch):
+    """Deleting a saved override for a known provider must remove stale patched key/url/cache."""
+    from backend import settings_store
+    from backend.models import provider_gateway
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _mock_public_dns(monkeypatch)
+
+    original = provider_gateway.VENDORS.get("deepseek", {}).copy()
+    provider_gateway.VENDORS["deepseek"] = {
+        "api_key": "sk-env-deepseek",
+        "base_url": "https://api.deepseek.com/v1",
+        "supports_json_mode": True,
+        "label": "DeepSeek",
+    }
+    try:
+        with (
+            patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+            patch.dict(
+                os.environ,
+                {"AI_FINANCE_MASTER_KEY": "test-settings-master-key", "DEEPSEEK_API_KEY": "sk-env-deepseek"},
+                clear=False,
+            ),
+        ):
+            settings_store.save_provider(
+                provider_id="deepseek",
+                name="Patched DeepSeek",
+                base_url="https://patched.example.com/v1",
+                api_key="sk-patched-deepseek",
+                enabled=True,
+            )
+            provider_gateway._client_cache["deepseek"] = object()
+
+            assert provider_gateway.VENDORS["deepseek"]["api_key"] == "sk-patched-deepseek"
+            assert provider_gateway.VENDORS["deepseek"]["base_url"] == "https://patched.example.com/v1"
+
+            assert settings_store.delete_provider("deepseek") is True
+
+        assert provider_gateway.VENDORS["deepseek"]["api_key"] == "sk-env-deepseek"
+        assert provider_gateway.VENDORS["deepseek"]["base_url"] == "https://api.deepseek.com/v1"
+        assert "deepseek" not in provider_gateway._client_cache
+    finally:
+        if original:
+            provider_gateway.VENDORS["deepseek"] = original
+        else:
+            provider_gateway.VENDORS.pop("deepseek", None)
+        provider_gateway.clear_client_cache()
+
+
 @pytest.mark.anyio
 async def test_export_settings(client):
     """GET /api/settings/export 导出不含明文 key"""
