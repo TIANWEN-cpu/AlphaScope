@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from unittest.mock import patch
 
@@ -232,6 +233,7 @@ def test_save_provider_empty_key_preserves_existing_key():
     with (
         patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
         patch("backend.settings_store._sync_to_gateway"),
+        patch.dict(os.environ, {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"}),
     ):
         settings_store.save_provider(
             provider_id="keep-key",
@@ -264,6 +266,7 @@ def test_provider_names_are_cleaned_before_returning():
     with (
         patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
         patch("backend.settings_store._sync_to_gateway"),
+        patch.dict(os.environ, {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"}),
     ):
         settings_store.save_provider(
             provider_id="sensenova",
