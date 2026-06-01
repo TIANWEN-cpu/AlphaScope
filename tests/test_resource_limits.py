@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+import pytest
+
+fastapi = pytest.importorskip("fastapi")
+TestClient = fastapi.testclient.TestClient
 
 from backend.api.main import app
 
