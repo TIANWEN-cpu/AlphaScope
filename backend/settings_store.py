@@ -775,7 +775,9 @@ def _sync_to_gateway() -> None:
                     _restore_builtin_vendor(pid, VENDORS)
                 else:
                     VENDORS.pop(pid, None)
-                logger.warning("跳过未完整配置 provider %s: API Key 或 Base URL 缺失", pid)
+                logger.warning(
+                    "跳过未完整配置 provider %s: API Key 或 Base URL 缺失", pid
+                )
                 continue
             try:
                 safe_base_url = validate_custom_base_url(base_url)

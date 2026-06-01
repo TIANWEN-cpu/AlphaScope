@@ -310,7 +310,9 @@ def test_validate_custom_base_url_allows_unresolved_hostname_with_opt_in(monkeyp
     )
 
 
-def test_validate_custom_base_url_allows_resolved_local_addresses_with_opt_in(monkeypatch):
+def test_validate_custom_base_url_allows_resolved_local_addresses_with_opt_in(
+    monkeypatch,
+):
     """Explicit local LLM opt-in bypasses DNS SSRF rejection for developer proxies."""
 
     def fail_if_resolved(*args, **kwargs):

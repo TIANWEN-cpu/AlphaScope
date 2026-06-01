@@ -31,7 +31,11 @@ async def test_analysis_run_rejects_empty_market_data(client):
     with patch("backend.api.main.get_prices", return_value=[]):
         resp = await client.post(
             "/api/analysis/run",
-            json={"stock_symbol": "600519.SH", "stock_name": "贵州茅台", "mode": "deep"},
+            json={
+                "stock_symbol": "600519.SH",
+                "stock_name": "贵州茅台",
+                "mode": "deep",
+            },
         )
 
     assert resp.status_code == 200
@@ -45,12 +49,23 @@ async def test_analysis_run_rejects_zero_only_market_data(client):
     with patch(
         "backend.api.main.get_prices",
         return_value=[
-            {"date": "2026-05-01", "open": 0, "close": 0, "high": 0, "low": 0, "volume": 0}
+            {
+                "date": "2026-05-01",
+                "open": 0,
+                "close": 0,
+                "high": 0,
+                "low": 0,
+                "volume": 0,
+            }
         ],
     ):
         resp = await client.post(
             "/api/analysis/run",
-            json={"stock_symbol": "600519.SH", "stock_name": "贵州茅台", "mode": "deep"},
+            json={
+                "stock_symbol": "600519.SH",
+                "stock_name": "贵州茅台",
+                "mode": "deep",
+            },
         )
 
     assert resp.status_code == 200

@@ -772,7 +772,9 @@ def _provider_model_items_from_config_json(config_json: Any) -> list[dict[str, A
     if not config_json:
         return []
     try:
-        parsed = json.loads(config_json) if isinstance(config_json, str) else config_json
+        parsed = (
+            json.loads(config_json) if isinstance(config_json, str) else config_json
+        )
     except Exception:
         return []
     if not isinstance(parsed, dict):
@@ -811,7 +813,9 @@ def get_provider_models(provider_id: str) -> list:
     _sync_persisted_providers_once()
     cfg = VENDORS.get(provider_id)
     if cfg and cfg.get("enabled", True) and cfg.get("api_key") and cfg.get("base_url"):
-        persisted_models = _provider_model_items_from_config_json(cfg.get("config_json"))
+        persisted_models = _provider_model_items_from_config_json(
+            cfg.get("config_json")
+        )
         if persisted_models:
             return persisted_models
     prov = _PROVIDER_CONFIG.get(provider_id)

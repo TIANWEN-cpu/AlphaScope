@@ -107,7 +107,9 @@ async def _list_provider_models_async(provider: dict[str, Any]) -> list[dict[str
         )
         models = client.models.list()
         return [
-            _public_model(m) for m in (getattr(models, "data", None) or []) if getattr(m, "id", "")
+            _public_model(m)
+            for m in (getattr(models, "data", None) or [])
+            if getattr(m, "id", "")
         ]
 
     return await asyncio.wait_for(
@@ -203,7 +205,9 @@ async def list_provider_models(provider_id: str):
         return ApiResponse(success=False, error=str(exc))
 
     try:
-        model_list = await _list_provider_models_async({**provider, "base_url": safe_base_url})
+        model_list = await _list_provider_models_async(
+            {**provider, "base_url": safe_base_url}
+        )
         return ApiResponse(success=True, data={"models": model_list})
     except asyncio.TimeoutError:
         return ApiResponse(success=False, error="获取模型列表超时")

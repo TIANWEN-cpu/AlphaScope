@@ -52,7 +52,14 @@ def test_news_impact_accepts_normal_window(monkeypatch):
     monkeypatch.setattr(
         "backend.price_store.get_prices",
         lambda symbol, limit=250: [
-            {"date": "2026-05-01", "open": 10, "close": 11, "high": 12, "low": 9, "volume": 1000}
+            {
+                "date": "2026-05-01",
+                "open": 10,
+                "close": 11,
+                "high": 12,
+                "low": 9,
+                "volume": 1000,
+            }
         ],
     )
     monkeypatch.setattr(
@@ -80,7 +87,14 @@ def test_technical_all_indicators_accepts_normal_limit(monkeypatch):
     monkeypatch.setattr(
         "backend.price_store.get_prices",
         lambda symbol, limit=250: [
-            {"date": "2026-05-01", "open": 10, "close": 11, "high": 12, "low": 9, "volume": 1000}
+            {
+                "date": "2026-05-01",
+                "open": 10,
+                "close": 11,
+                "high": 12,
+                "low": 9,
+                "volume": 1000,
+            }
         ],
     )
     monkeypatch.setattr(
@@ -104,7 +118,14 @@ def test_technical_support_resistance_accepts_normal_lookback(monkeypatch):
     monkeypatch.setattr(
         "backend.price_store.get_prices",
         lambda symbol, limit=25: [
-            {"date": "2026-05-01", "open": 10, "close": 11, "high": 12, "low": 9, "volume": 1000}
+            {
+                "date": "2026-05-01",
+                "open": 10,
+                "close": 11,
+                "high": 12,
+                "low": 9,
+                "volume": 1000,
+            }
         ],
     )
     monkeypatch.setattr(
