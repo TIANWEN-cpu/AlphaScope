@@ -61,7 +61,7 @@ jobs:
         run: |
           gh release view "${env:GITHUB_REF_NAME}" *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create "${env:GITHUB_REF_NAME}" --title "${env:GITHUB_REF_NAME}" --generate-notes
+            throw "Release ${env:GITHUB_REF_NAME} must be created by release.yml before installer assets can be uploaded."
           }
           gh release upload "${env:GITHUB_REF_NAME}" installer/installer-output/AlphaScope-Setup-*.exe --clobber
           gh release upload "${env:GITHUB_REF_NAME}" dist/AlphaScope-portable.zip --clobber
