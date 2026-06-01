@@ -25,15 +25,32 @@ except ImportError:
     logger.info("cryptography 库未安装，API Key 加密降级为 XOR 模式")
 
 
-def _get_encryption_key() -> bytes:
+def _dev_fallback_enabled() -> bool:
+    """Return True only when dev fallback encryption is explicitly enabled."""
+    return os.getenv("AI_FINANCE_ALLOW_DEV_KEY_FALLBACK", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _get_encryption_key(*, allow_dev_fallback: bool = True) -> bytes:
     """获取加密密钥（从环境变量）。"""
     key = os.getenv("AI_FINANCE_MASTER_KEY", "")
     if key:
         return hashlib.sha256(key.encode()).digest()
-    # 无 master key 时使用 dev key 并警告
+
+    if not allow_dev_fallback or not _dev_fallback_enabled():
+        raise RuntimeError(
+            "AI_FINANCE_MASTER_KEY must be set before encrypting non-empty API keys. "
+            "Set AI_FINANCE_ALLOW_DEV_KEY_FALLBACK=1 only for local development."
+        )
+
+    # 无 master key 时仅在显式本地开发 opt-in 后使用 dev key 并警告
     logger.warning(
-        "未设置 AI_FINANCE_MASTER_KEY 环境变量，API Key 加密强度降低。"
-        "请设置该环境变量以启用 AES-GCM 加密。"
+        "未设置 AI_FINANCE_MASTER_KEY 环境变量，正在使用显式启用的开发 fallback key。"
+        "仅可用于本地开发，请勿用于生产环境。"
     )
     return hashlib.sha256(b"dev-only-not-for-production").digest()
 

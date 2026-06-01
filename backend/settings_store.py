@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import copy
 import json
 import logging
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from backend.security.key_vault import decrypt_key, encrypt_key, mask_key
 from backend.storage.db import Database
+from backend.models.provider_gateway import validate_custom_base_url
 
 _TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS model_providers (
@@ -302,6 +304,19 @@ def _coerce_int(section: str, key: str, value: Any, default: int) -> int:
     return max(low, min(high, coerced))
 
 
+def _safe_encrypt_api_key(api_key: str) -> str:
+    if not api_key:
+        return ""
+    try:
+        return encrypt_key(api_key)
+    except RuntimeError as exc:
+        if "AI_FINANCE_MASTER_KEY" in str(exc):
+            raise RuntimeError(
+                "无法保存 API Key：AI_FINANCE_MASTER_KEY 未配置；请设置主密钥后重试，或留空 API Key 仅保存 Base URL。"
+            ) from exc
+        raise
+
+
 def _coerce_preference_value(section: str, key: str, value: Any) -> Any:
     default = DEFAULT_APP_PREFERENCES[section][key]
     if isinstance(default, bool):
@@ -427,7 +442,12 @@ def save_provider(
     """添加或更新 provider"""
     conn = _get_conn()
     now = time.time()
-    display_name = _clean_provider_name(provider_id, name, base_url)
+    from backend.models.provider_gateway import normalize_openai_base_url
+
+    normalized_base_url = normalize_openai_base_url(base_url)
+    if normalized_base_url:
+        normalized_base_url = validate_custom_base_url(normalized_base_url)
+    display_name = _clean_provider_name(provider_id, name, normalized_base_url)
     existing = conn.execute(
         "SELECT id, config_json FROM model_providers WHERE id = ?", (provider_id,)
     ).fetchone()
@@ -440,8 +460,8 @@ def save_provider(
                 "UPDATE model_providers SET name=?, base_url=?, encrypted_api_key=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
                 (
                     display_name,
-                    base_url,
-                    encrypt_key(api_key),
+                    normalized_base_url,
+                    _safe_encrypt_api_key(api_key),
                     int(enabled),
                     next_config_json,
                     now,
@@ -453,7 +473,7 @@ def save_provider(
                 "UPDATE model_providers SET name=?, base_url=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
                 (
                     display_name,
-                    base_url,
+                    normalized_base_url,
                     int(enabled),
                     next_config_json,
                     now,
@@ -461,14 +481,14 @@ def save_provider(
                 ),
             )
     else:
-        encrypted = encrypt_key(api_key) if api_key else ""
+        encrypted = _safe_encrypt_api_key(api_key) if api_key else ""
         conn.execute(
             "INSERT INTO model_providers (id, name, type, base_url, encrypted_api_key, enabled, config_json, created_at, updated_at) "
             "VALUES (?, ?, 'openai_compatible', ?, ?, ?, ?, ?, ?)",
             (
                 provider_id,
                 display_name,
-                base_url,
+                normalized_base_url,
                 encrypted,
                 int(enabled),
                 next_config_json,
@@ -505,13 +525,17 @@ def test_connection(provider_id: str) -> dict[str, Any]:
         return {"success": False, "error": "API Key 未配置"}
     if not provider["base_url"]:
         return {"success": False, "error": "Base URL 未配置"}
+    try:
+        safe_base_url = validate_custom_base_url(provider["base_url"])
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
 
     try:
         from openai import OpenAI
 
         client = OpenAI(
             api_key=provider["api_key"],
-            base_url=provider["base_url"],
+            base_url=safe_base_url,
             timeout=15.0,
         )
         models = client.models.list()
@@ -621,13 +645,17 @@ def import_settings(data: dict[str, Any]) -> dict[str, Any]:
         pid = p.get("id")
         if not pid:
             continue
-        save_provider(
-            provider_id=pid,
-            name=p.get("name", pid),
-            base_url=p.get("base_url", ""),
-            api_key="",  # 导入不含 key
-            enabled=p.get("enabled", True),
-        )
+        try:
+            save_provider(
+                provider_id=pid,
+                name=p.get("name", pid),
+                base_url=p.get("base_url", ""),
+                api_key="",  # 导入不含 key
+                enabled=p.get("enabled", True),
+            )
+        except ValueError as exc:
+            logger.warning("跳过不安全 provider Base URL %s: %s", pid, exc)
+            continue
         imported += 1
     if isinstance(data.get("preferences"), dict):
         save_app_preferences(data["preferences"])
@@ -637,39 +665,141 @@ def import_settings(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _builtin_vendor_config(provider_id: str) -> dict[str, Any] | None:
+    from backend.models import provider_gateway
+
+    if provider_id == "deepseek":
+        return {
+            "api_key": os.getenv("DEEPSEEK_API_KEY"),
+            "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+            "supports_json_mode": True,
+            "label": "DeepSeek",
+        }
+    if provider_id == "claude":
+        return {
+            "api_key": os.getenv("CLAUDE_API_KEY"),
+            "base_url": (os.getenv("CLAUDE_BASE_URL", "") + "/v1")
+            if os.getenv("CLAUDE_BASE_URL")
+            else None,
+            "supports_json_mode": False,
+            "label": "Claude",
+        }
+    if provider_id == "gpt":
+        return {
+            "api_key": os.getenv("GPT_API_KEY"),
+            "base_url": (os.getenv("GPT_BASE_URL", "") + "/v1")
+            if os.getenv("GPT_BASE_URL")
+            else None,
+            "supports_json_mode": True,
+            "label": "GPT",
+        }
+    if provider_id == "mimo":
+        return {
+            "api_key": os.getenv("MIMO_API_KEY"),
+            "base_url": (os.getenv("MIMO_BASE_URL", "") + "/v1")
+            if os.getenv("MIMO_BASE_URL")
+            else None,
+            "supports_json_mode": False,
+            "label": "Mimo",
+        }
+    if provider_id == "sensenova":
+        return {
+            "api_key": os.getenv("SENSENOVA_API_KEY"),
+            "base_url": os.getenv("SENSENOVA_BASE_URL"),
+            "supports_json_mode": False,
+            "label": "SenseNova",
+        }
+    if provider_id == "kimi":
+        return {
+            "api_key": os.getenv("KIMI_API_KEY"),
+            "base_url": os.getenv("KIMI_BASE_URL", "https://api.moonshot.cn/v1"),
+            "supports_json_mode": True,
+            "label": "Kimi",
+        }
+    config = provider_gateway._PROVIDER_CONFIG.get(provider_id)
+    if config and config.get("api_key") and config.get("base_url"):
+        return {
+            "api_key": config.get("api_key"),
+            "base_url": config.get("base_url"),
+            "supports_json_mode": config.get("supports_json_mode", True),
+            "label": config.get("label", provider_id),
+            "models": config.get("models", {}),
+        }
+    return None
+
+
+def _restore_builtin_vendor(provider_id: str, vendors: dict[str, Any]) -> None:
+    builtin = _builtin_vendor_config(provider_id)
+    if builtin and builtin.get("api_key") and builtin.get("base_url"):
+        vendors[provider_id] = builtin
+    else:
+        vendors.pop(provider_id, None)
+
+
 def _sync_to_gateway() -> None:
     """将 DB 配置同步到 provider_gateway 的 VENDORS dict"""
     try:
         from backend.models.provider_gateway import (
+            KNOWN_PROVIDER_ORDER,
             VENDORS,
+            _PROVIDER_CONFIG,
             _models_from_config_json,
             clear_client_cache,
+            validate_custom_base_url,
         )
 
         providers = list_providers()
+        provider_ids = {str(p.get("id") or "").strip() for p in providers}
+        known_provider_ids = set(KNOWN_PROVIDER_ORDER) | set(_PROVIDER_CONFIG)
+        for vendor_id in list(VENDORS.keys()):
+            if vendor_id not in provider_ids and vendor_id not in known_provider_ids:
+                VENDORS.pop(vendor_id, None)
+
+        for provider_id in known_provider_ids:
+            if provider_id not in provider_ids:
+                _restore_builtin_vendor(provider_id, VENDORS)
+
         for p in providers:
             pid = p["id"]
             provider_full = get_provider(pid)
             if not provider_full:
+                VENDORS.pop(pid, None)
+                continue
+            if not provider_full.get("enabled", True):
+                _restore_builtin_vendor(pid, VENDORS)
+                continue
+            api_key = provider_full.get("api_key") or ""
+            base_url = provider_full.get("base_url") or ""
+            if not api_key or not base_url:
+                if pid in known_provider_ids:
+                    _restore_builtin_vendor(pid, VENDORS)
+                else:
+                    VENDORS.pop(pid, None)
+                logger.warning(
+                    "跳过未完整配置 provider %s: API Key 或 Base URL 缺失", pid
+                )
+                continue
+            try:
+                safe_base_url = validate_custom_base_url(base_url)
+            except ValueError as exc:
+                if pid in known_provider_ids:
+                    _restore_builtin_vendor(pid, VENDORS)
+                else:
+                    VENDORS.pop(pid, None)
+                logger.warning("跳过不安全 provider Base URL %s: %s", pid, exc)
                 continue
             patch = {
-                "base_url": p["base_url"],
+                "api_key": api_key,
+                "base_url": safe_base_url,
                 "supports_json_mode": True,
                 "label": p["name"],
                 "config_json": provider_full.get("config_json") or "{}",
                 "models": _models_from_config_json(provider_full.get("config_json")),
             }
-            if provider_full["api_key"]:
-                patch["api_key"] = provider_full["api_key"]
             if pid in VENDORS:
-                # 更新已有 vendor
                 VENDORS[pid].update(patch)
             else:
-                # 新增 vendor
-                VENDORS[pid] = {
-                    "api_key": provider_full["api_key"],
-                    **patch,
-                }
+                VENDORS[pid] = patch
         clear_client_cache()
     except Exception as e:
         logger.warning("同步设置到 gateway 失败: %s", e)

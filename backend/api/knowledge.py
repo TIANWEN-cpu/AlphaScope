@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, File, UploadFile
@@ -33,6 +34,15 @@ class SearchRequest(BaseModel):
     limit: int = Field(default=20, description="最大结果数")
 
 
+def _sanitize_upload_filename(filename: str) -> str:
+    raw_name = Path(filename or "").name.strip()
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", raw_name)
+    safe_name = safe_name.strip("._-")
+    if not safe_name:
+        raise ValueError("文件名无效")
+    return safe_name
+
+
 # ============== Endpoints ==============
 
 
@@ -46,6 +56,11 @@ async def upload_document(file: UploadFile = File(...)):
             error=f"不支持的文件格式: {suffix}，支持: {', '.join(SUPPORTED_FORMATS)}",
         )
 
+    try:
+        safe_filename = _sanitize_upload_filename(file.filename or "")
+    except ValueError as exc:
+        return ApiResponse(success=False, error=str(exc))
+
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         return ApiResponse(success=False, error="文件大小超过 20MB 限制")
@@ -53,7 +68,7 @@ async def upload_document(file: UploadFile = File(...)):
     # 保存到磁盘
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     c_hash = hashlib.sha256(content).hexdigest()[:16]
-    save_name = f"{c_hash}_{file.filename}"
+    save_name = f"{c_hash}_{safe_filename}"
     save_path = UPLOADS_DIR / save_name
     save_path.write_bytes(content)
 
@@ -62,7 +77,7 @@ async def upload_document(file: UploadFile = File(...)):
 
     pipeline = get_document_pipeline()
     doc = pipeline.process_and_persist(
-        str(save_path), metadata={"original_name": file.filename}
+        str(save_path), metadata={"original_name": safe_filename}
     )
 
     if not doc:

@@ -1,5 +1,7 @@
 """Tests for backend.validators — pure-function schema normalizers."""
 
+import socket
+
 import pytest
 
 from llm_agents import (
@@ -257,3 +259,78 @@ def test_validate_custom_base_url_rejects_local_addresses():
         validate_custom_base_url("http://localhost:8000/v1")
     with pytest.raises(ValueError):
         validate_custom_base_url("http://127.0.0.1:8000/v1")
+    with pytest.raises(ValueError):
+        validate_custom_base_url("http://169.254.169.254/latest/meta-data")
+
+
+def test_validate_custom_base_url_rejects_resolved_local_addresses(monkeypatch):
+    """DNS names resolving to local/private/link-local addresses are unsafe by default."""
+
+    def fake_getaddrinfo(host, *args, **kwargs):
+        resolved = {
+            "127.0.0.1.nip.io": "127.0.0.1",
+            "10.0.0.1.sslip.io": "10.0.0.1",
+        }[host]
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (resolved, 443))]
+
+    monkeypatch.delenv("ALLOW_LOCAL_LLM_BASE_URL", raising=False)
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+
+    with pytest.raises(ValueError, match="默认禁止连接"):
+        validate_custom_base_url("https://127.0.0.1.nip.io/v1")
+    with pytest.raises(ValueError, match="默认禁止连接"):
+        validate_custom_base_url("https://10.0.0.1.sslip.io/v1")
+
+
+def test_validate_custom_base_url_rejects_unresolved_hostname_by_default(monkeypatch):
+    """Unresolved DNS names cannot be proven public and are unsafe by default."""
+
+    def fail_resolution(*args, **kwargs):
+        raise socket.gaierror("name or service not known")
+
+    monkeypatch.delenv("ALLOW_LOCAL_LLM_BASE_URL", raising=False)
+    monkeypatch.setattr(socket, "getaddrinfo", fail_resolution)
+
+    with pytest.raises(ValueError, match="DNS|解析"):
+        validate_custom_base_url("https://unresolved.example.invalid/v1")
+
+
+def test_validate_custom_base_url_allows_unresolved_hostname_with_opt_in(monkeypatch):
+    """Explicit local LLM opt-in preserves offline/dev hostname support."""
+
+    def fail_resolution(*args, **kwargs):
+        raise socket.gaierror("name or service not known")
+
+    monkeypatch.setenv("ALLOW_LOCAL_LLM_BASE_URL", "1")
+    monkeypatch.setattr(socket, "getaddrinfo", fail_resolution)
+
+    assert (
+        validate_custom_base_url("https://unresolved.example.invalid/v1")
+        == "https://unresolved.example.invalid/v1"
+    )
+
+
+def test_validate_custom_base_url_allows_resolved_local_addresses_with_opt_in(
+    monkeypatch,
+):
+    """Explicit local LLM opt-in bypasses DNS SSRF rejection for developer proxies."""
+
+    def fail_if_resolved(*args, **kwargs):
+        raise AssertionError("local opt-in should bypass DNS resolution")
+
+    monkeypatch.setenv("ALLOW_LOCAL_LLM_BASE_URL", "1")
+    monkeypatch.setattr(socket, "getaddrinfo", fail_if_resolved)
+
+    assert (
+        validate_custom_base_url("https://127.0.0.1.nip.io/v1")
+        == "https://127.0.0.1.nip.io/v1"
+    )
+
+
+def test_validate_custom_base_url_allows_local_addresses_with_opt_in(monkeypatch):
+    monkeypatch.setenv("ALLOW_LOCAL_LLM_BASE_URL", "1")
+
+    assert (
+        validate_custom_base_url("http://localhost:8000/v1")
+        == "http://localhost:8000/v1"
+    )

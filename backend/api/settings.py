@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+try:
+    from openai import OpenAI
+except Exception:  # pragma: no cover - optional dependency in tests
+    OpenAI = None
+
+from backend.models.provider_gateway import validate_custom_base_url
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+MODEL_LIST_TIMEOUT_SECONDS = 15.0
+MODEL_LIST_WAIT_TIMEOUT_SECONDS = 17.0
 
 
 # ============== Request/Response Models ==============
@@ -86,6 +95,28 @@ def _public_model(model: Any) -> dict[str, Any]:
     }
 
 
+async def _list_provider_models_async(provider: dict[str, Any]) -> list[dict[str, Any]]:
+    if OpenAI is None:
+        raise RuntimeError("OpenAI client unavailable")
+
+    def _load_models() -> list[dict[str, Any]]:
+        client = OpenAI(
+            api_key=provider["api_key"],
+            base_url=validate_custom_base_url(provider["base_url"]),
+            timeout=MODEL_LIST_TIMEOUT_SECONDS,
+        )
+        models = client.models.list()
+        return [
+            _public_model(m)
+            for m in (getattr(models, "data", None) or [])
+            if getattr(m, "id", "")
+        ]
+
+    return await asyncio.wait_for(
+        asyncio.to_thread(_load_models), timeout=MODEL_LIST_WAIT_TIMEOUT_SECONDS
+    )
+
+
 # ============== Endpoints ==============
 
 
@@ -119,15 +150,22 @@ async def save_provider(req: ProviderSaveRequest):
     """添加或更新 provider"""
     from backend.settings_store import save_provider as _save
 
-    result = _save(
-        provider_id=req.id,
-        name=req.name,
-        base_url=req.base_url,
-        api_key=req.api_key,
-        enabled=req.enabled,
-        config_json=req.config_json,
-    )
-    return ApiResponse(success=True, data=_public_provider(result))
+    try:
+        result = _save(
+            provider_id=req.id,
+            name=req.name,
+            base_url=req.base_url,
+            api_key=req.api_key,
+            enabled=req.enabled,
+            config_json=req.config_json,
+        )
+        return ApiResponse(success=True, data=_public_provider(result))
+    except ValueError as exc:
+        return ApiResponse(success=False, error=str(exc))
+    except RuntimeError as exc:
+        if "AI_FINANCE_MASTER_KEY" in str(exc):
+            return ApiResponse(success=False, error=str(exc))
+        raise
 
 
 @router.delete("/providers/{provider_id}")
@@ -161,20 +199,20 @@ async def list_provider_models(provider_id: str):
 
     if not provider["api_key"] or not provider["base_url"]:
         return ApiResponse(success=False, error="Provider 未配置完整")
+    try:
+        safe_base_url = validate_custom_base_url(provider["base_url"])
+    except ValueError as exc:
+        return ApiResponse(success=False, error=str(exc))
 
     try:
-        from openai import OpenAI
-
-        client = OpenAI(
-            api_key=provider["api_key"], base_url=provider["base_url"], timeout=15.0
+        model_list = await _list_provider_models_async(
+            {**provider, "base_url": safe_base_url}
         )
-        models = client.models.list()
-        model_list = [
-            _public_model(m) for m in (models.data or []) if getattr(m, "id", "")
-        ]
         return ApiResponse(success=True, data={"models": model_list})
-    except Exception as e:
-        return ApiResponse(success=False, error=f"获取模型列表失败: {e}")
+    except asyncio.TimeoutError:
+        return ApiResponse(success=False, error="获取模型列表超时")
+    except Exception:
+        return ApiResponse(success=False, error="获取模型列表失败")
 
 
 @router.get("/export")

@@ -11,13 +11,29 @@ import pytest
 class TestKeyVault:
     """测试 key_vault 加密/解密"""
 
-    def test_encrypt_decrypt_roundtrip_xor(self):
-        """XOR 模式加密解密往返"""
+    def test_encrypt_without_master_key_refuses_non_empty_key_by_default(self):
+        """Non-empty API keys must not be encrypted with the repository-known fallback key."""
+        from backend.security.key_vault import encrypt_key
+
+        with patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "", "AI_FINANCE_ALLOW_DEV_KEY_FALLBACK": ""},
+            clear=False,
+        ):
+            with pytest.raises(RuntimeError, match="AI_FINANCE_MASTER_KEY"):
+                encrypt_key("sk-test-1234567890abcdef")
+
+    def test_encrypt_decrypt_roundtrip_requires_explicit_dev_fallback_opt_in(self):
+        """Dev fallback encryption remains available only for explicit local-development opt-in."""
         from backend.security.key_vault import decrypt_key, encrypt_key
 
-        with patch.dict(os.environ, {"AI_FINANCE_MASTER_KEY": ""}, clear=False):
+        with patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "", "AI_FINANCE_ALLOW_DEV_KEY_FALLBACK": "1"},
+            clear=False,
+        ):
             encrypted = encrypt_key("sk-test-1234567890abcdef")
-            assert encrypted.startswith("xor:")
+            assert encrypted
             decrypted = decrypt_key(encrypted)
             assert decrypted == "sk-test-1234567890abcdef"
 

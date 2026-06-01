@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from backend.provider_timeout import call_with_timeout
@@ -16,11 +16,14 @@ from backend.utils.datetime_util import normalize_dt_str
 router = APIRouter(prefix="/api/news", tags=["news"])
 
 NEWS_PROVIDER_TIMEOUT_SECONDS = 8.0
+MAX_NEWS_LIMIT = 100
+MAX_EVENT_DAYS = 180
+MAX_EVENT_WINDOW = 30
 
 
 class NewsSearchRequest(BaseModel):
     query: str = Field(description="搜索关键词")
-    limit: int = Field(default=20, description="最大结果数")
+    limit: int = Field(default=20, ge=1, le=MAX_NEWS_LIMIT, description="最大结果数")
 
 
 def _coerce_fetch_result(result: Any) -> tuple[str, str]:
@@ -31,7 +34,9 @@ def _coerce_fetch_result(result: Any) -> tuple[str, str]:
 
 @router.get("")
 async def list_news(
-    symbol: str | None = None, event_type: str | None = None, limit: int = 50
+    symbol: str | None = None,
+    event_type: str | None = None,
+    limit: int = Query(default=50, ge=1, le=MAX_NEWS_LIMIT),
 ):
     """新闻列表"""
     from backend.news_store import list_news as _list
@@ -64,7 +69,9 @@ async def list_news(
 
 @router.get("/announcements")
 async def list_announcements(
-    symbol: str | None = None, category: str | None = None, limit: int = 50
+    symbol: str | None = None,
+    category: str | None = None,
+    limit: int = Query(default=50, ge=1, le=MAX_NEWS_LIMIT),
 ):
     """公告列表"""
     from backend.news_store import list_announcements as _list
@@ -119,7 +126,9 @@ async def list_announcements(
 
 
 @router.get("/events/{symbol}")
-async def get_event_summary(symbol: str, days: int = 30):
+async def get_event_summary(
+    symbol: str, days: int = Query(default=30, ge=1, le=MAX_EVENT_DAYS)
+):
     """事件摘要（类型分布+情绪）"""
     from backend.news_store import get_event_summary as _summary
 
@@ -128,7 +137,11 @@ async def get_event_summary(symbol: str, days: int = 30):
 
 
 @router.get("/impact/{symbol}")
-async def get_event_impact(symbol: str, days: int = 30, window: int = 5):
+async def get_event_impact(
+    symbol: str,
+    days: int = Query(default=30, ge=1, le=MAX_EVENT_DAYS),
+    window: int = Query(default=5, ge=1, le=MAX_EVENT_WINDOW),
+):
     """事件影响分析"""
     from backend.event_impact import analyze_event_impact, correlate_events_prices
     from backend.news_store import list_news

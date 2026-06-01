@@ -16,6 +16,7 @@ import os
 import json
 import logging
 import re
+import socket
 import threading
 import ipaddress
 from urllib.parse import urlsplit
@@ -100,6 +101,8 @@ def _chat_model_score(model_id: str) -> int:
     if not _is_text_chat_model(model_id):
         return -1000
     score = 0
+    if "deepseek" in model:
+        score += 28
     if "pro" in model:
         score += 45
     if "chat" in model:
@@ -154,6 +157,44 @@ def _allow_local_base_url() -> bool:
     }
 
 
+def _is_unsafe_ip_address(ip: ipaddress._BaseAddress) -> bool:
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _reject_unsafe_ip(ip: ipaddress._BaseAddress) -> None:
+    if _is_unsafe_ip_address(ip):
+        raise ValueError(
+            "默认禁止连接内网或本机自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1"
+        )
+
+
+def _reject_unsafe_resolved_addresses(host: str, port: Optional[int]) -> None:
+    try:
+        addrinfo = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError(
+            "自定义 Base URL 主机名 DNS 解析失败，默认禁止连接;"
+            "如需离线或本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1"
+        ) from exc
+    for info in addrinfo:
+        sockaddr = info[4]
+        if not sockaddr:
+            continue
+        address = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            continue
+        _reject_unsafe_ip(ip)
+
+
 def validate_custom_base_url(base_url: str) -> str:
     """Reject private/local custom endpoints unless explicitly enabled by environment."""
     normalized = normalize_openai_base_url(base_url)
@@ -170,18 +211,9 @@ def validate_custom_base_url(base_url: str) -> str:
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
+        _reject_unsafe_resolved_addresses(host, parsed.port)
         return normalized
-    if (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-        or ip.is_unspecified
-    ):
-        raise ValueError(
-            "默认禁止连接内网或本机自定义 Base URL;如需本机代理请设置 ALLOW_LOCAL_LLM_BASE_URL=1"
-        )
+    _reject_unsafe_ip(ip)
     return normalized
 
 
@@ -197,7 +229,11 @@ def load_providers(config_path: Optional[str] = None) -> Dict[str, Any]:
             prov_id = prov["id"]
             api_host = _resolve_env(prov.get("apiHost", ""))
             api_key = _resolve_env(prov.get("apiKey", ""))
-            api_host = normalize_openai_base_url(api_host)
+            try:
+                api_host = validate_custom_base_url(api_host)
+            except ValueError as exc:
+                logger.warning("跳过不安全 provider Base URL %s: %s", prov_id, exc)
+                continue
             providers[prov_id] = {
                 "api_key": api_key,
                 "base_url": api_host,
@@ -374,17 +410,26 @@ def _sync_persisted_providers_once() -> None:
         from backend.settings_store import get_provider, list_providers
 
         for public_provider in list_providers():
-            if public_provider.get("enabled") is False:
-                continue
             provider_id = str(public_provider.get("id") or "").strip()
             if not provider_id:
                 continue
+            if public_provider.get("enabled") is False:
+                VENDORS.pop(provider_id, None)
+                continue
             full_provider = get_provider(provider_id)
             if not full_provider:
+                VENDORS.pop(provider_id, None)
                 continue
             api_key = full_provider.get("api_key") or ""
-            base_url = normalize_openai_base_url(full_provider.get("base_url") or "")
+            base_url = full_provider.get("base_url") or ""
             if not api_key or not base_url:
+                VENDORS.pop(provider_id, None)
+                continue
+            try:
+                base_url = validate_custom_base_url(base_url)
+            except ValueError as exc:
+                VENDORS.pop(provider_id, None)
+                logger.warning("跳过不安全 provider Base URL %s: %s", provider_id, exc)
                 continue
             VENDORS[provider_id] = {
                 "api_key": api_key,
@@ -412,7 +457,7 @@ def get_vendor_config(
     如果提供了 api_key/base_url，则创建临时配置（细粒度 Key / 自定义 OpenAI-compatible Base URL）。
     """
     _sync_persisted_providers_once()
-    base = VENDORS.get(vendor) or VENDORS.get("deepseek")
+    base = VENDORS.get(vendor)
     if not base:
         return None
     if api_key or base_url:
@@ -439,6 +484,7 @@ def get_configured_provider(preferred: Optional[str] = None) -> tuple[str, str]:
         and cfg
         and cfg.get("api_key")
         and cfg.get("base_url")
+        and cfg.get("enabled", True)
     ]
     candidates = [
         preferred,
@@ -709,6 +755,7 @@ def _extract_json(text: str) -> dict:
 
 def get_provider_list() -> list:
     """返回所有已配置的 Provider 列表"""
+    _sync_persisted_providers_once()
     return [
         {
             "id": k,
@@ -717,11 +764,60 @@ def get_provider_list() -> list:
             "has_key": bool(v.get("api_key")),
         }
         for k, v in VENDORS.items()
+        if v.get("enabled", True) and v.get("api_key") and v.get("base_url")
     ]
+
+
+def _provider_model_items_from_config_json(config_json: Any) -> list[dict[str, Any]]:
+    if not config_json:
+        return []
+    try:
+        parsed = (
+            json.loads(config_json) if isinstance(config_json, str) else config_json
+        )
+    except Exception:
+        return []
+    if not isinstance(parsed, dict):
+        return []
+    raw_models = parsed.get("models") or []
+    if isinstance(raw_models, dict):
+        raw_models = [
+            {"id": str(model_id), **(meta if isinstance(meta, dict) else {})}
+            for model_id, meta in raw_models.items()
+        ]
+    if not isinstance(raw_models, list):
+        return []
+    models: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw_models:
+        if isinstance(item, str):
+            model_id = item.strip()
+            model = {"id": model_id, "name": model_id, "contextWindow": "未知"}
+        elif isinstance(item, dict):
+            model_id = str(item.get("id") or "").strip()
+            model = {
+                "id": model_id,
+                "name": item.get("name") or model_id,
+                "contextWindow": item.get("contextWindow", "未知"),
+            }
+        else:
+            continue
+        if model_id and model_id not in seen:
+            models.append(model)
+            seen.add(model_id)
+    return models
 
 
 def get_provider_models(provider_id: str) -> list:
     """返回指定 Provider 的模型列表"""
+    _sync_persisted_providers_once()
+    cfg = VENDORS.get(provider_id)
+    if cfg and cfg.get("enabled", True) and cfg.get("api_key") and cfg.get("base_url"):
+        persisted_models = _provider_model_items_from_config_json(
+            cfg.get("config_json")
+        )
+        if persisted_models:
+            return persisted_models
     prov = _PROVIDER_CONFIG.get(provider_id)
     if not prov:
         return []

@@ -8,6 +8,7 @@ const runtimeConfig = typeof window !== 'undefined' ? window.__ALPHASCOPE_CONFIG
 // the development and Docker fallback.
 export const API_BASE_URL = runtimeConfig?.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 export const API_KEY = runtimeConfig?.apiKey || import.meta.env.VITE_API_KEY || '';
+export const LOCAL_API_TOKEN = runtimeConfig?.localApiToken || import.meta.env.VITE_LOCAL_API_TOKEN || '';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -25,7 +26,10 @@ export async function fetchApi<T>(endpoint: string, options?: RequestInit): Prom
   if (API_KEY && !headers.has('X-API-Key') && !headers.has('Authorization')) {
     headers.set('X-API-Key', API_KEY);
   }
-  
+  if (LOCAL_API_TOKEN && !headers.has('X-AlphaScope-Local-Token')) {
+    headers.set('X-AlphaScope-Local-Token', LOCAL_API_TOKEN);
+  }
+
   const response = await fetch(url, {
     ...options,
     headers,

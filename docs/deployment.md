@@ -17,7 +17,7 @@ python build.py --installer
 
 ```text
 dist/AlphaScope/AlphaScope.exe
-installer/installer-output/AlphaScope-Setup-1.6.0.exe
+installer/installer-output/AlphaScope-Setup-1.7.0.exe
 ```
 
 如果机器没有 Inno Setup，仍可用 `python build.py --zip` 生成便携版目录和压缩包。
