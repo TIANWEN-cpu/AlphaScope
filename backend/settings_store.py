@@ -655,41 +655,58 @@ def _sync_to_gateway() -> None:
     """将 DB 配置同步到 provider_gateway 的 VENDORS dict"""
     try:
         from backend.models.provider_gateway import (
+            KNOWN_PROVIDER_ORDER,
             VENDORS,
+            _PROVIDER_CONFIG,
             _models_from_config_json,
             clear_client_cache,
             validate_custom_base_url,
         )
 
         providers = list_providers()
+        provider_ids = {str(p.get("id") or "").strip() for p in providers}
+        for vendor_id in list(VENDORS.keys()):
+            if (
+                vendor_id not in provider_ids
+                and vendor_id not in KNOWN_PROVIDER_ORDER
+                and vendor_id not in _PROVIDER_CONFIG
+            ):
+                VENDORS.pop(vendor_id, None)
         for p in providers:
             pid = p["id"]
             provider_full = get_provider(pid)
             if not provider_full:
+                VENDORS.pop(pid, None)
+                continue
+            if not provider_full.get("enabled", True):
+                VENDORS.pop(pid, None)
+                continue
+            api_key = provider_full.get("api_key") or ""
+            base_url = provider_full.get("base_url") or ""
+            if not api_key or not base_url:
+                VENDORS.pop(pid, None)
+                logger.warning("跳过未完整配置 provider %s: API Key 或 Base URL 缺失", pid)
                 continue
             try:
-                safe_base_url = validate_custom_base_url(provider_full.get("base_url") or "")
+                safe_base_url = validate_custom_base_url(base_url)
             except ValueError as exc:
+                VENDORS.pop(pid, None)
                 logger.warning("跳过不安全 provider Base URL %s: %s", pid, exc)
                 continue
             patch = {
+                "api_key": api_key,
                 "base_url": safe_base_url,
                 "supports_json_mode": True,
                 "label": p["name"],
                 "config_json": provider_full.get("config_json") or "{}",
                 "models": _models_from_config_json(provider_full.get("config_json")),
             }
-            if provider_full["api_key"]:
-                patch["api_key"] = provider_full["api_key"]
             if pid in VENDORS:
                 # 更新已有 vendor
                 VENDORS[pid].update(patch)
             else:
                 # 新增 vendor
-                VENDORS[pid] = {
-                    "api_key": provider_full["api_key"],
-                    **patch,
-                }
+                VENDORS[pid] = patch
         clear_client_cache()
     except Exception as e:
         logger.warning("同步设置到 gateway 失败: %s", e)

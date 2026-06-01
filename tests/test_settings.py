@@ -504,6 +504,186 @@ def test_mimo_model_is_detected_as_vision_capable():
     assert _model_capabilities("mimo-v2.5")["vision"] is True
 
 
+def test_sync_to_gateway_removes_deleted_provider_and_cached_client():
+    """Deleting a saved provider must remove runtime config and cached client."""
+    from backend import settings_store
+    from backend.models import provider_gateway
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+            clear=False,
+        ),
+    ):
+        settings_store.save_provider(
+            provider_id="custom-delete",
+            name="Custom Delete",
+            base_url="https://delete.example.com/v1",
+            api_key="sk-delete",
+            enabled=True,
+        )
+        provider_gateway._client_cache["custom-delete"] = object()
+
+        assert "custom-delete" in provider_gateway.VENDORS
+        assert "custom-delete" in provider_gateway._client_cache
+
+        assert settings_store.delete_provider("custom-delete") is True
+
+    assert "custom-delete" not in provider_gateway.VENDORS
+    assert "custom-delete" not in provider_gateway._client_cache
+
+
+def test_sync_to_gateway_disables_provider_and_clears_cached_client():
+    """Disabling a provider must make it non-listable and non-callable at runtime."""
+    from backend import settings_store
+    from backend.models import provider_gateway
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+            clear=False,
+        ),
+    ):
+        settings_store.save_provider(
+            provider_id="custom-disabled",
+            name="Custom Disabled",
+            base_url="https://disabled.example.com/v1",
+            api_key="sk-disabled",
+            enabled=True,
+            config_json='{"models":[{"id":"disabled-chat"}],"default_model":"disabled-chat"}',
+        )
+        provider_gateway._client_cache["custom-disabled"] = object()
+        settings_store.save_provider(
+            provider_id="custom-disabled",
+            name="Custom Disabled",
+            base_url="https://disabled.example.com/v1",
+            api_key="",
+            enabled=False,
+        )
+
+    assert "custom-disabled" not in provider_gateway.VENDORS
+    assert "custom-disabled" not in provider_gateway._client_cache
+    assert all(
+        item["id"] != "custom-disabled"
+        for item in provider_gateway.get_provider_list()
+    )
+    with pytest.raises(RuntimeError, match="未配置完整"):
+        provider_gateway.create_client("custom-disabled")
+
+
+def test_gateway_startup_sync_requires_complete_saved_provider_config():
+    """Persisted custom providers with missing key/base_url must not reuse stale runtime config."""
+    from backend import settings_store
+    from backend.models import provider_gateway
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+            clear=False,
+        ),
+    ):
+        settings_store._ensure_table(conn)
+        conn.execute(
+            """
+            INSERT INTO model_providers
+                (id, name, type, base_url, encrypted_api_key, enabled, config_json, created_at, updated_at)
+            VALUES (?, ?, 'openai_compatible', ?, ?, 1, '{}', 1, 1)
+            """,
+            ("incomplete-custom", "Incomplete Custom", "", ""),
+        )
+        conn.commit()
+        provider_gateway.VENDORS["incomplete-custom"] = {
+            "api_key": "sk-stale",
+            "base_url": "https://stale.example.com/v1",
+            "supports_json_mode": True,
+            "label": "Stale",
+        }
+        provider_gateway._PERSISTED_PROVIDERS_SYNCED = False
+        provider_gateway._PERSISTED_PROVIDERS_SYNCING = False
+
+        provider_gateway._sync_persisted_providers_once()
+
+    assert "incomplete-custom" not in provider_gateway.VENDORS
+    with pytest.raises(RuntimeError, match="未配置完整"):
+        provider_gateway.create_client("incomplete-custom")
+
+
+@pytest.mark.anyio
+async def test_legacy_custom_provider_models_come_from_saved_config(client):
+    """Legacy provider model endpoint should list saved custom provider models."""
+    from backend import settings_store
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+            clear=False,
+        ),
+    ):
+        settings_store.save_provider(
+            provider_id="custom-models",
+            name="Custom Models",
+            base_url="https://models.example.com/v1",
+            api_key="sk-models",
+            enabled=True,
+            config_json='{"models":[{"id":"alpha-chat","name":"Alpha Chat","contextWindow":8192}],"default_model":"alpha-chat"}',
+        )
+        resp = await client.get("/api/models/providers/custom-models/models")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["models"] == [
+        {"id": "alpha-chat", "name": "Alpha Chat", "contextWindow": 8192}
+    ]
+
+
+def test_legacy_custom_provider_models_hide_disabled_saved_provider():
+    """Disabled saved providers must not be listable through legacy model lookup."""
+    from backend import settings_store
+    from backend.models import provider_gateway
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+            clear=False,
+        ),
+    ):
+        settings_store.save_provider(
+            provider_id="disabled-models",
+            name="Disabled Models",
+            base_url="https://disabled-models.example.com/v1",
+            api_key="sk-disabled-models",
+            enabled=False,
+            config_json='{"models":[{"id":"hidden-chat"}],"default_model":"hidden-chat"}',
+        )
+        models = provider_gateway.get_provider_models("disabled-models")
+
+    assert models == []
 @pytest.mark.anyio
 async def test_export_settings(client):
     """GET /api/settings/export 导出不含明文 key"""

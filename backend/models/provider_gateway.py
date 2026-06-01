@@ -100,6 +100,8 @@ def _chat_model_score(model_id: str) -> int:
     if not _is_text_chat_model(model_id):
         return -1000
     score = 0
+    if "deepseek" in model:
+        score += 28
     if "pro" in model:
         score += 45
     if "chat" in model:
@@ -385,14 +387,18 @@ def _sync_persisted_providers_once() -> None:
                 continue
             full_provider = get_provider(provider_id)
             if not full_provider:
+                VENDORS.pop(provider_id, None)
                 continue
             api_key = full_provider.get("api_key") or ""
-            try:
-                base_url = validate_custom_base_url(full_provider.get("base_url") or "")
-            except ValueError as exc:
-                logger.warning("跳过不安全 provider Base URL %s: %s", provider_id, exc)
-                continue
+            base_url = full_provider.get("base_url") or ""
             if not api_key or not base_url:
+                VENDORS.pop(provider_id, None)
+                continue
+            try:
+                base_url = validate_custom_base_url(base_url)
+            except ValueError as exc:
+                VENDORS.pop(provider_id, None)
+                logger.warning("跳过不安全 provider Base URL %s: %s", provider_id, exc)
                 continue
             VENDORS[provider_id] = {
                 "api_key": api_key,
@@ -420,7 +426,7 @@ def get_vendor_config(
     如果提供了 api_key/base_url，则创建临时配置（细粒度 Key / 自定义 OpenAI-compatible Base URL）。
     """
     _sync_persisted_providers_once()
-    base = VENDORS.get(vendor) or VENDORS.get("deepseek")
+    base = VENDORS.get(vendor)
     if not base:
         return None
     if api_key or base_url:
@@ -447,6 +453,7 @@ def get_configured_provider(preferred: Optional[str] = None) -> tuple[str, str]:
         and cfg
         and cfg.get("api_key")
         and cfg.get("base_url")
+        and cfg.get("enabled", True)
     ]
     candidates = [
         preferred,
@@ -717,6 +724,7 @@ def _extract_json(text: str) -> dict:
 
 def get_provider_list() -> list:
     """返回所有已配置的 Provider 列表"""
+    _sync_persisted_providers_once()
     return [
         {
             "id": k,
@@ -725,11 +733,56 @@ def get_provider_list() -> list:
             "has_key": bool(v.get("api_key")),
         }
         for k, v in VENDORS.items()
+        if v.get("enabled", True) and v.get("api_key") and v.get("base_url")
     ]
+
+
+def _provider_model_items_from_config_json(config_json: Any) -> list[dict[str, Any]]:
+    if not config_json:
+        return []
+    try:
+        parsed = json.loads(config_json) if isinstance(config_json, str) else config_json
+    except Exception:
+        return []
+    if not isinstance(parsed, dict):
+        return []
+    raw_models = parsed.get("models") or []
+    if isinstance(raw_models, dict):
+        raw_models = [
+            {"id": str(model_id), **(meta if isinstance(meta, dict) else {})}
+            for model_id, meta in raw_models.items()
+        ]
+    if not isinstance(raw_models, list):
+        return []
+    models: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw_models:
+        if isinstance(item, str):
+            model_id = item.strip()
+            model = {"id": model_id, "name": model_id, "contextWindow": "未知"}
+        elif isinstance(item, dict):
+            model_id = str(item.get("id") or "").strip()
+            model = {
+                "id": model_id,
+                "name": item.get("name") or model_id,
+                "contextWindow": item.get("contextWindow", "未知"),
+            }
+        else:
+            continue
+        if model_id and model_id not in seen:
+            models.append(model)
+            seen.add(model_id)
+    return models
 
 
 def get_provider_models(provider_id: str) -> list:
     """返回指定 Provider 的模型列表"""
+    _sync_persisted_providers_once()
+    cfg = VENDORS.get(provider_id)
+    if cfg and cfg.get("enabled", True) and cfg.get("api_key") and cfg.get("base_url"):
+        persisted_models = _provider_model_items_from_config_json(cfg.get("config_json"))
+        if persisted_models:
+            return persisted_models
     prov = _PROVIDER_CONFIG.get(provider_id)
     if not prov:
         return []
