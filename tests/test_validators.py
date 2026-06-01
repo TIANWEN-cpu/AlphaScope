@@ -282,6 +282,34 @@ def test_validate_custom_base_url_rejects_resolved_local_addresses(monkeypatch):
         validate_custom_base_url("https://10.0.0.1.sslip.io/v1")
 
 
+def test_validate_custom_base_url_rejects_unresolved_hostname_by_default(monkeypatch):
+    """Unresolved DNS names cannot be proven public and are unsafe by default."""
+
+    def fail_resolution(*args, **kwargs):
+        raise socket.gaierror("name or service not known")
+
+    monkeypatch.delenv("ALLOW_LOCAL_LLM_BASE_URL", raising=False)
+    monkeypatch.setattr(socket, "getaddrinfo", fail_resolution)
+
+    with pytest.raises(ValueError, match="DNS|解析"):
+        validate_custom_base_url("https://unresolved.example.invalid/v1")
+
+
+def test_validate_custom_base_url_allows_unresolved_hostname_with_opt_in(monkeypatch):
+    """Explicit local LLM opt-in preserves offline/dev hostname support."""
+
+    def fail_resolution(*args, **kwargs):
+        raise socket.gaierror("name or service not known")
+
+    monkeypatch.setenv("ALLOW_LOCAL_LLM_BASE_URL", "1")
+    monkeypatch.setattr(socket, "getaddrinfo", fail_resolution)
+
+    assert (
+        validate_custom_base_url("https://unresolved.example.invalid/v1")
+        == "https://unresolved.example.invalid/v1"
+    )
+
+
 def test_validate_custom_base_url_allows_resolved_local_addresses_with_opt_in(monkeypatch):
     """Explicit local LLM opt-in bypasses DNS SSRF rejection for developer proxies."""
 
