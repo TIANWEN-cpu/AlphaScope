@@ -41,7 +41,9 @@ MOCK_PROVIDERS = [
 
 def _mock_public_dns(monkeypatch):
     def fake_getaddrinfo(host, port=None, *args, **kwargs):
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port or 443))]
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port or 443))
+        ]
 
     monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
 
@@ -175,9 +177,10 @@ async def test_save_provider_response_does_not_leak_plaintext_key(client):
 
 
 @pytest.mark.anyio
-async def test_save_provider_without_master_key_returns_actionable_failure(client, monkeypatch):
+async def test_save_provider_without_master_key_returns_actionable_failure(
+    client, monkeypatch
+):
     """POST save provider must not turn key-vault refusal into an HTTP 500."""
-    from backend import settings_store
 
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -275,7 +278,6 @@ async def test_masked_key_in_response(client):
 @pytest.mark.anyio
 async def test_save_provider_rejects_private_base_url_response(client):
     """POST save provider 对不安全 Base URL 返回业务失败。"""
-    from backend import settings_store
 
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -623,8 +625,7 @@ def test_sync_to_gateway_disables_provider_and_clears_cached_client():
     assert "custom-disabled" not in provider_gateway.VENDORS
     assert "custom-disabled" not in provider_gateway._client_cache
     assert all(
-        item["id"] != "custom-disabled"
-        for item in provider_gateway.get_provider_list()
+        item["id"] != "custom-disabled" for item in provider_gateway.get_provider_list()
     )
     with pytest.raises(RuntimeError, match="未配置完整"):
         provider_gateway.create_client("custom-disabled")
@@ -734,6 +735,7 @@ def test_legacy_custom_provider_models_hide_disabled_saved_provider():
 
     assert models == []
 
+
 def test_gateway_startup_sync_disabled_known_provider_suppresses_runtime_vendor():
     """Disabled saved known providers must override built-in/env runtime entries on startup."""
     from backend import settings_store
@@ -751,7 +753,9 @@ def test_gateway_startup_sync_disabled_known_provider_suppresses_runtime_vendor(
     }
     try:
         with (
-            patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+            patch(
+                "backend.settings_store.Database", return_value=_MemoryDatabase(conn)
+            ),
             patch.dict(
                 os.environ,
                 {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
@@ -779,7 +783,9 @@ def test_gateway_startup_sync_disabled_known_provider_suppresses_runtime_vendor(
             provider_gateway._sync_persisted_providers_once()
 
         assert "deepseek" not in provider_gateway.VENDORS
-        assert all(item["id"] != "deepseek" for item in provider_gateway.get_provider_list())
+        assert all(
+            item["id"] != "deepseek" for item in provider_gateway.get_provider_list()
+        )
         with pytest.raises(RuntimeError, match="未配置完整"):
             provider_gateway.create_client("deepseek")
     finally:
@@ -790,7 +796,9 @@ def test_gateway_startup_sync_disabled_known_provider_suppresses_runtime_vendor(
         provider_gateway.clear_client_cache()
 
 
-def test_delete_known_provider_override_restores_clean_builtin_and_clears_cache(monkeypatch):
+def test_delete_known_provider_override_restores_clean_builtin_and_clears_cache(
+    monkeypatch,
+):
     """Deleting a saved override for a known provider must remove stale patched key/url/cache."""
     from backend import settings_store
     from backend.models import provider_gateway
@@ -808,10 +816,15 @@ def test_delete_known_provider_override_restores_clean_builtin_and_clears_cache(
     }
     try:
         with (
-            patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+            patch(
+                "backend.settings_store.Database", return_value=_MemoryDatabase(conn)
+            ),
             patch.dict(
                 os.environ,
-                {"AI_FINANCE_MASTER_KEY": "test-settings-master-key", "DEEPSEEK_API_KEY": "sk-env-deepseek"},
+                {
+                    "AI_FINANCE_MASTER_KEY": "test-settings-master-key",
+                    "DEEPSEEK_API_KEY": "sk-env-deepseek",
+                },
                 clear=False,
             ),
         ):
@@ -824,13 +837,21 @@ def test_delete_known_provider_override_restores_clean_builtin_and_clears_cache(
             )
             provider_gateway._client_cache["deepseek"] = object()
 
-            assert provider_gateway.VENDORS["deepseek"]["api_key"] == "sk-patched-deepseek"
-            assert provider_gateway.VENDORS["deepseek"]["base_url"] == "https://patched.example.com/v1"
+            assert (
+                provider_gateway.VENDORS["deepseek"]["api_key"] == "sk-patched-deepseek"
+            )
+            assert (
+                provider_gateway.VENDORS["deepseek"]["base_url"]
+                == "https://patched.example.com/v1"
+            )
 
             assert settings_store.delete_provider("deepseek") is True
 
         assert provider_gateway.VENDORS["deepseek"]["api_key"] == "sk-env-deepseek"
-        assert provider_gateway.VENDORS["deepseek"]["base_url"] == "https://api.deepseek.com/v1"
+        assert (
+            provider_gateway.VENDORS["deepseek"]["base_url"]
+            == "https://api.deepseek.com/v1"
+        )
         assert "deepseek" not in provider_gateway._client_cache
     finally:
         if original:
