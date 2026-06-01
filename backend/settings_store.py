@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 from backend.security.key_vault import decrypt_key, encrypt_key, mask_key
 from backend.storage.db import Database
+from backend.models.provider_gateway import validate_custom_base_url
 
 _TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS model_providers (
@@ -427,7 +428,12 @@ def save_provider(
     """添加或更新 provider"""
     conn = _get_conn()
     now = time.time()
-    display_name = _clean_provider_name(provider_id, name, base_url)
+    from backend.models.provider_gateway import normalize_openai_base_url
+
+    normalized_base_url = normalize_openai_base_url(base_url)
+    if normalized_base_url:
+        normalized_base_url = validate_custom_base_url(normalized_base_url)
+    display_name = _clean_provider_name(provider_id, name, normalized_base_url)
     existing = conn.execute(
         "SELECT id, config_json FROM model_providers WHERE id = ?", (provider_id,)
     ).fetchone()
@@ -440,7 +446,7 @@ def save_provider(
                 "UPDATE model_providers SET name=?, base_url=?, encrypted_api_key=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
                 (
                     display_name,
-                    base_url,
+                    normalized_base_url,
                     encrypt_key(api_key),
                     int(enabled),
                     next_config_json,
@@ -453,7 +459,7 @@ def save_provider(
                 "UPDATE model_providers SET name=?, base_url=?, enabled=?, config_json=?, updated_at=? WHERE id=?",
                 (
                     display_name,
-                    base_url,
+                    normalized_base_url,
                     int(enabled),
                     next_config_json,
                     now,
@@ -468,7 +474,7 @@ def save_provider(
             (
                 provider_id,
                 display_name,
-                base_url,
+                normalized_base_url,
                 encrypted,
                 int(enabled),
                 next_config_json,
@@ -505,13 +511,17 @@ def test_connection(provider_id: str) -> dict[str, Any]:
         return {"success": False, "error": "API Key 未配置"}
     if not provider["base_url"]:
         return {"success": False, "error": "Base URL 未配置"}
+    try:
+        safe_base_url = validate_custom_base_url(provider["base_url"])
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
 
     try:
         from openai import OpenAI
 
         client = OpenAI(
             api_key=provider["api_key"],
-            base_url=provider["base_url"],
+            base_url=safe_base_url,
             timeout=15.0,
         )
         models = client.models.list()
@@ -621,13 +631,17 @@ def import_settings(data: dict[str, Any]) -> dict[str, Any]:
         pid = p.get("id")
         if not pid:
             continue
-        save_provider(
-            provider_id=pid,
-            name=p.get("name", pid),
-            base_url=p.get("base_url", ""),
-            api_key="",  # 导入不含 key
-            enabled=p.get("enabled", True),
-        )
+        try:
+            save_provider(
+                provider_id=pid,
+                name=p.get("name", pid),
+                base_url=p.get("base_url", ""),
+                api_key="",  # 导入不含 key
+                enabled=p.get("enabled", True),
+            )
+        except ValueError as exc:
+            logger.warning("跳过不安全 provider Base URL %s: %s", pid, exc)
+            continue
         imported += 1
     if isinstance(data.get("preferences"), dict):
         save_app_preferences(data["preferences"])
@@ -644,6 +658,7 @@ def _sync_to_gateway() -> None:
             VENDORS,
             _models_from_config_json,
             clear_client_cache,
+            validate_custom_base_url,
         )
 
         providers = list_providers()
@@ -652,8 +667,13 @@ def _sync_to_gateway() -> None:
             provider_full = get_provider(pid)
             if not provider_full:
                 continue
+            try:
+                safe_base_url = validate_custom_base_url(provider_full.get("base_url") or "")
+            except ValueError as exc:
+                logger.warning("跳过不安全 provider Base URL %s: %s", pid, exc)
+                continue
             patch = {
-                "base_url": p["base_url"],
+                "base_url": safe_base_url,
                 "supports_json_mode": True,
                 "label": p["name"],
                 "config_json": provider_full.get("config_json") or "{}",

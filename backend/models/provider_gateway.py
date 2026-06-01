@@ -197,7 +197,11 @@ def load_providers(config_path: Optional[str] = None) -> Dict[str, Any]:
             prov_id = prov["id"]
             api_host = _resolve_env(prov.get("apiHost", ""))
             api_key = _resolve_env(prov.get("apiKey", ""))
-            api_host = normalize_openai_base_url(api_host)
+            try:
+                api_host = validate_custom_base_url(api_host)
+            except ValueError as exc:
+                logger.warning("跳过不安全 provider Base URL %s: %s", prov_id, exc)
+                continue
             providers[prov_id] = {
                 "api_key": api_key,
                 "base_url": api_host,
@@ -383,7 +387,11 @@ def _sync_persisted_providers_once() -> None:
             if not full_provider:
                 continue
             api_key = full_provider.get("api_key") or ""
-            base_url = normalize_openai_base_url(full_provider.get("base_url") or "")
+            try:
+                base_url = validate_custom_base_url(full_provider.get("base_url") or "")
+            except ValueError as exc:
+                logger.warning("跳过不安全 provider Base URL %s: %s", provider_id, exc)
+                continue
             if not api_key or not base_url:
                 continue
             VENDORS[provider_id] = {

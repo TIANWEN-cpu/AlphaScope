@@ -223,6 +223,177 @@ async def test_masked_key_in_response(client):
         assert "api_key" not in p or p.get("api_key", "") == ""
 
 
+@pytest.mark.anyio
+async def test_save_provider_rejects_private_base_url_response(client):
+    """POST save provider 对不安全 Base URL 返回业务失败。"""
+    from backend import settings_store
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch("backend.settings_store._sync_to_gateway"),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+            clear=False,
+        ),
+    ):
+        os.environ.pop("ALLOW_LOCAL_LLM_BASE_URL", None)
+        resp = await client.post(
+            "/api/settings/providers",
+            json={
+                "id": "unsafe-api",
+                "name": "Unsafe API",
+                "base_url": "http://127.0.0.1:11434/v1",
+                "api_key": "sk-local",
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is False
+    assert "默认禁止连接" in data["error"]
+
+
+def test_save_provider_rejects_private_base_url_by_default():
+    """保存 provider 时默认拒绝内网/本机 Base URL。"""
+    from backend import settings_store
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch("backend.settings_store._sync_to_gateway"),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+            clear=False,
+        ),
+    ):
+        os.environ.pop("ALLOW_LOCAL_LLM_BASE_URL", None)
+        with pytest.raises(ValueError, match="默认禁止连接"):
+            settings_store.save_provider(
+                provider_id="unsafe-local",
+                name="Unsafe Local",
+                base_url="http://127.0.0.1:11434/v1",
+                api_key="sk-local",
+                enabled=True,
+            )
+
+
+def test_import_settings_skips_private_base_url_by_default():
+    """导入设置时默认跳过内网/元数据服务 Base URL。"""
+    from backend import settings_store
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch("backend.settings_store._sync_to_gateway"),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+            clear=False,
+        ),
+    ):
+        os.environ.pop("ALLOW_LOCAL_LLM_BASE_URL", None)
+        result = settings_store.import_settings(
+            {
+                "providers": [
+                    {
+                        "id": "metadata",
+                        "name": "Metadata",
+                        "base_url": "http://169.254.169.254/latest/meta-data",
+                    },
+                    {
+                        "id": "public",
+                        "name": "Public",
+                        "base_url": "https://api.example.com/v1",
+                    },
+                ]
+            }
+        )
+        providers = settings_store.list_providers()
+
+    assert result["imported"] == 1
+    assert [p["id"] for p in providers] == ["public"]
+
+
+def test_save_provider_allows_local_base_url_with_explicit_opt_in():
+    """显式 opt-in 时允许保存本机 LLM Base URL。"""
+    from backend import settings_store
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch("backend.settings_store._sync_to_gateway"),
+        patch.dict(
+            os.environ,
+            {
+                "AI_FINANCE_MASTER_KEY": "test-settings-master-key",
+                "ALLOW_LOCAL_LLM_BASE_URL": "1",
+            },
+            clear=False,
+        ),
+    ):
+        provider = settings_store.save_provider(
+            provider_id="local-ollama",
+            name="Local Ollama",
+            base_url="http://localhost:11434/v1",
+            api_key="sk-local",
+            enabled=True,
+        )
+
+    assert provider["base_url"] == "http://localhost:11434/v1"
+
+
+def test_gateway_startup_sync_skips_private_base_url_by_default():
+    """启动加载已存 provider 时默认跳过不安全 Base URL。"""
+    from backend import settings_store
+    from backend.models import provider_gateway
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    with (
+        patch("backend.settings_store.Database", return_value=_MemoryDatabase(conn)),
+        patch.dict(
+            os.environ,
+            {"AI_FINANCE_MASTER_KEY": "test-settings-master-key"},
+            clear=False,
+        ),
+    ):
+        os.environ.pop("ALLOW_LOCAL_LLM_BASE_URL", None)
+        settings_store._ensure_table(conn)
+        conn.execute(
+            """
+            INSERT INTO model_providers
+                (id, name, type, base_url, encrypted_api_key, enabled, config_json, created_at, updated_at)
+            VALUES (?, ?, 'openai_compatible', ?, ?, 1, '{}', 1, 1)
+            """,
+            (
+                "stored-unsafe",
+                "Stored Unsafe",
+                "http://10.0.0.8:8000/v1",
+                settings_store.encrypt_key("sk-stored"),
+            ),
+        )
+        conn.commit()
+        provider_gateway.VENDORS.pop("stored-unsafe", None)
+        provider_gateway._PERSISTED_PROVIDERS_SYNCED = False
+        provider_gateway._PERSISTED_PROVIDERS_SYNCING = False
+
+        provider_gateway._sync_persisted_providers_once()
+
+    assert "stored-unsafe" not in provider_gateway.VENDORS
+
+
 def test_save_provider_empty_key_preserves_existing_key():
     """更新已有 provider 时空 API Key 不清空旧密钥"""
     from backend import settings_store

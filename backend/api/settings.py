@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from backend.models.provider_gateway import validate_custom_base_url
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -119,15 +120,18 @@ async def save_provider(req: ProviderSaveRequest):
     """添加或更新 provider"""
     from backend.settings_store import save_provider as _save
 
-    result = _save(
-        provider_id=req.id,
-        name=req.name,
-        base_url=req.base_url,
-        api_key=req.api_key,
-        enabled=req.enabled,
-        config_json=req.config_json,
-    )
-    return ApiResponse(success=True, data=_public_provider(result))
+    try:
+        result = _save(
+            provider_id=req.id,
+            name=req.name,
+            base_url=req.base_url,
+            api_key=req.api_key,
+            enabled=req.enabled,
+            config_json=req.config_json,
+        )
+        return ApiResponse(success=True, data=_public_provider(result))
+    except ValueError as exc:
+        return ApiResponse(success=False, error=str(exc))
 
 
 @router.delete("/providers/{provider_id}")
@@ -161,12 +165,16 @@ async def list_provider_models(provider_id: str):
 
     if not provider["api_key"] or not provider["base_url"]:
         return ApiResponse(success=False, error="Provider 未配置完整")
+    try:
+        safe_base_url = validate_custom_base_url(provider["base_url"])
+    except ValueError as exc:
+        return ApiResponse(success=False, error=str(exc))
 
     try:
         from openai import OpenAI
 
         client = OpenAI(
-            api_key=provider["api_key"], base_url=provider["base_url"], timeout=15.0
+            api_key=provider["api_key"], base_url=safe_base_url, timeout=15.0
         )
         models = client.models.list()
         model_list = [
