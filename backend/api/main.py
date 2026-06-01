@@ -17,8 +17,10 @@ FastAPI 主入口 (v0.50)
 """
 
 import asyncio
+import hmac
 import json
 import logging
+import os
 from typing import AsyncGenerator, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,32 @@ if HAS_FASTAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    LOCAL_TOKEN_HEADER = "X-AlphaScope-Local-Token"
+    SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+    def _local_api_token() -> str:
+        return os.environ.get("ALPHASCOPE_LOCAL_API_TOKEN", "").strip()
+
+    def _is_local_token_required(request: Request) -> bool:
+        return bool(_local_api_token()) and request.method.upper() not in SAFE_METHODS
+
+    def _has_valid_local_token(request: Request) -> bool:
+        expected = _local_api_token()
+        provided = request.headers.get(LOCAL_TOKEN_HEADER, "")
+        return bool(provided) and hmac.compare_digest(provided, expected)
+
+    @app.middleware("http")
+    async def enforce_local_api_token(request: Request, call_next):
+        if _is_local_token_required(request) and not _has_valid_local_token(request):
+            return JSONResponse(
+                status_code=401,
+                content=ApiResponse(
+                    success=False,
+                    error="Missing or invalid local API token",
+                ).model_dump(),
+            )
+        return await call_next(request)
 
     # ============== 注册路由 ==============
 
