@@ -6,7 +6,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-113%20APIs-009688)](docs/api.md)
 [![Tests](https://img.shields.io/badge/targeted%20regression-52%20passed-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.6.0-blue)](https://github.com/TIANWEN-cpu/AlphaScope/releases/tag/v1.6.0)
+[![Release](https://img.shields.io/badge/release-v1.7.0-blue)](https://github.com/TIANWEN-cpu/AlphaScope/releases/tag/v1.7.0)
 
 研策中枢 AlphaScope 是一个本地优先的 AI 投研与量化决策工作台。项目把行情、新闻、公告、财务指标、技术分析、多 Agent 研究、证据链、研究报告、量化回测、基金定投和组合管理整合到一个可运行、可测试、可扩展的工程系统中。
 
@@ -77,6 +77,30 @@
 ### 研究报告生成
 
 ![研策中枢 AlphaScope 研究报告生成器](docs/assets/v1.4.1/report-generator.png)
+
+## v1.7.0 安全与真实性修复
+
+v1.7.0 聚焦后端边界安全和前端真实链路确认：知识库上传不再信任客户端原始文件名，Workbench 上传会等待后端确认后再显示成功，分析接口不再从空行情或零值行情构造正常成功结果；同时为新闻、技术指标和 Provider 模型列表补充资源上限与超时保护。
+
+### 上传与知识库安全
+
+- 知识库上传文件名会先去除路径组件并规范化非法字符，再写入磁盘和元数据。
+- 上传保存仍保留内容 hash 前缀，降低同名文件冲突风险。
+- Workbench 的材料上传改为真实调用 `/api/knowledge/upload`，失败时显示错误，不再只更新本地 UI 状态。
+- 新增上传安全回归测试，覆盖 traversal-style 文件名和规范化文件名路径。
+
+### 分析与资源边界
+
+- `/api/analysis/run` 改为基于真实价格数据构造分析上下文。
+- 空行情或零值行情会返回结构化失败，避免后端生成未标注的正常分析成功响应。
+- 新闻与技术指标接口增加请求参数上限，防止超大 limit / lookback / days 驱动过量工作。
+- Provider 模型列表获取移入 worker thread 并增加超时，避免阻塞 async API 路径。
+
+### 验证状态
+
+- `python -m pytest tests/test_upload_safety.py tests/test_resource_limits.py tests/test_analysis_guardrails.py tests/test_settings.py -q` 通过，`42 passed`。
+- `npm run lint` 通过。
+- `npm run build` 通过，仅保留既有 Vite chunk size / dynamic import warning。
 
 ## v1.6.0 前端工作台更新
 
@@ -389,6 +413,7 @@ data/                   # 本地运行数据，默认 gitignore
 
 | 版本 | 日期 | 重点 |
 |------|------|------|
+| v1.7.0 | 2026-06-01 | 知识库上传文件名安全、Workbench 真实后端上传、分析空/零行情保护、新闻/技术资源上限、Provider 模型列表超时隔离 |
 | v1.6.0 | 2026-05-31 | Windows 一键安装包、新闻详情与新闻 AI 助手、Agent 编排迁移到系统设置、自定义 Provider/模型路由、K 线提示框与研报生成增强 |
 | v1.5.0 | 2026-05-30 | AlphaScope 品牌与前端工作台过渡发布 |
 | v1.4.2 | 2026-05-28 | 品牌迁移为研策中枢 AlphaScope、本地回测自恢复、新闻乱码与降级体验修复、系统设置偏好持久化 |

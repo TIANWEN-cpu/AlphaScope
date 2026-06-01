@@ -7,7 +7,7 @@ import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
 import { STOCK_UNIVERSE, StockTarget, findStockTarget, formatStockLabel, resolveStockTarget } from '../lib/stocks';
 import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
-import { fetchApi } from '../lib/api';
+import { fetchApi, API_BASE_URL, API_KEY, LOCAL_API_TOKEN } from '../lib/api';
 import {
   buildModelOptions,
   getModelKey,
@@ -745,12 +745,41 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
     }
   };
 
-  const handleUploadContext = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleUploadContext = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setLastUploadedFile(file.name);
-    appendSystemMessage(`已载入多模态材料：**${file.name}**。\n该文件会作为 ${currentStock.name} 的图像/研报上下文，请切换到“K线/多模态解析”模块继续做视觉诊断。`);
-    event.target.value = '';
+
+    try {
+      appendSystemMessage(`正在上传 **${file.name}** 到知识库，请稍候...`);
+      const formData = new FormData();
+      formData.append('file', file);
+      const headers = new Headers();
+      if (API_KEY) {
+        headers.set('X-API-Key', API_KEY);
+      }
+      if (LOCAL_API_TOKEN) {
+        headers.set('X-AlphaScope-Local-Token', LOCAL_API_TOKEN);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/knowledge/upload`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || `HTTP ${response.status} ${response.statusText}`);
+      }
+
+      const uploadedName = payload?.data?.filename || file.name;
+      setLastUploadedFile(uploadedName);
+      appendSystemMessage(`已上传并索引：**${uploadedName}**。\n${payload?.message || '文件上传并处理成功'}`);
+    } catch (error) {
+      appendSystemMessage(`知识库上传失败：**${file.name}**\n${getErrorMessage(error)}`);
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const handleSend = async () => {

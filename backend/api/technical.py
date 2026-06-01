@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from backend.schemas.api import ApiResponse
 
 router = APIRouter(prefix="/api/technical", tags=["technical"])
 
+MAX_TECH_LIMIT = 500
+MAX_SUPPORT_LOOKBACK = 120
 
-def _get_bars(symbol: str, limit: int = 250) -> list[dict]:
+
+def _get_bars(symbol: str, limit: int = MAX_TECH_LIMIT) -> list[dict]:
     from backend.price_store import get_prices
 
     bars = get_prices(symbol, limit=limit)
@@ -20,7 +23,7 @@ def _get_bars(symbol: str, limit: int = 250) -> list[dict]:
 
 
 @router.get("/{symbol}")
-async def get_all_indicators(symbol: str, limit: int = 250):
+async def get_all_indicators(symbol: str, limit: int = Query(default=250, ge=1, le=MAX_TECH_LIMIT)):
     """计算所有技术指标"""
     from backend.indicators import calc_all
 
@@ -32,7 +35,7 @@ async def get_all_indicators(symbol: str, limit: int = 250):
 
 
 @router.get("/{symbol}/ma")
-async def get_ma(symbol: str, limit: int = 250):
+async def get_ma(symbol: str, limit: int = Query(default=250, ge=1, le=MAX_TECH_LIMIT)):
     """均线"""
     from backend.indicators import calc_ma
 
@@ -48,7 +51,7 @@ async def get_ma(symbol: str, limit: int = 250):
 
 
 @router.get("/{symbol}/macd")
-async def get_macd(symbol: str, limit: int = 250):
+async def get_macd(symbol: str, limit: int = Query(default=250, ge=1, le=MAX_TECH_LIMIT)):
     """MACD"""
     from backend.indicators import calc_macd
 
@@ -64,7 +67,7 @@ async def get_macd(symbol: str, limit: int = 250):
 
 
 @router.get("/{symbol}/rsi")
-async def get_rsi(symbol: str, limit: int = 250):
+async def get_rsi(symbol: str, limit: int = Query(default=250, ge=1, le=MAX_TECH_LIMIT)):
     """RSI"""
     from backend.indicators import calc_rsi
 
@@ -80,7 +83,7 @@ async def get_rsi(symbol: str, limit: int = 250):
 
 
 @router.get("/{symbol}/kdj")
-async def get_kdj(symbol: str, limit: int = 250):
+async def get_kdj(symbol: str, limit: int = Query(default=250, ge=1, le=MAX_TECH_LIMIT)):
     """KDJ"""
     from backend.indicators import calc_kdj
 
@@ -96,7 +99,7 @@ async def get_kdj(symbol: str, limit: int = 250):
 
 
 @router.get("/{symbol}/support-resistance")
-async def get_support_resistance(symbol: str, lookback: int = 20):
+async def get_support_resistance(symbol: str, lookback: int = Query(default=20, ge=1, le=MAX_SUPPORT_LOOKBACK)):
     """支撑压力位"""
     from backend.indicators import calc_support_resistance
 
