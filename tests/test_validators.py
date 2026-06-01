@@ -257,3 +257,14 @@ def test_validate_custom_base_url_rejects_local_addresses():
         validate_custom_base_url("http://localhost:8000/v1")
     with pytest.raises(ValueError):
         validate_custom_base_url("http://127.0.0.1:8000/v1")
+    with pytest.raises(ValueError):
+        validate_custom_base_url("http://169.254.169.254/latest/meta-data")
+
+
+def test_validate_custom_base_url_allows_local_addresses_with_opt_in(monkeypatch):
+    monkeypatch.setenv("ALLOW_LOCAL_LLM_BASE_URL", "1")
+
+    assert (
+        validate_custom_base_url("http://localhost:8000/v1")
+        == "http://localhost:8000/v1"
+    )
