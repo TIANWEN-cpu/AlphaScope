@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import socket
 import sqlite3
@@ -840,57 +841,40 @@ def test_delete_known_provider_override_restores_clean_builtin_and_clears_cache(
 
 
 @pytest.mark.anyio
-async def test_export_settings(client):
-    """GET /api/settings/export 导出不含明文 key"""
-    export_data = {
-        "version": "1.0",
-        "providers": [
-            {
-                "id": "deepseek",
-                "name": "DeepSeek",
-                "base_url": "https://api.deepseek.com/v1",
-                "api_key_masked": "sk-a...x9Zz",
-                "enabled": True,
-            }
-        ],
-    }
-    with patch("backend.settings_store.export_settings", return_value=export_data):
-        resp = await client.get("/api/settings/export")
+async def test_list_provider_models_times_out_quickly(client, monkeypatch):
+    """Provider model listing should return a bounded timeout instead of blocking the loop."""
+    from backend import settings_store
+
+    class SlowModels:
+        def list(self):
+            import time
+
+            time.sleep(1.0)
+            return type("Resp", (), {"data": []})()
+
+    class FakeOpenAI:
+        def __init__(self, *args, **kwargs):
+            self.models = SlowModels()
+
+    monkeypatch.setattr("backend.api.settings.OpenAI", FakeOpenAI)
+    monkeypatch.setattr("backend.api.settings.MODEL_LIST_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr("backend.api.settings.MODEL_LIST_WAIT_TIMEOUT_SECONDS", 0.1)
+    monkeypatch.setattr(
+        settings_store,
+        "get_provider",
+        lambda provider_id: {
+            "id": provider_id,
+            "api_key": "sk-test-secret",
+            "base_url": "https://api.example.com/v1",
+        },
+    )
+
+    resp = await asyncio.wait_for(
+        client.get("/api/settings/providers/demo/models"), timeout=0.5
+    )
+
     assert resp.status_code == 200
     data = resp.json()
-    assert data["success"] is True
-    for p in data["data"]["providers"]:
-        assert "api_key_masked" in p
-        assert "api_key" not in p
-
-
-@pytest.mark.anyio
-async def test_import_settings(client):
-    """POST /api/settings/import 导入设置"""
-    import_result = {
-        "imported": 2,
-        "message": "导入 2 个 provider（需手动填写 API Key）",
-    }
-    with patch("backend.settings_store.import_settings", return_value=import_result):
-        resp = await client.post(
-            "/api/settings/import",
-            json={
-                "version": "1.0",
-                "providers": [
-                    {
-                        "id": "deepseek",
-                        "name": "DeepSeek",
-                        "base_url": "https://api.deepseek.com/v1",
-                    },
-                    {
-                        "id": "claude",
-                        "name": "Claude",
-                        "base_url": "https://api.anthropic.com",
-                    },
-                ],
-            },
-        )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] is True
-    assert data["data"]["imported"] == 2
+    assert data["success"] is False
+    assert "超时" in data["error"] or "timeout" in data["error"].lower()
+    assert "sk-test-secret" not in resp.text

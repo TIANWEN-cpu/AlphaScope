@@ -43,6 +43,7 @@ except ImportError:
     HAS_FASTAPI = False
 
 if HAS_FASTAPI:
+    from backend.price_store import get_prices
     from backend.schemas.api import (
         AnalysisRequest,
         AnalysisResultData,
@@ -432,6 +433,17 @@ if HAS_FASTAPI:
 
     # ============== 分析 API ==============
 
+    def _meaningful_price_bars(symbol: str, limit: int = 30) -> list[dict[str, Any]]:
+        bars = get_prices(symbol, limit=limit)
+        return [
+            bar
+            for bar in bars
+            if any(
+                _safe_float_for_api(bar.get(field)) > 0
+                for field in ("open", "close", "high", "low", "volume")
+            )
+        ]
+
     @app.post("/api/analysis/run", response_model=ApiResponse[AnalysisResultData])
     def run_analysis(req: AnalysisRequest):
         """运行 Agent 分析"""
@@ -445,17 +457,28 @@ if HAS_FASTAPI:
         }
         mode = mode_map.get(req.mode, AnalysisMode.DEEP)
 
+        bars = _meaningful_price_bars(req.stock_symbol, limit=30)
+        if not bars:
+            return ApiResponse(success=False, error="行情数据不足，无法生成正常分析")
+
+        bars = sorted(bars, key=lambda bar: str(bar.get("date") or ""))
+        latest = bars[-1]
+        previous = bars[-2] if len(bars) > 1 else latest
+        latest_close = _safe_float_for_api(latest.get("close"))
+        previous_close = _safe_float_for_api(previous.get("close"))
+        first_close = _safe_float_for_api(bars[0].get("close"))
+
         stock_data = {
             "symbol": req.stock_symbol,
             "name": req.stock_name,
-            "close": 0,
-            "day_change": 0,
-            "period_change": 0,
-            "period_high": 0,
-            "period_low": 0,
-            "days": 30,
-            "volume": 0,
-            "total_amount": 0,
+            "close": latest_close,
+            "day_change": latest_close - previous_close,
+            "period_change": latest_close - first_close,
+            "period_high": max(_safe_float_for_api(bar.get("high")) for bar in bars),
+            "period_low": min(_safe_float_for_api(bar.get("low")) for bar in bars),
+            "days": len(bars),
+            "volume": _safe_float_for_api(latest.get("volume")),
+            "total_amount": _safe_float_for_api(latest.get("amount")),
         }
 
         result = run_agents_with_mode(
