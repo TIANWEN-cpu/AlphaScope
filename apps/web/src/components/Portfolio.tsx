@@ -1,8 +1,9 @@
 import type { ComponentType } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Briefcase, Landmark, ShieldCheck, WalletCards } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import { StableChartContainer } from './StableChartContainer';
 
 const ALLOCATION_DATA = [
   { name: '核心白马', value: 380000, color: '#f43f5e' },
@@ -110,7 +111,7 @@ export function Portfolio() {
         <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-lg backdrop-blur-md">
           <h3 className="mb-6 border-b border-white/5 pb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">资产配置</h3>
           <div className="flex h-72 items-center">
-            <ResponsiveContainer width="52%" height="100%">
+            <StableChartContainer className="h-full w-[52%]">
               <PieChart>
                 <Pie data={ALLOCATION_DATA} cx="50%" cy="50%" innerRadius={62} outerRadius={86} paddingAngle={4} dataKey="value" stroke="none">
                   {ALLOCATION_DATA.map((entry) => (
@@ -123,7 +124,7 @@ export function Portfolio() {
                   formatter={(value: number) => currencyFormatter.format(value)}
                 />
               </PieChart>
-            </ResponsiveContainer>
+            </StableChartContainer>
             <div className="ml-4 flex-1">
               {ALLOCATION_DATA.map((item) => (
                 <div key={item.name} className="mb-3 flex items-center justify-between">
@@ -141,7 +142,7 @@ export function Portfolio() {
         <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-lg backdrop-blur-md">
           <h3 className="mb-6 border-b border-white/5 pb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">行业风险暴露</h3>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            <StableChartContainer>
               <BarChart data={RISK_BUCKETS} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                 <XAxis dataKey="bucket" stroke="#737373" fontSize={11} />
@@ -150,7 +151,7 @@ export function Portfolio() {
                 <Bar dataKey="limit" name="上限" fill="#334155" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="exposure" name="当前暴露" fill="#6366f1" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </StableChartContainer>
           </div>
         </div>
 

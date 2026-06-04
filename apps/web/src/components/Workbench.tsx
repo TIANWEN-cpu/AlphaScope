@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { Bot, Maximize2, RefreshCw, Send, Zap, Clock, LineChart as LineChartIcon, Settings2, Sparkles, ChevronDown, ImagePlus } from 'lucide-react';
-import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Cell, Tooltip } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Cell, Tooltip } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
@@ -17,6 +17,7 @@ import {
   ModelProvider,
 } from '../lib/aiModelRouting';
 import { ThemedSelect } from './ThemedSelect';
+import { StableChartContainer } from './StableChartContainer';
 
 interface WorkbenchChartPoint {
   date: string;
@@ -981,7 +982,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                <div className="absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{formatPrice(chartStats.low)}</div>
              
              <div className="h-[calc(100%-72px)] min-h-[240px]">
-               <ResponsiveContainer width="100%" height="100%">
+               <StableChartContainer>
                  <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} onMouseMove={handleChartMouseMove}>
                    <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
                    <XAxis dataKey="date" tickFormatter={formatAxisDate} hide />
@@ -1002,11 +1003,11 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                    {showMa10Line && <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} activeDot={false} />}
                    {showMa20Line && <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} activeDot={false} />}
                  </ComposedChart>
-               </ResponsiveContainer>
+               </StableChartContainer>
              </div>
              
              <div className="h-[72px]">
-               <ResponsiveContainer width="100%" height="100%">
+               <StableChartContainer>
                  <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                    <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={{ fill: '#737373', fontSize: 10 }} stroke="#222" minTickGap={22} />
                    <Tooltip
@@ -1022,7 +1023,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                       ))}
                    </Bar>
                  </ComposedChart>
-               </ResponsiveContainer>
+               </StableChartContainer>
              </div>
           </div>
         </div>

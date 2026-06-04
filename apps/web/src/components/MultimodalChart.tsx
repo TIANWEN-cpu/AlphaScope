@@ -22,7 +22,6 @@ import {
   ComposedChart,
   Line,
   ReferenceLine,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -40,6 +39,7 @@ import {
   ModelOption,
   ModelProvider,
 } from '../lib/aiModelRouting';
+import { StableChartContainer } from './StableChartContainer';
 import { ThemedSelect } from './ThemedSelect';
 
 type ChartTab = 'vision' | 'kline';
@@ -186,10 +186,19 @@ function seedFromSymbol(symbol: string) {
   return symbol.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
 }
 
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function generateKLineData(stock: StockTarget, points = 48): KLinePoint[] {
   const random = mulberry32(seedFromSymbol(stock.symbol));
   const raw: Omit<KLinePoint, 'ma5' | 'ma20' | 'macd' | 'rsi'>[] = [];
   let open = stock.startPrice;
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - (points - 1));
 
   for (let i = 0; i < points; i++) {
     const drift = stock.market === 'A股' ? 0.002 : 0.001;
@@ -198,9 +207,11 @@ function generateKLineData(stock: StockTarget, points = 48): KLinePoint[] {
     const high = Math.max(open, close) + random() * stock.startPrice * 0.014;
     const low = Math.max(0.1, Math.min(open, close) - random() * stock.startPrice * 0.014);
     const volume = 120000 + Math.round(random() * 950000);
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + i);
 
     raw.push({
-      date: `05-${String(i + 1).padStart(2, '0')}`,
+      date: formatLocalDate(date),
       open: Number(open.toFixed(2)),
       close: Number(close.toFixed(2)),
       high: Number(high.toFixed(2)),
@@ -1012,7 +1023,7 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                     />
                   ) : (
                     <div data-testid="chart-generated-kline" className="relative z-10 h-full min-h-[360px] w-full rounded-xl border border-white/10 bg-[#070707] p-4">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <StableChartContainer>
                         <ComposedChart
                           data={chartData}
                           margin={{ top: 10, right: 18, left: -12, bottom: 18 }}
@@ -1036,7 +1047,7 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                           {showMA && <Line type="monotone" dataKey="ma5" stroke="#facc15" strokeWidth={1.4} dot={false} activeDot={false} />}
                           {showMA && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={1.4} dot={false} activeDot={false} />}
                         </ComposedChart>
-                      </ResponsiveContainer>
+                      </StableChartContainer>
                     </div>
                   )}
 
@@ -1115,7 +1126,7 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                     <span className="hidden font-mono text-[10px] text-neutral-600 sm:inline">鼠标移过图表查看该根K线</span>
                   </div>
                   <div className="min-h-0 flex-1">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <StableChartContainer>
                       <ComposedChart
                         data={chartData}
                         margin={{ top: 10, right: 18, left: -12, bottom: 18 }}
@@ -1139,11 +1150,11 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                         {showMA && <Line type="monotone" dataKey="ma5" stroke="#facc15" strokeWidth={1.5} dot={false} activeDot={false} />}
                         {showMA && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={1.5} dot={false} activeDot={false} />}
                       </ComposedChart>
-                    </ResponsiveContainer>
+                    </StableChartContainer>
                   </div>
                   <div className="my-3 h-px bg-white/5" />
                   <div className="h-28">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <StableChartContainer>
                       <ComposedChart data={chartData} margin={{ top: 4, right: 18, left: -12, bottom: 0 }}>
                         <CartesianGrid stroke="#ffffff" strokeOpacity={0.04} vertical={false} />
                         <XAxis dataKey="date" hide />
@@ -1167,7 +1178,7 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                         {indicator === 'rsi' && <ReferenceLine y={70} stroke="#f43f5e" strokeOpacity={0.35} strokeDasharray="3 3" />}
                         {indicator === 'rsi' && <ReferenceLine y={30} stroke="#10b981" strokeOpacity={0.35} strokeDasharray="3 3" />}
                       </ComposedChart>
-                    </ResponsiveContainer>
+                    </StableChartContainer>
                   </div>
                 </div>
               </motion.div>

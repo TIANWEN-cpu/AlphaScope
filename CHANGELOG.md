@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.7.2 - 2026-06-05
+
+### 图表稳定与一键启动复验
+
+- 新增 `StableChartContainer`，在容器尺寸可用后以数字宽高渲染 Recharts 图表，避免首次布局、动画切换和隐藏页签触发 `width(-1)` / `height(-1)` warning。
+- 替换 Workbench、Portfolio、Backtesting、MultimodalChart、FundDcaLab 中的直接 `ResponsiveContainer` 用法。
+- 修复 K 线/多模态页本地预览数据的日期生成逻辑，避免出现 `05-32`、`05-48` 等非法日期刻度。
+- 版本号统一升至 `1.7.2`，覆盖 `pyproject.toml`、前端 package、桌面启动器和 Inno Setup 配置。
+- 重新生成 Windows portable 目录和 `AlphaScope-portable.zip`，并确认 `_internal/pyproject.toml`、`_internal/akshare/file_fold/calendar.json`、`_internal/apps/web/dist/index.html` 均在包内。
+- 打包版烟测通过：`/health` 返回 `1.7.2`，`/api/prices/600519?limit=3` 返回 `success=true`、`source_status=ok`、`degraded=false`。
+- Browser-Use 打开最终打包页面后，新增 console `warning=0`、`error=0`、Recharts warning `0`。
+
 ## v1.7.1 - 2026-06-04
 
 ### 已知问题修复与一键启动交付

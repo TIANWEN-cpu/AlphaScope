@@ -17,11 +17,12 @@ import {
   TrendingUp,
   Upload,
 } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { findStockTarget, StockTarget } from '../lib/stocks';
 import { API_BASE_URL, LOCAL_API_TOKEN } from '../lib/api';
+import { StableChartContainer } from './StableChartContainer';
 
 type TabID = 'overview' | 'workshop' | 'pool' | 'compare';
 
@@ -297,7 +298,7 @@ export function Backtesting() {
                 <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-xl backdrop-blur-md xl:col-span-2">
                   <h3 className="mb-6 border-b border-white/5 pb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">收益率曲线</h3>
                   <div className="h-80 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <StableChartContainer>
                       <LineChart data={EQUITY_CURVE}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="month" stroke="#737373" fontSize={11} tickLine={false} />
@@ -306,7 +307,7 @@ export function Backtesting() {
                         <Line type="monotone" dataKey="strategy" name="策略收益" stroke="#f43f5e" strokeWidth={2.5} dot={false} />
                         <Line type="monotone" dataKey="base" name="沪深300基准" stroke="#737373" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
                       </LineChart>
-                    </ResponsiveContainer>
+                    </StableChartContainer>
                   </div>
                 </div>
 
