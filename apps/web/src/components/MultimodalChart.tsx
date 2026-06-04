@@ -59,6 +59,7 @@ interface KLinePoint {
   amplitude?: number;
   turnover?: number;
   source?: string;
+  frequency?: string;
   fetchedAt?: number;
   up: boolean;
   ma5: number;

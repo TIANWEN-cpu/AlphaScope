@@ -6,16 +6,21 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import math
+import re
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from backend.provider_timeout import call_with_timeout
 from backend.schemas.api import ApiResponse
+from backend.stock_resolver import resolve_stock
 
 router = APIRouter(prefix="/api/quant", tags=["quant"])
 
@@ -371,6 +376,43 @@ class LiveStopBody(BaseModel):
     run_id: str = Field(description="运行ID")
 
 
+class StockPoolExportRequest(BaseModel):
+    """Stock pool CSV export request."""
+
+    text: str = Field(description="Stock pool text containing symbols")
+
+
+def _extract_stock_pool_symbols(text: str, limit: int = 200) -> list[str]:
+    seen: set[str] = set()
+    symbols: list[str] = []
+    for match in re.finditer(r"\b\d{5,6}\b", text or ""):
+        code = match.group(0)
+        if code not in seen:
+            seen.add(code)
+            symbols.append(code)
+        if len(symbols) >= limit:
+            break
+    return symbols
+
+
+def _stock_pool_csv(symbols: list[str]) -> str:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(["symbol", "name", "market", "exchange", "source"])
+    for symbol in symbols:
+        identity = resolve_stock(symbol)
+        writer.writerow(
+            [
+                identity.get("symbol") or symbol,
+                identity.get("name") or "",
+                identity.get("market") or "",
+                identity.get("exchange") or "",
+                identity.get("source") or "",
+            ]
+        )
+    return buffer.getvalue()
+
+
 def run_local_backtest_payload(
     strategy_id: str,
     symbol: str,
@@ -457,6 +499,27 @@ async def reload_strategies():
             "degraded": False,
         },
         message=f"已加载 {len(strategies)} 个本地策略。",
+    )
+
+
+@router.post("/stock-pool/export")
+async def export_stock_pool(body: StockPoolExportRequest):
+    """Export a parsed stock pool as a testable server-side CSV file."""
+    symbols = _extract_stock_pool_symbols(body.text)
+    if not symbols:
+        return ApiResponse(
+            success=False,
+            error="No valid stock symbols found",
+            error_code="STOCK_POOL_EMPTY",
+        )
+
+    csv_text = _stock_pool_csv(symbols)
+    return Response(
+        content=csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="alphascope-stock-pool.csv"'
+        },
     )
 
 

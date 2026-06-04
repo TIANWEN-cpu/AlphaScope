@@ -34,7 +34,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { API_BASE_URL, API_KEY, type ApiResponse } from '../lib/api';
+import { API_BASE_URL, API_KEY, LOCAL_API_TOKEN, type ApiResponse } from '../lib/api';
 import { ProviderHealthPanel } from './ProviderHealthPanel';
 import {
   AI_ROUTE_LABELS,
@@ -69,6 +69,7 @@ import {
 import { ThemedSelect, type ThemedSelectOption } from './ThemedSelect';
 
 type SettingTab = 'general' | 'models' | 'agents' | 'api' | 'network' | 'security' | 'data';
+const DEFAULT_API_BASE_URL = 'http://localhost:8000';
 
 const SETTING_TABS: Array<{ id: SettingTab; label: string; icon: ComponentType<{ className?: string }> }> = [
   { id: 'general', label: '基础设置', icon: Settings2 },
@@ -106,7 +107,7 @@ const DEFAULT_SETTINGS = {
   density: '紧凑',
   autoRefresh: true,
   pushNotice: true,
-  apiBaseUrl: 'http://localhost:8000',
+  apiBaseUrl: API_BASE_URL,
   timeoutSeconds: 12,
   retryCount: 2,
   sseEnabled: true,
@@ -229,6 +230,9 @@ async function requestSettingsApi<T>(endpoint: string, options?: RequestInit): P
   if (API_KEY && !headers.has('X-API-Key') && !headers.has('Authorization')) {
     headers.set('X-API-Key', API_KEY);
   }
+  if (LOCAL_API_TOKEN && !headers.has('X-AlphaScope-Local-Token')) {
+    headers.set('X-AlphaScope-Local-Token', LOCAL_API_TOKEN);
+  }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
@@ -252,6 +256,9 @@ function loadSettings(): SettingsState {
 
     const parsed = JSON.parse(raw) as Partial<SettingsState>;
     const settings = { ...DEFAULT_SETTINGS, ...parsed };
+    if (!parsed.apiBaseUrl || (parsed.apiBaseUrl === DEFAULT_API_BASE_URL && API_BASE_URL !== DEFAULT_API_BASE_URL)) {
+      settings.apiBaseUrl = API_BASE_URL;
+    }
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     return settings;
   } catch {
@@ -999,7 +1006,7 @@ export function Settings({ initialTab }: SettingsProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-          <AnimatePresence mode="wait">
+          <div key={activeTab}>
             {activeTab === 'general' && (
               <motion.div key="general" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="max-w-3xl space-y-5">
                 <SettingCard title="工作台偏好" desc="控制默认标的、显示密度和自动刷新行为。" icon={SlidersHorizontal}>
@@ -1675,7 +1682,10 @@ export function Settings({ initialTab }: SettingsProps) {
                 <SettingCard title="后端连接" desc="用于本地 FastAPI 服务、SSE 任务事件和 Provider 健康接口。" icon={Server}>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="md:col-span-3">
-                      <TextField label="API Base URL" value={settings.apiBaseUrl} onChange={(value) => updateSetting('apiBaseUrl', value)} />
+                      <TextField label="当前运行时 API Base URL" value={API_BASE_URL} onChange={() => undefined} disabled />
+                      <p className="mt-2 text-xs text-neutral-500">
+                        该地址由运行时配置决定；保存本页网络参数不会热切换当前 API client。
+                      </p>
                     </div>
                     <TextField label="请求超时（秒）" type="number" value={settings.timeoutSeconds} onChange={(value) => updateSetting('timeoutSeconds', Number(value) || 1)} />
                     <TextField label="重试次数" type="number" value={settings.retryCount} onChange={(value) => updateSetting('retryCount', Number(value) || 0)} />
@@ -1705,14 +1715,14 @@ export function Settings({ initialTab }: SettingsProps) {
                 <ProviderHealthPanel />
               </motion.div>
             )}
-          </AnimatePresence>
+          </div>
 
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-            {[
+            {([
               ['当前后端', settings.apiBaseUrl, Monitor],
               ['事件流', settings.sseEnabled ? '已启用' : '已关闭', Bell],
               ['配置状态', '本地已可编辑', CheckCircle2],
-            ].map(([label, value, Icon]) => (
+            ] as [string, ReactNode, ComponentType<{ className?: string }>][]) .map(([label, value, Icon]) => (
               <div key={String(label)} className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
                 <Icon className="mb-2 h-4 w-4 text-indigo-300" />
                 <p className="text-[10px] text-neutral-500">{label}</p>

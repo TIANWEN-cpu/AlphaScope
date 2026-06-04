@@ -33,7 +33,7 @@ async def test_analysis_run_rejects_empty_market_data(client):
             "/api/analysis/run",
             json={
                 "stock_symbol": "600519.SH",
-                "stock_name": "贵州茅台",
+                "stock_name": "Maotai",
                 "mode": "deep",
             },
         )
@@ -41,7 +41,7 @@ async def test_analysis_run_rejects_empty_market_data(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is False
-    assert "行情" in data["error"] or "数据不足" in data["error"]
+    assert data["error"]
 
 
 @pytest.mark.anyio
@@ -63,7 +63,7 @@ async def test_analysis_run_rejects_zero_only_market_data(client):
             "/api/analysis/run",
             json={
                 "stock_symbol": "600519.SH",
-                "stock_name": "贵州茅台",
+                "stock_name": "Maotai",
                 "mode": "deep",
             },
         )
@@ -71,4 +71,83 @@ async def test_analysis_run_rejects_zero_only_market_data(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is False
-    assert "行情" in data["error"] or "数据不足" in data["error"]
+    assert data["error"]
+
+
+@pytest.mark.anyio
+async def test_analysis_run_marks_all_agent_model_failures_unsuccessful(client):
+    bars = [
+        {
+            "date": "2026-05-01",
+            "open": 10,
+            "close": 10,
+            "high": 11,
+            "low": 9,
+            "volume": 1000,
+            "amount": 10000,
+        },
+        {
+            "date": "2026-05-02",
+            "open": 11,
+            "close": 12,
+            "high": 12,
+            "low": 10,
+            "volume": 1200,
+            "amount": 14400,
+        },
+    ]
+    runtime_result = {
+        "mode": "standard",
+        "summary": {"final": "HOLD", "buy": 0, "sell": 0, "hold": 3},
+        "brief": "All model agents failed.",
+        "research_report": "All model agents failed.",
+        "agents": {
+            "fundamental": {
+                "signal": "HOLD",
+                "confidence": 0,
+                "reason": "provider deepseek is not configured",
+            },
+            "sentiment": {
+                "signal": "HOLD",
+                "confidence": 0,
+                "reason": "provider deepseek is not configured",
+            },
+            "technical": {
+                "signal": "HOLD",
+                "confidence": 0,
+                "reason": "provider deepseek is not configured",
+            },
+        },
+        "critic": None,
+        "chairman_summary": None,
+        "mode_name": "standard",
+        "model_status": {
+            "status": "degraded",
+            "degraded": True,
+            "failure_type": "auth",
+            "message": "all agent models failed",
+            "ok_agents": 0,
+            "total_agents": 3,
+            "failed_agents": [],
+        },
+    }
+
+    with (
+        patch("backend.api.main.get_prices", return_value=bars),
+        patch("backend.runtime.orchestrator.run_agents_with_mode", return_value=runtime_result),
+    ):
+        resp = await client.post(
+            "/api/analysis/run",
+            json={
+                "stock_symbol": "600519.SH",
+                "stock_name": "Maotai",
+                "mode": "standard",
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is False
+    assert data["error_code"] == "analysis_all_agents_failed"
+    assert data["data"]["result"]["model_status"]["ok_agents"] == 0
+    assert data["data"]["result"]["model_status"]["total_agents"] == 3

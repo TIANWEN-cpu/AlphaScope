@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.7.1 - 2026-06-04
+
+### 已知问题修复与一键启动交付
+- 修复通用文件上传文件名安全问题，保存前规范化文件名并约束最终路径位于上传目录内。
+- 修复顶部搜索框 Enter 键误选择建议列表第一项的问题。
+- 修复 `/api/analysis/run` 在所有 Agent 失败时仍返回成功 envelope 的问题，新增 `analysis_all_agents_failed` 错误码。
+- 新增服务端股票池 CSV 导出接口 `/api/quant/stock-pool/export`，前端导出优先使用服务端端点。
+- 修复 Workbench 首屏 Recharts 容器高度警告。
+- 补齐 React 类型依赖和前端类型定义，恢复 `npm run lint` 与生产构建通过。
+- API 版本改为读取 `pyproject.toml`，CORS 默认限制到本地来源。
+- 重新验证 Windows portable 打包链路，`python build.py --zip` 可生成 `AlphaScope.exe` 和 `AlphaScope-portable.zip`。
+
 ## v1.7.0 - 2026-06-01
 
 ### 安全与真实性修复
@@ -330,4 +342,3 @@
 - Replaced broad JSON-object extraction with balanced-brace scanning for LLM responses.
 - Made AI chat hot-reload compatibility use function signature inspection instead of TypeError string matching.
 - Loaded fundamentals data sources in parallel on cache misses.
-

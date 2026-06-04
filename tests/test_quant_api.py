@@ -89,6 +89,36 @@ class TestQuantReload:
         assert data["data"]["local_backtest_available"] is True
 
 
+class TestStockPoolExport:
+    @pytest.mark.anyio
+    async def test_stock_pool_export_returns_csv(self, client):
+        resp = await client.post(
+            "/api/quant/stock-pool/export",
+            json={"text": "600519 Maotai\n300750 CATL\n600519 duplicate"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/csv")
+        assert "alphascope-stock-pool.csv" in resp.headers["content-disposition"]
+        lines = resp.text.strip().splitlines()
+        assert lines[0] == "symbol,name,market,exchange,source"
+        assert len(lines) == 3
+        assert lines[1].startswith("600519,")
+        assert lines[2].startswith("300750,")
+
+    @pytest.mark.anyio
+    async def test_stock_pool_export_rejects_empty_pool(self, client):
+        resp = await client.post(
+            "/api/quant/stock-pool/export",
+            json={"text": "no symbols here"},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert data["error_code"] == "STOCK_POOL_EMPTY"
+
+
 class TestQuantBacktest:
     """本地回测端点。"""
 

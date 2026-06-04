@@ -976,50 +976,54 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
             </div>
 
             {/* Chart Area */}
-            <div className="relative min-h-0 flex-1 bg-black/40 p-5">
+            <div className="relative h-[360px] min-h-[320px] bg-black/40 p-5">
                <div className="absolute right-6 top-6 text-[10px] font-mono text-neutral-600">{formatPrice(chartStats.high)}</div>
                <div className="absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{formatPrice(chartStats.low)}</div>
              
-             <ResponsiveContainer width="100%" height="80%">
-               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} onMouseMove={handleChartMouseMove}>
-                 <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
-                 <XAxis dataKey="date" tickFormatter={formatAxisDate} hide />
-                 <YAxis domain={priceDomain} hide />
-                 <Tooltip
-                   content={<CompactWorkbenchTooltip />}
-                   offset={0}
-                   allowEscapeViewBox={{ x: true, y: true }}
-                   wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
-                   cursor={{ stroke: '#818cf8', strokeOpacity: 0.32, strokeWidth: 1 }}
-                 />
-                 <Bar dataKey="wickRange" barSize={9} shape={<WorkbenchCandlestick />}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`candle-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
-                    ))}
-                 </Bar>
-                 {showMa5Line && <Line type="monotone" dataKey="ma5" stroke="#eab308" strokeWidth={1.5} dot={false} activeDot={false} />}
-                 {showMa10Line && <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} activeDot={false} />}
-                 {showMa20Line && <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} activeDot={false} />}
-               </ComposedChart>
-             </ResponsiveContainer>
+             <div className="h-[calc(100%-72px)] min-h-[240px]">
+               <ResponsiveContainer width="100%" height="100%">
+                 <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} onMouseMove={handleChartMouseMove}>
+                   <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
+                   <XAxis dataKey="date" tickFormatter={formatAxisDate} hide />
+                   <YAxis domain={priceDomain} hide />
+                   <Tooltip
+                     content={<CompactWorkbenchTooltip />}
+                     offset={0}
+                     allowEscapeViewBox={{ x: true, y: true }}
+                     wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
+                     cursor={{ stroke: '#818cf8', strokeOpacity: 0.32, strokeWidth: 1 }}
+                   />
+                   <Bar dataKey="wickRange" barSize={9} shape={<WorkbenchCandlestick />}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={`candle-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
+                      ))}
+                   </Bar>
+                   {showMa5Line && <Line type="monotone" dataKey="ma5" stroke="#eab308" strokeWidth={1.5} dot={false} activeDot={false} />}
+                   {showMa10Line && <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} activeDot={false} />}
+                   {showMa20Line && <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} activeDot={false} />}
+                 </ComposedChart>
+               </ResponsiveContainer>
+             </div>
              
-             <ResponsiveContainer width="100%" height="20%">
-               <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                 <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={{ fill: '#737373', fontSize: 10 }} stroke="#222" minTickGap={22} />
-                 <Tooltip
-                   content={<WorkbenchChartTooltip />}
-                   offset={0}
-                   allowEscapeViewBox={{ x: true, y: true }}
-                   wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
-                   cursor={{ fill: 'rgba(129,140,248,0.08)' }}
-                 />
-                 <Bar dataKey="volume" barSize={4} radius={[2, 2, 0, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-vol-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} fillOpacity={0.4} />
-                    ))}
-                 </Bar>
-               </ComposedChart>
-             </ResponsiveContainer>
+             <div className="h-[72px]">
+               <ResponsiveContainer width="100%" height="100%">
+                 <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                   <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={{ fill: '#737373', fontSize: 10 }} stroke="#222" minTickGap={22} />
+                   <Tooltip
+                     content={<WorkbenchChartTooltip />}
+                     offset={0}
+                     allowEscapeViewBox={{ x: true, y: true }}
+                     wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
+                     cursor={{ fill: 'rgba(129,140,248,0.08)' }}
+                   />
+                   <Bar dataKey="volume" barSize={4} radius={[2, 2, 0, 0]}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-vol-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} fillOpacity={0.4} />
+                      ))}
+                   </Bar>
+                 </ComposedChart>
+               </ResponsiveContainer>
+             </div>
           </div>
         </div>
 

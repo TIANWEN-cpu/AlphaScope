@@ -21,9 +21,48 @@ import hmac
 import json
 import logging
 import os
+import re
+import tomllib
+from pathlib import Path
 from typing import AsyncGenerator, Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _load_api_version() -> str:
+    pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    try:
+        with pyproject_path.open("rb") as file:
+            project = tomllib.load(file).get("project", {})
+        version = project.get("version")
+        if isinstance(version, str) and version.strip():
+            return version
+    except OSError:
+        logger.warning("Unable to read project version from %s", pyproject_path)
+    except tomllib.TOMLDecodeError:
+        logger.warning("Unable to parse project version from %s", pyproject_path)
+    return "0.0.0"
+
+
+def _split_csv_env(name: str) -> list[str]:
+    value = os.environ.get(name, "")
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _cors_middleware_options() -> dict[str, Any]:
+    if os.environ.get("ALPHASCOPE_ALLOW_ALL_CORS", "").strip() == "1":
+        return {
+            "allow_origins": ["*"],
+            "allow_origin_regex": None,
+        }
+
+    return {
+        "allow_origins": _split_csv_env("ALPHASCOPE_CORS_ORIGINS"),
+        "allow_origin_regex": os.environ.get(
+            "ALPHASCOPE_CORS_ORIGIN_REGEX",
+            r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$",
+        ),
+    }
 
 
 def _safe_float_for_api(value: Any, default: float = 0.0) -> float:
@@ -58,7 +97,7 @@ if HAS_FASTAPI:
         TeamData,
     )
 
-    api_version = "1.1.4"
+    api_version = _load_api_version()
 
     app = FastAPI(
         title="研策中枢 AlphaScope API",
@@ -68,7 +107,7 @@ if HAS_FASTAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        **_cors_middleware_options(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -487,15 +526,23 @@ if HAS_FASTAPI:
             agent_configs=req.agent_configs,
             global_ai_settings=req.global_ai_settings,
         )
+        model_status = result.get("model_status") or {}
+        total_agents = int(model_status.get("total_agents") or 0)
+        ok_agents = int(model_status.get("ok_agents") or 0)
+        all_agents_failed = total_agents > 0 and ok_agents == 0
 
         return ApiResponse(
-            success=True,
+            success=not all_agents_failed,
+            error=model_status.get("message") if all_agents_failed else None,
+            error_code="analysis_all_agents_failed" if all_agents_failed else None,
             data=AnalysisResultData(
                 stock_symbol=req.stock_symbol,
                 stock_name=req.stock_name,
                 mode=result.get("mode", req.mode),
                 result={
                     "summary": result.get("summary"),
+                    "brief": result.get("brief"),
+                    "research_report": result.get("research_report"),
                     "agents": {
                         k: {
                             "signal": v.get("signal"),
@@ -506,6 +553,8 @@ if HAS_FASTAPI:
                     },
                     "critic": result.get("critic"),
                     "chairman_summary": result.get("chairman_summary"),
+                    "model_status": model_status,
+                    "mode_name": result.get("mode_name"),
                 },
             ),
         )
@@ -636,7 +685,11 @@ if HAS_FASTAPI:
         import hashlib
         from pathlib import Path
 
-        filename = file.filename or "upload.png"
+        raw_filename = file.filename or "upload.png"
+        filename = Path(raw_filename).name.strip()
+        filename = re.sub(r"[^A-Za-z0-9._-]+", "_", filename).strip("._-")
+        if not filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
         suffix = Path(filename).suffix.lower()
         supported = {
             ".png",
@@ -663,6 +716,8 @@ if HAS_FASTAPI:
         upload_dir = UPLOADS_DIR
         upload_dir.mkdir(parents=True, exist_ok=True)
         save_path = upload_dir / f"{file_hash}_{filename}"
+        if not save_path.resolve().is_relative_to(upload_dir.resolve()):
+            raise HTTPException(status_code=400, detail="Invalid filename")
         save_path.write_bytes(content)
 
         return ApiResponse(

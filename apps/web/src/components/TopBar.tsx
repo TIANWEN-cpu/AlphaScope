@@ -102,7 +102,7 @@ export function TopBar() {
                 }
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  void selectStock(suggestions[activeIndex]?.symbol || suggestions[0]?.symbol || searchValue);
+                  void selectStock(searchValue);
                 }
                 if (e.key === 'Escape') {
                   setIsOpen(false);

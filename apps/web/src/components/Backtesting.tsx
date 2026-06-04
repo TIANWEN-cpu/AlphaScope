@@ -21,6 +21,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { findStockTarget, StockTarget } from '../lib/stocks';
+import { API_BASE_URL, LOCAL_API_TOKEN } from '../lib/api';
 
 type TabID = 'overview' | 'workshop' | 'pool' | 'compare';
 
@@ -164,10 +165,27 @@ export function Backtesting() {
     event.target.value = '';
   };
 
-  const exportPool = () => {
+  const exportPool = async () => {
     const rows = ['symbol,name,sector,momentum,liquidity,risk,score']
       .concat(parsedPool.map((row) => `${row.stock.symbol},${row.stock.name},${row.stock.sector},${row.momentum},${row.liquidity},${row.risk},${row.score}`));
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+    let csvText = rows.join('\n');
+    try {
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      if (LOCAL_API_TOKEN) {
+        headers.set('X-AlphaScope-Local-Token', LOCAL_API_TOKEN);
+      }
+      const response = await fetch(`${API_BASE_URL}/api/quant/stock-pool/export`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text: poolText }),
+      });
+      if (response.ok && response.headers.get('content-type')?.includes('text/csv')) {
+        csvText = await response.text();
+      }
+    } catch {
+      // Keep local CSV export usable when the API is unavailable.
+    }
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;

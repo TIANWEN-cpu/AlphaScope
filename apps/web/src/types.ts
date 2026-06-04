@@ -66,6 +66,7 @@ export interface ProviderEvidence {
   id: string;
   ref_id: string;
   type: string;
+  evidence_type?: string;
   title: string;
   claim: string;
   source: string;
@@ -84,6 +85,9 @@ export interface AgentOpinion {
   name?: string;
   vendor?: string;
   model?: string;
+  ok?: boolean;
+  fallback_used?: boolean;
+  structured_fallback?: boolean;
   risk_points?: string[];
   evidence_refs?: string[];
 }
@@ -118,6 +122,7 @@ export interface AnalysisResult {
   source_appendix: SourceAppendixItem[];
   degraded: boolean;
   source_errors: any[];
+  data_status?: string;
 }
 
 export interface AnalysisTask {
