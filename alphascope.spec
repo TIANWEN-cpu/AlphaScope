@@ -6,17 +6,19 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 ROOT = Path(os.path.abspath(SPEC)).parent
 
 datas = [
+    (str(ROOT / "pyproject.toml"), "."),
     (str(ROOT / "backend"), "backend"),
     (str(ROOT / "config"), "config"),
     (str(ROOT / "prompts"), "prompts"),
     (str(ROOT / "apps" / "web" / "dist"), "apps/web/dist"),
 ]
+datas += collect_data_files("akshare")
 
 for optional_dir in ("custom_providers",):
     path = ROOT / optional_dir

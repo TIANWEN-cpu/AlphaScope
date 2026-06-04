@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 
 
 def _load_api_version() -> str:
+    env_version = os.environ.get("ALPHASCOPE_VERSION", "").strip()
+    if env_version:
+        return env_version
+
     pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
     try:
         with pyproject_path.open("rb") as file:
