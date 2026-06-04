@@ -63,22 +63,38 @@ interface PriceSeriesResponse {
   source_status?: string;
 }
 
-const generateKlineData = (points: number, basePrice: number = 1500, stepDays = 1): WorkbenchChartPoint[] => {
+const generateKlineData = (
+  points: number,
+  basePrice: number = 1500,
+  stepDays = 1,
+  stepMinutes = 0,
+): WorkbenchChartPoint[] => {
   let currentPrice = basePrice;
   const volatility = Math.max(0.25, Math.min(10, basePrice * 0.012));
   const volumeBase = Math.max(80000, basePrice * 2800);
   const startDate = new Date();
-  startDate.setDate(startDate.getDate() - (points - 1) * stepDays);
+  startDate.setSeconds(0, 0);
+  if (stepMinutes > 0) {
+    startDate.setTime(startDate.getTime() - (points - 1) * stepMinutes * 60_000);
+  } else {
+    startDate.setDate(startDate.getDate() - (points - 1) * stepDays);
+  }
   const raw = Array.from({ length: points }).map((_, i) => {
     const open = currentPrice;
     const close = Math.max(0.1, currentPrice + (Math.random() * volatility * 2 - volatility));
     const high = Math.max(open, close) + Math.random() * volatility * 0.8;
     const low = Math.max(0.1, Math.min(open, close) - Math.random() * volatility * 0.8);
     const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i * stepDays);
+    if (stepMinutes > 0) {
+      date.setTime(startDate.getTime() + i * stepMinutes * 60_000);
+    } else {
+      date.setDate(startDate.getDate() + i * stepDays);
+    }
     currentPrice = close;
     return {
-      date: date.toISOString().slice(0, 10),
+      date: stepMinutes > 0
+        ? `${date.toISOString().slice(0, 10)} ${date.toTimeString().slice(0, 5)}`
+        : date.toISOString().slice(0, 10),
       open: Number(open.toFixed(2)),
       close: Number(close.toFixed(2)),
       high: Number(high.toFixed(2)),
@@ -211,11 +227,18 @@ function stripSymbolSuffix(symbol: string) {
   return String(symbol || '').trim().split('.')[0];
 }
 
-function formatAxisDate(value: string) {
+function formatAxisDate(value: string, period = '日K') {
   const text = String(value || '');
-  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(text)) return text.slice(5, 16);
-  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(5, 10);
-  return text;
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+  if (!match) return text;
+  const [, year, month, day, hour, minute] = match;
+  if (period === '分时') {
+    return hour && minute ? `${hour}:${minute}` : `${month}-${day}`;
+  }
+  if (period === '月K') {
+    return `${year}-${month}`;
+  }
+  return `${month}-${day}`;
 }
 
 function getMinimumPeriodBars(period: string) {
@@ -437,7 +460,7 @@ function WorkbenchCandlestick(props: any) {
 }
 
 function getPeriodConfig(period: string) {
-  if (period === '分时') return { points: 60, frequency: 'intraday', limit: 120, stepDays: 1 };
+  if (period === '分时') return { points: 60, frequency: 'intraday', limit: 120, stepDays: 0, stepMinutes: 5 };
   if (period === '周K') return { points: 104, frequency: '1w', limit: 156, stepDays: 7 };
   if (period === '月K') return { points: 60, frequency: '1mo', limit: 120, stepDays: 30 };
   return { points: 40, frequency: '1d', limit: 80, stepDays: 1 };
@@ -664,7 +687,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
   useEffect(() => {
     let cancelled = false;
     const period = getPeriodConfig(activePeriod);
-    const fallback = generateKlineData(period.points, currentStock.startPrice, period.stepDays);
+    const fallback = generateKlineData(period.points, currentStock.startPrice, period.stepDays, period.stepMinutes ?? 0);
 
     async function loadPrices() {
       setPriceStatus('loading');
@@ -985,7 +1008,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                <StableChartContainer>
                  <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} onMouseMove={handleChartMouseMove}>
                    <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
-                   <XAxis dataKey="date" tickFormatter={formatAxisDate} hide />
+                   <XAxis dataKey="date" tickFormatter={(value) => formatAxisDate(String(value), activePeriod)} hide />
                    <YAxis domain={priceDomain} hide />
                    <Tooltip
                      content={<CompactWorkbenchTooltip />}
@@ -1009,7 +1032,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
              <div className="h-[72px]">
                <StableChartContainer>
                  <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                   <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={{ fill: '#737373', fontSize: 10 }} stroke="#222" minTickGap={22} />
+                   <XAxis dataKey="date" tickFormatter={(value) => formatAxisDate(String(value), activePeriod)} tick={{ fill: '#737373', fontSize: 10 }} stroke="#222" minTickGap={22} />
                    <Tooltip
                      content={<WorkbenchChartTooltip />}
                      offset={0}
