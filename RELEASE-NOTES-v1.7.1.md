@@ -27,6 +27,8 @@ dist\AlphaScope\AlphaScope.exe
 - 补齐 React 19 类型依赖与前端类型定义，恢复 `npm run lint` 通过。
 - API 版本号改为从 `pyproject.toml` 读取，避免健康检查和项目版本脱节。
 - CORS 默认限制为本地开发/一键启动来源，可通过环境变量显式开启更宽策略。
+- 修复 Windows 一键启动包缺少 `akshare` 数据文件的问题，打包产物已包含 `akshare/file_fold/calendar.json` 等运行时资源。
+- 打包产物包含 `_internal/pyproject.toml`，并通过 `ALPHASCOPE_VERSION` 提供版本兜底，启动后 `/health` 返回 `1.7.1`。
 
 ## 一键启动
 
@@ -79,6 +81,7 @@ npm run build
 - `POST /api/quant/stock-pool/export` 返回 `200`、`text/csv; charset=utf-8` 和 `attachment; filename="alphascope-stock-pool.csv"`。
 - Browser-Use 打开 `http://127.0.0.1:3017/`，首页行情图可见，刷新后 fresh warn/error console logs 为 `0`。
 - `python build.py --skip-web --zip --no-clean` 成功生成 `dist/AlphaScope/AlphaScope.exe` 和 `dist/AlphaScope-portable.zip`。
+- 新版 `AlphaScope.exe --no-browser` 冒烟通过：`/health` 返回 `1.7.1`，`/api/prices/600519?limit=3` 返回 `success=true`、`source_status=ok`。
 
 ## 已知边界
 
