@@ -18,6 +18,8 @@ MAX_PRICE_FETCH_DAYS = 3650
 
 
 def _minimum_period_bars(frequency: str) -> int:
+    if frequency == "1y":
+        return 2
     if frequency == "1mo":
         return 6
     if frequency == "1w":
@@ -150,8 +152,9 @@ async def get_prices(
             },
         )
 
+    aggregated_frequencies = {"1w", "1mo", "1y"}
     store_frequency = (
-        "1d" if normalized_frequency in {"1w", "1mo"} else normalized_frequency
+        "1d" if normalized_frequency in aggregated_frequencies else normalized_frequency
     )
     fetch_days = default_daily_window_days(
         max(1, min(limit, 500)), normalized_frequency
@@ -161,7 +164,7 @@ async def get_prices(
         frequency=store_frequency,
         start_date=start,
         end_date=end,
-        limit=fetch_days if normalized_frequency in {"1w", "1mo"} else limit,
+        limit=fetch_days if normalized_frequency in aggregated_frequencies else limit,
         include_incompatible=True,
     )
     bars = filter_incompatible_price_bars(raw_bars)
@@ -170,7 +173,12 @@ async def get_prices(
     error = None
     error_code = None
     should_extend_period_history = False
-    if normalized_frequency in {"1w", "1mo"} and bars and not start and not end:
+    if (
+        normalized_frequency in aggregated_frequencies
+        and bars
+        and not start
+        and not end
+    ):
         should_extend_period_history = (
             len(aggregate_price_bars(bars, normalized_frequency)) < limit
         )
@@ -192,11 +200,13 @@ async def get_prices(
             frequency=store_frequency,
             start_date=start,
             end_date=end,
-            limit=fetch_days if normalized_frequency in {"1w", "1mo"} else limit,
+            limit=fetch_days
+            if normalized_frequency in aggregated_frequencies
+            else limit,
             include_incompatible=True,
         )
         bars = filter_incompatible_price_bars(raw_bars)
-    if normalized_frequency in {"1w", "1mo"}:
+    if normalized_frequency in aggregated_frequencies:
         bars = aggregate_price_bars(bars, normalized_frequency)[-limit:]
         if bars and len(bars) < _minimum_period_bars(normalized_frequency):
             degraded = True

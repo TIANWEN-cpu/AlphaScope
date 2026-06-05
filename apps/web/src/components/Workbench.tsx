@@ -63,6 +63,80 @@ interface PriceSeriesResponse {
   source_status?: string;
 }
 
+type KlinePeriod = '分时' | '日K' | '周K' | '月K' | '年K' | '自定义';
+type CustomKlineFrequency = 'intraday' | '1d' | '1w' | '1mo' | '1y';
+
+interface PeriodConfig {
+  points: number;
+  frequency: CustomKlineFrequency;
+  limit: number;
+  stepDays: number;
+  stepMinutes?: number;
+  label: string;
+  axisPeriod: Exclude<KlinePeriod, '自定义'>;
+}
+
+const PERIOD_BUTTONS: KlinePeriod[] = ['分时', '日K', '周K', '月K', '年K', '自定义'];
+
+const CUSTOM_FREQUENCY_OPTIONS: Array<{ value: CustomKlineFrequency; label: string }> = [
+  { value: 'intraday', label: '分时' },
+  { value: '1d', label: '日K' },
+  { value: '1w', label: '周K' },
+  { value: '1mo', label: '月K' },
+  { value: '1y', label: '年K' },
+];
+
+const CUSTOM_LIMIT_OPTIONS: Record<CustomKlineFrequency, Array<{ value: string; label: string }>> = {
+  intraday: [
+    { value: '60', label: '60分' },
+    { value: '120', label: '120分' },
+    { value: '240', label: '240分' },
+  ],
+  '1d': [
+    { value: '60', label: '60日' },
+    { value: '120', label: '120日' },
+    { value: '250', label: '250日' },
+    { value: '500', label: '500日' },
+  ],
+  '1w': [
+    { value: '26', label: '26周' },
+    { value: '52', label: '52周' },
+    { value: '104', label: '104周' },
+    { value: '156', label: '156周' },
+  ],
+  '1mo': [
+    { value: '24', label: '24月' },
+    { value: '60', label: '60月' },
+    { value: '120', label: '120月' },
+  ],
+  '1y': [
+    { value: '5', label: '5年' },
+    { value: '10', label: '10年' },
+    { value: '20', label: '20年' },
+  ],
+};
+
+const CUSTOM_FREQUENCY_CONFIG: Record<CustomKlineFrequency, Omit<PeriodConfig, 'points' | 'limit' | 'label'>> = {
+  intraday: { frequency: 'intraday', stepDays: 0, stepMinutes: 5, axisPeriod: '分时' },
+  '1d': { frequency: '1d', stepDays: 1, axisPeriod: '日K' },
+  '1w': { frequency: '1w', stepDays: 7, axisPeriod: '周K' },
+  '1mo': { frequency: '1mo', stepDays: 30, axisPeriod: '月K' },
+  '1y': { frequency: '1y', stepDays: 365, axisPeriod: '年K' },
+};
+
+function getCustomLimitOptions(frequency: CustomKlineFrequency) {
+  return CUSTOM_LIMIT_OPTIONS[frequency] ?? CUSTOM_LIMIT_OPTIONS['1d'];
+}
+
+function getCustomLimitNumber(frequency: CustomKlineFrequency, value: string) {
+  const options = getCustomLimitOptions(frequency);
+  const fallback = Number(options[1]?.value ?? options[0]?.value ?? 120);
+  const parsed = Number(value);
+  return options.some((option) => option.value === value) && Number.isFinite(parsed)
+    ? parsed
+    : fallback;
+}
+
 const generateKlineData = (
   points: number,
   basePrice: number = 1500,
@@ -238,17 +312,21 @@ function formatAxisDate(value: string, period = '日K') {
   if (period === '月K') {
     return `${year}-${month}`;
   }
+  if (period === '年K') {
+    return year;
+  }
   return `${month}-${day}`;
 }
 
 function getMinimumPeriodBars(period: string) {
-  if (period === '月K') return 6;
-  if (period === '周K') return 12;
+  if (period === '1y' || period === '年K') return 2;
+  if (period === '1mo' || period === '月K') return 6;
+  if (period === '1w' || period === '周K') return 12;
   return 2;
 }
 
 function shouldShowMovingAverage(period: string, dataLength: number, windowSize: number) {
-  if (period === '月K' || period === '周K') {
+  if (period === '1y' || period === '年K' || period === '1mo' || period === '月K' || period === '1w' || period === '周K') {
     return dataLength >= windowSize;
   }
   return dataLength >= 2;
@@ -459,17 +537,34 @@ function WorkbenchCandlestick(props: any) {
   );
 }
 
-function getPeriodConfig(period: string) {
-  if (period === '分时') return { points: 60, frequency: 'intraday', limit: 120, stepDays: 0, stepMinutes: 5 };
-  if (period === '周K') return { points: 104, frequency: '1w', limit: 156, stepDays: 7 };
-  if (period === '月K') return { points: 60, frequency: '1mo', limit: 120, stepDays: 30 };
-  return { points: 40, frequency: '1d', limit: 80, stepDays: 1 };
+function getPeriodConfig(
+  period: KlinePeriod,
+  customFrequency: CustomKlineFrequency = '1d',
+  customLimit = '120',
+): PeriodConfig {
+  if (period === '自定义') {
+    const base = CUSTOM_FREQUENCY_CONFIG[customFrequency];
+    const limit = getCustomLimitNumber(customFrequency, customLimit);
+    return {
+      ...base,
+      points: limit,
+      limit,
+      label: `自定义${base.axisPeriod}`,
+    };
+  }
+  if (period === '分时') return { points: 60, frequency: 'intraday', limit: 120, stepDays: 0, stepMinutes: 5, label: '分时', axisPeriod: '分时' };
+  if (period === '周K') return { points: 104, frequency: '1w', limit: 156, stepDays: 7, label: '周K', axisPeriod: '周K' };
+  if (period === '月K') return { points: 60, frequency: '1mo', limit: 120, stepDays: 30, label: '月K', axisPeriod: '月K' };
+  if (period === '年K') return { points: 12, frequency: '1y', limit: 20, stepDays: 365, label: '年K', axisPeriod: '年K' };
+  return { points: 40, frequency: '1d', limit: 80, stepDays: 1, label: '日K', axisPeriod: '日K' };
 }
 
 function getPeriodTestId(period: string) {
   if (period === '分时') return 'workbench-period-intraday';
   if (period === '周K') return 'workbench-period-weekly';
   if (period === '月K') return 'workbench-period-monthly';
+  if (period === '年K') return 'workbench-period-yearly';
+  if (period === '自定义') return 'workbench-period-custom';
   return 'workbench-period-daily';
 }
 
@@ -479,8 +574,11 @@ interface WorkbenchProps {
 
 export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previousChartPeriodKeyRef = useRef<string | undefined>(undefined);
   const [currentStock, setCurrentStock] = useState<StockTarget>(() => getPersistedStock() ?? STOCK_UNIVERSE[0]);
-  const [activePeriod, setActivePeriod] = useState('日K');
+  const [activePeriod, setActivePeriod] = useState<KlinePeriod>('日K');
+  const [customFrequency, setCustomFrequency] = useState<CustomKlineFrequency>('1d');
+  const [customLimit, setCustomLimit] = useState('120');
   const [activePanelTab, setActivePanelTab] = useState<PanelTabId>('news');
   const [chartData, setChartData] = useState(() => generateKlineData(40, currentStock.startPrice));
   const [analysisMode, setAnalysisMode] = useState<AnalysisModeId>('standard');
@@ -516,13 +614,20 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
     () => chatModelOptions.find((option) => option.key === selectedChatModelKey) ?? chatModelOptions[0],
     [chatModelOptions, selectedChatModelKey],
   );
+  const customLimitOptions = useMemo(() => getCustomLimitOptions(customFrequency), [customFrequency]);
+  const activePeriodConfig = useMemo(
+    () => getPeriodConfig(activePeriod, customFrequency, customLimit),
+    [activePeriod, customFrequency, customLimit],
+  );
+  const activePeriodLabel = activePeriodConfig.label;
+  const axisPeriod = activePeriodConfig.axisPeriod;
   const canSendChat = Boolean(input.trim() && selectedChatModel && !chatLoading);
   const chartLastPoint = chartData[chartData.length - 1];
-  const lastChartPoint = activePeriod === '分时' ? (latestQuote ?? chartLastPoint) : chartLastPoint;
+  const lastChartPoint = activePeriodConfig.frequency === 'intraday' ? (latestQuote ?? chartLastPoint) : chartLastPoint;
   const displayPrice = lastChartPoint?.close ?? metrics.price;
   const displayChange = lastChartPoint?.changePct ?? metrics.change;
   const displayIsUp = displayChange >= 0;
-  const isPeriodDataTooShort = chartData.length > 0 && chartData.length < getMinimumPeriodBars(activePeriod);
+  const isPeriodDataTooShort = chartData.length > 0 && chartData.length < getMinimumPeriodBars(activePeriodConfig.frequency);
   const chartStats = useMemo(() => {
     const lastPoint = chartData[chartData.length - 1];
     const ma5 = lastPoint?.ma5 ?? metrics.price;
@@ -550,13 +655,13 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
     ? `${lastChartPoint?.source || 'provider'} · ${lastChartPoint?.date || ''}`
     : priceMessage;
   const chartSourceLabel = isPeriodDataTooShort
-    ? `${activePeriod}样本不足，仅显示上市以来可用K线`
+    ? `${activePeriodLabel}样本不足，仅显示上市以来可用K线`
     : priceSourceLabel;
   const displayChartPoint = hoveredChartPoint ?? lastChartPoint;
   const displayChartPointUp = (displayChartPoint?.change ?? 0) >= 0;
-  const showMa5Line = shouldShowMovingAverage(activePeriod, chartData.length, 5);
-  const showMa10Line = shouldShowMovingAverage(activePeriod, chartData.length, 10);
-  const showMa20Line = shouldShowMovingAverage(activePeriod, chartData.length, 20);
+  const showMa5Line = shouldShowMovingAverage(activePeriodConfig.frequency, chartData.length, 5);
+  const showMa10Line = shouldShowMovingAverage(activePeriodConfig.frequency, chartData.length, 10);
+  const showMa20Line = shouldShowMovingAverage(activePeriodConfig.frequency, chartData.length, 20);
 
   const handleChartMouseMove = (state: any) => {
     const point = state?.activePayload?.find((item: any) => item?.payload)?.payload as WorkbenchChartPoint | undefined;
@@ -685,9 +790,30 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
   }, [currentStock]);
 
   useEffect(() => {
+    if (customLimitOptions.some((option) => option.value === customLimit)) return;
+    setCustomLimit(customLimitOptions[1]?.value ?? customLimitOptions[0]?.value ?? '120');
+  }, [customLimit, customLimitOptions]);
+
+  useEffect(() => {
     let cancelled = false;
-    const period = getPeriodConfig(activePeriod);
+    const period = activePeriodConfig;
     const fallback = generateKlineData(period.points, currentStock.startPrice, period.stepDays, period.stepMinutes ?? 0);
+    const chartPeriodKey = [
+      currentStock.symbol,
+      period.frequency,
+      period.limit,
+      period.points,
+      period.stepDays,
+      period.stepMinutes ?? 0,
+    ].join('|');
+    if (previousChartPeriodKeyRef.current !== chartPeriodKey) {
+      previousChartPeriodKeyRef.current = chartPeriodKey;
+      setChartData(fallback);
+      setHoveredChartPoint(undefined);
+      if (period.frequency !== 'intraday') {
+        setLatestQuote(undefined);
+      }
+    }
 
     async function loadPrices() {
       setPriceStatus('loading');
@@ -718,7 +844,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
         setChartData(nextData);
         if (payload.bars?.length) {
           setPriceStatus(payload.degraded ? 'degraded' : 'live');
-          setPriceMessage(formatPricePayloadMessage(payload, activePeriod));
+          setPriceMessage(formatPricePayloadMessage(payload, activePeriodLabel));
         } else {
           setPriceStatus('degraded');
           setPriceMessage('行情源暂无数据，已切换本地预览');
@@ -737,9 +863,9 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
     return () => {
       cancelled = true;
     };
-  }, [activePeriod, currentStock, priceRefreshKey]);
+  }, [activePeriodConfig, activePeriodLabel, currentStock, priceRefreshKey]);
 
-  const handlePeriodChange = (period: string) => {
+  const handlePeriodChange = (period: KlinePeriod) => {
     setActivePeriod(period);
   };
 
@@ -752,7 +878,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
 
   const handleRefreshChart = () => {
     setPriceRefreshKey((value) => value + 1);
-    appendSystemMessage(`已刷新 **${currentStock.name}** (${currentStock.symbol}) 的${activePeriod}行情，并同步更新均线、成交量与资金标签。`);
+    appendSystemMessage(`已刷新 **${currentStock.name}** (${currentStock.symbol}) 的${activePeriodLabel}行情，并同步更新均线、成交量与资金标签。`);
   };
 
   const handleFullscreen = async () => {
@@ -964,8 +1090,8 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
               >
                 <RefreshCw className={cn('h-3.5 w-3.5', priceStatus === 'loading' && 'animate-spin')} />
               </button>
-              <div className="flex rounded-lg border border-white/5 bg-black/40 p-1 shadow-inner">
-                {['分时', '日K', '周K', '月K'].map((period) => (
+              <div className="flex flex-wrap rounded-lg border border-white/5 bg-black/40 p-1 shadow-inner">
+                {PERIOD_BUTTONS.map((period) => (
                   <button 
                     key={period}
                     data-testid={getPeriodTestId(period)}
@@ -979,6 +1105,32 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                   </button>
                 ))}
               </div>
+              {activePeriod === '自定义' && (
+                <div className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/40 p-1 shadow-inner">
+                  <ThemedSelect
+                    value={customFrequency}
+                    options={CUSTOM_FREQUENCY_OPTIONS}
+                    onChange={(value) => setCustomFrequency(value as CustomKlineFrequency)}
+                    ariaLabel="自定义K线粒度"
+                    testId="workbench-custom-frequency"
+                    className="w-[86px]"
+                    buttonClassName="h-8 rounded-md border-transparent bg-transparent px-2 text-xs"
+                    menuClassName="text-xs"
+                    align="right"
+                  />
+                  <ThemedSelect
+                    value={customLimit}
+                    options={customLimitOptions}
+                    onChange={setCustomLimit}
+                    ariaLabel="自定义K线窗口"
+                    testId="workbench-custom-limit"
+                    className="w-[86px]"
+                    buttonClassName="h-8 rounded-md border-transparent bg-transparent px-2 text-xs"
+                    menuClassName="text-xs"
+                    align="right"
+                  />
+                </div>
+              )}
               </div>
             </div>
 
@@ -993,7 +1145,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                )}
                {isPeriodDataTooShort && (
                  <span className="min-w-0 truncate rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-300">
-                   {activePeriod}样本不足：仅 {chartData.length} 根，可能是新股或行情源历史较短
+                   {activePeriodLabel}样本不足：仅 {chartData.length} 根，可能是新股或行情源历史较短
                  </span>
                )}
                <span className="text-neutral-500 sm:ml-auto">VOL: {formatVolume(chartStats.volume)}</span>
@@ -1008,7 +1160,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                <StableChartContainer>
                  <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} onMouseMove={handleChartMouseMove}>
                    <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
-                   <XAxis dataKey="date" tickFormatter={(value) => formatAxisDate(String(value), activePeriod)} hide />
+                   <XAxis dataKey="date" tickFormatter={(value) => formatAxisDate(String(value), axisPeriod)} hide />
                    <YAxis domain={priceDomain} hide />
                    <Tooltip
                      content={<CompactWorkbenchTooltip />}
@@ -1032,7 +1184,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
              <div className="h-[72px]">
                <StableChartContainer>
                  <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                   <XAxis dataKey="date" tickFormatter={(value) => formatAxisDate(String(value), activePeriod)} tick={{ fill: '#737373', fontSize: 10 }} stroke="#222" minTickGap={22} />
+                   <XAxis dataKey="date" tickFormatter={(value) => formatAxisDate(String(value), axisPeriod)} tick={{ fill: '#737373', fontSize: 10 }} stroke="#222" minTickGap={22} />
                    <Tooltip
                      content={<WorkbenchChartTooltip />}
                      offset={0}

@@ -22,12 +22,16 @@ def test_normalize_frequency_aliases():
     assert normalize_frequency("1mo") == "1mo"
     assert normalize_frequency("1M") == "1mo"
     assert normalize_frequency("monthly") == "1mo"
+    assert normalize_frequency("1y") == "1y"
+    assert normalize_frequency("yearly") == "1y"
+    assert normalize_frequency("年K") == "1y"
     assert normalize_frequency("unknown") == "1d"
 
 
 def test_default_daily_window_days_extends_weekly_and_monthly_history():
     assert default_daily_window_days(156, "1w") >= 1122
     assert default_daily_window_days(120, "1mo") >= 3930
+    assert default_daily_window_days(10, "1y") >= 3650
     assert default_daily_window_days(80, "1d") == 160
 
 
@@ -122,6 +126,56 @@ def test_aggregate_monthly_bars_groups_by_calendar_month():
     assert result[1]["low"] == 9
     assert result[1]["close"] == 14
     assert result[1]["volume"] == 300
+
+
+def test_aggregate_yearly_bars_groups_by_calendar_year():
+    bars = [
+        {
+            "symbol": "600519",
+            "date": "2025-01-02",
+            "open": 10,
+            "high": 12,
+            "low": 9,
+            "close": 11,
+            "volume": 100,
+            "amount": 1000,
+            "source": "test",
+        },
+        {
+            "symbol": "600519",
+            "date": "2025-12-31",
+            "open": 11,
+            "high": 15,
+            "low": 10,
+            "close": 14,
+            "volume": 200,
+            "amount": 2000,
+            "source": "test",
+        },
+        {
+            "symbol": "600519",
+            "date": "2026-01-05",
+            "open": 20,
+            "high": 22,
+            "low": 19,
+            "close": 21,
+            "volume": 300,
+            "amount": 3000,
+            "source": "test",
+        },
+    ]
+
+    result = aggregate_price_bars(bars, "1y")
+
+    assert [item["period_start"] for item in result] == ["2025-01-02", "2026-01-05"]
+    assert result[0]["date"] == "2025-12-31"
+    assert result[0]["open"] == 10
+    assert result[0]["high"] == 15
+    assert result[0]["low"] == 9
+    assert result[0]["close"] == 14
+    assert result[0]["volume"] == 300
+    assert result[0]["amount"] == 3000
+    assert result[0]["frequency"] == "1y"
 
 
 def test_cn_trading_minute_filter():

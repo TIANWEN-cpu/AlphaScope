@@ -277,7 +277,7 @@ def stop_running_instance(root: Path) -> int:
 
 def configure_runtime_environment(root: Path) -> None:
     os.environ.setdefault("ALPHASCOPE_PACKAGED", "1" if is_frozen() else "0")
-    os.environ.setdefault("ALPHASCOPE_VERSION", "1.7.3")
+    os.environ.setdefault("ALPHASCOPE_VERSION", "1.7.4")
     os.environ.setdefault("ALPHASCOPE_RUNTIME_ROOT", str(root))
     os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
     os.environ.setdefault("STREAMLIT_BROWSER_GATHER_USAGE_STATS", "false")

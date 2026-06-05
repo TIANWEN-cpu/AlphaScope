@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 INTRADAY_FREQUENCIES = {"intraday", "1m", "minute", "minutes", "分时"}
 WEEKLY_FREQUENCIES = {"1w", "w", "week", "weekly", "周k", "周K"}
 MONTHLY_FREQUENCIES = {"1mo", "1mth", "1M", "month", "monthly", "月k", "月K"}
+YEARLY_FREQUENCIES = {"1y", "y", "year", "yearly", "年k", "年K"}
 
 
 def normalize_frequency(frequency: str | None) -> str:
@@ -31,6 +32,10 @@ def normalize_frequency(frequency: str | None) -> str:
         item.lower() for item in MONTHLY_FREQUENCIES
     }:
         return "1mo"
+    if raw in YEARLY_FREQUENCIES or lowered in {
+        item.lower() for item in YEARLY_FREQUENCIES
+    }:
+        return "1y"
     return "1d"
 
 
@@ -61,6 +66,8 @@ def _period_key(dt: datetime, frequency: str) -> tuple[int, int] | tuple[int, in
     if frequency == "1w":
         iso = dt.isocalendar()
         return (iso.year, iso.week)
+    if frequency == "1y":
+        return (dt.year, 1, 1)
     return (dt.year, dt.month, 1)
 
 
@@ -78,7 +85,7 @@ def aggregate_price_bars(
 ) -> list[dict[str, Any]]:
     """从日线聚合周线/月线。输入可乱序，输出按日期升序。"""
     normalized_frequency = normalize_frequency(frequency)
-    if normalized_frequency not in {"1w", "1mo"}:
+    if normalized_frequency not in {"1w", "1mo", "1y"}:
         return bars
 
     dated_bars = [
@@ -315,6 +322,8 @@ def fetch_intraday_prices(
 def default_daily_window_days(limit: int, frequency: str) -> int:
     """为聚合周期准备足够的日线数据。"""
     normalized = normalize_frequency(frequency)
+    if normalized == "1y":
+        return max(limit * 366 + 730, 3650)
     if normalized == "1mo":
         return max(limit * 32 + 90, 730)
     if normalized == "1w":
