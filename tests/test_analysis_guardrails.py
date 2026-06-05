@@ -134,7 +134,10 @@ async def test_analysis_run_marks_all_agent_model_failures_unsuccessful(client):
 
     with (
         patch("backend.api.main.get_prices", return_value=bars),
-        patch("backend.runtime.orchestrator.run_agents_with_mode", return_value=runtime_result),
+        patch(
+            "backend.runtime.orchestrator.run_agents_with_mode",
+            return_value=runtime_result,
+        ),
     ):
         resp = await client.post(
             "/api/analysis/run",
