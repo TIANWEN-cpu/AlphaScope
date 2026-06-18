@@ -164,6 +164,7 @@ if HAS_FASTAPI:
     from backend.api.portfolio_new import router as portfolio_router
     from backend.api.report_gen import router as report_gen_router
     from backend.api.stocks import router as stocks_router
+    from backend.api.valuation import router as valuation_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -184,6 +185,7 @@ if HAS_FASTAPI:
     app.include_router(portfolio_router)
     app.include_router(report_gen_router)
     app.include_router(stocks_router)
+    app.include_router(valuation_router)
 
     # ============== 全局错误处理 ==============
 

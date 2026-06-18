@@ -223,3 +223,51 @@ def generate_summary(messages: List[dict]) -> str:
         return "暂无分析摘要"
 
     return "\n\n".join(f"- {s}" for s in summaries)
+
+
+def generate_report_with_gate(
+    conversation: dict,
+    messages: List[dict],
+    include_evidence: bool = True,
+    critic: dict | None = None,
+) -> dict:
+    """生成报告并运行质量门控(确定性 pass/fail)。
+
+    返回 ``{"report": <markdown>, "gate": <run_gate 结果>}``。
+    ``gate["passed"] is False`` 表示存在 critical 问题,调用方应据此拒绝
+    或标红发布(见 :mod:`backend.quality.report_gate`)。不改变
+    :func:`generate_report` 的既有行为。
+    """
+    report = generate_report(conversation, messages, include_evidence)
+
+    # 复用消息中的 evidence 构造证据链作为门控输入(失败则降级为仅正文检查)
+    evidence_chain = None
+    try:
+        all_evidence: list = []
+        for msg in messages:
+            meta = msg.get("metadata", {})
+            if isinstance(meta, str):
+                import json
+
+                try:
+                    meta = json.loads(meta)
+                except Exception:
+                    meta = {}
+            if isinstance(meta, dict) and meta.get("evidence"):
+                all_evidence.extend(meta["evidence"])
+        if all_evidence:
+            from backend.quality.evidence_chain import build_evidence_chain
+
+            evidence_chain = build_evidence_chain(all_evidence)
+    except Exception:
+        evidence_chain = None
+
+    from backend.quality.report_gate import run_gate
+
+    gate = run_gate(
+        report,
+        evidence_chain=evidence_chain,
+        critic=critic,
+        mode=conversation.get("mode"),
+    )
+    return {"report": report, "gate": gate}
