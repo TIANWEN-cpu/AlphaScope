@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useState } from 'react';
+import { Onboarding } from './components/Onboarding';
 import type { ErrorInfo, ReactNode } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Sidebar } from './components/Sidebar';
@@ -174,6 +175,7 @@ export default function App() {
         </main>
       </div>
     </div>
+    <Onboarding />
   </div>
 );
 }
