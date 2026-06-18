@@ -153,3 +153,7 @@ class BaseProvider(ABC):
     def get_fund_flow(self, query: dict, **kwargs) -> list[dict]:
         """获取资金流数据"""
         raise NotImplementedError(f"{self.name} 不支持 get_fund_flow")
+
+    def get_dragon_tiger(self, query: dict, **kwargs) -> dict:
+        """获取龙虎榜 (机构 vs 游资席位) 数据"""
+        raise NotImplementedError(f"{self.name} 不支持 get_dragon_tiger")
