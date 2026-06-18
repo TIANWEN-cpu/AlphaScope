@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Loader2, Plus, RefreshCcw, Sunrise, X } from 'lucide-react';
+import { ChevronDown, Loader2, Plus, RefreshCcw, Sunrise, X } from 'lucide-react';
 import { fetchApi } from '../lib/api';
 import { dispatchStockSelected, getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
 import type { StockTarget } from '../lib/stocks';
@@ -28,6 +28,17 @@ interface BriefItem {
   news_count?: number;
 }
 
+interface EnrichInfo {
+  loading?: boolean;
+  loaded?: boolean;
+  dcfVerdict?: string;
+  intrinsic?: number | null;
+  lboIrr?: number | null;
+  instNet?: number | null;
+  youziNet?: number | null;
+  matchedYouzi?: string[];
+}
+
 function loadWatchlist(): WatchItem[] {
   try {
     const raw = typeof window !== 'undefined' ? window.localStorage.getItem(WL_KEY) : null;
@@ -49,11 +60,21 @@ function saveWatchlist(wl: WatchItem[]) {
 const fmtPct = (n?: number | null) =>
   n === undefined || n === null ? '—' : `${n >= 0 ? '+' : ''}${Number(n).toFixed(2)}%`;
 
+const fmtMoney = (n?: number | null) => {
+  if (n === undefined || n === null) return '—';
+  const v = Number(n);
+  if (Math.abs(v) >= 1e8) return `${(v / 1e8).toFixed(2)}亿`;
+  if (Math.abs(v) >= 1e4) return `${(v / 1e4).toFixed(0)}万`;
+  return `${v.toFixed(0)}`;
+};
+
 export function MorningBrief() {
   const [watchlist, setWatchlist] = useState<WatchItem[]>(() => loadWatchlist());
   const [current, setCurrent] = useState<StockTarget | null>(() => getPersistedStock() ?? null);
   const [briefs, setBriefs] = useState<Record<string, BriefItem>>({});
   const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [enrich, setEnrich] = useState<Record<string, EnrichInfo>>({});
 
   useEffect(() => subscribeStockSelected(({ stock }) => setCurrent(stock)), []);
 
@@ -95,6 +116,29 @@ export function MorningBrief() {
     setWatchlist(next);
     saveWatchlist(next);
     loadBrief(next);
+  };
+
+  const toggleExpand = (symbol: string) => {
+    setExpanded((cur) => (cur === symbol ? null : symbol));
+    if (enrich[symbol]?.loaded || enrich[symbol]?.loading) return;
+    setEnrich((m) => ({ ...m, [symbol]: { ...m[symbol], loading: true } }));
+    const val = fetchApi<any>(`/api/valuation/${encodeURIComponent(symbol)}`).catch(() => null);
+    const dt = fetchApi<any>(`/api/dragon-tiger/${encodeURIComponent(symbol)}`).catch(() => null);
+    void Promise.all([val, dt]).then(([v, d]: [any, any]) => {
+      setEnrich((m) => ({
+        ...m,
+        [symbol]: {
+          loading: false,
+          loaded: true,
+          dcfVerdict: v?.summary?.dcf_verdict,
+          intrinsic: v?.summary?.dcf_intrinsic_per_share,
+          lboIrr: v?.summary?.lbo_irr_pct,
+          instNet: d?.inst_vs_youzi?.institutional_net,
+          youziNet: d?.inst_vs_youzi?.youzi_net,
+          matchedYouzi: d?.matched_youzi ?? [],
+        },
+      }));
+    });
   };
 
   return (
@@ -192,6 +236,52 @@ export function MorningBrief() {
                   </ul>
                 ) : (
                   <div className="mt-2 border-t border-white/5 pt-2 text-[11px] text-neutral-600">近期无本地新闻</div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(w.symbol)}
+                  className="mt-2 flex items-center gap-1 text-[11px] text-neutral-500 transition-colors hover:text-indigo-300"
+                >
+                  <ChevronDown className={`h-3 w-3 transition-transform ${expanded === w.symbol ? 'rotate-180' : ''}`} />
+                  估值 / 游资
+                </button>
+                {expanded === w.symbol && (
+                  <div className="mt-2 rounded-lg border border-white/5 bg-white/[0.02] p-2.5 text-[11px]">
+                    {enrich[w.symbol]?.loading ? (
+                      <span className="flex items-center gap-1.5 text-indigo-300">
+                        <Loader2 className="h-3 w-3 animate-spin" /> 加载估值与龙虎榜…
+                      </span>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        <span className="text-neutral-500">DCF 内在价值</span>
+                        <span className="text-right font-mono text-neutral-200">
+                          {enrich[w.symbol]?.intrinsic != null ? `¥${enrich[w.symbol]?.intrinsic}` : '—'}
+                        </span>
+                        <span className="text-neutral-500">DCF 结论</span>
+                        <span className="text-right text-neutral-300">{enrich[w.symbol]?.dcfVerdict ?? '—'}</span>
+                        <span className="text-neutral-500">LBO IRR</span>
+                        <span className="text-right font-mono text-neutral-200">
+                          {enrich[w.symbol]?.lboIrr != null ? `${enrich[w.symbol]?.lboIrr}%` : '—'}
+                        </span>
+                        <span className="text-neutral-500">机构净额</span>
+                        <span className={`text-right font-mono ${(enrich[w.symbol]?.instNet ?? 0) >= 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                          {fmtMoney(enrich[w.symbol]?.instNet)}
+                        </span>
+                        <span className="text-neutral-500">游资净额</span>
+                        <span className={`text-right font-mono ${(enrich[w.symbol]?.youziNet ?? 0) >= 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                          {fmtMoney(enrich[w.symbol]?.youziNet)}
+                        </span>
+                        {enrich[w.symbol]?.matchedYouzi && (enrich[w.symbol]?.matchedYouzi?.length ?? 0) > 0 && (
+                          <>
+                            <span className="text-neutral-500">上榜游资</span>
+                            <span className="text-right text-rose-300/90">
+                              {enrich[w.symbol]?.matchedYouzi?.slice(0, 3).join('、')}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             );
