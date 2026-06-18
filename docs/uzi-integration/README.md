@@ -23,3 +23,25 @@
 - 复用 AlphaScope 既有设施:provider 基类/自动发现 registry、`stock_resolver`、`web_search_provider`、`critic.py`、`evidence_chain.py`、`expert_panel.py`。
 - 不移植 UZI 的数据层架构、面板引擎、分享卡/战报营销出图(AlphaScope 自有更优实现或定位不符)。
 - 移植文件头部标注来源,见 [ATTRIBUTION.md](ATTRIBUTION.md)。
+
+## 已交付的前端模块(把后端能力接出为可用界面)
+
+| 侧边栏模块 | 接出的后端 | 提交 |
+|---|---|---|
+| 估值建模 | `/api/valuation`(DCF/Comps/LBO,可调假设情景) | `e9c0213` / `f3267d6` |
+| 龙虎榜/游资 | `/api/dragon-tiger`(机构vs游资 + 杀猪盘检测) | `0131221` / `3c5b48d` |
+| 投资人库 | `/api/experts`(59 位投资人 persona) | `672a58b` |
+| 自选晨报 | `/api/brief`(自选最新价/新闻 + 展开估值/游资) | `bf66737` / `ce72cbf` |
+| 顶栏成本药丸 | `/api/diagnostics/cost-summary`(LLM 花费) | `01ad3cc` |
+| 首次引导向导 | `/api/settings/providers`(选模型→填key→测试) | `edd16f7` |
+
+## 自规划扩展(在路线图之外)
+
+- **A** 自选晨报每只股可展开「估值 + 游资」(懒加载复用上述端点)。
+- **E** 估值面板可调一阶段增速/永续增速/Beta 做情景分析。
+- **F** 龙虎榜面板「杀猪盘检测」按钮(接出 M1 的 8 信号扫描)。
+- 研报质量门控(M3)暴露为 `/api/quality/report-gate` + 导出 `?gate`。
+- 研究成果一键导出 Markdown(`/api/export/...` + 面板导出按钮)。
+
+所有新增均为**纯增量**(新文件/新路由/新标签),不删改既有功能;每项独立分支 → tsc/build/pytest 验证 → 合并 main。
+
