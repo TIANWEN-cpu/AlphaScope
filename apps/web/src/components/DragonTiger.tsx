@@ -299,6 +299,26 @@ export function DragonTiger() {
                 </div>
               )}
 
+              {data.sector_lhb_top && data.sector_lhb_top.length > 0 && (
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                  <h3 className="mb-2 text-sm font-medium text-neutral-200">近月活跃龙虎榜个股(板块参考)</h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {data.sector_lhb_top.slice(0, 12).map((r, i) => {
+                      const nm = r['名称'] ?? r['股票简称'] ?? '';
+                      const code = r['代码'] ?? r['股票代码'] ?? '';
+                      const cnt = r['上榜次数'] ?? r['次数'];
+                      return (
+                        <span key={i} className="rounded border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-neutral-300">
+                          {nm}
+                          {code ? ` ${code}` : ''}
+                          {cnt != null ? ` · ${cnt}次` : ''}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <p className="text-[10px] leading-relaxed text-neutral-600">
                 游资席位来自公开龙虎榜匹配,可能存在席位变更/重名;机构识别基于"机构专用"标识。仅供研究参考,不构成投资建议。
               </p>
