@@ -168,6 +168,7 @@ if HAS_FASTAPI:
     from backend.api.dragon_tiger import router as dragon_tiger_router
     from backend.api.export import router as export_router
     from backend.api.quality import router as quality_router
+    from backend.api.experts import router as experts_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -192,6 +193,7 @@ if HAS_FASTAPI:
     app.include_router(dragon_tiger_router)
     app.include_router(export_router)
     app.include_router(quality_router)
+    app.include_router(experts_router)
 
     # ============== 全局错误处理 ==============
 
