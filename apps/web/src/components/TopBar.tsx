@@ -1,10 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCircle2, Loader2, Search, X } from 'lucide-react';
+import { Bell, CheckCircle2, Loader2, Search, Wallet, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { dispatchStockSelected, subscribeStockSelected } from '../lib/workspaceEvents';
 import { findStockTarget, formatStockLabel, resolveStockTarget, searchStockTargets, searchStockTargetsRemote } from '../lib/stocks';
 import type { StockTarget } from '../lib/stocks';
 import { cn } from '../lib/utils';
+import { fetchApi } from '../lib/api';
+
+interface CostWindow {
+  calls: number;
+  cost_usd: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+interface CostSummary {
+  windows: { today: CostWindow; last_7d: CostWindow; last_30d: CostWindow; total: CostWindow };
+  by_model: { model: string; vendor: string; calls: number; cost_usd: number }[];
+  as_of: number;
+}
+
+const fmtUsd = (n: number) => `$${(n ?? 0).toFixed((n ?? 0) < 1 ? 4 : 2)}`;
 
 export function TopBar() {
   const [searchValue, setSearchValue] = useState('');
@@ -14,6 +30,8 @@ export function TopBar() {
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [remoteSuggestions, setRemoteSuggestions] = useState<StockTarget[]>([]);
+  const [cost, setCost] = useState<CostSummary | null>(null);
+  const [costOpen, setCostOpen] = useState(false);
 
   const localSuggestions = useMemo(() => searchStockTargets(searchValue, 6), [searchValue]);
   const suggestions = remoteSuggestions.length ? remoteSuggestions : localSuggestions;
@@ -23,6 +41,25 @@ export function TopBar() {
       const resolved = findStockTarget(stock.symbol) ?? stock;
       setLastSelected(formatStockLabel(resolved));
     });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      void fetchApi<CostSummary>('/api/diagnostics/cost-summary')
+        .then((data) => {
+          if (!cancelled) setCost(data);
+        })
+        .catch(() => {
+          /* 成本展示为非关键信息，取数失败静默处理 */
+        });
+    };
+    load();
+    const timer = window.setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -175,6 +212,64 @@ export function TopBar() {
           </span>
         </div>
         <div className="relative flex shrink-0 items-center gap-5">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setCostOpen((open) => !open)}
+              title="LLM 调用成本(估算)"
+              className="flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium text-amber-300 transition-colors hover:bg-amber-500/15"
+            >
+              <Wallet className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">今日</span>
+              <span className="font-mono">{fmtUsd(cost?.windows?.today?.cost_usd ?? 0)}</span>
+            </button>
+            <AnimatePresence>
+              {costOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  className="absolute right-0 top-11 z-[120] w-72 rounded-2xl border border-white/10 bg-[#0b0c12] p-4 shadow-2xl ring-1 ring-black/70"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-neutral-100">LLM 调用成本</h3>
+                    <button
+                      type="button"
+                      onClick={() => setCostOpen(false)}
+                      className="rounded-md p-1 text-neutral-500 hover:bg-white/5 hover:text-neutral-300"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    {([['今日', 'today'], ['近7天', 'last_7d'], ['近30天', 'last_30d'], ['累计', 'total']] as const).map(
+                      ([label, key]) => (
+                        <div key={key} className="rounded-lg border border-white/5 bg-white/[0.03] px-2.5 py-2">
+                          <div className="text-neutral-500">{label}</div>
+                          <div className="mt-0.5 font-mono text-amber-300">{fmtUsd(cost?.windows?.[key]?.cost_usd ?? 0)}</div>
+                          <div className="text-[10px] text-neutral-600">{cost?.windows?.[key]?.calls ?? 0} 次调用</div>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                  {cost?.by_model?.length ? (
+                    <div className="mt-3 border-t border-white/5 pt-2">
+                      <div className="mb-1 text-[10px] uppercase tracking-widest text-neutral-500">按模型(累计)</div>
+                      {cost.by_model.slice(0, 4).map((m) => (
+                        <div key={`${m.vendor}/${m.model}`} className="flex items-center justify-between py-0.5 text-[11px]">
+                          <span className="truncate text-neutral-300">{m.model}</span>
+                          <span className="ml-2 shrink-0 font-mono text-amber-300/90">{fmtUsd(m.cost_usd)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-3 border-t border-white/5 pt-2 text-[11px] text-neutral-500">暂无调用记录</div>
+                  )}
+                  <div className="mt-2 text-[10px] leading-relaxed text-neutral-600">估算值,基于各模型公开单价</div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setNoticeOpen((open) => !open)}

@@ -189,6 +189,64 @@ def get_health_history(limit: int = 50) -> list[dict[str, Any]]:
 # ============== Diagnostics Summary ==============
 
 
+def get_cost_summary(now: float | None = None) -> dict[str, Any]:
+    """按时间窗 + 按模型 汇总 LLM 调用成本(读 cost_records)。
+
+    窗口:today(本地自然日 0 点起)/ last_7d / last_30d / total。
+    ``now`` 可注入用于测试;默认取当前时间。
+    """
+    import datetime
+
+    conn = _get_conn()
+    if now is None:
+        now = time.time()
+    dt = datetime.datetime.fromtimestamp(now)
+    midnight = datetime.datetime(dt.year, dt.month, dt.day).timestamp()
+    windows = {
+        "today": midnight,
+        "last_7d": now - 7 * 86400,
+        "last_30d": now - 30 * 86400,
+        "total": 0.0,
+    }
+
+    def _agg(since: float) -> dict:
+        row = conn.execute(
+            "SELECT COUNT(*) AS calls, COALESCE(SUM(cost_usd),0) AS cost, "
+            "COALESCE(SUM(input_tokens),0) AS inp, COALESCE(SUM(output_tokens),0) AS outp "
+            "FROM cost_records WHERE created_at >= ?",
+            (since,),
+        ).fetchone()
+        return {
+            "calls": row["calls"] or 0,
+            "cost_usd": round(row["cost"] or 0, 4),
+            "input_tokens": row["inp"] or 0,
+            "output_tokens": row["outp"] or 0,
+        }
+
+    by_model = []
+    for r in conn.execute(
+        "SELECT model, vendor, COUNT(*) AS calls, COALESCE(SUM(cost_usd),0) AS cost, "
+        "COALESCE(SUM(input_tokens),0) AS inp, COALESCE(SUM(output_tokens),0) AS outp "
+        "FROM cost_records GROUP BY model, vendor ORDER BY cost DESC"
+    ).fetchall():
+        by_model.append(
+            {
+                "model": r["model"],
+                "vendor": r["vendor"],
+                "calls": r["calls"] or 0,
+                "cost_usd": round(r["cost"] or 0, 4),
+                "input_tokens": r["inp"] or 0,
+                "output_tokens": r["outp"] or 0,
+            }
+        )
+
+    return {
+        "windows": {k: _agg(since) for k, since in windows.items()},
+        "by_model": by_model,
+        "as_of": now,
+    }
+
+
 def get_diagnostics_summary() -> dict[str, Any]:
     """汇总诊断统计。"""
     conn = _get_conn()

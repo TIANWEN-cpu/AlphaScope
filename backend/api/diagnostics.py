@@ -71,3 +71,11 @@ async def get_summary():
 
     summary = get_diagnostics_summary()
     return ApiResponse(success=True, data=summary)
+
+
+@router.get("/cost-summary")
+async def get_cost_summary():
+    """LLM 调用成本汇总:今日/近7天/近30天/累计 + 按模型明细。"""
+    from backend.diagnostics_store import get_cost_summary as _summary
+
+    return ApiResponse(success=True, data=_summary())
