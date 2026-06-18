@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Loader2, RefreshCcw, Swords, Users } from 'lucide-react';
+import { Download, Loader2, RefreshCcw, Swords, Users } from 'lucide-react';
 import { fetchApi } from '../lib/api';
+import { downloadText } from '../lib/download';
 import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
 import type { StockTarget } from '../lib/stocks';
 
@@ -72,6 +73,28 @@ export function DragonTiger() {
   const isNonA = stock && stock.market !== 'A股' && stock.market !== '北交所';
   const noRecords = data && (data.lhb_count_30d ?? 0) === 0;
 
+  const exportMd = () => {
+    if (!data) return;
+    const lines: string[] = [
+      `# 龙虎榜/游资报告 · ${stock?.name ?? ''} (${stock?.symbol ?? ''})`,
+      '',
+      `- 近30日上榜: ${data.lhb_count_30d ?? 0} 次`,
+      `- 机构净额: ${fmtMoney(iv?.institutional_net)}(买 ${fmtMoney(iv?.institutional_buy)} / 卖 ${fmtMoney(iv?.institutional_sell)})`,
+      `- 游资净额: ${fmtMoney(iv?.youzi_net)}(买 ${fmtMoney(iv?.youzi_buy)} / 卖 ${fmtMoney(iv?.youzi_sell)})`,
+      '',
+    ];
+    const youzi = Object.entries(data.matched_youzi_detail ?? {});
+    if (youzi.length) {
+      lines.push(
+        '## 上榜知名游资',
+        ...youzi.map(([nick, info]) => `- ${nick}${info.tier ? `(${TIER_LABEL[info.tier] ?? info.tier})` : ''}${info.style ? ` · ${info.style}` : ''}`),
+        '',
+      );
+    }
+    lines.push('> 游资席位来自公开龙虎榜匹配,仅供研究参考,不构成投资建议。');
+    downloadText(`alphascope-dragontiger-${stock?.symbol ?? 'report'}.md`, lines.join('\n'));
+  };
+
   return (
     <motion.div
       key="dragon_tiger"
@@ -93,15 +116,26 @@ export function DragonTiger() {
           </div>
         </div>
         {stock && (
-          <button
-            type="button"
-            onClick={() => load(stock.symbol)}
-            disabled={loading}
-            className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[12px] text-neutral-300 transition-colors hover:bg-white/[0.06] disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
-            刷新
-          </button>
+          <div className="flex items-center gap-2">
+            {data && !isNonA && !noRecords && (
+              <button
+                type="button"
+                onClick={exportMd}
+                className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[12px] text-neutral-300 transition-colors hover:bg-white/[0.06]"
+              >
+                <Download className="h-3.5 w-3.5" /> 导出 .md
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => load(stock.symbol)}
+              disabled={loading}
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[12px] text-neutral-300 transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
+              刷新
+            </button>
+          </div>
         )}
       </div>
 

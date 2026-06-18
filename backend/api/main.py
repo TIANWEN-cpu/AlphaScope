@@ -166,6 +166,7 @@ if HAS_FASTAPI:
     from backend.api.stocks import router as stocks_router
     from backend.api.valuation import router as valuation_router
     from backend.api.dragon_tiger import router as dragon_tiger_router
+    from backend.api.export import router as export_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -188,6 +189,7 @@ if HAS_FASTAPI:
     app.include_router(stocks_router)
     app.include_router(valuation_router)
     app.include_router(dragon_tiger_router)
+    app.include_router(export_router)
 
     # ============== 全局错误处理 ==============
 

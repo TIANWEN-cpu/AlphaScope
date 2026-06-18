@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Calculator, Loader2, RefreshCcw, TrendingUp } from 'lucide-react';
+import { Calculator, Download, Loader2, RefreshCcw, TrendingUp } from 'lucide-react';
 import { fetchApi } from '../lib/api';
+import { downloadText } from '../lib/download';
 import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
 import type { StockTarget } from '../lib/stocks';
 
@@ -89,6 +90,24 @@ export function Valuation() {
   const lbo = data?.lbo;
   const comps = data?.comps;
 
+  const exportMd = () => {
+    if (!data) return;
+    const lines: string[] = [
+      `# 估值报告 · ${stock?.name ?? ''} (${stock?.symbol ?? ''})`,
+      '',
+      '## 三法摘要',
+      `- DCF 内在价值: ¥${s?.dcf_intrinsic_per_share ?? '—'}(安全边际 ${pct(s?.dcf_safety_margin_pct)})${s?.dcf_verdict ?? ''}`,
+      `- LBO: ${lbo?.irr_pct ?? '—'}% IRR · MOIC ${lbo?.moic ?? '—'}x · ${s?.lbo_verdict ?? lbo?.verdict ?? ''}`,
+      `- 同业对比: ${s?.comps_verdict ?? '—'}`,
+      '',
+    ];
+    if (dcf?.methodology_log?.length) {
+      lines.push('## DCF 推导', ...dcf.methodology_log.map((x, i) => `${i + 1}. ${x}`), '');
+    }
+    lines.push('> 估值为模型估算,基于公开数据与默认假设,不构成投资建议。');
+    downloadText(`alphascope-valuation-${stock?.symbol ?? 'report'}.md`, lines.join('\n'));
+  };
+
   return (
     <motion.div
       key="valuation"
@@ -110,15 +129,26 @@ export function Valuation() {
           </div>
         </div>
         {stock && (
-          <button
-            type="button"
-            onClick={() => load(stock.symbol)}
-            disabled={loading}
-            className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[12px] text-neutral-300 transition-colors hover:bg-white/[0.06] disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
-            重新估算
-          </button>
+          <div className="flex items-center gap-2">
+            {data && (
+              <button
+                type="button"
+                onClick={exportMd}
+                className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[12px] text-neutral-300 transition-colors hover:bg-white/[0.06]"
+              >
+                <Download className="h-3.5 w-3.5" /> 导出 .md
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => load(stock.symbol)}
+              disabled={loading}
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[12px] text-neutral-300 transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
+              重新估算
+            </button>
+          </div>
         )}
       </div>
 
