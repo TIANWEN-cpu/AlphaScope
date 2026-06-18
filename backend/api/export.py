@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 logger = logging.getLogger(__name__)
@@ -23,8 +23,11 @@ def _safe_filename(stem: str) -> str:
 
 
 @router.get("/conversation/{conversation_id}.md")
-def export_conversation_markdown(conversation_id: str):
-    """把一段 AI 研究对话导出为 Markdown 文件(浏览器下载)。"""
+def export_conversation_markdown(conversation_id: str, gate: bool = Query(default=False)):
+    """把一段 AI 研究对话导出为 Markdown 文件(浏览器下载)。
+
+    ``?gate=true`` 时附加 M3 研报质量门控结果(critical/warning)到文末。
+    """
     from backend.ai_assistant.conversation_store import ConversationStore
     from backend.ai_assistant.report_generator import generate_report
     from backend.storage.db import Database
@@ -35,6 +38,12 @@ def export_conversation_markdown(conversation_id: str):
         raise HTTPException(status_code=404, detail="对话不存在")
     messages = store.get_messages(conversation_id)
     markdown = generate_report(conv, messages)
+
+    if gate:
+        from backend.quality.report_gate import format_human, run_gate
+
+        result = run_gate(markdown, mode=conv.get("mode"))
+        markdown += "\n\n---\n\n## 质量门控\n\n```\n" + format_human(result) + "\n```\n"
 
     stem = _safe_filename(
         f"alphascope-{conv.get('stock_symbol') or conv.get('title') or conversation_id}"
