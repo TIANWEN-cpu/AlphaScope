@@ -67,6 +67,9 @@ export function Valuation() {
   const [data, setData] = useState<ValuationData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [g1, setG1] = useState('');
+  const [tg, setTg] = useState('');
+  const [betaIn, setBetaIn] = useState('');
 
   useEffect(() => {
     return subscribeStockSelected(({ stock: s }) => setStock(s));
@@ -75,7 +78,15 @@ export function Valuation() {
   const load = (symbol: string) => {
     setLoading(true);
     setError('');
-    void fetchApi<ValuationData>(`/api/valuation/${encodeURIComponent(symbol)}`)
+    const params = new URLSearchParams();
+    const g = parseFloat(g1);
+    if (!Number.isNaN(g)) params.set('stage1_growth', String(g / 100));
+    const t = parseFloat(tg);
+    if (!Number.isNaN(t)) params.set('terminal_g', String(t / 100));
+    const b = parseFloat(betaIn);
+    if (!Number.isNaN(b)) params.set('beta', String(b));
+    const qs = params.toString();
+    void fetchApi<ValuationData>(`/api/valuation/${encodeURIComponent(symbol)}${qs ? `?${qs}` : ''}`)
       .then((d) => setData(d))
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
@@ -151,6 +162,50 @@ export function Valuation() {
           </div>
         )}
       </div>
+
+      {stock && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+          <span className="text-[11px] text-neutral-500">情景假设(留空=默认):</span>
+          <label className="text-[11px] text-neutral-500">
+            一阶段增速%
+            <input
+              value={g1}
+              onChange={(e) => setG1(e.target.value)}
+              placeholder="10"
+              inputMode="decimal"
+              className="ml-1 w-16 rounded border border-white/[0.06] bg-white/[0.03] px-2 py-1 font-mono text-neutral-200 focus:border-indigo-500/50 focus:outline-none"
+            />
+          </label>
+          <label className="text-[11px] text-neutral-500">
+            永续增速%
+            <input
+              value={tg}
+              onChange={(e) => setTg(e.target.value)}
+              placeholder="2.5"
+              inputMode="decimal"
+              className="ml-1 w-16 rounded border border-white/[0.06] bg-white/[0.03] px-2 py-1 font-mono text-neutral-200 focus:border-indigo-500/50 focus:outline-none"
+            />
+          </label>
+          <label className="text-[11px] text-neutral-500">
+            Beta
+            <input
+              value={betaIn}
+              onChange={(e) => setBetaIn(e.target.value)}
+              placeholder="1.0"
+              inputMode="decimal"
+              className="ml-1 w-16 rounded border border-white/[0.06] bg-white/[0.03] px-2 py-1 font-mono text-neutral-200 focus:border-indigo-500/50 focus:outline-none"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => load(stock.symbol)}
+            disabled={loading}
+            className="rounded-lg bg-indigo-500/80 px-3 py-1 text-[12px] text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
+          >
+            应用
+          </button>
+        </div>
+      )}
 
       {!stock && (
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-10 text-center text-sm text-neutral-500">
