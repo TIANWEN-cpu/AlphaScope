@@ -21,7 +21,8 @@ import {
   Image as ImageIcon,
   Coins,
   Calculator,
-  Swords
+  Swords,
+  Sunrise
 } from 'lucide-react';
 import type { TabID } from '../types';
 import { cn } from '../lib/utils';
@@ -49,6 +50,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
         { id: 'market', label: '组合与风控', icon: ShieldAlert },
         { id: 'dragon_tiger', label: '龙虎榜/游资', icon: Swords },
         { id: 'investors', label: '投资人库', icon: Users },
+        { id: 'brief', label: '自选晨报', icon: Sunrise },
         { id: 'news', label: '数据源终端聚合', icon: Newspaper },
         { id: 'chart', label: 'K线/多模态解析', icon: ImageIcon },
         { id: 'detailed', label: '研究报告生成', icon: FileText },
