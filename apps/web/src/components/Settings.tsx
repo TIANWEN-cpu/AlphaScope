@@ -717,6 +717,13 @@ export function Settings({ initialTab }: SettingsProps) {
       setDiscoveredModels([]);
       return;
     }
+    if (
+      settings.confirmDangerousActions
+      && !window.confirm(`确认删除 Provider "${selectedProvider.name}"？此操作会写入本地配置。`)
+    ) {
+      setProviderStatus('已取消删除 Provider');
+      return;
+    }
 
     setProviderLoading(true);
     const result = await requestSettingsApi<{ deleted: string }>(`/api/settings/providers/${encodeURIComponent(selectedProviderId)}`, {
@@ -814,6 +821,13 @@ export function Settings({ initialTab }: SettingsProps) {
   };
 
   const removeModelFromProvider = (modelId: string) => {
+    if (
+      settings.confirmDangerousActions
+      && !window.confirm(`确认从当前 Provider 移除模型 "${modelId}"？`)
+    ) {
+      setProviderStatus('已取消移除模型');
+      return;
+    }
     setProviderModels((prev) => {
       const current = prev.length ? prev : visibleProviderModels;
       return current.filter((model) => model.id !== modelId);
@@ -922,6 +936,14 @@ export function Settings({ initialTab }: SettingsProps) {
   };
 
   const deleteAgent = (id: string) => {
+    const agent = agentConfigs.find((item) => item.id === id);
+    if (
+      settings.confirmDangerousActions
+      && !window.confirm(`确认删除 Agent "${agent?.name || id}"？`)
+    ) {
+      setSavedMessage('已取消删除 Agent');
+      return;
+    }
     setAgentConfigs((prev) => {
       const remaining = prev.filter((agent) => agent.id !== id);
       const next = remaining.length ? remaining : [createCustomAgentConfig(1)];

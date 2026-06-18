@@ -32,6 +32,38 @@ interface EvidenceNode {
   verifiedBy: string;
 }
 
+const CUSTOM_EVIDENCE_STORAGE_KEY = 'alphascope.evidence.customNodes.v1';
+
+function readCustomEvidenceStore(): Record<string, EvidenceNode[]> {
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_EVIDENCE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function loadCustomEvidenceNodes(stock: StockTarget): EvidenceNode[] {
+  const nodes = readCustomEvidenceStore()[stock.symbol];
+  return Array.isArray(nodes) ? nodes : [];
+}
+
+function saveCustomEvidenceNodes(stock: StockTarget, nodes: EvidenceNode[]) {
+  try {
+    const store = readCustomEvidenceStore();
+    if (nodes.length) {
+      store[stock.symbol] = nodes;
+    } else {
+      delete store[stock.symbol];
+    }
+    window.localStorage.setItem(CUSTOM_EVIDENCE_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    // Local evidence remains available in memory when storage is unavailable.
+  }
+}
+
 function buildEvidenceNodes(stock: StockTarget): EvidenceNode[] {
   const isChip = /半导体|存储|芯片|光模块/i.test(stock.sector) || stock.symbol.startsWith('301666');
   const isConsumption = /白酒|消费/i.test(stock.sector);
@@ -100,7 +132,7 @@ function buildEvidenceNodes(stock: StockTarget): EvidenceNode[] {
 export function EvidenceChain() {
   const initialStock = getPersistedStock() ?? STOCK_UNIVERSE[0];
   const [selectedTarget, setSelectedTarget] = useState<StockTarget>(initialStock);
-  const [customNodes, setCustomNodes] = useState<EvidenceNode[]>([]);
+  const [customNodes, setCustomNodes] = useState<EvidenceNode[]>(() => loadCustomEvidenceNodes(initialStock));
   const [selectedNode, setSelectedNode] = useState<EvidenceNode | null>(null);
   
   // Custom new node states
@@ -127,8 +159,9 @@ export function EvidenceChain() {
   }, [evidenceNodes]);
 
   useEffect(() => subscribeStockSelected(({ stock }) => {
-    setSelectedTarget(findStockTarget(stock.symbol) ?? stock);
-    setCustomNodes([]);
+    const nextStock = findStockTarget(stock.symbol) ?? stock;
+    setSelectedTarget(nextStock);
+    setCustomNodes(loadCustomEvidenceNodes(nextStock));
   }), []);
 
   const pillars = [
@@ -153,7 +186,11 @@ export function EvidenceChain() {
       verifiedBy: '人工审计分析师'
     };
 
-    setCustomNodes(prev => [newNode, ...prev]);
+    setCustomNodes(prev => {
+      const next = [newNode, ...prev];
+      saveCustomEvidenceNodes(selectedTarget, next);
+      return next;
+    });
     setSelectedNode(newNode);
     setNewTitle('');
     setNewContent('');
@@ -162,7 +199,11 @@ export function EvidenceChain() {
 
   const handleDeleteEvidence = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setCustomNodes(prev => prev.filter(item => item.id !== id));
+    setCustomNodes(prev => {
+      const next = prev.filter(item => item.id !== id);
+      saveCustomEvidenceNodes(selectedTarget, next);
+      return next;
+    });
     if (selectedNode?.id === id) {
       setSelectedNode(null);
     }
@@ -201,7 +242,7 @@ export function EvidenceChain() {
             const stock = stockOptions.find((item) => item.symbol === e.target.value);
             if (stock) {
               setSelectedTarget(stock);
-              setCustomNodes([]);
+              setCustomNodes(loadCustomEvidenceNodes(stock));
               dispatchStockSelected(stock, 'system');
             }
           }}

@@ -119,6 +119,9 @@ interface NewsUrlParsePayload {
   sentiment?: number;
   importance?: number;
   category?: string;
+  degraded?: boolean;
+  source_status?: string;
+  error?: string;
 }
 
 interface ChatResponse {
@@ -1019,8 +1022,11 @@ export function NewsAggregator({ onOpenModelSettings }: NewsAggregatorProps) {
       if (normalized) {
         parsedArticle = {
           ...normalized,
+          sourceStatus: parsed.degraded ? 'degraded' : normalized.sourceStatus,
           sourceUrl: normalized.sourceUrl || trimmed,
-          aiSummary: `${normalized.aiSummary}\n\n后端已返回正文/摘要字段，仍建议打开原文核对发布时间、来源和关键数字。`,
+          aiSummary: parsed.degraded
+            ? `${normalized.aiSummary}\n\n后端链接解析已降级：${parsed.source_status || parsed.error || '来源暂不可用'}。请打开原文核对发布时间、来源和关键数字。`
+            : `${normalized.aiSummary}\n\n后端已返回正文/摘要字段，仍建议打开原文核对发布时间、来源和关键数字。`,
         };
       }
     } catch {

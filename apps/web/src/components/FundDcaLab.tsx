@@ -882,6 +882,7 @@ export function FundDcaLab() {
     usePortfolioMode,
     portfolioWeights,
     initialCapital,
+    selectedFund,
     customFundType,
     customFundVol,
     customFundDrift,
@@ -1394,7 +1395,7 @@ export function FundDcaLab() {
                     className="w-full bg-[#0c0c12] border border-white/5 rounded px-2.5 py-1.5 text-sm text-neutral-100 cursor-pointer font-medium"
                   >
                     <option value="none">常規固定额跟投</option>
-                    <option value="moderate font-bold">逢跌1.5倍加码扣款</option>
+                    <option value="moderate">逢跌1.5倍加码扣款</option>
                     <option value="aggressive">极限下跌双倍猛烈补仓</option>
                   </select>
                 </div>

@@ -63,6 +63,11 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
   return (
     <motion.aside 
       animate={{ width: isExpanded ? 220 : 72 }}
+      style={{
+        width: isExpanded ? 220 : 72,
+        minWidth: isExpanded ? 220 : 72,
+        maxWidth: isExpanded ? 220 : 72,
+      }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       className="bg-black/20 border-r border-white/[0.02] backdrop-blur-3xl flex flex-col items-center py-6 h-full z-20 flex-shrink-0"
     >
@@ -101,8 +106,9 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
                       key={tab.id}
                       data-testid={`nav-${tab.id}`}
                       onClick={() => setCurrentTab(tab.id)}
+                      style={{ width: '100%' }}
                       className={cn(
-                        'h-11 flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
+                        'h-11 w-full flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
                         isExpanded ? 'px-3 justify-start' : 'justify-center',
                         isActive 
                           ? 'text-indigo-400' 
@@ -158,8 +164,9 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
         <button 
           data-testid="nav-settings"
           onClick={() => setCurrentTab('settings')}
+          style={{ width: '100%' }}
           className={cn(
-            'h-11 flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
+            'h-11 w-full flex items-center rounded-xl transition-all duration-300 relative group flex-shrink-0',
             isExpanded ? 'px-3 justify-start' : 'justify-center',
             currentTab === 'settings'
               ? 'text-indigo-400' 
