@@ -33,3 +33,21 @@ async def get_dragon_tiger(symbol: str, days: int = Query(default=30, ge=1, le=9
             error=str(exc),
             error_code="DRAGON_TIGER_FAILED",
         )
+
+
+@router.get("/{symbol}/trap")
+def scan_trap(symbol: str, name: str | None = Query(default=None)):
+    """杀猪盘(拉高出货/荐股诈骗)信号扫描 — 8 类推广痕迹关键词检测(基于网搜)。"""
+    from backend.dragon_tiger.trap_signals import scan_trap_signals
+
+    target = (name or symbol).strip()
+    try:
+        return ApiResponse(success=True, data=scan_trap_signals(target))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("[trap] %s 失败: %s", symbol, exc)
+        return ApiResponse(
+            success=False,
+            data={"symbol": symbol},
+            error=str(exc),
+            error_code="TRAP_SCAN_FAILED",
+        )

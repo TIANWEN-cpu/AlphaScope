@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Download, Loader2, RefreshCcw, Swords, Users } from 'lucide-react';
+import { Download, Loader2, RefreshCcw, ShieldAlert, Swords, Users } from 'lucide-react';
 import { fetchApi } from '../lib/api';
 import { downloadText } from '../lib/download';
 import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
@@ -53,6 +53,15 @@ export function DragonTiger() {
   const [data, setData] = useState<DragonTigerData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [trap, setTrap] = useState<{
+    trap_level?: string;
+    trap_score?: number | null;
+    signals_hit?: string;
+    signals_hit_count?: number;
+    recommendation?: string;
+    signals_hit_detail?: Array<{ name: string }>;
+  } | null>(null);
+  const [trapLoading, setTrapLoading] = useState(false);
 
   useEffect(() => subscribeStockSelected(({ stock: s }) => setStock(s)), []);
 
@@ -95,6 +104,18 @@ export function DragonTiger() {
     downloadText(`alphascope-dragontiger-${stock?.symbol ?? 'report'}.md`, lines.join('\n'));
   };
 
+  const scanTrap = () => {
+    if (!stock) return;
+    setTrapLoading(true);
+    setTrap(null);
+    void fetchApi<any>(
+      `/api/dragon-tiger/${encodeURIComponent(stock.symbol)}/trap?name=${encodeURIComponent(stock.name ?? stock.symbol)}`,
+    )
+      .then((d) => setTrap(d))
+      .catch(() => setTrap({ trap_level: '⚪ 扫描失败', recommendation: '杀猪盘扫描失败(可能未配置网络搜索)。' }))
+      .finally(() => setTrapLoading(false));
+  };
+
   return (
     <motion.div
       key="dragon_tiger"
@@ -126,6 +147,17 @@ export function DragonTiger() {
                 <Download className="h-3.5 w-3.5" /> 导出 .md
               </button>
             )}
+            {!isNonA && (
+              <button
+                type="button"
+                onClick={scanTrap}
+                disabled={trapLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[12px] text-amber-300 transition-colors hover:bg-amber-500/15 disabled:opacity-50"
+              >
+                {trapLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                杀猪盘检测
+              </button>
+            )}
             <button
               type="button"
               onClick={() => load(stock.symbol)}
@@ -138,6 +170,25 @@ export function DragonTiger() {
           </div>
         )}
       </div>
+
+      {trap && (
+        <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-amber-200">杀猪盘检测:{trap.trap_level}</span>
+            <span className="text-[12px] text-neutral-400">命中 {trap.signals_hit ?? `${trap.signals_hit_count ?? 0}/8`}</span>
+          </div>
+          <p className="mt-1 text-[12px] text-neutral-400">{trap.recommendation}</p>
+          {trap.signals_hit_detail && trap.signals_hit_detail.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {trap.signals_hit_detail.map((sgl, i) => (
+                <span key={i} className="rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                  {sgl.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {!stock && (
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-10 text-center text-sm text-neutral-500">
