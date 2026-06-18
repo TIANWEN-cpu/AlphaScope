@@ -11,7 +11,7 @@
 | **M1** | A 股龙虎榜「机构 vs 游资」席位 + 杀猪盘信号(新 provider) | ✅ 完成(`bd45b04`，14 测试) |
 | **M2** | DCF / Comps / LBO 机构估值建模(新 `backend/valuation/`) | ✅ 完成(15 测试) |
 | **M3** | 研报质量机械门控(新 `backend/quality/report_gate.py`) | ✅ 完成(14 测试) |
-| **M4** | 投资人 persona 扩充(`config/experts.yaml` + `prompts/experts/`) | 进行中 |
+| **M4** | 投资人 persona 扩充(`config/experts.yaml` + `prompts/experts/`) | ✅ 完成(+49 persona，9 测试) |
 
 ## 验证基线
 
