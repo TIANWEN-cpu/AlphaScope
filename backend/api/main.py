@@ -170,6 +170,7 @@ if HAS_FASTAPI:
     from backend.api.quality import router as quality_router
     from backend.api.experts import router as experts_router
     from backend.api.brief import router as brief_router
+    from backend.api.watchlist import router as watchlist_router
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -196,6 +197,7 @@ if HAS_FASTAPI:
     app.include_router(quality_router)
     app.include_router(experts_router)
     app.include_router(brief_router)
+    app.include_router(watchlist_router)
 
     # ============== 全局错误处理 ==============
 

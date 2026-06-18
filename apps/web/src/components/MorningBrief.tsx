@@ -98,7 +98,19 @@ export function MorningBrief() {
   };
 
   useEffect(() => {
-    loadBrief(watchlist);
+    // 后端为自选的权威来源;失败则回退 localStorage 种子
+    void fetchApi<{ items: WatchItem[] }>('/api/watchlist')
+      .then((d) => {
+        const items = (d?.items ?? []).map((i) => ({ symbol: i.symbol, name: i.name }));
+        if (items.length) {
+          setWatchlist(items);
+          saveWatchlist(items);
+          loadBrief(items);
+        } else {
+          loadBrief(watchlist);
+        }
+      })
+      .catch(() => loadBrief(watchlist));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -109,6 +121,20 @@ export function MorningBrief() {
     setWatchlist(next);
     saveWatchlist(next);
     loadBrief(next);
+    void fetchApi<{ items: WatchItem[] }>('/api/watchlist', {
+      method: 'POST',
+      body: JSON.stringify({ symbol: current.symbol, name: current.name ?? current.symbol }),
+    })
+      .then((d) => {
+        const items = (d?.items ?? []).map((i) => ({ symbol: i.symbol, name: i.name }));
+        if (items.length) {
+          setWatchlist(items);
+          saveWatchlist(items);
+        }
+      })
+      .catch(() => {
+        /* 后端不可用时仅本地保存 */
+      });
   };
 
   const remove = (symbol: string) => {
@@ -116,6 +142,9 @@ export function MorningBrief() {
     setWatchlist(next);
     saveWatchlist(next);
     loadBrief(next);
+    void fetchApi(`/api/watchlist/${encodeURIComponent(symbol)}`, { method: 'DELETE' }).catch(() => {
+      /* 后端不可用时仅本地移除 */
+    });
   };
 
   const toggleExpand = (symbol: string) => {
