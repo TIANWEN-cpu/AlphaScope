@@ -20,7 +20,8 @@ import {
   FileText,
   Image as ImageIcon,
   Coins,
-  Calculator
+  Calculator,
+  Swords
 } from 'lucide-react';
 import type { TabID } from '../types';
 import { cn } from '../lib/utils';
@@ -46,6 +47,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
         { id: 'dashboard', label: '对话式研究', icon: LayoutGrid },
         { id: 'agents', label: '多Agent网络', icon: BrainCircuit },
         { id: 'market', label: '组合与风控', icon: ShieldAlert },
+        { id: 'dragon_tiger', label: '龙虎榜/游资', icon: Swords },
         { id: 'news', label: '数据源终端聚合', icon: Newspaper },
         { id: 'chart', label: 'K线/多模态解析', icon: ImageIcon },
         { id: 'detailed', label: '研究报告生成', icon: FileText },
