@@ -19,7 +19,8 @@ import {
   ShieldAlert,
   FileText,
   Image as ImageIcon,
-  Coins
+  Coins,
+  Calculator
 } from 'lucide-react';
 import type { TabID } from '../types';
 import { cn } from '../lib/utils';
@@ -56,6 +57,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
       items: [
         { id: 'tasks', label: '量化回测与执行', icon: Activity },
         { id: 'fund_dca', label: '基金与定投研究室', icon: Coins },
+        { id: 'valuation', label: '估值建模', icon: Calculator },
       ]
     }
   ];

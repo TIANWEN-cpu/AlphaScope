@@ -17,8 +17,9 @@ const ReportGenerator = lazy(() => import('./components/ReportGenerator').then((
 const EvidenceChain = lazy(() => import('./components/EvidenceChain').then((module) => ({ default: module.EvidenceChain })));
 const Settings = lazy(() => import('./components/Settings').then((module) => ({ default: module.Settings })));
 const PlaceholderModule = lazy(() => import('./components/PlaceholderModule').then((module) => ({ default: module.PlaceholderModule })));
+const Valuation = lazy(() => import('./components/Valuation').then((module) => ({ default: module.Valuation })));
 
-const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'settings'];
+const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'settings'];
 
 function ModuleLoading() {
   return (
@@ -158,6 +159,9 @@ export default function App() {
                     )}
                     {currentTab === 'detailed' && (
                       <ReportGenerator key="report" onOpenModelSettings={openModelSettings} />
+                    )}
+                    {currentTab === 'valuation' && (
+                      <Valuation key="valuation" />
                     )}
                     {currentTab === 'saved' && (
                       <EvidenceChain key="saved" />
