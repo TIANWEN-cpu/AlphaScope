@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import tomllib
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +14,13 @@ pytest.importorskip("httpx")
 from httpx import ASGITransport, AsyncClient
 
 from backend.api.main import app
+
+
+def _pyproject_version() -> str:
+    """pyproject.toml 的 project.version —— 版本号单一来源。"""
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    with pyproject.open("rb") as f:
+        return tomllib.load(f)["project"]["version"]
 
 
 @pytest.fixture
@@ -247,4 +256,4 @@ class TestVersion:
     @pytest.mark.anyio
     async def test_version_is_current(self, client):
         resp = await client.get("/health")
-        assert resp.json()["data"]["version"] == "1.1.4"
+        assert resp.json()["data"]["version"] == _pyproject_version()

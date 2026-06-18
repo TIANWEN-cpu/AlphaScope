@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +14,13 @@ pytest.importorskip("httpx")
 from httpx import ASGITransport, AsyncClient
 
 from backend.api.main import app
+
+
+def _pyproject_version() -> str:
+    """pyproject.toml 的 project.version —— 版本号单一来源。"""
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    with pyproject.open("rb") as f:
+        return tomllib.load(f)["project"]["version"]
 
 PNG_BYTES = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
@@ -345,8 +353,8 @@ class TestVersion:
     """版本号验证"""
 
     @pytest.mark.anyio
-    async def test_version_is_101(self, client):
-        """API 版本为 1.1.4"""
+    async def test_version_matches_pyproject(self, client):
+        """/health 版本应与 pyproject.toml 的 project.version 一致(单一来源)"""
         resp = await client.get("/health")
         assert resp.status_code == 200
-        assert resp.json()["data"]["version"] == "1.1.4"
+        assert resp.json()["data"]["version"] == _pyproject_version()
