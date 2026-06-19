@@ -125,11 +125,11 @@ export function Valuation() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="mx-auto max-w-5xl px-6 py-6"
+      className="mx-auto max-w-5xl px-4 sm:px-6 py-6"
     >
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/20">
             <Calculator className="h-5 w-5" />
           </div>
           <div>
@@ -236,7 +236,7 @@ export function Valuation() {
 
           {/* 三法摘要 */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+            <div className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.01] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/10">
               <div className="text-[11px] uppercase tracking-widest text-neutral-500">DCF 内在价值</div>
               <div className="mt-1 font-mono text-2xl text-neutral-100">
                 ¥{s?.dcf_intrinsic_per_share?.toFixed(2) ?? '—'}
@@ -244,13 +244,13 @@ export function Valuation() {
               <div className="mt-1 text-[12px] text-neutral-400">安全边际 {pct(s?.dcf_safety_margin_pct)}</div>
               <div className="mt-1 text-[12px] text-indigo-300">{s?.dcf_verdict ?? '—'}</div>
             </div>
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+            <div className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.01] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/10">
               <div className="text-[11px] uppercase tracking-widest text-neutral-500">LBO 交叉验证</div>
               <div className="mt-1 font-mono text-2xl text-neutral-100">{lbo?.irr_pct?.toFixed(1) ?? '—'}% IRR</div>
               <div className="mt-1 text-[12px] text-neutral-400">MOIC {lbo?.moic?.toFixed(2) ?? '—'}x · {lbo?.leverage_turns ?? '—'}x 杠杆</div>
               <div className="mt-1 text-[12px] text-indigo-300">{s?.lbo_verdict ?? lbo?.verdict ?? '—'}</div>
             </div>
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+            <div className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.01] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/10">
               <div className="text-[11px] uppercase tracking-widest text-neutral-500">同业对比</div>
               <div className="mt-1 text-sm text-neutral-200">{s?.comps_verdict ?? comps?.note ?? '—'}</div>
               {comps?.peer_stats?.pe?.median !== undefined && (

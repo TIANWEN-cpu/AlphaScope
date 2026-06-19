@@ -176,11 +176,11 @@ export function MorningBrief() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="mx-auto max-w-5xl px-6 py-6"
+      className="mx-auto max-w-5xl px-4 sm:px-6 py-6"
     >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300 shadow-lg shadow-amber-500/20 ring-1 ring-amber-500/20">
             <Sunrise className="h-5 w-5" />
           </div>
           <div>
@@ -221,7 +221,7 @@ export function MorningBrief() {
             const b = briefs[w.symbol];
             const up = (b?.change_pct ?? 0) >= 0;
             return (
-              <div key={w.symbol} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+              <div key={w.symbol} className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.01] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-baseline gap-2">
                     <span

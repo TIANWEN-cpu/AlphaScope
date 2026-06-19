@@ -122,11 +122,11 @@ export function DragonTiger() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="mx-auto max-w-5xl px-6 py-6"
+      className="mx-auto max-w-5xl px-4 sm:px-6 py-6"
     >
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 text-rose-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 text-rose-300 shadow-lg shadow-rose-500/20 ring-1 ring-rose-500/20">
             <Swords className="h-5 w-5" />
           </div>
           <div>
@@ -223,21 +223,21 @@ export function DragonTiger() {
             <>
               {/* 机构 vs 游资 净额 */}
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+                <div className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.01] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/10">
                   <div className="text-[11px] uppercase tracking-widest text-neutral-500">机构净额</div>
                   <div className={`mt-1 font-mono text-xl ${(iv?.institutional_net ?? 0) >= 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
                     {fmtMoney(iv?.institutional_net)}
                   </div>
                   <div className="mt-1 text-[11px] text-neutral-500">买 {fmtMoney(iv?.institutional_buy)} · 卖 {fmtMoney(iv?.institutional_sell)}</div>
                 </div>
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+                <div className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.01] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/10">
                   <div className="text-[11px] uppercase tracking-widest text-neutral-500">游资净额</div>
                   <div className={`mt-1 font-mono text-xl ${(iv?.youzi_net ?? 0) >= 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
                     {fmtMoney(iv?.youzi_net)}
                   </div>
                   <div className="mt-1 text-[11px] text-neutral-500">买 {fmtMoney(iv?.youzi_buy)} · 卖 {fmtMoney(iv?.youzi_sell)}</div>
                 </div>
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+                <div className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.01] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/10">
                   <div className="text-[11px] uppercase tracking-widest text-neutral-500">近30日上榜</div>
                   <div className="mt-1 font-mono text-xl text-neutral-100">{data.lhb_count_30d} 次</div>
                   <div className="mt-1 text-[11px] text-neutral-500">{data.matched_youzi?.length ?? 0} 个知名游资在场</div>

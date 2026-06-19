@@ -102,11 +102,11 @@ export function ExpertPanel() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="mx-auto max-w-6xl px-6 py-6"
+      className="mx-auto max-w-6xl px-4 sm:px-6 py-6"
     >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/20">
             <Users className="h-5 w-5" />
           </div>
           <div>
@@ -141,8 +141,10 @@ export function ExpertPanel() {
             <div
               key={e.id}
               onClick={() => toggleSelect(e.id)}
-              className={`cursor-pointer rounded-xl border bg-white/[0.03] p-4 transition-colors ${
-                selected.has(e.id) ? 'border-indigo-500/60 ring-1 ring-indigo-500/40' : 'border-white/[0.06] hover:border-indigo-500/30'
+              className={`group cursor-pointer rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/10 ${
+                selected.has(e.id)
+                  ? 'border-indigo-500/60 bg-indigo-500/[0.06] ring-1 ring-indigo-500/40'
+                  : 'border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.01] hover:border-indigo-500/40'
               }`}
             >
               <div className="flex items-center gap-2">
