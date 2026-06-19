@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Loader2, Search, Users } from 'lucide-react';
+import { Check, Download, Loader2, Search, Users } from 'lucide-react';
 import { fetchApi } from '../lib/api';
+import { downloadText } from '../lib/download';
 
 /**
  * 投资人库面板(纯新增模块)。
@@ -24,6 +25,29 @@ export function ExpertPanel() {
   const [experts, setExperts] = useState<Expert[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  const exportTeam = () => {
+    const members = experts.filter((e) => selected.has(e.id));
+    if (!members.length) return;
+    const lines: string[] = [`# 自定义专家团(${members.length} 位)`, ''];
+    members.forEach((m) => {
+      lines.push(`## ${m.name ?? m.id}${m.style ? `(${m.style})` : ''}`);
+      if (m.focus_dims?.length) lines.push(`关注:${m.focus_dims.join('、')}`);
+      if (m.preview) lines.push('', m.preview);
+      lines.push('');
+    });
+    lines.push('> 由 AlphaScope 投资人库组队导出,可作为多视角分析的团队画像/提示词参考。');
+    downloadText(`alphascope-team-${members.length}.md`, lines.join('\n'));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -94,10 +118,17 @@ export function ExpertPanel() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((e) => (
-            <div key={e.id} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 transition-colors hover:border-indigo-500/30">
+            <div
+              key={e.id}
+              onClick={() => toggleSelect(e.id)}
+              className={`cursor-pointer rounded-xl border bg-white/[0.03] p-4 transition-colors ${
+                selected.has(e.id) ? 'border-indigo-500/60 ring-1 ring-indigo-500/40' : 'border-white/[0.06] hover:border-indigo-500/30'
+              }`}
+            >
               <div className="flex items-center gap-2">
                 <span className="text-xl">{e.icon ?? '📊'}</span>
                 <span className="text-sm font-medium text-neutral-100">{e.name ?? e.id}</span>
+                {selected.has(e.id) && <Check className="h-3.5 w-3.5 text-indigo-300" />}
                 {e.style && (
                   <span className="ml-auto rounded border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] text-indigo-300">
                     {e.style}
@@ -116,6 +147,24 @@ export function ExpertPanel() {
               {e.preview && <p className="mt-2 line-clamp-4 text-[11px] leading-relaxed text-neutral-500">{e.preview}</p>}
             </div>
           ))}
+        </div>
+      )}
+
+      {selected.size > 0 && (
+        <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-xl border border-indigo-500/30 bg-[#0b0c12]/95 px-4 py-2.5 shadow-xl backdrop-blur">
+          <span className="text-[12px] text-neutral-300">已选 {selected.size} 位投资人</span>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setSelected(new Set())} className="text-[12px] text-neutral-500 transition-colors hover:text-neutral-300">
+              清空
+            </button>
+            <button
+              type="button"
+              onClick={exportTeam}
+              className="flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-1.5 text-[12px] text-white transition-colors hover:bg-indigo-400"
+            >
+              <Download className="h-3.5 w-3.5" /> 导出团队提示词
+            </button>
+          </div>
         </div>
       )}
     </motion.div>
