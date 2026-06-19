@@ -3,10 +3,10 @@
 [![CI](https://github.com/TIANWEN-cpu/AlphaScope/actions/workflows/ci.yml/badge.svg)](https://github.com/TIANWEN-cpu/AlphaScope/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![Frontend](https://img.shields.io/badge/frontend-Vite%20%2B%20React%2019-646CFF)](apps/web/package.json)
-[![FastAPI](https://img.shields.io/badge/FastAPI-113%20APIs-009688)](docs/api.md)
+[![FastAPI](https://img.shields.io/badge/FastAPI-123%20APIs-009688)](docs/api.md)
 [![Tests](https://img.shields.io/badge/release%20checks-passed-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.7.4-blue)](https://github.com/TIANWEN-cpu/AlphaScope/releases/tag/v1.7.4)
+[![Release](https://img.shields.io/badge/release-v1.8.0-blue)](https://github.com/TIANWEN-cpu/AlphaScope/releases/tag/v1.8.0)
 
 研策中枢 AlphaScope 是一个本地优先的 AI 投研与量化决策工作台。项目把行情、新闻、公告、财务指标、技术分析、多 Agent 研究、证据链、研究报告、量化回测、基金定投和组合管理整合到一个可运行、可测试、可扩展的工程系统中。
 
