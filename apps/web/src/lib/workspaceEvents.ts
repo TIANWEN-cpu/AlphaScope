@@ -54,3 +54,15 @@ export function getPersistedStock(): StockTarget | undefined {
     return undefined;
   }
 }
+
+export const TAB_CHANGE_EVENT = 'alphascope:tab-change';
+
+export function dispatchTabChange(tab: string) {
+  window.dispatchEvent(new CustomEvent<{ tab: string }>(TAB_CHANGE_EVENT, { detail: { tab } }));
+}
+
+export function subscribeTabChange(handler: (tab: string) => void) {
+  const listener = (event: Event) => handler((event as CustomEvent<{ tab: string }>).detail?.tab);
+  window.addEventListener(TAB_CHANGE_EVENT, listener);
+  return () => window.removeEventListener(TAB_CHANGE_EVENT, listener);
+}

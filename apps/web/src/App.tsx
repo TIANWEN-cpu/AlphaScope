@@ -1,5 +1,6 @@
-import React, { lazy, Suspense, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Onboarding } from './components/Onboarding';
+import { subscribeTabChange } from './lib/workspaceEvents';
 import type { ErrorInfo, ReactNode } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Sidebar } from './components/Sidebar';
@@ -118,6 +119,8 @@ export default function App() {
     setSettingsInitialTab('models');
     setCurrentTab('settings');
   };
+
+  useEffect(() => subscribeTabChange((tab) => setCurrentTab(tab as TabID)), []);
 
   return (
     <div className="flex h-screen w-full bg-[#050505] text-neutral-300 font-sans selection:bg-indigo-500/30 overflow-hidden relative">

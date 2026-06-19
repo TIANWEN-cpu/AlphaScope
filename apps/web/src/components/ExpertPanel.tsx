@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Check, Download, Loader2, Search, Users } from 'lucide-react';
 import { fetchApi } from '../lib/api';
 import { downloadText } from '../lib/download';
+import { dispatchTabChange } from '../lib/workspaceEvents';
 
 /**
  * 投资人库面板(纯新增模块)。
@@ -26,6 +27,7 @@ export function ExpertPanel() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
 
   const toggleSelect = (id: string) =>
     setSelected((s) => {
@@ -47,6 +49,24 @@ export function ExpertPanel() {
     });
     lines.push('> 由 AlphaScope 投资人库组队导出,可作为多视角分析的团队画像/提示词参考。');
     downloadText(`alphascope-team-${members.length}.md`, lines.join('\n'));
+  };
+
+  const createTeam = () => {
+    const ids = experts.filter((e) => selected.has(e.id)).map((e) => e.id);
+    if (!ids.length) return;
+    setCreating(true);
+    void fetchApi('/api/experts/team', {
+      method: 'POST',
+      body: JSON.stringify({ member_ids: ids, name: `自定义投资人团(${ids.length}位)` }),
+    })
+      .then(() => {
+        setSelected(new Set());
+        dispatchTabChange('agents'); // 创建后跳转「多Agent网络」
+      })
+      .catch(() => {
+        /* 失败保持选择,可重试 */
+      })
+      .finally(() => setCreating(false));
   };
 
   useEffect(() => {
@@ -159,10 +179,18 @@ export function ExpertPanel() {
             </button>
             <button
               type="button"
-              onClick={exportTeam}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-1.5 text-[12px] text-white transition-colors hover:bg-indigo-400"
+              onClick={createTeam}
+              disabled={creating}
+              className="flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-1.5 text-[12px] text-white transition-colors hover:bg-indigo-400 disabled:opacity-50"
             >
-              <Download className="h-3.5 w-3.5" /> 导出团队提示词
+              {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Users className="h-3.5 w-3.5" />} 创建专家团
+            </button>
+            <button
+              type="button"
+              onClick={exportTeam}
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[12px] text-neutral-300 transition-colors hover:bg-white/[0.06]"
+            >
+              <Download className="h-3.5 w-3.5" /> 导出提示词
             </button>
           </div>
         </div>
