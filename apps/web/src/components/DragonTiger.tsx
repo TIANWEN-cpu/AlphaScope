@@ -79,7 +79,8 @@ export function DragonTiger() {
   }, [stock?.symbol]);
 
   const iv = data?.inst_vs_youzi;
-  const isNonA = stock && stock.market !== 'A股' && stock.market !== '北交所';
+  // 龙虎榜为 A 股特有;仅当明确是港股时判为不适用,market 未知则按 A 股尝试(后端会返回空)
+  const isNonA = stock && stock.market === '港股';
   const noRecords = data && (data.lhb_count_30d ?? 0) === 0;
 
   const exportMd = () => {
