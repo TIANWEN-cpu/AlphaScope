@@ -266,6 +266,9 @@ class AkShareProvider(BaseProvider):
                 adjust=adjust,
             )
             if df is None or len(df) == 0:
+                em = self._get_prices_from_eastmoney(symbol, start_date, end_date)
+                if em:
+                    return em
                 return self._get_prices_from_tencent(symbol, start_date, end_date)
             results = []
             for _, row in df.iterrows():
@@ -293,6 +296,9 @@ class AkShareProvider(BaseProvider):
             return results
         except Exception as e:
             logger.debug("AkShare prices failed: %s", e)
+        em = self._get_prices_from_eastmoney(symbol, start_date, end_date)
+        if em:
+            return em
         return self._get_prices_from_tencent(symbol, start_date, end_date)
 
     def _get_hk_prices(self, query: dict) -> list[dict]:
@@ -409,6 +415,84 @@ class AkShareProvider(BaseProvider):
         except Exception as e:
             logger.debug("Tencent prices fallback failed: %s", e)
             return []
+
+    def _get_prices_from_eastmoney(
+        self,
+        symbol: str,
+        start_date: str,
+        end_date: str,
+    ) -> list[dict]:
+        """直连东方财富 push2his 日线接口。
+
+        akshare 的 stock_zh_a_hist / 腾讯兜底当前都可能失效(拉不到最新日线),
+        东财 push2his 是稳定可靠的兜底源,自带正确的开高低收/量额。
+        """
+        import json
+        import urllib.request
+
+        digits = "".join(ch for ch in str(symbol or "") if ch.isdigit())
+        if not digits:
+            return []
+        if len(digits) == 5:
+            secid = f"116.{digits}"  # 港股
+        elif digits.startswith("6"):
+            secid = f"1.{digits}"  # 沪市
+        else:
+            secid = f"0.{digits}"  # 深市/创业/北交所
+        beg = (start_date or "").replace("-", "") or "19900101"
+        end = (end_date or "").replace("-", "") or "20500101"
+        url = (
+            "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+            f"?secid={secid}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57"
+            f"&klt=101&fqt=1&beg={beg}&end={end}"
+        )
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                payload = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.debug("Eastmoney prices failed for %s: %s", symbol, e)
+            return []
+        klines = ((payload or {}).get("data") or {}).get("klines") or []
+        if not klines:
+            return []
+        market = "HK" if len(digits) == 5 else "CN"
+        results: list[dict] = []
+        prev_close = None
+        for line in klines:
+            parts = str(line).split(",")
+            if len(parts) < 7:
+                continue
+            open_price = _float_value(parts[1])
+            close = _float_value(parts[2])
+            high = _float_value(parts[3])
+            low = _float_value(parts[4])
+            volume = _float_value(parts[5])
+            amount = _float_value(parts[6])
+            base = prev_close or open_price or close
+            change_pct = ((close - base) / base * 100) if base else 0.0
+            amplitude = ((high - low) / base * 100) if base else 0.0
+            results.append(
+                {
+                    "symbol": symbol,
+                    "market": market,
+                    "date": parts[0],
+                    "open": open_price,
+                    "high": high,
+                    "low": low,
+                    "close": close,
+                    "volume": volume,
+                    "amount": amount,
+                    "turnover": 0.0,
+                    "amplitude": round(amplitude, 4),
+                    "change_pct": round(change_pct, 4),
+                    "adjust": "",
+                    "frequency": "1d",
+                    "source": "eastmoney",
+                }
+            )
+            prev_close = close
+        return results
 
     # ---- 资金流 ----
     def get_fund_flow(self, query: dict, **kwargs) -> list[dict]:

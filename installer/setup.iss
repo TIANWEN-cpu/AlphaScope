@@ -4,11 +4,11 @@
 ;   python build.py --installer
 ;
 ; Output:
-;   installer/installer-output/AlphaScope-Setup-1.8.0.exe
+;   installer/installer-output/AlphaScope-Setup-1.8.1.exe
 
 #define MyAppName "AlphaScope"
 #define MyAppNameCN "研策中枢 AlphaScope"
-#define MyAppVersion "1.8.0"
+#define MyAppVersion "1.8.1"
 #define MyAppPublisher "TIANWEN"
 #define MyAppURL "https://github.com/TIANWEN-cpu/AlphaScope"
 #define MyAppExeName "AlphaScope.exe"

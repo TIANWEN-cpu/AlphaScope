@@ -141,6 +141,31 @@ def load_dotenv(root: Path) -> None:
             os.environ[key] = value
 
 
+def ensure_master_key(root: Path) -> None:
+    """确保存在持久的 AI_FINANCE_MASTER_KEY,用于加密自定义 Provider 的 API Key。
+
+    首次启动若 .env 中没有,则生成随机密钥并追加写入 .env。每台安装独立、持久,
+    无需用户手动配置,也避免使用不安全的开发回退密钥。
+    """
+    if os.environ.get("AI_FINANCE_MASTER_KEY", "").strip():
+        return
+    key = secrets.token_urlsafe(32)
+    os.environ["AI_FINANCE_MASTER_KEY"] = key
+    env_file = root / ".env"
+    try:
+        existing = env_file.read_text(encoding="utf-8") if env_file.exists() else ""
+        with env_file.open("a", encoding="utf-8") as handle:
+            if existing and not existing.endswith("\n"):
+                handle.write("\n")
+            handle.write(
+                "\n# 自动生成的主密钥(加密自定义 Provider Key 用),请勿改动或泄露\n"
+                f"AI_FINANCE_MASTER_KEY={key}\n"
+            )
+        print("[AlphaScope] Generated persistent master key in .env")
+    except OSError as exc:
+        print(f"[AlphaScope] Warning: could not persist master key: {exc}")
+
+
 def find_free_port(preferred: int) -> int:
     for port in range(preferred, preferred + 50):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -324,6 +349,7 @@ def run() -> int:
     sync_runtime_assets(root, bundled)
     ensure_env_file(root, bundled)
     load_dotenv(root)
+    ensure_master_key(root)
 
     api_port = find_free_port(
         int(os.environ.get("ALPHASCOPE_API_PORT", DEFAULT_API_PORT))

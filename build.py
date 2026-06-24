@@ -157,6 +157,14 @@ def copy_runtime_files() -> None:
     ):
         (DIST_DIR / relative).mkdir(parents=True, exist_ok=True)
 
+    # 预置种子行情(常用股近1年日线,无任何 key);首次启动后会自动补到最新
+    seed_db = ROOT / "seed" / "ai_finance.db"
+    if seed_db.exists():
+        shutil.copy2(seed_db, DIST_DIR / "data" / "db" / "ai_finance.db")
+        print(f"[ok] Seeded price data -> {DIST_DIR / 'data' / 'db' / 'ai_finance.db'}")
+    else:
+        print("[warn] seed/ai_finance.db 不存在,发布版将无预置行情(可先跑 scripts/build_seed_db.py)")
+
     write_readme()
 
 
