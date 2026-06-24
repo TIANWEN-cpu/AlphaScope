@@ -1,44 +1,141 @@
+import { useEffect, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Briefcase, Landmark, ShieldCheck, WalletCards } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, Briefcase, Landmark, Plus, RefreshCw, Search, ShieldCheck, Trash2, WalletCards } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import { fetchApi } from '../lib/api';
+import { findStockTarget, resolveStockTarget, STOCK_UNIVERSE, StockTarget } from '../lib/stocks';
+import { getPersistedStock } from '../lib/workspaceEvents';
 import { StableChartContainer } from './StableChartContainer';
 
-const ALLOCATION_DATA = [
-  { name: '核心白马', value: 380000, color: '#f43f5e' },
-  { name: '新能源成长', value: 260000, color: '#6366f1' },
-  { name: '金融地产', value: 210000, color: '#14b8a6' },
-  { name: '现金/逆回购', value: 150000, color: '#64748b' },
-];
+const PORTFOLIO_STORAGE_KEY = 'alphascope:research-portfolio-positions';
+const SECTOR_LIMIT_PCT = 35;
 
-const POSITION_DATA = [
-  { symbol: '600519.SH', name: '贵州茅台', sector: '白酒', weight: 18.4, cost: 1632.5, price: 1721.2, pnl: 5.43, risk: '中' },
-  { symbol: '300750.SZ', name: '宁德时代', sector: '新能源电池', weight: 15.2, cost: 198.4, price: 206.1, pnl: 3.88, risk: '中高' },
-  { symbol: '600036.SH', name: '招商银行', sector: '银行', weight: 11.8, cost: 33.2, price: 34.6, pnl: 4.22, risk: '低' },
-  { symbol: '300059.SZ', name: '东方财富', sector: '互联网券商', weight: 9.6, cost: 16.4, price: 15.9, pnl: -3.05, risk: '中高' },
-  { symbol: '601318.SH', name: '中国平安', sector: '保险', weight: 8.7, cost: 47.1, price: 48.3, pnl: 2.55, risk: '中' },
-];
+interface ResearchPosition {
+  symbol: string;
+  name: string;
+  sector: string;
+  shares: number;
+  cost: number;
+  addedAt: string;
+}
 
-const TRADE_LOG = [
-  { asset: '贵州茅台', symbol: '600519.SH', type: '买入', price: '¥1,721.20', pnl: '+¥8,860', isWin: true, reason: '核心仓回补' },
-  { asset: '东方财富', symbol: '300059.SZ', type: '卖出', price: '¥15.89', pnl: '-¥2,430', isWin: false, reason: '券商情绪降温' },
-  { asset: '宁德时代', symbol: '300750.SZ', type: '买入', price: '¥206.10', pnl: '+¥5,120', isWin: true, reason: '产业链景气修复' },
-  { asset: '中国平安', symbol: '601318.SH', type: '减仓', price: '¥48.31', pnl: '+¥1,960', isWin: true, reason: '行业暴露再平衡' },
-];
+interface WatchlistItem {
+  symbol: string;
+  name?: string;
+}
 
-const RISK_BUCKETS = [
-  { bucket: '白酒', exposure: 18.4, limit: 25 },
-  { bucket: '新能源', exposure: 24.7, limit: 30 },
-  { bucket: '金融', exposure: 20.5, limit: 35 },
-  { bucket: 'TMT', exposure: 12.3, limit: 25 },
-];
+interface PriceBar {
+  symbol: string;
+  date: string;
+  close: number;
+  change_pct?: number;
+  previous_close?: number;
+  source?: string;
+}
+
+interface PositionRow extends ResearchPosition {
+  price: number;
+  marketValue: number;
+  costValue: number;
+  pnl: number;
+  pnlPct: number;
+  dailyPnl: number;
+  weight: number;
+  source: string;
+  priceDate: string;
+  risk: '低' | '中' | '高';
+}
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
   currency: 'CNY',
   maximumFractionDigits: 0,
 });
+
+const numberFormatter = new Intl.NumberFormat('zh-CN', {
+  maximumFractionDigits: 2,
+});
+
+const allocationColors = ['#f43f5e', '#6366f1', '#14b8a6', '#64748b', '#f59e0b', '#06b6d4'];
+
+function normalizeSymbol(value: string) {
+  const raw = String(value || '').trim().toUpperCase();
+  const code = raw.match(/\d{5,6}/)?.[0] || raw;
+  if (!code) return '';
+  if (raw.includes('.')) return raw;
+  if (code.length === 5) return `${code}.HK`;
+  if (/^(60|68|90)/.test(code)) return `${code}.SH`;
+  if (/^(00|30|20)/.test(code)) return `${code}.SZ`;
+  if (/^[48]/.test(code)) return `${code}.BJ`;
+  return `${code}.SZ`;
+}
+
+function stripSymbolSuffix(symbol: string) {
+  return String(symbol || '').trim().split('.')[0];
+}
+
+function readStoredPositions(): ResearchPosition[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(PORTFOLIO_STORAGE_KEY) || '[]') as ResearchPosition[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item?.symbol && Number(item.shares) > 0 && Number(item.cost) > 0)
+      .map((item) => ({
+        ...item,
+        symbol: normalizeSymbol(item.symbol),
+        shares: Number(item.shares),
+        cost: Number(item.cost),
+        sector: item.sector || findStockTarget(item.symbol)?.sector || '未分类',
+        addedAt: item.addedAt || new Date().toISOString(),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredPositions(positions: ResearchPosition[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PORTFOLIO_STORAGE_KEY, JSON.stringify(positions));
+}
+
+function formatCurrency(value: number) {
+  return currencyFormatter.format(Number.isFinite(value) ? value : 0);
+}
+
+function formatPercent(value: number) {
+  if (!Number.isFinite(value)) return '--';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${numberFormatter.format(value)}%`;
+}
+
+function riskLevel(weight: number, pnlPct: number): PositionRow['risk'] {
+  if (weight >= 25 || pnlPct <= -15) return '高';
+  if (weight >= 12 || pnlPct <= -8) return '中';
+  return '低';
+}
+
+function riskTone(risk: PositionRow['risk']) {
+  if (risk === '高') return 'border-rose-500/20 bg-rose-500/10 text-rose-300';
+  if (risk === '中') return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
+  return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
+}
+
+async function fetchLatestPrice(symbol: string): Promise<PriceBar | null> {
+  const code = encodeURIComponent(stripSymbolSuffix(symbol));
+  try {
+    return await fetchApi<PriceBar>(`/api/prices/${code}/latest`);
+  } catch {
+    try {
+      const series = await fetchApi<{ bars: PriceBar[] }>(`/api/prices/${code}?limit=1`);
+      return series.bars?.[0] || null;
+    } catch {
+      return null;
+    }
+  }
+}
 
 function SummaryCard({
   label,
@@ -73,7 +170,217 @@ function SummaryCard({
 }
 
 export function Portfolio() {
-  const totalAssets = ALLOCATION_DATA.reduce((sum, item) => sum + item.value, 0);
+  const [positions, setPositions] = useState<ResearchPosition[]>(() => readStoredPositions());
+  const [quotes, setQuotes] = useState<Record<string, PriceBar | null>>({});
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [loadingPrices, setLoadingPrices] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [formError, setFormError] = useState('');
+  const [draft, setDraft] = useState({
+    symbol: '',
+    name: '',
+    sector: '',
+    shares: '100',
+    cost: '',
+  });
+  const [activeStock] = useState<StockTarget | undefined>(() => {
+    try {
+      return getPersistedStock();
+    } catch {
+      return undefined;
+    }
+  });
+
+  useEffect(() => {
+    writeStoredPositions(positions);
+  }, [positions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadWatchlist() {
+      try {
+        const result = await fetchApi<{ items: WatchlistItem[] }>('/api/watchlist');
+        if (!cancelled) setWatchlist(result.items || []);
+      } catch {
+        if (!cancelled) setWatchlist([]);
+      }
+    }
+    void loadWatchlist();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (draft.symbol || !activeStock) return;
+    setDraft((prev) => ({
+      ...prev,
+      symbol: activeStock.symbol,
+      name: activeStock.name,
+      sector: activeStock.sector,
+    }));
+  }, [activeStock, draft.symbol]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPrices() {
+      if (!positions.length) {
+        setQuotes({});
+        return;
+      }
+      setLoadingPrices(true);
+      const entries = await Promise.all(
+        positions.map(async (position) => [position.symbol, await fetchLatestPrice(position.symbol)] as const),
+      );
+      if (!cancelled) {
+        setQuotes(Object.fromEntries(entries));
+        setLoadingPrices(false);
+      }
+    }
+    void loadPrices();
+    return () => {
+      cancelled = true;
+    };
+  }, [positions, refreshKey]);
+
+  const rows = useMemo<PositionRow[]>(() => {
+    const baseRows = positions.map((position) => {
+      const quote = quotes[position.symbol];
+      const price = Number(quote?.close || position.cost || 0);
+      const marketValue = position.shares * price;
+      const costValue = position.shares * position.cost;
+      const pnl = marketValue - costValue;
+      const pnlPct = costValue > 0 ? (pnl / costValue) * 100 : 0;
+      const previousClose = Number(quote?.previous_close || 0);
+      const dayChangePct = Number(quote?.change_pct || 0);
+      const prevPrice = previousClose > 0 ? previousClose : price / (1 + dayChangePct / 100);
+      const dailyPnl = Number.isFinite(prevPrice) && prevPrice > 0 ? (price - prevPrice) * position.shares : 0;
+      return {
+        ...position,
+        price,
+        marketValue,
+        costValue,
+        pnl,
+        pnlPct,
+        dailyPnl,
+        weight: 0,
+        source: quote?.source || '待同步',
+        priceDate: quote?.date || '',
+        risk: '低' as PositionRow['risk'],
+      };
+    });
+    const total = baseRows.reduce((sum, row) => sum + row.marketValue, 0);
+    return baseRows.map((row) => {
+      const weight = total > 0 ? (row.marketValue / total) * 100 : 0;
+      return {
+        ...row,
+        weight,
+        risk: riskLevel(weight, row.pnlPct),
+      };
+    });
+  }, [positions, quotes]);
+
+  const totals = useMemo(() => {
+    const totalAssets = rows.reduce((sum, row) => sum + row.marketValue, 0);
+    const totalCost = rows.reduce((sum, row) => sum + row.costValue, 0);
+    const dailyPnl = rows.reduce((sum, row) => sum + row.dailyPnl, 0);
+    const totalPnl = totalAssets - totalCost;
+    const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+    const winners = rows.filter((row) => row.pnl >= 0).length;
+    const maxRiskUse = rows.reduce((max, row) => Math.max(max, row.weight), 0);
+    return { totalAssets, totalCost, dailyPnl, totalPnl, totalPnlPct, winners, maxRiskUse };
+  }, [rows]);
+
+  const allocationData = useMemo(() => {
+    const grouped = new Map<string, number>();
+    rows.forEach((row) => grouped.set(row.sector || '未分类', (grouped.get(row.sector || '未分类') || 0) + row.marketValue));
+    return Array.from(grouped.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], index) => ({ name, value, color: allocationColors[index % allocationColors.length] }));
+  }, [rows]);
+
+  const riskBuckets = useMemo(() => (
+    allocationData.map((item) => ({
+      bucket: item.name,
+      exposure: totals.totalAssets > 0 ? Number(((item.value / totals.totalAssets) * 100).toFixed(2)) : 0,
+      limit: SECTOR_LIMIT_PCT,
+    }))
+  ), [allocationData, totals.totalAssets]);
+
+  const riskNotes = useMemo(() => {
+    const notes: string[] = [];
+    const overLimit = riskBuckets.filter((item) => item.exposure > item.limit);
+    if (overLimit.length) notes.push(`${overLimit[0].bucket} 暴露 ${overLimit[0].exposure}% 超过 ${SECTOR_LIMIT_PCT}%`);
+    const stale = rows.filter((row) => !row.priceDate || row.source === '待同步');
+    if (stale.length) notes.push(`${stale.length} 只持仓价格未同步`);
+    const highRisk = rows.filter((row) => row.risk === '高');
+    if (highRisk.length) notes.push(`${highRisk.length} 只持仓触发高风险阈值`);
+    if (!notes.length) notes.push(rows.length ? '当前研究组合未触发行业上限和单仓高风险阈值' : '暂无持仓');
+    return notes;
+  }, [riskBuckets, rows]);
+
+  const prefillStock = async (stock: StockTarget | WatchlistItem) => {
+    const symbol = normalizeSymbol(stock.symbol);
+    const local = findStockTarget(symbol);
+    const quote = await fetchLatestPrice(symbol);
+    setDraft({
+      symbol,
+      name: stock.name || local?.name || '',
+      sector: local?.sector || '',
+      shares: draft.shares || '100',
+      cost: quote?.close ? String(quote.close) : draft.cost,
+    });
+    setFormError('');
+  };
+
+  const addPosition = async () => {
+    setFormError('');
+    const normalizedSymbol = normalizeSymbol(draft.symbol);
+    if (!normalizedSymbol) {
+      setFormError('请输入股票代码');
+      return;
+    }
+    const shares = Number(draft.shares);
+    if (!Number.isFinite(shares) || shares <= 0) {
+      setFormError('数量必须大于 0');
+      return;
+    }
+    let resolved: StockTarget | undefined;
+    try {
+      resolved = await resolveStockTarget(normalizedSymbol);
+    } catch {
+      resolved = findStockTarget(normalizedSymbol);
+    }
+    const quote = Number(draft.cost) > 0 ? null : await fetchLatestPrice(normalizedSymbol);
+    const cost = Number(draft.cost) > 0 ? Number(draft.cost) : Number(quote?.close || 0);
+    if (!Number.isFinite(cost) || cost <= 0) {
+      setFormError('成本价为空，且现价同步失败');
+      return;
+    }
+    const next: ResearchPosition = {
+      symbol: resolved?.symbol || normalizedSymbol,
+      name: draft.name.trim() || resolved?.name || normalizedSymbol,
+      sector: draft.sector.trim() || resolved?.sector || findStockTarget(normalizedSymbol)?.sector || '未分类',
+      shares,
+      cost,
+      addedAt: new Date().toISOString(),
+    };
+    setPositions((prev) => {
+      const others = prev.filter((item) => item.symbol !== next.symbol);
+      return [next, ...others];
+    });
+    setDraft((prev) => ({ ...prev, symbol: '', name: '', sector: '', cost: '' }));
+  };
+
+  const removePosition = (symbol: string) => {
+    setPositions((prev) => prev.filter((item) => item.symbol !== symbol));
+  };
+
+  const quickStocks = [
+    ...(activeStock ? [activeStock] : []),
+    ...watchlist.map((item) => ({ symbol: normalizeSymbol(item.symbol), name: item.name || normalizeSymbol(item.symbol) })),
+    ...STOCK_UNIVERSE.slice(0, 6),
+  ].filter((item, index, list) => item.symbol && list.findIndex((candidate) => candidate.symbol === item.symbol) === index);
 
   return (
     <motion.div
@@ -83,12 +390,22 @@ export function Portfolio() {
       transition={{ duration: 0.3 }}
       className="mx-auto h-full max-w-7xl overflow-y-auto p-6 lg:p-10"
     >
-      <div className="mb-8">
-        <h2 className="flex items-center gap-3 text-2xl font-display font-medium text-neutral-100">
-          <Briefcase className="h-6 w-6 text-indigo-500" />
-          组合与风控总览
-        </h2>
-        <p className="mt-2 text-sm font-mono text-neutral-500">面向 A 股研究组合的资产配置、持仓风险、调仓记录与行业暴露监控。</p>
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h2 className="flex items-center gap-3 text-2xl font-display font-medium text-neutral-100">
+            <Briefcase className="h-6 w-6 text-indigo-500" />
+            组合与风控总览
+          </h2>
+          <p className="mt-2 text-sm font-mono text-neutral-500">研究组合持仓、真实行情估值、行业暴露与风险阈值。</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setRefreshKey((value) => value + 1)}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-neutral-200 transition-colors hover:bg-white/[0.08]"
+        >
+          <RefreshCw className={cn('h-4 w-4', loadingPrices && 'animate-spin')} />
+          刷新价格
+        </button>
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
@@ -96,153 +413,219 @@ export function Portfolio() {
           <div className="pointer-events-none absolute right-0 top-0 p-3 text-rose-300 opacity-15">
             <WalletCards className="h-28 w-28 stroke-[0.5]" />
           </div>
-          <h3 className="relative z-10 text-[10px] font-mono uppercase tracking-widest text-rose-300">总资产</h3>
-          <h2 className="relative z-10 mt-4 text-4xl font-mono font-medium text-white">{currencyFormatter.format(totalAssets)}</h2>
-          <p className="relative z-10 mt-3 flex items-center gap-1 text-xs font-mono text-rose-300">
-            <ArrowUpRight className="h-3.5 w-3.5" />
-            今日浮盈 +¥24,500（+2.45%）
+          <h3 className="relative z-10 text-[10px] font-mono uppercase tracking-widest text-rose-300">组合市值</h3>
+          <h2 className="relative z-10 mt-4 text-4xl font-mono font-medium text-white">{formatCurrency(totals.totalAssets)}</h2>
+          <p className={cn('relative z-10 mt-3 flex items-center gap-1 text-xs font-mono', totals.dailyPnl >= 0 ? 'text-rose-300' : 'text-emerald-300')}>
+            {totals.dailyPnl >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+            今日浮动 {formatCurrency(totals.dailyPnl)} / 累计 {formatPercent(totals.totalPnlPct)}
           </p>
         </div>
-        <SummaryCard label="持仓数量" value="12" hint="8 只盈利 / 4 只回撤" tone="emerald" icon={Landmark} />
-        <SummaryCard label="风险占用" value="24%" hint="低于 50% 上限" tone="indigo" icon={ShieldCheck} />
+        <SummaryCard label="持仓数量" value={String(rows.length)} hint={`${totals.winners} 只盈利 / ${Math.max(0, rows.length - totals.winners)} 只回撤`} tone="emerald" icon={Landmark} />
+        <SummaryCard label="最大行业占用" value={`${totals.maxRiskUse.toFixed(0)}%`} hint={`单行业上限 ${SECTOR_LIMIT_PCT}%`} tone={totals.maxRiskUse > SECTOR_LIMIT_PCT ? 'rose' : 'indigo'} icon={ShieldCheck} />
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 shadow-lg backdrop-blur-md">
+        <div className="grid gap-3 lg:grid-cols-[1.1fr_1fr_0.7fr_0.7fr_auto]">
+          <label className="min-w-0">
+            <span className="mb-1 block text-[10px] font-mono uppercase tracking-widest text-neutral-500">代码</span>
+            <input
+              value={draft.symbol}
+              onChange={(event) => setDraft((prev) => ({ ...prev, symbol: event.target.value }))}
+              placeholder="600519 或 600519.SH"
+              className="h-10 w-full rounded-lg border border-white/10 bg-black/35 px-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-indigo-400/50"
+            />
+          </label>
+          <label className="min-w-0">
+            <span className="mb-1 block text-[10px] font-mono uppercase tracking-widest text-neutral-500">名称</span>
+            <input
+              value={draft.name}
+              onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
+              placeholder="自动解析"
+              className="h-10 w-full rounded-lg border border-white/10 bg-black/35 px-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-indigo-400/50"
+            />
+          </label>
+          <label className="min-w-0">
+            <span className="mb-1 block text-[10px] font-mono uppercase tracking-widest text-neutral-500">数量</span>
+            <input
+              value={draft.shares}
+              onChange={(event) => setDraft((prev) => ({ ...prev, shares: event.target.value }))}
+              inputMode="decimal"
+              className="h-10 w-full rounded-lg border border-white/10 bg-black/35 px-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-indigo-400/50"
+            />
+          </label>
+          <label className="min-w-0">
+            <span className="mb-1 block text-[10px] font-mono uppercase tracking-widest text-neutral-500">成本</span>
+            <input
+              value={draft.cost}
+              onChange={(event) => setDraft((prev) => ({ ...prev, cost: event.target.value }))}
+              inputMode="decimal"
+              placeholder="留空取现价"
+              className="h-10 w-full rounded-lg border border-white/10 bg-black/35 px-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-indigo-400/50"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={addPosition}
+            className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-4 text-sm font-medium text-indigo-100 transition-colors hover:bg-indigo-500/25"
+          >
+            <Plus className="h-4 w-4" />
+            加入
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Search className="h-4 w-4 text-neutral-600" />
+          {quickStocks.slice(0, 9).map((stock) => (
+            <button
+              key={stock.symbol}
+              type="button"
+              onClick={() => prefillStock(stock)}
+              className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] text-neutral-400 transition-colors hover:border-indigo-400/40 hover:text-indigo-200"
+            >
+              {stock.name || stock.symbol}
+            </button>
+          ))}
+        </div>
+        {formError && <div className="mt-3 text-xs text-rose-300">{formError}</div>}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-lg backdrop-blur-md">
           <h3 className="mb-6 border-b border-white/5 pb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">资产配置</h3>
-          <div className="flex h-72 items-center">
-            <StableChartContainer className="h-full w-[52%]">
-              <PieChart>
-                <Pie data={ALLOCATION_DATA} cx="50%" cy="50%" innerRadius={62} outerRadius={86} paddingAngle={4} dataKey="value" stroke="none">
-                  {ALLOCATION_DATA.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '8px', fontSize: '12px' }}
-                  itemStyle={{ color: '#e5e5e5' }}
-                  formatter={(value: number) => currencyFormatter.format(value)}
-                />
-              </PieChart>
-            </StableChartContainer>
-            <div className="ml-4 flex-1">
-              {ALLOCATION_DATA.map((item) => (
-                <div key={item.name} className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                    <span className="text-neutral-400">{item.name}</span>
+          {allocationData.length ? (
+            <div className="flex h-72 items-center">
+              <StableChartContainer className="h-full w-[52%]">
+                <PieChart>
+                  <Pie data={allocationData} cx="50%" cy="50%" innerRadius={62} outerRadius={86} paddingAngle={4} dataKey="value" stroke="none">
+                    {allocationData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '8px', fontSize: '12px' }}
+                    itemStyle={{ color: '#e5e5e5' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                </PieChart>
+              </StableChartContainer>
+              <div className="ml-4 flex-1">
+                {allocationData.map((item) => (
+                  <div key={item.name} className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-neutral-400">{item.name}</span>
+                    </div>
+                    <span className="font-mono text-xs text-neutral-200">{formatCurrency(item.value)}</span>
                   </div>
-                  <span className="font-mono text-xs text-neutral-200">{currencyFormatter.format(item.value)}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex h-72 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-neutral-500">
+              暂无持仓
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-lg backdrop-blur-md">
           <h3 className="mb-6 border-b border-white/5 pb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">行业风险暴露</h3>
-          <div className="h-72">
-            <StableChartContainer>
-              <BarChart data={RISK_BUCKETS} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="bucket" stroke="#737373" fontSize={11} />
-                <YAxis stroke="#737373" fontSize={11} />
-                <RechartsTooltip contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '8px', fontSize: '12px' }} />
-                <Bar dataKey="limit" name="上限" fill="#334155" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="exposure" name="当前暴露" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </StableChartContainer>
-          </div>
+          {riskBuckets.length ? (
+            <div className="h-72">
+              <StableChartContainer>
+                <BarChart data={riskBuckets} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="bucket" stroke="#737373" fontSize={11} />
+                  <YAxis stroke="#737373" fontSize={11} />
+                  <RechartsTooltip contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number) => `${value}%`} />
+                  <Bar dataKey="limit" name="上限" fill="#334155" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="exposure" name="当前暴露" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </StableChartContainer>
+            </div>
+          ) : (
+            <div className="flex h-72 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-neutral-500">
+              暂无行业暴露
+            </div>
+          )}
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-lg backdrop-blur-md lg:col-span-2">
           <div className="flex items-center justify-between border-b border-white/5 bg-black/40 p-5">
             <h3 className="text-xs font-mono uppercase tracking-widest text-neutral-400">核心持仓</h3>
-            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[11px] text-amber-200">
-              AI 生成，请核验来源与价格
+            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-200">
+              价格来自行情 API
             </span>
           </div>
-          <table className="w-full border-collapse text-left text-xs">
-            <thead className="border-b border-white/5 bg-black/20 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-              <tr>
-                <th className="px-5 py-3">标的</th>
-                <th className="px-5 py-3">行业</th>
-                <th className="px-5 py-3 text-right">权重</th>
-                <th className="px-5 py-3 text-right">成本</th>
-                <th className="px-5 py-3 text-right">现价</th>
-                <th className="px-5 py-3 text-right">浮盈亏</th>
-                <th className="px-5 py-3 text-right">风险</th>
-              </tr>
-            </thead>
-            <tbody>
-              {POSITION_DATA.map((position) => (
-                <tr key={position.symbol} className="border-b border-white/5 hover:bg-white/[0.025]">
-                  <td className="px-5 py-3.5">
-                    <p className="font-medium text-neutral-200">{position.name}</p>
-                    <p className="mt-1 font-mono text-[10px] text-indigo-300">{position.symbol}</p>
-                  </td>
-                  <td className="px-5 py-3.5 text-neutral-400">{position.sector}</td>
-                  <td className="px-5 py-3.5 text-right font-mono text-neutral-300">{position.weight}%</td>
-                  <td className="px-5 py-3.5 text-right font-mono text-neutral-400">¥{position.cost}</td>
-                  <td className="px-5 py-3.5 text-right font-mono text-neutral-200">¥{position.price}</td>
-                  <td className={cn('px-5 py-3.5 text-right font-mono font-medium', position.pnl >= 0 ? 'text-rose-400' : 'text-emerald-400')}>
-                    {position.pnl >= 0 ? '+' : ''}{position.pnl}%
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <span className={cn('rounded-full border px-2 py-1 text-[10px]', position.risk === '低' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/20 bg-amber-500/10 text-amber-300')}>
-                      {position.risk}
-                    </span>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] border-collapse text-left text-xs">
+              <thead className="border-b border-white/5 bg-black/20 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+                <tr>
+                  <th className="px-5 py-3">标的</th>
+                  <th className="px-5 py-3">行业</th>
+                  <th className="px-5 py-3 text-right">权重</th>
+                  <th className="px-5 py-3 text-right">数量</th>
+                  <th className="px-5 py-3 text-right">成本</th>
+                  <th className="px-5 py-3 text-right">现价</th>
+                  <th className="px-5 py-3 text-right">浮盈亏</th>
+                  <th className="px-5 py-3 text-right">风险</th>
+                  <th className="px-5 py-3 text-right">操作</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-lg backdrop-blur-md lg:col-span-2">
-          <div className="border-b border-white/5 bg-black/40 p-5">
-            <h3 className="text-xs font-mono uppercase tracking-widest text-neutral-400">近期调仓</h3>
+              </thead>
+              <tbody>
+                {rows.length === 0 && (
+                  <tr>
+                    <td className="px-5 py-8 text-center text-neutral-500" colSpan={9}>暂无持仓</td>
+                  </tr>
+                )}
+                {rows.map((position) => (
+                  <tr key={position.symbol} className="border-b border-white/5 hover:bg-white/[0.025]">
+                    <td className="px-5 py-3.5">
+                      <p className="font-medium text-neutral-200">{position.name}</p>
+                      <p className="mt-1 font-mono text-[10px] text-indigo-300">{position.symbol}</p>
+                      <p className="mt-1 font-mono text-[10px] text-neutral-600">{position.source} {position.priceDate}</p>
+                    </td>
+                    <td className="px-5 py-3.5 text-neutral-400">{position.sector}</td>
+                    <td className="px-5 py-3.5 text-right font-mono text-neutral-300">{position.weight.toFixed(2)}%</td>
+                    <td className="px-5 py-3.5 text-right font-mono text-neutral-400">{numberFormatter.format(position.shares)}</td>
+                    <td className="px-5 py-3.5 text-right font-mono text-neutral-400">¥{numberFormatter.format(position.cost)}</td>
+                    <td className="px-5 py-3.5 text-right font-mono text-neutral-200">¥{numberFormatter.format(position.price)}</td>
+                    <td className={cn('px-5 py-3.5 text-right font-mono font-medium', position.pnl >= 0 ? 'text-rose-400' : 'text-emerald-400')}>
+                      {formatCurrency(position.pnl)}
+                      <span className="ml-2 text-[10px] opacity-70">{formatPercent(position.pnlPct)}</span>
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <span className={cn('rounded-full border px-2 py-1 text-[10px]', riskTone(position.risk))}>
+                        {position.risk}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => removePosition(position.symbol)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/25 text-neutral-500 transition-colors hover:border-rose-400/40 hover:text-rose-300"
+                        title="移出组合"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <table className="w-full border-collapse text-left text-xs">
-            <thead className="border-b border-white/5 bg-black/20 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-              <tr>
-                <th className="px-5 py-3">标的</th>
-                <th className="px-5 py-3">动作</th>
-                <th className="px-5 py-3">原因</th>
-                <th className="px-5 py-3 text-right">成交价</th>
-                <th className="px-5 py-3 text-right">贡献</th>
-              </tr>
-            </thead>
-            <tbody>
-              {TRADE_LOG.map((trade) => (
-                <tr key={`${trade.symbol}-${trade.type}`} className="border-b border-white/5 hover:bg-white/[0.025]">
-                  <td className="px-5 py-3.5">
-                    <p className="font-medium text-neutral-200">{trade.asset}</p>
-                    <p className="mt-1 font-mono text-[10px] text-indigo-300">{trade.symbol}</p>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className={cn('rounded border px-2 py-0.5 text-[10px] font-mono', trade.type === '买入' ? 'border-rose-500/20 bg-rose-500/10 text-rose-300' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300')}>
-                      {trade.type}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-neutral-400">{trade.reason}</td>
-                  <td className="px-5 py-3.5 text-right font-mono text-neutral-400">{trade.price}</td>
-                  <td className={cn('px-5 py-3.5 text-right font-mono font-medium', trade.isWin ? 'text-rose-400' : 'text-emerald-400')}>
-                    {trade.isWin ? <ArrowUpRight className="mr-1 inline h-3.5 w-3.5" /> : <ArrowDownRight className="mr-1 inline h-3.5 w-3.5" />}
-                    {trade.pnl}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
 
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs leading-relaxed text-amber-100/80 lg:col-span-2">
-          <div className="mb-1 flex items-center gap-2 font-medium text-amber-200">
+          <div className="mb-2 flex items-center gap-2 font-medium text-amber-200">
             <AlertTriangle className="h-4 w-4" />
-            风险提示
+            风险检查
           </div>
-          组合页展示的是研究辅助视图，价格、盈亏与调仓原因需要与真实账户、券商成交回报和数据源证据链交叉核验。
+          <div className="flex flex-wrap gap-2">
+            {riskNotes.map((note) => (
+              <span key={note} className="rounded-full border border-amber-400/20 bg-black/20 px-3 py-1 font-mono text-[11px] text-amber-100/80">
+                {note}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     </motion.div>
