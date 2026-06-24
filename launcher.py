@@ -18,6 +18,7 @@ import socket
 import sys
 import threading
 import time
+import tomllib
 import webbrowser
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -275,9 +276,27 @@ def stop_running_instance(root: Path) -> int:
     return 0
 
 
+def _read_project_version() -> str:
+    """Read the app version from the bundled (or source) pyproject.toml.
+
+    Kept in sync with backend.api.main._load_api_version so the packaged exe
+    never drifts from the declared version. Falls back to "0.0.0" if unreadable.
+    """
+    for base in (bundle_root(), runtime_root()):
+        pyproject = base / "pyproject.toml"
+        try:
+            with pyproject.open("rb") as file:
+                version = tomllib.load(file).get("project", {}).get("version")
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if isinstance(version, str) and version.strip():
+            return version.strip()
+    return "0.0.0"
+
+
 def configure_runtime_environment(root: Path) -> None:
     os.environ.setdefault("ALPHASCOPE_PACKAGED", "1" if is_frozen() else "0")
-    os.environ.setdefault("ALPHASCOPE_VERSION", "1.7.4")
+    os.environ.setdefault("ALPHASCOPE_VERSION", _read_project_version())
     os.environ.setdefault("ALPHASCOPE_RUNTIME_ROOT", str(root))
     os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
     os.environ.setdefault("STREAMLIT_BROWSER_GATHER_USAGE_STATS", "false")
