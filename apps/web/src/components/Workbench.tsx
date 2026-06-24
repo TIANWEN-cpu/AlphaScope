@@ -194,59 +194,120 @@ const generateKlineData = (
   });
 };
 
-const MOCK_NEWS = [
-  { time: "22:13", title: "市场定价显示，交易员已完全预期到2026年底美联储将加息25个基点。", source: "财联社" },
-  { time: "22:12", title: "财联社5月22日电，美联储官员沃勒表示，4月份消费者价格上涨的范围令人担忧...", source: "财联社" },
-  { time: "22:04", title: "港股IPO：融泰药业递表港交所", desc: "广东融泰药业股份有限公司向港交所提交上市申请书，独家保荐人为中信证券。", source: "公告" }
-];
+type MetricTone = 'rose' | 'emerald' | 'indigo' | 'amber' | 'neutral';
 
-const MOCK_FINANCE = [
-  { label: '市盈率(TTM)', value: '28.45', trend: 'up' },
-  { label: '市净率(MRQ)', value: '6.12', trend: 'down' },
-  { label: '毛利率', value: '91.8%', trend: 'up' },
-  { label: '净利润同增', value: '+19.1%', trend: 'up' },
-];
-
-const MOCK_FUNDS = [
-  { label: '主力净流入', value: '+3.2亿', color: 'text-rose-500' },
-  { label: '超大单', value: '+4.5亿', color: 'text-rose-500' },
-  { label: '大单', value: '-1.3亿', color: 'text-emerald-500' },
-  { label: '中单', value: '-2.1亿', color: 'text-emerald-500' },
-];
-
-const stockMetrics: Record<string, { price: number; change: number; finance: typeof MOCK_FINANCE; funds: typeof MOCK_FUNDS }> = {
-  '600519.SH': {
-    price: 1513.48,
-    change: 0.39,
-    finance: MOCK_FINANCE,
-    funds: MOCK_FUNDS,
-  },
-  '300750.SZ': {
-    price: 206.1,
-    change: 2.14,
-    finance: [
-      { label: '市盈率(TTM)', value: '21.72', trend: 'down' },
-      { label: '市净率(MRQ)', value: '4.86', trend: 'up' },
-      { label: '毛利率', value: '25.4%', trend: 'up' },
-      { label: '净利润同增', value: '+12.7%', trend: 'up' },
-    ],
-    funds: [
-      { label: '主力净流入', value: '+5.8亿', color: 'text-rose-500' },
-      { label: '超大单', value: '+2.6亿', color: 'text-rose-500' },
-      { label: '大单', value: '+1.1亿', color: 'text-rose-500' },
-      { label: '中单', value: '-0.9亿', color: 'text-emerald-500' },
-    ],
-  },
-};
-
-function getWorkbenchMetrics(stock: StockTarget) {
-  return stockMetrics[stock.symbol] ?? {
-    price: stock.startPrice,
-    change: stock.symbol.charCodeAt(0) % 2 === 0 ? 1.06 : -0.72,
-    finance: MOCK_FINANCE,
-    funds: MOCK_FUNDS,
-  };
+interface MetricCard {
+  label: string;
+  value: string;
+  detail: string;
+  tone: MetricTone;
 }
+
+interface PanelNewsItem {
+  time: string;
+  title: string;
+  desc?: string;
+  source: string;
+  detail: string;
+}
+
+interface FinancialPeriod {
+  period?: string;
+  revenue_yi?: number;
+  net_profit_yi?: number;
+  gross_margin_pct?: number;
+  roe_pct?: number;
+  debt_ratio_pct?: number;
+  yoy_revenue_pct?: number;
+  yoy_net_profit_pct?: number;
+}
+
+interface FundamentalsResponse {
+  symbol: string;
+  stock_name?: string;
+  industry?: string;
+  financial_periods?: FinancialPeriod[];
+  valuation?: Record<string, number | string>;
+  fundamental_score?: Record<string, number | string>;
+  degraded?: boolean;
+  source_status?: string;
+  error?: string;
+}
+
+interface FundFlowSummary {
+  recent_days?: number;
+  main_total_yi?: number;
+  super_total_yi?: number;
+  large_total_yi?: number;
+  medium_total_yi?: number;
+  small_total_yi?: number;
+  last_date?: string;
+  last_main_yi?: number;
+  last_main_pct?: number;
+  inflow_days?: number;
+  outflow_days?: number;
+}
+
+interface FundFlowResponse {
+  symbol: string;
+  summary?: FundFlowSummary;
+  records?: Array<Record<string, number | string>>;
+  degraded?: boolean;
+  source?: string;
+  source_status?: string;
+  error?: string;
+  cached_at?: string;
+}
+
+interface FactorResponse {
+  symbol: string;
+  stock_name?: string;
+  computed_at?: string;
+  factors?: Record<string, number>;
+  sample_counts?: Record<string, number>;
+  degraded_inputs?: string[];
+  missing_dimensions?: string[];
+  signals?: Array<Record<string, number | string | boolean>>;
+}
+
+interface NewsResponseItem {
+  title?: string;
+  summary?: string;
+  source?: string;
+  published_at?: string;
+  event_type?: string;
+  sentiment?: number;
+  importance?: number;
+}
+
+interface NewsListResponse {
+  news?: NewsResponseItem[];
+  total?: number;
+  degraded?: boolean;
+  source_status?: string;
+  error?: string;
+}
+
+const LOADING_FINANCE_CARDS: MetricCard[] = [
+  { label: '营业收入', value: '--', detail: '正在同步财务摘要', tone: 'neutral' },
+  { label: '归母净利', value: '--', detail: '正在同步财务摘要', tone: 'neutral' },
+  { label: '毛利率', value: '--', detail: '正在同步财务摘要', tone: 'neutral' },
+  { label: 'ROE', value: '--', detail: '正在同步财务摘要', tone: 'neutral' },
+];
+
+const LOADING_FUND_CARDS: MetricCard[] = [
+  { label: '近5日主力', value: '--', detail: '正在同步资金流', tone: 'neutral' },
+  { label: '当日主力', value: '--', detail: '正在同步资金流', tone: 'neutral' },
+  { label: '超大单', value: '--', detail: '正在同步资金流', tone: 'neutral' },
+  { label: '大单', value: '--', detail: '正在同步资金流', tone: 'neutral' },
+];
+
+const LOADING_QUANT_CARDS: MetricCard[] = [
+  { label: '综合因子', value: '--', detail: '正在计算量化因子', tone: 'neutral' },
+  { label: '价格动量', value: '--', detail: '正在计算量化因子', tone: 'neutral' },
+  { label: '资金因子', value: '--', detail: '正在计算量化因子', tone: 'neutral' },
+  { label: '样本完整度', value: '--', detail: '正在计算量化因子', tone: 'neutral' },
+];
 
 const ANALYSIS_MODES = [
   { id: 'standard', label: '标准分析', desc: '基本面、资金、技术面综合研判' },
@@ -274,13 +335,6 @@ const PANEL_TABS: Array<{ id: PanelTabId; label: string; icon: typeof Zap }> = [
   { id: 'finance', label: '核心财务', icon: Clock },
   { id: 'funds', label: '主力资金', icon: LineChartIcon },
   { id: 'quant', label: '量化因子', icon: Settings2 },
-];
-
-const QUANT_FACTORS = [
-  { label: '动量强度', value: '74', desc: '近端价格强度与成交扩张匹配度较高。' },
-  { label: '波动约束', value: '中', desc: '短线波动放大，仓位建议保留风险缓冲。' },
-  { label: '拥挤度', value: '58', desc: '主题热度上升但未达到极端拥挤。' },
-  { label: '证据完整度', value: 'B', desc: '需继续补公告、资金流和估值来源。' },
 ];
 
 function getErrorMessage(error: unknown) {
@@ -352,6 +406,209 @@ function formatVolume(value?: number) {
   if (number >= 100000000) return `${(number / 100000000).toFixed(2)}亿`;
   if (number >= 10000) return `${(number / 10000).toFixed(1)}万`;
   return Math.round(number).toLocaleString('zh-CN');
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function formatYi(value?: number, digits = 1) {
+  if (!isFiniteNumber(value)) return '--';
+  return `${value.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits })}亿`;
+}
+
+function formatSignedYi(value?: number, digits = 2) {
+  if (!isFiniteNumber(value)) return '--';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits })}亿`;
+}
+
+function formatPercent(value?: number, digits = 1) {
+  if (!isFiniteNumber(value)) return '--';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
+}
+
+function formatFactorValue(value?: number) {
+  if (!isFiniteNumber(value)) return '--';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(3)}`;
+}
+
+function toneForSigned(value?: number): MetricTone {
+  if (!isFiniteNumber(value) || Math.abs(value) < 0.0001) return 'neutral';
+  return value > 0 ? 'rose' : 'emerald';
+}
+
+function toneForQuality(value?: number): MetricTone {
+  if (!isFiniteNumber(value)) return 'neutral';
+  if (value >= 70) return 'rose';
+  if (value >= 45) return 'indigo';
+  return 'amber';
+}
+
+function metricToneClass(tone: MetricTone) {
+  return {
+    rose: 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.22)]',
+    emerald: 'text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.22)]',
+    indigo: 'text-indigo-300 drop-shadow-[0_0_10px_rgba(129,140,248,0.22)]',
+    amber: 'text-amber-300 drop-shadow-[0_0_10px_rgba(251,191,36,0.18)]',
+    neutral: 'text-neutral-300',
+  }[tone];
+}
+
+function sourceStatusLabel(sourceStatus?: string, degraded?: boolean) {
+  if (degraded) {
+    if (sourceStatus === 'cache') return '缓存数据';
+    if (sourceStatus === 'timeout') return '数据源超时';
+    if (sourceStatus === 'empty') return '暂无数据';
+    if (sourceStatus === 'unavailable') return '数据源不可用';
+    return `降级：${sourceStatus || 'unknown'}`;
+  }
+  if (!sourceStatus || sourceStatus === 'ok') return '真实数据';
+  return sourceStatus;
+}
+
+function formatNewsTime(value?: string) {
+  if (!value) return '--';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 16);
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const hour = String(parsed.getHours()).padStart(2, '0');
+  const minute = String(parsed.getMinutes()).padStart(2, '0');
+  return `${month}-${day} ${hour}:${minute}`;
+}
+
+function emptyCards(reason: string): MetricCard[] {
+  return [
+    { label: '数据状态', value: '暂无', detail: reason, tone: 'amber' },
+    { label: '来源', value: '--', detail: reason, tone: 'neutral' },
+    { label: '日期', value: '--', detail: reason, tone: 'neutral' },
+    { label: '建议', value: '刷新', detail: '点击行情刷新按钮后会重新拉取信息源', tone: 'indigo' },
+  ];
+}
+
+function buildFinanceCards(payload?: FundamentalsResponse): MetricCard[] {
+  const latest = payload?.financial_periods?.[0];
+  if (!latest) {
+    return emptyCards(payload?.error || '基本面接口没有返回当前标的财务摘要');
+  }
+  const period = latest.period || '最新报告期';
+  const score = Number(payload?.fundamental_score?.total_score ?? payload?.fundamental_score?.score ?? NaN);
+  return [
+    {
+      label: '营业收入',
+      value: formatYi(latest.revenue_yi),
+      detail: `${period} · 营收同比 ${formatPercent(latest.yoy_revenue_pct)}`,
+      tone: toneForSigned(latest.yoy_revenue_pct),
+    },
+    {
+      label: '归母净利',
+      value: formatYi(latest.net_profit_yi),
+      detail: `${period} · 净利同比 ${formatPercent(latest.yoy_net_profit_pct)}`,
+      tone: toneForSigned(latest.yoy_net_profit_pct),
+    },
+    {
+      label: '毛利率',
+      value: formatPercent(latest.gross_margin_pct),
+      detail: `${period} · 来自财务摘要`,
+      tone: isFiniteNumber(latest.gross_margin_pct) ? 'rose' : 'neutral',
+    },
+    {
+      label: 'ROE',
+      value: formatPercent(latest.roe_pct),
+      detail: isFiniteNumber(score) ? `基本面评分 ${score.toFixed(0)}` : `${period} · 资产负债率 ${formatPercent(latest.debt_ratio_pct)}`,
+      tone: isFiniteNumber(score) ? toneForQuality(score) : toneForSigned(latest.roe_pct),
+    },
+  ];
+}
+
+function buildFundFlowCards(payload?: FundFlowResponse): MetricCard[] {
+  const summary = payload?.summary;
+  if (!summary) {
+    return emptyCards(payload?.error || '资金流接口没有返回当前标的资金数据');
+  }
+  const recentDays = summary.recent_days || 5;
+  const trend = `${summary.inflow_days || 0} 日流入 / ${summary.outflow_days || 0} 日流出`;
+  const lastDate = summary.last_date || '最近交易日';
+  return [
+    {
+      label: `近${recentDays}日主力`,
+      value: formatSignedYi(summary.main_total_yi),
+      detail: `${trend} · ${payload?.source || 'eastmoney'}`,
+      tone: toneForSigned(summary.main_total_yi),
+    },
+    {
+      label: '当日主力',
+      value: formatSignedYi(summary.last_main_yi),
+      detail: `${lastDate} · 净占比 ${formatPercent(summary.last_main_pct, 2)}`,
+      tone: toneForSigned(summary.last_main_yi),
+    },
+    {
+      label: '超大单',
+      value: formatSignedYi(summary.super_total_yi),
+      detail: `近${recentDays}日超大单净额`,
+      tone: toneForSigned(summary.super_total_yi),
+    },
+    {
+      label: '大单',
+      value: formatSignedYi(summary.large_total_yi),
+      detail: `近${recentDays}日大单净额`,
+      tone: toneForSigned(summary.large_total_yi),
+    },
+  ];
+}
+
+function buildQuantCards(payload?: FactorResponse): MetricCard[] {
+  const factors = payload?.factors || {};
+  if (!payload || !Object.keys(factors).length) {
+    return emptyCards('量化因子接口没有返回可用结果');
+  }
+  const counts = payload.sample_counts || {};
+  const missing = payload.missing_dimensions || [];
+  const degraded = payload.degraded_inputs || [];
+  const qualityScore = Math.max(
+    0,
+    100 - missing.length * 20 - degraded.length * 10,
+  );
+  const sampleText = `新闻 ${counts.news || 0} / 事件 ${counts.events || 0} / 研报 ${counts.reports || 0}`;
+  return [
+    {
+      label: '综合因子',
+      value: formatFactorValue(factors.composite),
+      detail: `加权新闻、事件、评级、资金与动量 · ${payload.computed_at?.slice(0, 10) || '最新'}`,
+      tone: toneForSigned(factors.composite),
+    },
+    {
+      label: '价格动量',
+      value: formatFactorValue(factors.momentum),
+      detail: '基于近端价格涨跌幅与成交量变化',
+      tone: toneForSigned(factors.momentum),
+    },
+    {
+      label: '资金因子',
+      value: formatFactorValue(factors.fund_flow),
+      detail: degraded.includes('fund_flow') ? '资金源降级，因子可信度降低' : '基于主力资金近5日趋势',
+      tone: toneForSigned(factors.fund_flow),
+    },
+    {
+      label: '样本完整度',
+      value: `${qualityScore}`,
+      detail: missing.length ? `${sampleText} · 缺失 ${missing.join(', ')}` : sampleText,
+      tone: toneForQuality(qualityScore),
+    },
+  ];
+}
+
+function buildNewsItems(payload?: NewsListResponse): PanelNewsItem[] {
+  return (payload?.news || []).slice(0, 6).map((item) => ({
+    time: formatNewsTime(item.published_at),
+    title: item.title || '未命名资讯',
+    desc: item.summary || (item.event_type ? `事件类型：${item.event_type}` : undefined),
+    source: item.source || 'news',
+    detail: `${item.source || 'news'} · ${item.published_at || '未知时间'}`,
+  }));
 }
 
 function getWorkbenchPriceDomain(data: WorkbenchChartPoint[], fallback: number): [number, number] {
@@ -597,6 +854,16 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
   const [priceStatus, setPriceStatus] = useState<'loading' | 'live' | 'degraded'>('loading');
   const [priceMessage, setPriceMessage] = useState('正在同步行情...');
   const [priceRefreshKey, setPriceRefreshKey] = useState(0);
+  const [financeCards, setFinanceCards] = useState<MetricCard[]>(LOADING_FINANCE_CARDS);
+  const [fundFlowCards, setFundFlowCards] = useState<MetricCard[]>(LOADING_FUND_CARDS);
+  const [quantCards, setQuantCards] = useState<MetricCard[]>(LOADING_QUANT_CARDS);
+  const [stockNews, setStockNews] = useState<PanelNewsItem[]>([]);
+  const [infoStatus, setInfoStatus] = useState<Record<PanelTabId, string>>({
+    news: '正在同步当前标的资讯...',
+    finance: '正在同步基本面数据...',
+    funds: '正在同步主力资金...',
+    quant: '正在计算量化因子...',
+  });
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -607,7 +874,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
     }
   ]);
   const [input, setInput] = useState('');
-  const metrics = getWorkbenchMetrics(currentStock);
+  const fallbackPrice = currentStock.startPrice;
   const selectedMode = ANALYSIS_MODES.find((mode) => mode.id === analysisMode) ?? ANALYSIS_MODES[0];
   const chatModelOptions = useMemo(() => buildModelOptions(chatProviders, 'chat'), [chatProviders]);
   const selectedChatModel = useMemo(
@@ -624,19 +891,19 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
   const canSendChat = Boolean(input.trim() && selectedChatModel && !chatLoading);
   const chartLastPoint = chartData[chartData.length - 1];
   const lastChartPoint = activePeriodConfig.frequency === 'intraday' ? (latestQuote ?? chartLastPoint) : chartLastPoint;
-  const displayPrice = lastChartPoint?.close ?? metrics.price;
-  const displayChange = lastChartPoint?.changePct ?? metrics.change;
+  const displayPrice = lastChartPoint?.close ?? fallbackPrice;
+  const displayChange = lastChartPoint?.changePct ?? 0;
   const displayIsUp = displayChange >= 0;
   const isPeriodDataTooShort = chartData.length > 0 && chartData.length < getMinimumPeriodBars(activePeriodConfig.frequency);
   const chartStats = useMemo(() => {
     const lastPoint = chartData[chartData.length - 1];
-    const ma5 = lastPoint?.ma5 ?? metrics.price;
-    const ma10 = lastPoint?.ma10 ?? metrics.price;
-    const ma20 = lastPoint?.ma20 ?? metrics.price;
+    const ma5 = lastPoint?.ma5 ?? fallbackPrice;
+    const ma10 = lastPoint?.ma10 ?? fallbackPrice;
+    const ma20 = lastPoint?.ma20 ?? fallbackPrice;
     const values = chartData.flatMap((point) => [point.high, point.low, point.ma5, point.ma10, point.ma20]);
     const validValues = values.filter((value) => Number.isFinite(value));
-    const max = validValues.length ? Math.max(...validValues) : metrics.price;
-    const min = validValues.length ? Math.min(...validValues) : metrics.price;
+    const max = validValues.length ? Math.max(...validValues) : fallbackPrice;
+    const min = validValues.length ? Math.min(...validValues) : fallbackPrice;
     const volume = lastPoint?.volume ?? 0;
     return {
       ma5,
@@ -646,10 +913,10 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
       low: min,
       volume,
     };
-  }, [chartData, metrics.price]);
+  }, [chartData, fallbackPrice]);
   const priceDomain = useMemo(
-    () => getWorkbenchPriceDomain(chartData, metrics.price),
-    [chartData, metrics.price],
+    () => getWorkbenchPriceDomain(chartData, fallbackPrice),
+    [chartData, fallbackPrice],
   );
   const priceSourceLabel = priceStatus === 'live'
     ? `${lastChartPoint?.source || 'provider'} · ${lastChartPoint?.date || ''}`
@@ -667,27 +934,6 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
     const point = state?.activePayload?.find((item: any) => item?.payload)?.payload as WorkbenchChartPoint | undefined;
     if (point) setHoveredChartPoint(point);
   };
-  const stockNews = useMemo(() => {
-    const prefix = `${currentStock.name} ${currentStock.symbol}`;
-    const sector = currentStock.sector || '当前行业';
-    const stockSpecific = [
-      {
-        time: '14:12',
-        title: `${prefix} 公告与业务跟踪：重点核验 ${sector} 订单、收入确认和客户结构。`,
-        desc: `该条已绑定当前标的，点击后会把公告/业务线索推送到右侧 AI 分析引擎。`,
-        source: '公告',
-      },
-      {
-        time: '13:36',
-        title: `${currentStock.name} 资金与换手观察：放量方向需要与价格行为交叉验证。`,
-        desc: '资金信号只作为短线关注度，不直接替代基本面和公告证据。',
-        source: '资金',
-      },
-      ...MOCK_NEWS,
-    ];
-    return stockSpecific.slice(0, 5);
-  }, [currentStock]);
-
   const handlePanelTabChange = (tabId: PanelTabId) => {
     setActivePanelTab(tabId);
   };
@@ -865,6 +1111,106 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
     };
   }, [activePeriodConfig, activePeriodLabel, currentStock, priceRefreshKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const symbol = encodeURIComponent(stripSymbolSuffix(currentStock.symbol));
+    const stockName = encodeURIComponent(currentStock.name);
+
+    setFinanceCards(LOADING_FINANCE_CARDS);
+    setFundFlowCards(LOADING_FUND_CARDS);
+    setQuantCards(LOADING_QUANT_CARDS);
+    setStockNews([]);
+    setInfoStatus({
+      news: `正在同步 ${currentStock.name} 的资讯...`,
+      finance: `正在同步 ${currentStock.name} 的基本面...`,
+      funds: `正在同步 ${currentStock.name} 的主力资金...`,
+      quant: `正在计算 ${currentStock.name} 的量化因子...`,
+    });
+
+    async function loadInformationPanels() {
+      const [newsResult, fundamentalsResult, fundFlowResult, factorResult] = await Promise.allSettled([
+        fetchApi<NewsListResponse>(`/api/news?symbol=${symbol}&limit=6`),
+        fetchApi<FundamentalsResponse>(`/api/fundamentals/${symbol}`),
+        fetchApi<FundFlowResponse>(`/api/fund-flow/${symbol}?days=30`),
+        fetchApi<FactorResponse>(`/api/factors/${symbol}?stock_name=${stockName}&days=30`),
+      ]);
+
+      if (cancelled) return;
+
+      if (newsResult.status === 'fulfilled') {
+        const items = buildNewsItems(newsResult.value);
+        setStockNews(items);
+        setInfoStatus((prev) => ({
+          ...prev,
+          news: items.length
+            ? `${sourceStatusLabel(newsResult.value.source_status, newsResult.value.degraded)} · ${items.length} 条资讯`
+            : `${sourceStatusLabel(newsResult.value.source_status || 'empty', true)} · 当前标的暂无可用资讯`,
+        }));
+      } else {
+        setStockNews([]);
+        setInfoStatus((prev) => ({
+          ...prev,
+          news: `资讯源不可用：${getErrorMessage(newsResult.reason)}`,
+        }));
+      }
+
+      if (fundamentalsResult.status === 'fulfilled') {
+        const payload = fundamentalsResult.value;
+        setFinanceCards(buildFinanceCards(payload));
+        const period = payload.financial_periods?.[0]?.period;
+        setInfoStatus((prev) => ({
+          ...prev,
+          finance: `${sourceStatusLabel(payload.source_status, payload.degraded)}${period ? ` · 报告期 ${period}` : ''}`,
+        }));
+      } else {
+        setFinanceCards(emptyCards(getErrorMessage(fundamentalsResult.reason)));
+        setInfoStatus((prev) => ({
+          ...prev,
+          finance: `基本面源不可用：${getErrorMessage(fundamentalsResult.reason)}`,
+        }));
+      }
+
+      if (fundFlowResult.status === 'fulfilled') {
+        const payload = fundFlowResult.value;
+        setFundFlowCards(buildFundFlowCards(payload));
+        const lastDate = payload.summary?.last_date;
+        setInfoStatus((prev) => ({
+          ...prev,
+          funds: `${sourceStatusLabel(payload.source_status, payload.degraded)} · ${payload.source || 'eastmoney'}${lastDate ? ` · ${lastDate}` : ''}`,
+        }));
+      } else {
+        setFundFlowCards(emptyCards(getErrorMessage(fundFlowResult.reason)));
+        setInfoStatus((prev) => ({
+          ...prev,
+          funds: `资金源不可用：${getErrorMessage(fundFlowResult.reason)}`,
+        }));
+      }
+
+      if (factorResult.status === 'fulfilled') {
+        const payload = factorResult.value;
+        setQuantCards(buildQuantCards(payload));
+        const degradedText = payload.degraded_inputs?.length
+          ? ` · 降级输入 ${payload.degraded_inputs.join(', ')}`
+          : '';
+        setInfoStatus((prev) => ({
+          ...prev,
+          quant: `近30日因子 · ${payload.computed_at?.slice(0, 19).replace('T', ' ') || '已计算'}${degradedText}`,
+        }));
+      } else {
+        setQuantCards(emptyCards(getErrorMessage(factorResult.reason)));
+        setInfoStatus((prev) => ({
+          ...prev,
+          quant: `因子计算失败：${getErrorMessage(factorResult.reason)}`,
+        }));
+      }
+    }
+
+    void loadInformationPanels();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStock, priceRefreshKey]);
+
   const handlePeriodChange = (period: KlinePeriod) => {
     setActivePeriod(period);
   };
@@ -980,7 +1326,9 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
             ma5: Number(chartStats.ma5.toFixed(2)),
             ma20: Number(chartStats.ma20.toFixed(2)),
             ma60: Number(chartStats.ma20.toFixed(2)),
-            fund_dir: metrics.funds.map((item) => `${item.label}: ${item.value}`).join('；'),
+            fund_dir: fundFlowCards.map((item) => `${item.label}: ${item.value}`).join('；'),
+            fundamentals: financeCards.map((item) => `${item.label}: ${item.value} (${item.detail})`).join('；'),
+            factor_context: quantCards.map((item) => `${item.label}: ${item.value} (${item.detail})`).join('；'),
             data_date: new Date().toLocaleDateString('zh-CN'),
             analysis_mode: selectedMode.label,
             auto_evidence: autoEvidence,
@@ -1057,10 +1405,10 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
         </div>
 
         <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-4 md:w-auto md:max-w-[48rem]">
-          {metrics.finance.slice(0, 4).map((item, i) => (
-            <div key={i} className="flex min-w-0 flex-col rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.04]">
+          {financeCards.slice(0, 4).map((item, i) => (
+            <div key={`${item.label}-${i}`} title={item.detail} className="flex min-w-0 flex-col rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.04]">
               <span className="mb-1.5 truncate text-xs text-neutral-500">{item.label}</span>
-              <span className={cn("text-sm font-mono font-medium tracking-wide", item.trend === 'up' ? 'text-rose-500' : 'text-emerald-500')}>
+              <span className={cn("truncate text-sm font-mono font-medium tracking-wide", metricToneClass(item.tone))}>
                 {item.value}
               </span>
             </div>
@@ -1227,6 +1575,9 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                </button>
              ))}
            </div>
+           <div className="border-b border-white/5 bg-black/30 px-5 py-2 text-[10px] font-mono text-neutral-500">
+             {infoStatus[activePanelTab]}
+           </div>
            <div className="flex-1 overflow-y-auto p-4 bg-black/40 custom-scrollbar">
              <AnimatePresence mode="wait">
                {activePanelTab === 'news' && (
@@ -1234,12 +1585,17 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                    key="news"
                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                  >
+                   {stockNews.length === 0 && (
+                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100/80">
+                       当前标的暂无可用资讯。可在新闻聚合页按股票名称或代码拉取外部新闻；本面板不会再用模板新闻替代真实结果。
+                     </div>
+                   )}
                    {stockNews.map((news, i) => (
                      <button
                        key={`${news.time}-${news.title}`}
                        type="button"
                        data-testid={`workbench-news-item-${i}`}
-                       onClick={() => handlePanelItemSelect(news.title, `${news.source} 线索已关联 ${formatStockLabel(currentStock)}，可进入新闻聚合页继续按来源分类追踪。`)}
+                       onClick={() => handlePanelItemSelect(news.title, `${news.detail}。该资讯已关联 ${formatStockLabel(currentStock)}。`)}
                        className="w-full px-4 py-3 text-left border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer group focus:outline-none focus:bg-indigo-500/[0.04]"
                      >
                        <div className="flex gap-4">
@@ -1264,18 +1620,19 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
 
                {activePanelTab === 'finance' && (
                  <motion.div key="finance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {metrics.finance.map((item, i) => (
+              {financeCards.map((item, i) => (
                      <button
                        key={item.label}
                        type="button"
                        data-testid={`workbench-finance-card-${i}`}
-                       onClick={() => handlePanelItemSelect(item.label, `当前值 ${item.value}，请结合 ${currentStock.name} 最新财报、行业均值和估值假设复核。`)}
+                       onClick={() => handlePanelItemSelect(item.label, `当前值 ${item.value}。${item.detail}。请结合 ${currentStock.name} 最新财报、行业均值和估值假设复核。`)}
                        className="bg-white/[0.03] border border-white/5 p-4 rounded-xl flex flex-col justify-center hover:bg-white/[0.05] transition-colors text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                      >
                        <span className="text-xs text-neutral-500 mb-2">{item.label}</span>
-                       <span className={cn("text-2xl font-mono font-medium", item.trend === 'up' ? 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]' : 'text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]')}>
+                       <span className={cn("text-2xl font-mono font-medium", metricToneClass(item.tone))}>
                          {item.value}
                        </span>
+                       <span className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-neutral-500">{item.detail}</span>
                      </button>
                    ))}
                  </motion.div>
@@ -1283,18 +1640,19 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
 
                {activePanelTab === 'funds' && (
                  <motion.div key="funds" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
-                   {metrics.funds.map((item, i) => (
+                   {fundFlowCards.map((item, i) => (
                      <button
                        key={item.label}
                        type="button"
                        data-testid={`workbench-funds-card-${i}`}
-                       onClick={() => handlePanelItemSelect(item.label, `${item.label} 当前为 ${item.value}。资金项需要和换手率、价格方向、龙虎榜/两融数据交叉验证。`)}
-                       className="bg-white/[0.03] border border-white/5 p-4 rounded-xl flex flex-col justify-center items-center hover:bg-white/[0.05] transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                       onClick={() => handlePanelItemSelect(item.label, `${item.label} 当前为 ${item.value}。${item.detail}。资金项需要和换手率、价格方向、龙虎榜/两融数据交叉验证。`)}
+                       className="bg-white/[0.03] border border-white/5 p-4 rounded-xl flex flex-col justify-center hover:bg-white/[0.05] transition-colors text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                      >
                        <span className="text-xs text-neutral-500 mb-2">{item.label}</span>
-                       <span className={`text-2xl font-mono font-medium drop-shadow-md ${item.color}`}>
+                       <span className={cn("text-2xl font-mono font-medium", metricToneClass(item.tone))}>
                          {item.value}
                        </span>
+                       <span className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-neutral-500">{item.detail}</span>
                      </button>
                    ))}
                  </motion.div>
@@ -1302,17 +1660,17 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
 
                {activePanelTab === 'quant' && (
                  <motion.div key="quant" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid h-full grid-cols-2 gap-4 p-4">
-                   {QUANT_FACTORS.map((factor, i) => (
+                   {quantCards.map((factor, i) => (
                      <button
                        key={factor.label}
                        type="button"
                        data-testid={`workbench-quant-card-${i}`}
-                       onClick={() => handlePanelItemSelect(factor.label, `${factor.desc} 该因子当前只作为研究辅助，不构成投资建议。`)}
+                       onClick={() => handlePanelItemSelect(factor.label, `${factor.detail}。该因子当前只作为研究辅助，不构成投资建议。`)}
                        className="rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-4 text-left text-indigo-200 transition-colors hover:bg-indigo-500/15 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                      >
                        <span className="block text-[10px] font-mono uppercase tracking-widest text-indigo-300/70">{factor.label}</span>
-                       <span className="mt-2 block text-2xl font-mono font-semibold text-indigo-100">{factor.value}</span>
-                       <span className="mt-2 block text-[11px] leading-relaxed text-indigo-100/65">{factor.desc}</span>
+                       <span className={cn("mt-2 block text-2xl font-mono font-semibold", metricToneClass(factor.tone))}>{factor.value}</span>
+                       <span className="mt-2 block text-[11px] leading-relaxed text-indigo-100/65">{factor.detail}</span>
                      </button>
                    ))}
                  </motion.div>
