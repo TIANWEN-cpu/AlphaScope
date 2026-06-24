@@ -220,7 +220,7 @@ export function TopBar() {
               className="flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium text-amber-300 transition-colors hover:bg-amber-500/15"
             >
               <Wallet className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">今日</span>
+              <span className="hidden sm:inline">LLM 今日</span>
               <span className="font-mono">{fmtUsd(cost?.windows?.today?.cost_usd ?? 0)}</span>
             </button>
             <AnimatePresence>
