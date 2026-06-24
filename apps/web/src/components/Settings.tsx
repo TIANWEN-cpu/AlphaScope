@@ -1039,7 +1039,7 @@ export function Settings({ initialTab }: SettingsProps) {
                     <TextField label="首选数据源组合" value={settings.activeProvider} onChange={(value) => updateSetting('activeProvider', value)} />
                   </div>
                   <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <ToggleRow label="自动刷新行情沙盘" hint="切换标的后自动重算 K 线与资金模拟。" checked={settings.autoRefresh} onChange={() => updateSetting('autoRefresh', !settings.autoRefresh)} />
+                    <ToggleRow label="自动刷新行情沙盘" hint="切换标的后自动重算 K 线与资金信息。" checked={settings.autoRefresh} onChange={() => updateSetting('autoRefresh', !settings.autoRefresh)} />
                     <ToggleRow label="桌面通知提示" hint="任务完成、数据源降级和分析失败时提醒。" checked={settings.pushNotice} onChange={() => updateSetting('pushNotice', !settings.pushNotice)} />
                   </div>
                 </SettingCard>
