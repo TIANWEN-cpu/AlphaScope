@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ElementType } from 'react';
 import {
-  Activity,
   BarChart3,
   Bot,
   Database,
   Globe,
   Network,
   Play,
+  RefreshCw,
   Settings2,
   ShieldCheck,
   Square,
@@ -18,12 +18,16 @@ import { cn } from '../lib/utils';
 import {
   AgentConfig,
   AgentIconKey,
-  getEnabledAgentRuntimeConfigs,
   AGENT_CONFIG_STORAGE_KEY,
   LEGACY_AGENT_CONFIG_STORAGE_KEY,
+  getEnabledAgentRuntimeConfigs,
   loadAgentConfigs,
   saveAgentConfigs,
 } from '../lib/agentConfigs';
+import { fetchApi } from '../lib/api';
+import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
+import { STOCK_UNIVERSE, formatStockLabel } from '../lib/stocks';
+import { getErrorMessage, stripSymbolSuffix, useTaskStream } from '../lib/dataFetch';
 
 const ICON_MAP: Record<AgentIconKey, ElementType> = {
   macro: Globe,
@@ -31,7 +35,7 @@ const ICON_MAP: Record<AgentIconKey, ElementType> = {
   quant: TrendingUp,
   risk: ShieldCheck,
   data: Database,
-  execution: Activity,
+  execution: Play,
   custom: Bot,
 };
 
@@ -42,6 +46,9 @@ interface AgentsSystemProps {
 export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
   const [agents, setAgents] = useState<AgentConfig[]>(() => loadAgentConfigs());
   const [topologyOpen, setTopologyOpen] = useState(false);
+  const [stock, setStock] = useState(() => getPersistedStock() ?? STOCK_UNIVERSE[0]);
+  const [runningTaskCount, setRunningTaskCount] = useState<number>(0);
+  const task = useTaskStream();
 
   useEffect(() => {
     saveAgentConfigs(agents);
@@ -57,33 +64,41 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
         setAgents(loadAgentConfigs());
       }
     };
-
+    const unsubscribe = subscribeStockSelected(({ stock: nextStock }) => {
+      setStock(nextStock);
+    });
     window.addEventListener('agent-configs-changed', handleAgentConfigChange);
     window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('agent-configs-changed', handleAgentConfigChange);
       window.removeEventListener('storage', handleStorageChange);
+      unsubscribe();
     };
   }, []);
 
   const enabledAgents = useMemo(() => agents.filter((agent) => agent.enabled), [agents]);
   const enabledCount = enabledAgents.length;
-  const runningCount = useMemo(
-    () => enabledAgents.filter((agent) => agent.status === 'analyzing').length,
-    [enabledAgents],
-  );
   const runtimeConfigs = useMemo(() => getEnabledAgentRuntimeConfigs(agents), [agents]);
 
-  const handleToggleExpert = (id: string) => {
-    setAgents((prev) => prev.map((agent) => {
-      if (agent.id !== id || !agent.enabled) return agent;
-      const isAnalyzing = agent.status === 'analyzing';
-      return {
-        ...agent,
-        status: isAnalyzing ? 'idle' : 'analyzing',
-        task: isAnalyzing ? '暂无任务' : '执行模拟诊断指令...',
-      };
-    }));
+  const refreshRunningCount = useCallback(async () => {
+    try {
+      const res = await fetchApi<{ tasks?: unknown[]; total?: number }>('/api/tasks?status=running&limit=50');
+      setRunningTaskCount(res.total ?? res.tasks?.length ?? 0);
+    } catch {
+      setRunningTaskCount(task.isRunning ? 1 : 0);
+    }
+  }, [task.isRunning]);
+
+  useEffect(() => {
+    void refreshRunningCount();
+  }, [refreshRunningCount]);
+
+  const handleRun = () => {
+    if (!stock || task.isRunning) return;
+    void task.run(stripSymbolSuffix(stock.symbol), stock.name, 'deep');
+  };
+  const handleStop = () => {
+    void task.cancel().then(() => void refreshRunningCount());
   };
 
   return (
@@ -103,35 +118,94 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
             </span>
           </h2>
           <p className="text-sm text-neutral-400 font-mono">
-            查看 Agent 运行状态与协作拓扑；角色、提示词和数量请在系统设置中维护。
+            查看启用 Agent 与真实分析任务运行态；角色、提示词和数量请在系统设置中维护。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-lg border border-white/5 bg-black/40 px-3 py-2 text-xs font-mono text-neutral-400">
+            标的：{formatStockLabel(stock)}
+          </span>
+          <button
+            type="button"
+            onClick={refreshRunningCount}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-neutral-300 transition-colors hover:bg-white/[0.06]"
+          >
+            <RefreshCw className={cn('h-4 w-4', task.isRunning && 'animate-spin')} />
+            刷新
+          </button>
           <button
             type="button"
             data-testid="agents-open-settings"
             onClick={onOpenAgentSettings}
             className="flex items-center gap-2 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 py-2 text-xs font-medium text-indigo-300 transition-colors hover:bg-indigo-500/15"
           >
-            <Settings2 className="w-4 h-4" />
+            <Settings2 className="h-4 w-4" />
             到系统设置配置
           </button>
           <button
             type="button"
-            data-testid="agents-topology-toggle"
             onClick={() => setTopologyOpen((open) => !open)}
             className="flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-xs font-medium text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)] transition-colors hover:bg-indigo-500/20"
           >
-            <Network className="w-4 h-4" />
+            <Network className="h-4 w-4" />
             全网拓扑
           </button>
+          {task.isRunning ? (
+            <button
+              type="button"
+              onClick={handleStop}
+              className="flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-500/15 px-4 py-2 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-500/25"
+            >
+              <Square className="h-4 w-4 fill-current" />
+              停止分析
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-testid="agents-run-analysis"
+              onClick={handleRun}
+              disabled={enabledCount === 0}
+              title={enabledCount === 0 ? '请先在系统设置启用至少一个 Agent' : '对当前标的运行启用的专家圆桌分析'}
+              className="flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-600 px-4 py-2 text-xs font-medium text-white shadow-[0_0_20px_rgba(99,102,241,0.2)] transition-all hover:bg-indigo-500 disabled:opacity-40"
+            >
+              <Play className="h-4 w-4 fill-current" />
+              启动圆桌分析
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Real task progress / result banner */}
+      <AnimatePresence>
+        {(task.isRunning || task.message || task.error || task.result) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="relative z-10 mx-2 mb-5 overflow-hidden rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4"
+          >
+            {task.isRunning && (
+              <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-black/40">
+                <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${task.progress}%` }} />
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-xs">
+              {task.isRunning && <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-400" />}
+              <span className={cn('font-medium', task.error ? 'text-rose-300' : task.result ? 'text-emerald-300' : 'text-indigo-200')}>
+                {task.error ? `分析失败：${task.error}` : task.result ? '圆桌分析完成，可在「研究报告」查看结果。' : task.message || '任务调度中...'}
+              </span>
+            </div>
+            {task.status === 'pending' && task.taskId && (
+              <p className="mt-1 font-mono text-[10px] text-neutral-500">任务 ID：{task.taskId}</p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="mx-2 mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
         {[
           ['已启用席位', `${enabledCount}/${agents.length}`, '进入分析请求的 Agent 数量。'],
-          ['运行中', `${runningCount}`, '当前模拟调度中的专家席位。'],
+          ['运行中任务', `${runningTaskCount}`, '后端 /api/tasks 实时运行态。'],
           ['请求配置', `${runtimeConfigs.length}`, '将写入 agent_configs 的配置项。'],
         ].map(([label, value, desc]) => (
           <div key={label} className="rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3">
@@ -154,11 +228,11 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
               <div>
                 <h3 className="text-sm font-semibold text-neutral-100">协作拓扑概览</h3>
                 <p className="mt-1 text-xs text-neutral-500">
-                  当前启用 {enabledCount} 个 Agent，其中 {runningCount} 个正在工作；设置页保存后会同步到本页和分析请求。
+                  当前启用 {enabledCount} 个 Agent，后端运行态 {runningTaskCount} 个；设置页保存后会同步到本页和分析请求。
                 </p>
               </div>
-              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
-                调度器在线
+              <span className={cn('rounded-full border px-3 py-1 text-xs', task.isRunning ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-black/30 text-neutral-400')}>
+                {task.isRunning ? '调度器运行中' : '调度器待命'}
               </span>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -181,6 +255,7 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {agents.map((agent, index) => {
             const Icon = ICON_MAP[agent.iconKey] ?? Bot;
+            const participating = agent.enabled && task.isRunning;
             return (
               <motion.div
                 key={agent.id}
@@ -189,11 +264,11 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
                 transition={{ delay: index * 0.04, type: 'spring', stiffness: 300, damping: 24 }}
                 className={cn(
                   'group relative flex min-h-[260px] flex-col overflow-hidden rounded-2xl border bg-white/[0.02] p-5 shadow-xl backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.04]',
-                  agent.status === 'analyzing' && agent.enabled ? 'border-indigo-500/35' : 'border-white/5 hover:border-indigo-500/25',
+                  participating ? 'border-indigo-500/35' : 'border-white/5 hover:border-indigo-500/25',
                   !agent.enabled && 'bg-black/20',
                 )}
               >
-                {agent.status === 'analyzing' && agent.enabled && (
+                {participating && (
                   <motion.div
                     animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
                     transition={{ repeat: Infinity, duration: 2 }}
@@ -205,11 +280,10 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
                   <div className="flex min-w-0 items-center gap-4">
                     <div className={cn(
                       'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border shadow-inner transition-colors',
-                      agent.status === 'analyzing' && agent.enabled
+                      participating
                         ? 'border-indigo-500/30 bg-gradient-to-tr from-indigo-600/20 to-indigo-400/10 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
                         : 'border-white/5 bg-black/40 text-neutral-500 group-hover:text-neutral-400',
-                    )}
-                    >
+                    )}>
                       <Icon className="h-6 w-6" />
                     </div>
                     <div className="min-w-0">
@@ -220,12 +294,13 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
 
                   <div className={cn(
                     'shrink-0 rounded-md border px-2.5 py-1 text-[10px] font-mono',
-                    agent.enabled
-                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
-                      : 'border-white/10 bg-black/30 text-neutral-500',
-                  )}
-                  >
-                    {agent.enabled ? '启用' : '停用'}
+                    participating
+                      ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300'
+                      : agent.enabled
+                        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                        : 'border-white/10 bg-black/30 text-neutral-500',
+                  )}>
+                    {participating ? '分析中' : agent.enabled ? '已就绪' : '停用'}
                   </div>
                 </div>
 
@@ -245,31 +320,14 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
 
                 <div className="relative z-10 mt-5 flex items-center justify-between border-t border-white/5 pt-4">
                   <div className="flex min-w-0 max-w-[68%] flex-col gap-1">
-                    <span className="text-[10px] font-mono tracking-wide text-neutral-500">当前任务</span>
-                    <motion.span
-                      key={agent.task}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={cn('truncate text-xs font-medium', agent.status === 'analyzing' && agent.enabled ? 'text-indigo-300' : 'text-neutral-400')}
-                      title={agent.task}
-                    >
-                      {agent.task}
-                    </motion.span>
+                    <span className="text-[10px] font-mono tracking-wide text-neutral-500">运行态</span>
+                    <span className={cn('truncate text-xs font-medium', participating ? 'text-indigo-300' : 'text-neutral-400')}>
+                      {participating ? '跟随圆桌调度参与分析' : agent.enabled ? '待命，点击右上角启动圆桌分析' : '已在系统设置中停用'}
+                    </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleExpert(agent.id)}
-                    disabled={!agent.enabled}
-                    title={agent.enabled ? '启动或暂停模拟分析' : '请先在系统设置中启用该 Agent'}
-                    className={cn(
-                      'flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-40',
-                      agent.status === 'analyzing' && agent.enabled
-                        ? 'border-rose-500/30 bg-rose-500/10 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.1)] hover:bg-rose-500/20'
-                        : 'border-white/10 bg-black/40 text-neutral-400 hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-indigo-400',
-                    )}
-                  >
-                    {agent.status === 'analyzing' && agent.enabled ? <Square className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
-                  </button>
+                  <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl border', participating ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-400' : 'border-white/10 bg-black/40 text-neutral-500')}>
+                    <Icon className="h-4 w-4" />
+                  </div>
                 </div>
               </motion.div>
             );
