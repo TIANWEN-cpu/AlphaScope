@@ -45,17 +45,18 @@ const DEFAULT_POOL_TEXT = `600519 贵州茅台
 
 interface PerformanceMetrics {
   total_return?: number;
-  annualized_return?: number;
+  annual_return?: number;
   max_drawdown?: number;
   sharpe_ratio?: number;
   sortino_ratio?: number;
   calmar_ratio?: number;
   win_rate?: number;
   profit_factor?: number;
-  total_trades?: number;
+  trade_count?: number;
   initial_capital?: number;
   final_equity?: number;
   trading_days?: number;
+  volatility?: number;
 }
 
 interface TradeRecord {
@@ -74,17 +75,36 @@ interface RiskViolation {
   date?: string;
 }
 
+interface BacktestEquityPoint {
+  date?: string;
+  equity?: number;
+  value?: number;
+}
+
+interface BacktestSummary {
+  data_source?: string;
+  data_source_label?: string;
+  bar_count?: number;
+  trade_count?: number;
+  risk_violation_count?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
 interface BacktestResultData {
-  strategy_name?: string;
+  run_id?: string;
+  strategy_id?: string;
   symbol?: string;
-  equity_curve?: number[];
-  dates?: string[];
+  equity_curve?: BacktestEquityPoint[];
   trades?: TradeRecord[];
-  performance?: PerformanceMetrics;
+  metrics?: PerformanceMetrics;
   risk_violations?: RiskViolation[];
+  summary?: BacktestSummary;
+  message?: string;
 }
 
 interface StrategyInfo {
+  id: string;
   name: string;
   description?: string;
   default_params?: Record<string, unknown>;
@@ -222,7 +242,7 @@ export function Backtesting() {
 
   useEffect(() => {
     if (!selectedStrategy && strategies.length) {
-      setSelectedStrategy(strategies[0].name);
+      setSelectedStrategy(strategies[0].id || strategies[0].name);
     }
   }, [strategies, selectedStrategy]);
 
@@ -326,20 +346,25 @@ export function Backtesting() {
     setResult(null);
     setActionMessage(`正在运行「${selectedStrategy}」对 ${selectedStockName}(${stripSymbolSuffix(selectedSymbol)}) 的真实回测...`);
     try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const res = await fetchApi<BacktestResultData>('/api/quant/backtest', {
         method: 'POST',
         body: JSON.stringify({
-          strategy_name: selectedStrategy,
+          strategy_id: selectedStrategy,
           symbol: stripSymbolSuffix(selectedSymbol),
-          days,
+          start_date: fmt(startDate),
+          end_date: fmt(endDate),
           initial_capital: initialCapital,
           params: {},
         }),
       });
       setResult(res);
-      const perf = res.performance || {};
+      const perf = res.metrics || {};
       setActionMessage(
-        `回测完成：${perf.total_trades ?? 0} 笔交易，累计收益 ${formatPercent(perf.total_return)}，最大回撤 ${formatPercent(perf.max_drawdown)}。`,
+        `回测完成：${perf.trade_count ?? 0} 笔交易，累计收益 ${formatPercent(perf.total_return)}，最大回撤 ${formatPercent(perf.max_drawdown)}。${res.summary?.data_source_label ? '数据来源：' + res.summary.data_source_label : ''}`,
       );
     } catch (err) {
       const msg = getErrorMessage(err);
@@ -397,16 +422,14 @@ export function Backtesting() {
 
   const equityData = useMemo(() => {
     if (!result?.equity_curve?.length) return [];
-    const curve = result.equity_curve;
-    const dates = result.dates || [];
-    return curve.map((value, index) => ({
+    return result.equity_curve.map((point, index) => ({
       index: index + 1,
-      date: dates[index] || `D${index + 1}`,
-      equity: value,
+      date: point.date || `D${index + 1}`,
+      equity: point.equity ?? point.value ?? 0,
     }));
   }, [result]);
 
-  const perf = result?.performance;
+  const perf = result?.metrics;
   const sortedPoolRows = useMemo(
     () => [...poolRows].sort((a, b) => (b.composite ?? -Infinity) - (a.composite ?? -Infinity)),
     [poolRows],
@@ -500,7 +523,7 @@ export function Backtesting() {
                   >
                     {strategies.length === 0 && <option value="">{strategiesAsync.loading ? '加载策略...' : '暂无策略'}</option>}
                     {strategies.map((strategy) => (
-                      <option key={strategy.name} value={strategy.name} className="bg-[#0f0f15] text-neutral-200">
+                      <option key={strategy.id || strategy.name} value={strategy.id || strategy.name} className="bg-[#0f0f15] text-neutral-200">
                         {strategy.name}
                       </option>
                     ))}
@@ -544,16 +567,16 @@ export function Backtesting() {
               )}
 
               <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-4">
-                <MetricCard label="累计收益" value={perf ? formatPercent(perf.total_return) : '--'} hint={perf ? `年化 ${formatPercent(perf.annualized_return)}` : '运行回测后显示'} icon={TrendingUp} tone="rose" />
+                <MetricCard label="累计收益" value={perf ? formatPercent(perf.total_return) : '--'} hint={perf ? `年化 ${formatPercent(perf.annual_return)}` : '运行回测后显示'} icon={TrendingUp} tone="rose" />
                 <MetricCard label="最大回撤" value={perf ? formatPercent(perf.max_drawdown) : '--'} hint={perf ? `Calmar ${formatFactor(perf.calmar_ratio)}` : '运行回测后显示'} icon={ShieldAlert} tone="emerald" />
-                <MetricCard label="胜率" value={perf ? `${formatFactor(perf.win_rate)}%` : '--'} hint={perf ? `共 ${perf.total_trades ?? 0} 笔交易` : '运行回测后显示'} icon={Flag} tone="indigo" />
+                <MetricCard label="胜率" value={perf ? `${formatFactor(perf.win_rate)}%` : '--'} hint={perf ? `共 ${perf.trade_count ?? 0} 笔交易` : '运行回测后显示'} icon={Flag} tone="indigo" />
                 <MetricCard label="夏普比率" value={perf ? formatFactor(perf.sharpe_ratio) : '--'} hint={perf ? `Sortino ${formatFactor(perf.sortino_ratio)}` : '运行回测后显示'} icon={BarChart} />
               </div>
 
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                 <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-xl backdrop-blur-md xl:col-span-2">
                   <h3 className="mb-6 border-b border-white/5 pb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">
-                    净值曲线 {result ? `· ${result.strategy_name} / ${result.symbol}` : '· 待运行'}
+                    净值曲线 {result ? `· ${result.strategy_id} / ${result.symbol}${result.summary?.data_source_label ? ' · ' + result.summary.data_source_label : ''}` : '· 待运行'}
                   </h3>
                   <div className="h-80 w-full">
                     {equityData.length ? (
@@ -627,8 +650,8 @@ export function Backtesting() {
                 )}
                 {strategies.map((strategy) => (
                   <div
-                    key={strategy.name}
-                    onClick={() => setSelectedStrategy(strategy.name)}
+                    key={strategy.id || strategy.name}
+                    onClick={() => setSelectedStrategy(strategy.id || strategy.name)}
                     className={cn(
                       'mb-3 flex cursor-pointer items-start justify-between rounded-xl border p-4 transition-colors',
                       selectedStrategy === strategy.name ? 'border-indigo-500/40 bg-indigo-500/10' : 'border-white/5 bg-black/25 hover:border-white/15',
