@@ -36,6 +36,7 @@ import {
 import { cn } from '../lib/utils';
 import { API_BASE_URL, API_KEY, LOCAL_API_TOKEN, type ApiResponse } from '../lib/api';
 import { ProviderHealthPanel } from './ProviderHealthPanel';
+import { DataSourceConfigPanel } from './DataSourceConfigPanel';
 import {
   AI_ROUTE_LABELS,
   AiModelRoutes,
@@ -1735,6 +1736,7 @@ export function Settings({ initialTab }: SettingsProps) {
             {activeTab === 'data' && (
               <motion.div key="data" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                 <ProviderHealthPanel />
+                <DataSourceConfigPanel />
               </motion.div>
             )}
           </div>

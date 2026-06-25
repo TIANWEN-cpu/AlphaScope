@@ -28,6 +28,17 @@ from typing import AsyncGenerator, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# 启动时加载项目根 .env (若存在), 使 AI_FINANCE_MASTER_KEY 等配置对后端可用
+try:
+    from dotenv import load_dotenv
+
+    _ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+    if _ENV_FILE.exists():
+        load_dotenv(_ENV_FILE)
+        logger.info("已加载环境配置: %s", _ENV_FILE)
+except ImportError:
+    pass
+
 
 def _load_api_version() -> str:
     env_version = os.environ.get("ALPHASCOPE_VERSION", "").strip()
@@ -171,6 +182,11 @@ if HAS_FASTAPI:
     from backend.api.experts import router as experts_router
     from backend.api.brief import router as brief_router
     from backend.api.watchlist import router as watchlist_router
+    from backend.api.datasources import router as datasources_router
+
+    # 启动时把已保存的数据源凭证注入环境变量, 使 provider 自动注册时可用
+    from backend.datasource_config import init_credentials_on_startup
+    init_credentials_on_startup()
 
     app.include_router(settings_router)
     app.include_router(reports_router)
@@ -198,6 +214,7 @@ if HAS_FASTAPI:
     app.include_router(experts_router)
     app.include_router(brief_router)
     app.include_router(watchlist_router)
+    app.include_router(datasources_router)
 
     # ============== 全局错误处理 ==============
 

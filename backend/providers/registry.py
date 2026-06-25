@@ -188,15 +188,26 @@ class ProviderRegistry:
 
     def _is_enabled(self, provider_name: str, data_type: str) -> bool:
         """检查 Provider 在配置中是否启用"""
-        config_key = f"{data_type}_providers"
+        # data_type 用复数 (如 prices), yaml 用单数键 (如 price), 需映射
+        config_key = self._section_key_for(data_type)
         provider_config = self._config.get(config_key, {}).get(provider_name, {})
         return provider_config.get("enabled", True)
 
     def _get_config_priority(self, provider_name: str, data_type: str) -> Optional[int]:
         """从配置中获取 Provider 优先级"""
-        config_key = f"{data_type}_providers"
+        config_key = self._section_key_for(data_type)
         provider_config = self._config.get(config_key, {}).get(provider_name, {})
         return provider_config.get("priority")
+
+    # data_type (复数, provider.data_types) -> yaml 单数键
+    _DATA_TYPE_TO_YAML_KEY: dict[str, str] = {
+        "prices": "price",
+        "announcements": "announcement",
+        "reports": "report",
+    }
+
+    def _section_key_for(self, data_type: str) -> str:
+        return f"{self._DATA_TYPE_TO_YAML_KEY.get(data_type, data_type)}_providers"
 
     def get_all_health(self) -> list[dict]:
         """获取所有 Provider 的健康状态"""

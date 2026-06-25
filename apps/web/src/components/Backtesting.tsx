@@ -223,8 +223,8 @@ export function Backtesting() {
   const persistedStock = useMemo(() => persisted ?? STOCK_UNIVERSE[0], [persisted]);
   const [selectedSymbol, setSelectedSymbol] = useState(persistedStock.symbol);
   const [selectedStockName, setSelectedStockName] = useState(persistedStock.name);
-  const [days, setDays] = useState(120);
-  const [initialCapital, setInitialCapital] = useState(100000);
+  const [days, setDays] = useState(180);
+  const [initialCapital, setInitialCapital] = useState(1000000);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<BacktestResultData | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
@@ -363,9 +363,16 @@ export function Backtesting() {
       });
       setResult(res);
       const perf = res.metrics || {};
-      setActionMessage(
-        `回测完成：${perf.trade_count ?? 0} 笔交易，累计收益 ${formatPercent(perf.total_return)}，最大回撤 ${formatPercent(perf.max_drawdown)}。${res.summary?.data_source_label ? '数据来源：' + res.summary.data_source_label : ''}`,
-      );
+      const tradeCount = perf.trade_count ?? 0;
+      if (tradeCount === 0) {
+        setActionMessage(
+          `回测完成但 0 笔交易：策略未触发买卖信号，或当前本金（¥${initialCapital.toLocaleString()}）按 A 股 100 股整手买不进该标的。可尝试提高本金或更换标的。${res.summary?.data_source_label ? ' 数据来源：' + res.summary.data_source_label : ''}`,
+        );
+      } else {
+        setActionMessage(
+          `回测完成：${tradeCount} 笔交易，累计收益 ${formatPercent(perf.total_return)}，最大回撤 ${formatPercent(perf.max_drawdown)}。${res.summary?.data_source_label ? '数据来源：' + res.summary.data_source_label : ''}`,
+        );
+      }
     } catch (err) {
       const msg = getErrorMessage(err);
       setRunError(msg);
@@ -544,9 +551,9 @@ export function Backtesting() {
                   <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">初始资金</p>
                   <input
                     type="number"
-                    min={1000}
+                    min={10000}
                     value={initialCapital}
-                    onChange={(e) => setInitialCapital(Math.max(1000, Number(e.target.value) || 100000))}
+                    onChange={(e) => setInitialCapital(Math.max(10000, Number(e.target.value) || 1000000))}
                     className="mt-1 w-28 bg-transparent text-sm text-neutral-200 outline-none"
                   />
                 </div>
