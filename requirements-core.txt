@@ -11,6 +11,7 @@ curl_cffi==0.13.0
 openai==2.3.0
 python-dotenv==1.1.0
 pyyaml==6.0.2
+ruamel.yaml>=0.18,<0.19  # 保留注释的 YAML round-trip 编辑 (数据源权重配置); 不可用时回退 PyYAML
 pydantic==2.11.3
 tenacity==9.1.2
 aiohttp==3.12.4
