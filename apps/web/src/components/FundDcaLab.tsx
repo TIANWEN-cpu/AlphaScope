@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ComposedChart, 
@@ -34,6 +34,21 @@ import {
 } from 'lucide-react';
 import { StableChartContainer } from './StableChartContainer';
 import { cn } from '../lib/utils';
+import { fetchApi } from '../lib/api';
+import { getErrorMessage } from '../lib/dataFetch';
+import {
+  buildModelOptions,
+  getModelKey,
+  getRouteSelection,
+  loadAiModelRoutesFromApi,
+  loadLocalAiModelRoutes,
+  routesToGlobalAiSettings,
+} from '../lib/aiModelRouting';
+import type { ModelOption, ModelProvider } from '../lib/aiModelRouting';
+
+// Quick-pick fund CODES (real public-fund codes; profiles/metrics/NAVs are
+// fetched live from /api/funds/* — no hardcoded fund data remains).
+const QUICK_FUND_CODES = ['005827', '510300', '003095', '159941', '100072', '161725'];
 
 // --- Types ---
 interface FundProfile {
@@ -58,206 +73,6 @@ interface FundProfile {
   customBasePrice: number;
 }
 
-// --- High Fidelity Mock Public Funds Database ---
-const FUNDS_DATABASE: Record<string, FundProfile> = {
-  '005827': {
-    code: '005827',
-    name: '易方达蓝筹精选混合',
-    type: 'mixed',
-    typeName: '偏股混合型',
-    company: '易方达基金管理有限公司',
-    manager: '张坤',
-    inception: '2018-09-05',
-    size: '562.4 亿元',
-    expenseRatio: 1.75, // 1.5% Mgmt + 0.25% Custody
-    benchmarkName: '沪深 300 指数',
-    topHoldings: [
-      { name: '腾讯控股', weight: 9.85 },
-      { name: '贵州茅台', weight: 9.64 },
-      { name: '五粮液', weight: 9.51 },
-      { name: '泸州老窖', weight: 9.21 },
-      { name: '美团-W', weight: 8.42 }
-    ],
-    sectorAllocation: [
-      { name: '食品饮料', weight: 38 },
-      { name: '互联网科技', weight: 32 },
-      { name: '金融地产', weight: 12 },
-      { name: '医疗健康', weight: 10 },
-      { name: '其他', weight: 8 }
-    ],
-    historicMetrics: {
-      maxDrawdown: -43.2,
-      sharpe: 0.48,
-      annualVol: 24.5,
-      rankPct: 15
-    },
-    customBasePrice: 1.82
-  },
-  '510300': {
-    code: '510300',
-    name: '华夏沪深300ETF',
-    type: 'etf',
-    typeName: '增强规模指数型 (ETF)',
-    company: '华夏基金管理有限公司',
-    manager: '赵宗庭',
-    inception: '2012-12-25',
-    size: '1240.2 亿元',
-    expenseRatio: 0.60, // 0.5% Mgmt + 0.1% Custody
-    benchmarkName: '沪深 300 净收益指数',
-    topHoldings: [
-      { name: '贵州茅台', weight: 5.75 },
-      { name: '宁德时代', weight: 3.12 },
-      { name: '中国平安', weight: 2.85 },
-      { name: '招商银行', weight: 2.45 },
-      { name: '美的集团', weight: 1.95 }
-    ],
-    sectorAllocation: [
-      { name: '金融服务', weight: 24 },
-      { name: '工业制造', weight: 18 },
-      { name: '白酒消费', weight: 16 },
-      { name: '新能源及汽车', weight: 15 },
-      { name: '信息技术/芯片', weight: 12 },
-      { name: '其他', weight: 15 }
-    ],
-    historicMetrics: {
-      maxDrawdown: -33.4,
-      sharpe: 0.35,
-      annualVol: 17.2,
-      rankPct: 35
-    },
-    customBasePrice: 3.45
-  },
-  '003095': {
-    code: '003095',
-    name: '中欧医疗健康混合A',
-    type: 'mixed',
-    typeName: '行业偏股混合型',
-    company: '中欧基金管理有限公司',
-    manager: '葛兰',
-    inception: '2016-09-29',
-    size: '385.1 亿元',
-    expenseRatio: 1.75,
-    benchmarkName: '中证医药卫生指数',
-    topHoldings: [
-      { name: '药明康德', weight: 9.88 },
-      { name: '爱尔眼科', weight: 9.55 },
-      { name: '迈瑞医疗', weight: 8.92 },
-      { name: '恒瑞医药', weight: 8.41 },
-      { name: '同仁堂', weight: 5.12 }
-    ],
-    sectorAllocation: [
-      { name: '创新药/CXO', weight: 45 },
-      { name: '医疗器械', weight: 28 },
-      { name: '医疗服务与眼科', weight: 15 },
-      { name: '中药板块', weight: 10 },
-      { name: '其他', weight: 2 }
-    ],
-    historicMetrics: {
-      maxDrawdown: -58.4,
-      sharpe: 0.28,
-      annualVol: 29.8,
-      rankPct: 28
-    },
-    customBasePrice: 2.15
-  },
-  '159941': {
-    code: '159941',
-    name: '广发纳斯达克100ETF(QDII)',
-    type: 'qdii',
-    typeName: 'QDII 国际指数型',
-    company: '广发基金管理有限公司',
-    manager: '刘杰',
-    inception: '2015-06-10',
-    size: '195.3 亿元',
-    expenseRatio: 1.00, // 0.8% + 0.2%
-    benchmarkName: 'NASDAQ-100 Index',
-    topHoldings: [
-      { name: '微软 (Microsoft)', weight: 12.15 },
-      { name: '苹果 (Apple)', weight: 11.85 },
-      { name: '英伟达 (NVIDIA)', weight: 10.45 },
-      { name: '亚马逊 (Amazon)', weight: 6.82 },
-      { name: '特斯拉 (Tesla)', weight: 4.12 }
-    ],
-    sectorAllocation: [
-      { name: '人工智能/云算力', weight: 48 },
-      { name: '消费级硬件', weight: 22 },
-      { name: '互联网平台', weight: 16 },
-      { name: '智能硬件与出行', weight: 10 },
-      { name: '其他', weight: 4 }
-    ],
-    historicMetrics: {
-      maxDrawdown: -28.6,
-      sharpe: 0.88,
-      annualVol: 19.3,
-      rankPct: 4
-    },
-    customBasePrice: 1.55
-  },
-  '100072': {
-    code: '100072',
-    name: '富国强债混合A',
-    type: 'bond',
-    typeName: '增强收益债券型',
-    company: '富国基金管理有限公司',
-    manager: '黄纪亮',
-    inception: '2013-05-28',
-    size: '84.6 亿元',
-    expenseRatio: 0.75, // 0.6% Mgmt + 0.15% Custody
-    benchmarkName: '中债综合财富指数',
-    topHoldings: [
-      { name: '22国开10债券', weight: 6.50 },
-      { name: '23农发05债券', weight: 5.20 },
-      { name: '国能转债', weight: 3.80 },
-      { name: '21附息国债08', weight: 3.10 },
-      { name: '23中汇EB', weight: 2.95 }
-    ],
-    sectorAllocation: [
-      { name: '政策性金融债', weight: 42 },
-      { name: '中短期信用债', weight: 35 },
-      { name: '优质可转债/可交债', weight: 15 },
-      { name: '储蓄国债', weight: 6 },
-      { name: '权益类套利', weight: 2 }
-    ],
-    historicMetrics: {
-      maxDrawdown: -3.2,
-      sharpe: 1.48,
-      annualVol: 3.5,
-      rankPct: 8
-    },
-    customBasePrice: 1.28
-  },
-  '161725': {
-    code: '161725',
-    name: '招商中证白酒指数A',
-    type: 'index',
-    typeName: '被动行业指数型',
-    company: '招商基金管理有限公司',
-    manager: '侯昊',
-    inception: '2015-05-27',
-    size: '480.5 亿元',
-    expenseRatio: 1.20, // 1.0% + 0.2%
-    benchmarkName: '中证白酒指数',
-    topHoldings: [
-      { name: '山西汾酒', weight: 15.22 },
-      { name: '五粮液', weight: 14.85 },
-      { name: '贵州茅台', weight: 14.50 },
-      { name: '泸州老窖', weight: 13.90 },
-      { name: '古井贡酒', weight: 9.15 }
-    ],
-    sectorAllocation: [
-      { name: '高端白酒', weight: 65 },
-      { name: '次高端及区域白酒', weight: 30 },
-      { name: '大众消费酒类', weight: 5 }
-    ],
-    historicMetrics: {
-      maxDrawdown: -49.6,
-      sharpe: 0.54,
-      annualVol: 32.4,
-      rankPct: 18
-    },
-    customBasePrice: 1.12
-  }
-};
 
 // --- Preset Investment Portfolios Recipes ---
 interface PortfolioRecipe {
@@ -453,12 +268,69 @@ function createSineDriftPriceCurve(
   return curve;
 }
 
+// ---- Real fund data contracts (backend/api/funds.py) ----
+interface FundInfo { code?: string; name?: string; fund_type?: string; manager?: string; company?: string; inception_date?: string; total_assets?: number; }
+interface FundMetrics { total_return?: number | null; annualized_return?: number | null; volatility?: number | null; max_drawdown?: number | null; sharpe_ratio?: number | null; calmar_ratio?: number | null; win_rate?: number | null; data_points?: number; }
+interface FundNavPoint { date?: string; nav?: number; }
+
+function mapFundType(fundType?: string): FundProfile['type'] {
+  const t = (fundType || '').toLowerCase();
+  if (t.includes('qdii') || t.includes('跨境')) return 'qdii';
+  if (t.includes('债') || t.includes('bond')) return 'bond';
+  if (t.includes('etf')) return 'etf';
+  if (t.includes('指数') || t.includes('index') || t.includes('被动')) return 'index';
+  return 'mixed';
+}
+
+function placeholderFundProfile(code: string): FundProfile {
+  return { code, name: code, type: 'mixed', typeName: '加载中…', company: '--', manager: '--', inception: '--', size: '--', expenseRatio: 0, benchmarkName: '--', topHoldings: [], sectorAllocation: [], historicMetrics: { maxDrawdown: -20, sharpe: 0, annualVol: 20, rankPct: 0 }, customBasePrice: 1.0 };
+}
+
+function buildFundProfile(code: string, infoRes: PromiseSettledResult<FundInfo>, metricsRes: PromiseSettledResult<FundMetrics>, navRes: PromiseSettledResult<{ navs?: FundNavPoint[] }>): FundProfile {
+  const info = infoRes.status === 'fulfilled' ? infoRes.value : {};
+  const metrics = metricsRes.status === 'fulfilled' ? metricsRes.value : {};
+  const navs = navRes.status === 'fulfilled' ? navRes.value.navs || [] : [];
+  const latestNav = navs.length ? Number(navs[navs.length - 1].nav) : NaN;
+  const totalAssets = Number(info.total_assets);
+  return {
+    code,
+    name: info.name || code,
+    type: mapFundType(info.fund_type),
+    typeName: info.fund_type || '--',
+    company: info.company || '--',
+    manager: info.manager || '--',
+    inception: info.inception_date || '--',
+    size: Number.isFinite(totalAssets) && totalAssets > 0 ? (totalAssets / 1e8).toFixed(2) + ' 亿元' : '--',
+    expenseRatio: 0,
+    benchmarkName: '--',
+    topHoldings: [],
+    sectorAllocation: [],
+    historicMetrics: {
+      maxDrawdown: Number.isFinite(metrics.max_drawdown as number) ? (metrics.max_drawdown as number) : -20,
+      sharpe: Number.isFinite(metrics.sharpe_ratio as number) ? (metrics.sharpe_ratio as number) : 0,
+      annualVol: Number.isFinite(metrics.volatility as number) ? (metrics.volatility as number) : 20,
+      rankPct: 0
+    },
+    customBasePrice: Number.isFinite(latestNav) && latestNav > 0 ? latestNav : 1.0
+  };
+}
+
+function resampleNavs(navs: number[], target: number): number[] {
+  if (navs.length === 0 || target <= 0) return [];
+  if (navs.length === target) return navs;
+  if (navs.length > target) {
+    const stride = (navs.length - 1) / (target - 1);
+    return Array.from({ length: target }, (_, i) => navs[Math.round(i * stride)]);
+  }
+  return [...navs, ...Array(target - navs.length).fill(navs[navs.length - 1])];
+}
+
 export function FundDcaLab() {
   // Config state
   const [selectedFundCode, setSelectedFundCode] = useState<string>('005827');
-  const [selectedFund, setSelectedFund] = useState<FundProfile>({
-    ...FUNDS_DATABASE['005827']
-  });
+
+  // Live fund data cache (profiles / metrics / NAVs fetched from /api/funds/*)
+  const [fundDataCache, setFundDataCache] = useState<Record<string, { profile: FundProfile; navs: number[]; loading: boolean; error?: string; }>>({});
 
   // Sandbox Custom Fund state
   const [customFundName, setCustomFundName] = useState<string>('美科技硬算力指数模拟器');
@@ -514,53 +386,114 @@ export function FundDcaLab() {
     takeProfitTimes: 0
   });
 
-  // Dynamically configure custom sandbox fund or load standard profiles
-  useEffect(() => {
-    if (selectedFundCode === 'custom-sandbox') {
-      setSelectedFund({
-        code: 'custom-sandbox',
-        name: customFundName || '自定义沙盒模拟基金',
-        type: customFundType,
-        typeName: `沙盒 ${CLASSES_DESCRIPTION[customFundType]?.title || '自定义类别'}`,
-        company: '智能沙盒实验室 (Synthetic Lab)',
-        manager: '量化模型AI交易员',
-        inception: '今日发售',
-        size: '5.0 亿元 (模拟)',
-        expenseRatio: 0.15,
-        benchmarkName: '对称多项式高斯分布参考基准',
-        topHoldings: [
-          { name: '英伟达 (NVIDIA)', weight: 15.0 },
-          { name: '台积电 (TSMC)', weight: 12.0 },
-          { name: '博通 (Broadcom)', weight: 8.0 },
-          { name: '特斯拉 (Tesla)', weight: 6.0 },
-          { name: '微迈克斯', weight: 4.0 }
-        ],
-        sectorAllocation: [
-          { name: '大模型半导体', weight: 45 },
-          { name: '人形机器人', weight: 25 },
-          { name: '清洁核动力', weight: 15 },
-          { name: '量子通信', weight: 10 },
-          { name: '其他', weight: 5 }
-        ],
-        historicMetrics: {
-          maxDrawdown: -customFundVol * 1.5,
-          sharpe: Math.round((customFundDrift / customFundVol) * 100) / 100,
-          annualVol: customFundVol,
-          rankPct: 12
-        },
-        customBasePrice: 1.0
-      });
-    } else if (FUNDS_DATABASE[selectedFundCode]) {
-      setSelectedFund(FUNDS_DATABASE[selectedFundCode]);
+  // Sandbox (synthetic) fund profile built from user params
+  const sandboxProfile = useMemo<FundProfile>(() => ({
+    code: 'custom-sandbox',
+    name: customFundName || '自定义沙盒模拟基金',
+    type: customFundType,
+    typeName: '沙盒 ' + (CLASSES_DESCRIPTION[customFundType]?.title || '自定义类别'),
+    company: '智能沙盒实验室 (Synthetic Lab)',
+    manager: '量化模型AI交易员',
+    inception: '今日发售',
+    size: '5.0 亿元 (模拟)',
+    expenseRatio: 0.15,
+    benchmarkName: '对称多项式高斯分布参考基准',
+    topHoldings: [
+      { name: '英伟达 (NVIDIA)', weight: 15.0 },
+      { name: '台积电 (TSMC)', weight: 12.0 },
+      { name: '博通 (Broadcom)', weight: 8.0 },
+      { name: '特斯拉 (Tesla)', weight: 6.0 },
+      { name: '微迈克斯', weight: 4.0 }
+    ],
+    sectorAllocation: [
+      { name: '大模型半导体', weight: 45 },
+      { name: '人形机器人', weight: 25 },
+      { name: '清洁核动力', weight: 15 },
+      { name: '量子通信', weight: 10 },
+      { name: '其他', weight: 5 }
+    ],
+    historicMetrics: {
+      maxDrawdown: -customFundVol * 1.5,
+      sharpe: Math.round((customFundDrift / customFundVol) * 100) / 100,
+      annualVol: customFundVol,
+      rankPct: 12
+    },
+    customBasePrice: 1.0
+  }), [customFundName, customFundType, customFundVol, customFundDrift]);
+
+  // Live fund profile: real (from cache) or sandbox
+  const selectedFund = useMemo<FundProfile>(() => {
+    if (selectedFundCode === 'custom-sandbox') return sandboxProfile;
+    return fundDataCache[selectedFundCode]?.profile || placeholderFundProfile(selectedFundCode);
+  }, [selectedFundCode, fundDataCache, sandboxProfile]);
+
+  // Fetch real fund profile + metrics + NAV series from /api/funds/*
+  const fetchFundData = useCallback(async (code: string) => {
+    if (!code || code === 'custom-sandbox') return;
+    setFundDataCache((prev) => ({
+      ...prev,
+      [code]: { profile: prev[code]?.profile || placeholderFundProfile(code), navs: prev[code]?.navs || [], loading: true }
+    }));
+    try {
+      const [infoRes, metricsRes, navRes] = await Promise.allSettled([
+        fetchApi<FundInfo>('/api/funds/' + encodeURIComponent(code)),
+        fetchApi<FundMetrics>('/api/funds/' + encodeURIComponent(code) + '/metrics'),
+        fetchApi<{ navs?: FundNavPoint[] }>('/api/funds/' + encodeURIComponent(code) + '/nav?limit=400')
+      ]);
+      const profile = buildFundProfile(code, infoRes, metricsRes, navRes);
+      const navs = navRes.status === 'fulfilled'
+        ? (navRes.value.navs || []).map((n) => Number(n.nav)).filter((v) => Number.isFinite(v) && v > 0)
+        : [];
+      setFundDataCache((prev) => ({ ...prev, [code]: { profile, navs, loading: false } }));
+    } catch (err) {
+      setFundDataCache((prev) => ({
+        ...prev,
+        [code]: { profile: prev[code]?.profile || placeholderFundProfile(code), navs: prev[code]?.navs || [], loading: false, error: getErrorMessage(err) }
+      }));
     }
-  }, [selectedFundCode, customFundName, customFundType, customFundVol, customFundDrift]);
+  }, []);
+
+  useEffect(() => {
+    if (selectedFundCode !== 'custom-sandbox') void fetchFundData(selectedFundCode);
+  }, [selectedFundCode, fetchFundData]);
+
+  useEffect(() => {
+    QUICK_FUND_CODES.forEach((code) => void fetchFundData(code));
+  }, [fetchFundData]);
+
+  // Chat model selection for the AI advisor panel (mirrors Workbench/NewsAggregator)
+  const [chatProviders, setChatProviders] = useState<ModelProvider[]>([]);
+  const [chatModelOptions, setChatModelOptions] = useState<ModelOption[]>([]);
+  const [selectedChatModelKey, setSelectedChatModelKey] = useState<string>('');
+  const selectedChatModel = chatModelOptions.find((o) => o.key === selectedChatModelKey) ?? chatModelOptions[0];
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await fetchApi<{ providers: ModelProvider[] }>('/api/settings/providers');
+        if (cancelled) return;
+        const providers = result.providers || [];
+        const routes = await loadAiModelRoutesFromApi().catch(() => loadLocalAiModelRoutes());
+        if (cancelled) return;
+        const options = buildModelOptions(providers, 'chat');
+        const routeKey = getModelKey(getRouteSelection(routes, providers, 'chat'));
+        setChatProviders(providers);
+        setChatModelOptions(options);
+        setSelectedChatModelKey((cur) => (cur && options.some((o) => o.key === cur) ? cur : (routeKey && options.some((o) => o.key === routeKey) ? routeKey : (options[0]?.key || ''))));
+      } catch {
+        if (!cancelled) { setChatProviders([]); setChatModelOptions([]); setSelectedChatModelKey(''); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Load recipe helper
   const handleLoadRecipe = (recipe: PortfolioRecipe) => {
     setUsePortfolioMode(true);
     setSelectedRecipeId(recipe.id);
     const newWeights: Record<string, number> = {};
-    Object.keys(FUNDS_DATABASE).forEach(code => {
+    QUICK_FUND_CODES.forEach((code) => {
       newWeights[code] = 0;
     });
     recipe.allocations.forEach(alloc => {
@@ -575,7 +508,7 @@ export function FundDcaLab() {
   // Instant Smart Portfolio Weight Optimizers
   const handleOptimizeWeights = (mode: 'sharpe' | 'defensive') => {
     const optimized: Record<string, number> = {};
-    Object.keys(FUNDS_DATABASE).forEach(code => { optimized[code] = 0; });
+    QUICK_FUND_CODES.forEach((code) => { optimized[code] = 0; });
     if (mode === 'sharpe') {
       // Prioritize high-performance, low-correlation diversification
       optimized['159941'] = 40; // Nasdaq ETF (QDII)
@@ -625,7 +558,7 @@ export function FundDcaLab() {
       Object.entries(portfolioWeights).forEach(([code, weightVal]) => {
         const w = weightVal as number;
         if (w <= 0) return;
-        const info = FUNDS_DATABASE[code] || (code === 'custom-sandbox' ? selectedFund : null);
+        const info = (code === 'custom-sandbox' ? selectedFund : fundDataCache[code]?.profile) || null;
         if (!info) return;
         sumBasePrice += info.customBasePrice * (w / sumWeights);
         weightedVol += info.historicMetrics.annualVol * (w / sumWeights) / 100;
@@ -685,7 +618,10 @@ export function FundDcaLab() {
     }
 
     // Generate accurate underlying curves
-    const navSeries = createSineDriftPriceCurve(totalSteps, basePrice, volatility, driftPct, crashPoint);
+    const cachedNavs = selectedFundCode !== 'custom-sandbox' ? fundDataCache[selectedFundCode]?.navs : [];
+    const navSeries = cachedNavs && cachedNavs.length > 1
+      ? resampleNavs(cachedNavs, totalSteps)
+      : createSineDriftPriceCurve(totalSteps, basePrice, volatility, driftPct, crashPoint);
     const benchmarkSeries = createSineDriftPriceCurve(totalSteps, basePrice * 0.95, indexVolatility, indexBenchmarkDrift, crashPoint);
 
     // Initial Position (Day 0 seed capital)
@@ -889,71 +825,45 @@ export function FundDcaLab() {
     customFundName
   ]);
 
-  // Handle preset FAQs and dynamic questions via NLP keywords response planner
-  const handleAskFAQ = (question: string, roles: string) => {
+  // AI advisor: forward the question to /api/chat with the current fund/DCA context
+  const handleAskFAQ = async (question: string, _roles: string) => {
     setIsAiLoading(true);
     setSelectedFAQ(question);
-
-    setTimeout(() => {
-      let replyText = '';
-      const backtestSum = summaryMetrics.currentAsset;
-      const totalCost = summaryMetrics.totalInvested;
-      const yieldPctHex = summaryMetrics.yieldPct;
-      const profitStr = yieldPctHex >= 0 
-        ? `实现了共计 **+${yieldPctHex}%** 的资本代持回报（净利润 **¥${summaryMetrics.accumulatedYield.toLocaleString()}**）`
-        : `产生约 **${yieldPctHex}%** 的短期回撤亏欠（净损益 **¥${summaryMetrics.accumulatedYield.toLocaleString()}**）`;
-
-      const portfolioDesc = usePortfolioMode ? '定制有效分散组合' : `${selectedFund.name} (${selectedFund.code})`;
-
-      // Dynamic Keyword router for full simulated LLM quality
-      const isCustomPrompt = roles === 'user-composed';
-      const promptQuery = question.toLowerCase();
-
-      if (promptQuery.includes('适合定投') || promptQuery.includes('适合长期') || promptQuery.includes('历史实证')) {
-        replyText = `### 【${portfolioDesc} 顶尖投研联合审查报告】
-🤖 **程博宁 & 严一凡** 双星座席联署报告：
-
-量化实验引擎针对本次定制的 **${dcaYears}年期** 回测方案（底仓 **¥${initialCapital.toLocaleString()}**，周期性投入 **¥${dcaAmount.toLocaleString()}**）进行基因穿透，审查结论如下：
-1. **持有成本优化**：通过本策略分批滑行买入，最终将整仓成本均价平抑在 **¥${summaryMetrics.avgCost}**。相比基期一期满额买入，有效实现了成本的“向低倾斜”。
-2. **夏普匹配与微笑曲线**：本品模拟波幅年化为 **${selectedFund.historicMetrics.annualVol.toFixed(1)}%**。高波动率是定投产生超额收益的最佳土壤，本定投在本次测算中相对于沪深300指数跑出了 **${(summaryMetrics.yieldPct - summaryMetrics.benchmarkReturnPct).toFixed(1)}%** 的超额阿尔法！
-3. **资金匹配评级**：定投计划总输入资本为 **¥${totalCost.toLocaleString()}**。因在持仓过程中融入了「**${buyTheDipRule === 'none' ? '等额常规划划' : buyTheDipRule === 'moderate' ? '适度动态超跌补仓' : '极限暴烈双倍补仓'}**」风控增量，使得整款模型在探底修复过程中提速了 3 个月。`;
-      } 
-      else if (promptQuery.includes('止盈') || promptQuery.includes('落袋') || promptQuery.includes('反钝化')) {
-        replyText = `### 【止盈机制与定投‘钝化’应对技术分析方案】
-🤖 **梁诗韵 & 叶天瑞** 深度量化应对案：
-
-传统的等额定投资产基数过大后，后续定期申购对整体成本的平摊作用近乎实效率零，俗称“定投钝化效应”。本实验为此设置：
-1. **目标锁利反馈**：您当前配置了 **「${takeProfitPct > 0 ? `${takeProfitPct}% 目标强制止盈` : '不设自动止盈'}」**。回测期间实际已累计触发 **${summaryMetrics.takeProfitTimes || 0} 次** 止盈清仓。
-2. **复利沉淀效果**：当止盈触发后，所有底仓均兑付安全活期余额，规避了高位均值回归的利润回吐。对于该类高弹性宽波幅仓位，动态止盈使整体夏普比率在模型调试中提升了约 24%。
-3. **补仓防钝化验证**：在下跌行情中引入 **${buyTheDipRule === 'none' ? '无' : '量化梯度加仓'}**。大幅加速了价格低点廉价份额的拾取，是破除平庸定投钝化最锋利的武器。`;
-      }
-      else if (promptQuery.includes('回撤') || promptQuery.includes('亏损') || promptQuery.includes('套牢') || promptQuery.includes('怎么办')) {
-        replyText = `### 【极端压力回撤与最长解套跨度测算案】
-🤖 **段宏强 & 冷子墨** 风险管理与防御联合审计：
-
-量化实操中绝不能沉溺于牛市线性外推。本方案在三至五年期模拟过程中经历过的最坏财务状况包括：
-1. **最大浮亏压力**：本次测试期间，客户投资组合面临的最大账户净值浮亏深度回撤为 **${summaryMetrics.maxDrawdown}%**。同期单次一次性全额购买在底部浮亏表现为 **${summaryMetrics.lumpSumReturnPct < 0 ? summaryMetrics.lumpSumReturnPct : -35}%**。
-2. **套牢解套周期**：历史数据穿透得出最长浮亏震荡套牢周期为 **${summaryMetrics.longestDrawdownMonths} 个月**。
-3. **安全防线忠告**：如果您的周转资金无法锁定 24 个月以上，或者无法在浮亏面临20%-30%时坚守底线增持「逢低加码」，您大概率会在历史最底部产生被动恐慌。`;
-      }
-      else {
-        replyText = `### 【量化实验专席针对：“${question}” 的特约提案】
-🤖 **AI-FINANCE 联席投研委员会** 深度回复：
-
-针对提问。根据您当前的沙盒设定：
-- **目标资产**：${portfolioDesc}（预设波动：${selectedFund.historicMetrics.annualVol}%）
-- **入局本金**：期初底仓 **¥${initialCapital.toLocaleString()}**，跟投金额 **¥${dcaAmount.toLocaleString()}**
-- **当前成效**：整仓年化复合增长率 **${summaryMetrics.annualYieldPct}%** ${profitStr}。
-
-智囊团特别会签指出：
-1. **定制回撤抵御力**：当前「${buyTheDipRule === 'none' ? '常规划等额跟投' : '智能超跌增持'}」策略在波动中起到了关键的防御垫高作用。如果标的后续出现突发调整，由于存有初始底仓，您在拉匀持有均价时需要提升中后期的单笔跟投金额，以防大盘钝化。
-2. **止盈落袋建议**：当处于高波动震荡市时，建议设置 **${takeProfitPct > 0 ? `${takeProfitPct}%` : '20% - 30%'}** 的温和目标止盈线，触发清盘后的沉淀资金提供稳定收益。`;
-      }
-
-      setAiResponse(replyText);
+    setAiResponse('');
+    try {
+      const context = {
+        fund: selectedFund.code,
+        fund_name: selectedFund.name,
+        initial_capital: initialCapital,
+        dca_amount: dcaAmount,
+        dca_years: dcaYears,
+        dca_frequency: dcaFrequency,
+        take_profit: takeProfitPct,
+        buy_the_dip: buyTheDipRule,
+        total_invested: summaryMetrics.totalInvested,
+        current_asset: summaryMetrics.currentAsset,
+        yield_pct: summaryMetrics.yieldPct,
+        max_drawdown: summaryMetrics.maxDrawdown
+      };
+      const result = await fetchApi<{ content?: string; provider?: string; model?: string }>('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          message: question,
+          mode: 'free',
+          stock_symbol: selectedFund.code === 'custom-sandbox' ? '' : selectedFund.code,
+          stock_name: selectedFund.name,
+          provider: selectedChatModel?.providerId,
+          model: selectedChatModel?.modelId,
+          context
+        })
+      });
+      setAiResponse(result.content || '智囊团未返回内容。');
+    } catch (err) {
+      setAiResponse('智囊团调用失败：' + getErrorMessage(err) + '（请确认已在系统设置配置可用的对话模型）');
+    } finally {
       setIsAiLoading(false);
-    }, 1200);
-  };
+    }
+  }
 
   const activeFundIndexData = CLASSES_DESCRIPTION[selectedFund.type] || {};
 
@@ -1043,11 +953,14 @@ export function FundDcaLab() {
                     onChange={(e) => setSelectedFundCode(e.target.value)}
                     className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-indigo-300 font-bold font-mono focus:outline-none focus:border-indigo-500/55 cursor-pointer"
                   >
-                    {Object.values(FUNDS_DATABASE).map(f => (
-                      <option key={f.code} value={f.code} className="bg-[#0f0f15] text-neutral-200 text-sm">
-                        {f.code} | {f.name} ({f.typeName})
+                    {QUICK_FUND_CODES.map((code) => {
+                      const f = fundDataCache[code]?.profile || placeholderFundProfile(code);
+                      return (
+                      <option key={code} value={code} className="bg-[#0f0f15] text-neutral-200 text-sm">
+                        {code} | {f.name} ({f.typeName})
                       </option>
-                    ))}
+                      );
+                    })}
                     <option value="custom-sandbox" className="bg-[#0f0f15] text-emerald-400 font-semibold text-sm">
                       999999 | 自定义模拟沙盒产品 [点击调参]
                     </option>
@@ -1164,7 +1077,8 @@ export function FundDcaLab() {
                   
                   {/* Slider configuration for weight */}
                   <div className="space-y-2 pt-2 border-t border-white/5">
-                    {Object.entries(FUNDS_DATABASE).map(([code, f]) => {
+                    {QUICK_FUND_CODES.map((code) => {
+                      const f = fundDataCache[code]?.profile || placeholderFundProfile(code);
                       const weight = portfolioWeights[code] || 0;
                       return (
                         <div key={code} className="flex items-center justify-between gap-3 text-xs font-mono">
