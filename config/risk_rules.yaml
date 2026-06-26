@@ -1,0 +1,30 @@
+# 研报发布前风控 gate 配置 (v1.9.x)
+#
+# 这些规则在「研报发布前」统一评估,任一 critical 规则触发 → 一票否决,
+# 研报顶部红字写明理由。与回测期 risk_controller.py 共享同一套风控哲学:
+# 纯规则、确定性、可单测,LLM 风控 Agent 只负责把引擎结果翻译成人话。
+#
+# 合规红线: 风控只做「研究层风险提示与决策约束」, 绝不输出买卖指令。
+
+# ST / 退市风险 / 停牌 / 财务造假 → 直接剔除/否决
+blacklist:
+  enabled: true
+  # 标的名称/符号命中下列关键词即判 critical
+  name_patterns: ["ST", "*ST", "退", "暂停上市"]
+
+# 单标的仓位上限(研报场景: 建议/拟配置仓位)
+max_position_pct:
+  enabled: true
+  limit: 30.0  # 单标的占总资金 % 上限
+
+# 总仓位/集中度上限
+concentration:
+  enabled: true
+  max_total_exposure_pct: 80.0  # 总仓位上限 %
+  max_single_sector_pct: 50.0   # 单行业集中度上限 % (暂按标的数近似)
+
+# AI 结论置信度门控: 平均置信度过低 → 警告(critical=false, 仅提示)
+confidence_floor:
+  enabled: true
+  warn_below_pct: 35.0   # 低于此值 → warn
+  veto_below_pct: 15.0   # 低于此值 → critical(否决), 结论不可信

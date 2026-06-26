@@ -460,6 +460,7 @@ def run_agents_with_mode(
             "critic": None,
             "chairman_summary": None,
             "evidence_pool": evidence_pool,
+            "risk_gate": None,
             "model_status": model_status,
             "mode": mode.value,
             "mode_name": config.name,
@@ -569,6 +570,23 @@ def run_agents_with_mode(
         chairman_summary,
     )
 
+    # 研报发布前风控 gate(v1.9.x): 评估黑名单/集中度/置信度等, critical 触发一票否决。
+    # 合规红线: 风控只做提示与约束, 绝不输出买卖指令; 否决时研报保留(可追溯)但
+    # 顶部红字写明理由, 且 summary 不给出买入方向。
+    risk_gate = None
+    try:
+        from backend.quant.risk.engine import RiskEngine
+
+        risk_gate = RiskEngine().gate(stock_data, summary).to_dict()
+        if risk_gate.get("vetoed"):
+            banner = "⛔【风控一票否决】本研报因触发 critical 风控规则被否决, 方向性结论不作为投资依据:\n" + "\n".join(
+                f"  - {r}" for r in risk_gate.get("veto_reasons", [])
+            )
+            research_report = f"{banner}\n\n{research_report}"
+            summary = {**summary, "final": "风控否决(结论不作为投资依据)"}
+    except Exception as exc:  # noqa: BLE001 - 风控 gate 失败不应阻断研报
+        logger.debug("风控 gate 评估失败, 跳过: %s", exc)
+
     return {
         "agents": results,
         "summary": summary,
@@ -579,6 +597,7 @@ def run_agents_with_mode(
         "research_report": research_report,
         "model_status": model_status,
         "evidence_pool": evidence_pool,
+        "risk_gate": risk_gate,
         "mode": mode.value,
         "mode_name": config.name,
     }
@@ -665,6 +684,7 @@ def _run_auto_mode(
             "critic": None,
             "chairman_summary": None,
             "evidence_pool": [],
+            "risk_gate": None,
             "mode": "auto",
             "mode_name": "自动模式 (预筛直接输出)",
             "auto_escalated": False,

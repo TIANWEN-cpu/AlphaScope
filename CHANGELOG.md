@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.9.3 - 2026-06-27
+
+### 风控独立一票否决 gate(决策期)
+对标金策智算「门下省」与 vn.py vnpy_riskmanager 插件式风控, 把风控从「只在回测里跑」
+提升为「研报发布前也过的统一 gate」:
+
+- 新建 `backend/quant/risk/`(`rules.py` + `engine.py`): 纯规则、确定性、可单测,
+  规则配置化(`config/risk_rules.yaml`)。覆盖: ST/退市黑名单、单标的仓位、总仓位/
+  行业集中度、AI 结论置信度门控。
+- 与回测期 `risk_controller.py`(交易级,逐 bar)职责分离, 不耦合。
+- orchestrator: 研报发布前跑 `RiskEngine.gate()`, 任一 critical 触发**一票否决**——
+  研报保留(可追溯)但顶部红字写明理由, summary 不给出买入方向。
+- `/api/analysis/run` 响应透出 `risk_gate` 字段(findings/vetoed/veto_reasons)。
+- **合规红线**: 风控只做研究层风险提示与决策约束, 绝不输出买卖指令。
+- 新增 `tests/test_risk_engine.py`(9 用例: 单规则 + gate 汇总 + orchestrator 集成)。
+
 ## v1.9.2 - 2026-06-27
 
 ### Agent 结论可溯源：绑定 evidence_id
