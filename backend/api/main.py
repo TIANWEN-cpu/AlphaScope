@@ -183,6 +183,7 @@ if HAS_FASTAPI:
     from backend.api.brief import router as brief_router
     from backend.api.watchlist import router as watchlist_router
     from backend.api.datasources import router as datasources_router
+    from backend.api.csv_upload import router as csv_upload_router
 
     # 启动时把已保存的数据源凭证注入环境变量, 使 provider 自动注册时可用
     from backend.datasource_config import init_credentials_on_startup
@@ -215,6 +216,7 @@ if HAS_FASTAPI:
     app.include_router(brief_router)
     app.include_router(watchlist_router)
     app.include_router(datasources_router)
+    app.include_router(csv_upload_router)
 
     # ============== 全局错误处理 ==============
 
@@ -630,6 +632,7 @@ if HAS_FASTAPI:
                     "chairman_summary": result.get("chairman_summary"),
                     "evidence_pool": result.get("evidence_pool", []),
                     "risk_gate": result.get("risk_gate"),
+                    "data_verification": result.get("data_verification"),
                     "model_status": model_status,
                     "mode_name": result.get("mode_name"),
                 },

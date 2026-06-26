@@ -371,6 +371,12 @@ def run_agents_with_mode(
     Returns:
         Same shape as run_custom_agents() with additional mode metadata
     """
+    # 数据完整性预检(v1.9.4): 在任何 LLM 调用前做确定性核验, 缺失维度打标后
+    # 注入简报, 杜绝下游 Agent 对缺失数据「脑补」。失败不阻断主流程。
+    from backend.agents.data_verifier import verify_data
+
+    verification = verify_data(stock_data)
+
     # Zero-key safety net: if no model provider is configured (first launch /
     # Demo mode), return a clearly-labelled demo skeleton instead of attempting
     # LLM calls that will all fail. Honest: never fabricates Agent conclusions.
@@ -382,6 +388,7 @@ def run_agents_with_mode(
             demo = build_demo_report(stock_data)
             demo["mode"] = mode.value
             demo["mode_name"] = "Demo"
+            demo["data_verification"] = verification.to_dict()
             return demo
     except Exception as exc:  # noqa: BLE001 - fallback module is optional
         logger.debug("demo fallback check skipped: %s", exc)
@@ -430,6 +437,9 @@ def run_agents_with_mode(
     brief = build_market_brief(
         stock_data, evidence_context=evidence_ctx, factor_context=factor_ctx
     )
+    # 证据池就绪后重算核验(纳入 evidence 维度), 并把「严禁编造缺失维度」提示注入简报。
+    verification = verify_data(stock_data, evidence_pool=evidence_pool)
+    brief += verification.brief_warning()
     api_keys = api_keys or {}
 
     active = [
@@ -462,6 +472,7 @@ def run_agents_with_mode(
             "evidence_pool": evidence_pool,
             "risk_gate": None,
             "model_status": model_status,
+            "data_verification": verification.to_dict(),
             "mode": mode.value,
             "mode_name": config.name,
         }
@@ -598,6 +609,7 @@ def run_agents_with_mode(
         "model_status": model_status,
         "evidence_pool": evidence_pool,
         "risk_gate": risk_gate,
+        "data_verification": verification.to_dict(),
         "mode": mode.value,
         "mode_name": config.name,
     }
@@ -617,8 +629,11 @@ def _run_auto_mode(
     Stage 2: If confidence is between 30-70, escalate to full DEEP analysis
     """
     from backend.runtime.context_builder import build_market_brief
+    from backend.agents.data_verifier import verify_data
 
     brief = build_market_brief(stock_data)
+    verification = verify_data(stock_data)
+    brief += verification.brief_warning()
 
     # Stage 1: Pre-screen
     pre_screen_messages = [
@@ -685,6 +700,7 @@ def _run_auto_mode(
             "chairman_summary": None,
             "evidence_pool": [],
             "risk_gate": None,
+            "data_verification": verification.to_dict(),
             "mode": "auto",
             "mode_name": "自动模式 (预筛直接输出)",
             "auto_escalated": False,

@@ -2,6 +2,19 @@
 
 ## v1.9.4 - 2026-06-27
 
+### 数据核验 Agent + CSV/Excel 数据源(compass §7.3 + §7.2)
+让「数据缺失」不再被 LLM 脑补, 并让用户自带数据零 Key 入查询面:
+- `agents/data_verifier.py`: 确定性预检(纯规则/不触网/失败不阻断), 逐维度核验
+  行情/技术/基本面/资金流/舆情/证据是否齐全/新鲜/无异常; 缺失维度打标后由
+  `brief_warning()` 生成「严禁编造」强约束注入简报, overall = complete/partial/insufficient。
+- orchestrator 全路径(DEEP/STANDARD/AUTO 预筛/demo/无 Agent)透出 `data_verification`;
+  `/api/analysis/run` 响应新增 data_verification 字段。
+- `providers/csv_provider.py`: 上传 CSV/Excel → discover_schema 认中英文表头(含单位后缀)
+  → 映射标准 OHLCV → 入价格查询面(priority=15, 高于 demo_seed 低于在线真源), 数据标注
+  source=csv_upload/user_upload 绝不冒充在线行情。
+- 新增 `/api/providers/csv/{datasets,upload,{filename}}` 上传/列举/删除端点。
+- tests: test_data_verifier.py(9 用例) + test_csv_provider.py(9 用例)。
+
 ### ProviderCapability 能力 schema(deep-research 独有)
 对标 tickflow tiers.yaml「能力驱动」, 用统一 schema 表达每个数据源能力:
 - BaseProvider.capability(): 返回标准化能力字典(markets/data_types/data_class/
@@ -20,8 +33,6 @@
   freshness_score/completeness_score + 顶层 quality_good/warn/poor 计数与 avg_quality。
 - 前端 ProviderHealthPanel: 每个 provider 卡片显示质量分(红黄绿着色)+ 成功率/新鲜度。
 - tests/test_source_quality.py: 6 用例(纯函数口径 + 聚合)。
-
-### 统计指标补基准对比/超额收益/信息比率(compass §7.4-2)
 
 ### 统计指标补基准对比/超额收益/信息比率(compass §7.4-2)
 对标 Qlib 口径, 补齐回测绩效的基准相关指标:
