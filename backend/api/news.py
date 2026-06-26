@@ -257,6 +257,21 @@ async def _fetch_and_store_news(
     symbol: str | None = None,
     limit: int = 50,
 ) -> tuple[str, str]:
+    """异步包装：把阻塞的 provider 调用丢到线程池，避免冻结事件循环。"""
+    try:
+        return await asyncio.to_thread(
+            _fetch_and_store_news_sync, symbol, limit
+        )
+    except TimeoutError as exc:
+        return "timeout", str(exc)
+    except Exception as exc:
+        return "unavailable", str(exc)
+
+
+def _fetch_and_store_news_sync(
+    symbol: str | None = None,
+    limit: int = 50,
+) -> tuple[str, str]:
     try:
         from backend.news_data import (
             fetch_telegraph_cls,
@@ -308,6 +323,21 @@ async def _fetch_and_store_news(
 
 
 async def _fetch_and_store_announcements(
+    symbol: str,
+    limit: int = 50,
+) -> tuple[str, str]:
+    """异步包装：阻塞调用丢线程池，避免冻结事件循环。"""
+    try:
+        return await asyncio.to_thread(
+            _fetch_and_store_announcements_sync, symbol, limit
+        )
+    except TimeoutError as exc:
+        return "timeout", str(exc)
+    except Exception as exc:
+        return "unavailable", str(exc)
+
+
+def _fetch_and_store_announcements_sync(
     symbol: str,
     limit: int = 50,
 ) -> tuple[str, str]:

@@ -21,6 +21,7 @@ from typing import Dict, Any, Optional
 from backend.project_paths import CACHE_DIR
 
 FUND_FLOW_CACHE_DIR = CACHE_DIR / "fund_flow"
+FUND_FLOW_CACHE_TTL_SECONDS = 1800  # 30 分钟 TTL：避免每次冷访问都打 eastmoney（~2.6s）
 EASTMONEY_FUND_FLOW_URL = (
     "http://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
 )
@@ -113,7 +114,18 @@ def _write_flow_cache(kind: str, key: str, df: pd.DataFrame) -> None:
         pass
 
 
-def _read_flow_cache(kind: str, key: str, days: int) -> Optional[pd.DataFrame]:
+def _read_flow_cache(
+    kind: str,
+    key: str,
+    days: int,
+    *,
+    fresh_only: bool = False,
+) -> Optional[pd.DataFrame]:
+    """读取资金流缓存。
+
+    fresh_only=True 时只返回未过期的缓存（用于正常路径的 TTL 命中）；
+    fresh_only=False 时返回任意存在的缓存（降级路径兜底，即使过期也用）。
+    """
     try:
         path = _cache_path(kind, key)
         if not path.exists():
@@ -122,12 +134,19 @@ def _read_flow_cache(kind: str, key: str, days: int) -> Optional[pd.DataFrame]:
         records = payload.get("records") or []
         if not records:
             return None
+        if fresh_only:
+            try:
+                saved_at = datetime.fromisoformat(payload["saved_at"])
+            except (KeyError, ValueError):
+                return None
+            if (datetime.now() - saved_at).total_seconds() > FUND_FLOW_CACHE_TTL_SECONDS:
+                return None
         df = pd.DataFrame(records, columns=payload.get("columns") or None)
         df = _normalize_flow_frame(df, days)
         df.attrs["source"] = payload.get("source") or "cache"
-        df.attrs["degraded"] = True
-        df.attrs["source_status"] = "cache"
-        df.attrs["error"] = "Using cached fund-flow data; provider unavailable"
+        df.attrs["degraded"] = fresh_only  # TTL 命中视为新鲜，不算降级
+        df.attrs["source_status"] = "cache" if not fresh_only else "cache"
+        df.attrs["error"] = "" if fresh_only else "Using cached fund-flow data; provider unavailable"
         df.attrs["cached_at"] = payload.get("saved_at", "")
         return df
     except Exception:
@@ -205,10 +224,16 @@ def _fetch_individual_fund_flow_eastmoney(symbol: str) -> Optional[pd.DataFrame]
 
 
 def fetch_individual_fund_flow(symbol: str, days: int = 30) -> Optional[pd.DataFrame]:
-    """个股每日资金流向（东方财富 HTTP 源，失败时读取本地缓存）"""
+    """个股每日资金流向（先查 TTL 缓存，再打东方财富 HTTP 源，最后兜底过期缓存）"""
     code = _symbol_code(symbol)
+    # 1) TTL 未过期 -> 直接命中，跳过网络
+    cached = _read_flow_cache("individual", code, days, fresh_only=True)
+    if cached is not None:
+        return cached
+    # 2) 打网络源
     df = _safe(_fetch_individual_fund_flow_eastmoney, code)
     if df is None or len(df) == 0:
+        # 3) 网络失败 -> 兜底用过期缓存
         return _read_flow_cache("individual", code, days)
     df = _normalize_flow_frame(df, days)
     df.attrs["source"] = getattr(df, "attrs", {}).get("source") or "eastmoney"
@@ -217,7 +242,10 @@ def fetch_individual_fund_flow(symbol: str, days: int = 30) -> Optional[pd.DataF
 
 
 def fetch_market_fund_flow(days: int = 30) -> Optional[pd.DataFrame]:
-    """大盘资金流向"""
+    """大盘资金流向（先查 TTL 缓存，再打 akshare，最后兜底过期缓存）"""
+    cached = _read_flow_cache("market", "overview", days, fresh_only=True)
+    if cached is not None:
+        return cached
     df = _safe(ak.stock_market_fund_flow)
     if df is None or len(df) == 0:
         return _read_flow_cache("market", "overview", days)

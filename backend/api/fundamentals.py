@@ -39,8 +39,8 @@ def _run_fundamentals(fn, *, name: str):
 
 
 @router.get("/{symbol}")
-async def get_fundamentals(symbol: str):
-    """综合基本面分析"""
+def get_fundamentals(symbol: str):
+    """综合基本面分析（同步路由：FastAPI 自动丢进线程池，避免阻塞事件循环）"""
     from backend.fundamentals import (
         analyze_balance_sheet,
         analyze_cash_flow,
@@ -132,8 +132,8 @@ async def get_fundamentals(symbol: str):
 
 
 @router.get("/{symbol}/valuation")
-async def get_valuation(symbol: str):
-    """估值指标"""
+def get_valuation(symbol: str):
+    """估值指标（同步路由，跑在线程池）"""
     from backend.fundamentals import (
         calc_valuation_metrics,
         load_fundamentals,
@@ -179,8 +179,8 @@ async def get_valuation(symbol: str):
 
 
 @router.get("/{symbol}/peers")
-async def get_peers(symbol: str):
-    """行业对比"""
+def get_peers(symbol: str):
+    """行业对比（同步路由，跑在线程池）"""
     from backend.fundamentals import fetch_industry_peers
 
     try:
@@ -229,8 +229,8 @@ async def get_peers(symbol: str):
 
 
 @router.get("/{symbol}/shareholders")
-async def get_shareholders(symbol: str):
-    """股东结构"""
+def get_shareholders(symbol: str):
+    """股东结构（同步路由，跑在线程池）"""
     from backend.fundamentals import (
         fetch_circulate_holders,
         fetch_inst_changes,

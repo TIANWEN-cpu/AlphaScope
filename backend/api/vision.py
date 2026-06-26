@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
@@ -28,7 +30,8 @@ async def analyze_vision(req: VisionAnalyzeRequest):
     from backend.vision.vision_agent import analyze_image
 
     try:
-        result = call_with_timeout(
+        result = await asyncio.to_thread(
+            call_with_timeout,
             lambda: analyze_image(
                 image_base64=req.image_base64,
                 mime_type=req.mime_type,
@@ -88,7 +91,8 @@ async def generate_report(req: VisionAnalyzeRequest):
     from backend.vision.report_generator import generate_vision_report
 
     try:
-        result = call_with_timeout(
+        result = await asyncio.to_thread(
+            call_with_timeout,
             lambda: analyze_image(
                 image_base64=req.image_base64,
                 mime_type=req.mime_type,

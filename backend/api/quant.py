@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import math
@@ -525,9 +526,9 @@ async def export_stock_pool(body: StockPoolExportRequest):
 
 @router.post("/backtest")
 async def run_backtest(body: BacktestRequestBody):
-    """发起回测"""
+    """发起回测（同步重计算丢线程池，避免阻塞事件循环）"""
     try:
-        result = _run_local_backtest(body)
+        result = await asyncio.to_thread(_run_local_backtest, body)
         return ApiResponse(success=True, data=result, message=result.get("message"))
     except Exception as e:
         return ApiResponse(
