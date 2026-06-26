@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Onboarding } from './components/Onboarding';
 import { subscribeTabChange } from './lib/workspaceEvents';
 import type { ErrorInfo, ReactNode } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { KeepAlive } from './components/KeepAlive';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Workbench } from './components/Workbench';
@@ -141,53 +141,47 @@ export default function App() {
             <div className="h-full overflow-y-auto custom-scrollbar">
               <ModuleErrorBoundary resetKey={currentTab}>
                 <Suspense fallback={<ModuleLoading />}>
-                  <AnimatePresence mode="wait">
-                    {(currentTab === 'dashboard' || currentTab === 'workbench') && (
-                      <Workbench onOpenModelSettings={openModelSettings} />
-                    )}
-                    {(currentTab === 'agents' || currentTab === 'experts') && (
-                      <AgentsSystem key="agents" onOpenAgentSettings={openAgentSettings} />
-                    )}
-                    {currentTab === 'market' && (
-                      <Portfolio key="portfolio" />
-                    )}
-                    {currentTab === 'tasks' && (
-                      <Backtesting key="backtesting" />
-                    )}
-                    {currentTab === 'fund_dca' && (
-                      <FundDcaLab key="fund_dca" />
-                    )}
-                    {currentTab === 'news' && (
-                      <NewsAggregator key="news" onOpenModelSettings={openModelSettings} />
-                    )}
-                    {currentTab === 'chart' && (
-                      <MultimodalChart key="chart" onOpenModelSettings={openModelSettings} />
-                    )}
-                    {currentTab === 'detailed' && (
-                      <ReportGenerator key="report" onOpenModelSettings={openModelSettings} />
-                    )}
-                    {currentTab === 'valuation' && (
-                      <Valuation key="valuation" />
-                    )}
-                    {currentTab === 'dragon_tiger' && (
-                      <DragonTiger key="dragon_tiger" />
-                    )}
-                    {currentTab === 'investors' && (
-                      <ExpertPanel key="investors" />
-                    )}
-                    {currentTab === 'brief' && (
-                      <MorningBrief key="brief" />
-                    )}
-                    {currentTab === 'saved' && (
-                      <EvidenceChain key="saved" />
-                    )}
-                    {currentTab === 'settings' && (
-                      <Settings key="settings" initialTab={settingsInitialTab} />
-                    )}
-                    {!VISIBLE_TABS.includes(currentTab) && (
-                      <PlaceholderModule key="placeholder" tab={currentTab} />
-                    )}
-                  </AnimatePresence>
+                  {/* 切页优化：
+                      1) 不再用 AnimatePresence mode="wait"（旧版会强制等退场动画 0.4s 才挂新页）；
+                      2) 用 KeepAlive 缓存"无强布局副作用"的重型 tab（Workbench / Portfolio /
+                         NewsAggregator / AgentsSystem / FundDcaLab / Valuation / DragonTiger /
+                         ExpertPanel / MorningBrief / EvidenceChain），切回时秒显、不重新拉数据；
+                      3) 有 canvas/强布局依赖或带 interval 的 tab（chart / detailed / tasks /
+                         settings）仍按需挂载卸载，避免隐藏时尺寸为 0 或空转轮询。 */}
+                  <KeepAlive
+                    active={currentTab}
+                    tabs={{
+                      dashboard: () => <Workbench onOpenModelSettings={openModelSettings} />,
+                      workbench: () => <Workbench onOpenModelSettings={openModelSettings} />,
+                      agents: () => <AgentsSystem onOpenAgentSettings={openAgentSettings} />,
+                      experts: () => <AgentsSystem onOpenAgentSettings={openAgentSettings} />,
+                      market: () => <Portfolio />,
+                      fund_dca: () => <FundDcaLab />,
+                      news: () => <NewsAggregator onOpenModelSettings={openModelSettings} />,
+                      valuation: () => <Valuation />,
+                      dragon_tiger: () => <DragonTiger />,
+                      investors: () => <ExpertPanel />,
+                      brief: () => <MorningBrief />,
+                      saved: () => <EvidenceChain />,
+                    }}
+                  />
+                  {/* 非缓存类：按需挂载 */}
+                  {currentTab === 'tasks' && (
+                    <Backtesting key="backtesting" />
+                  )}
+                  {currentTab === 'chart' && (
+                    <MultimodalChart key="chart" onOpenModelSettings={openModelSettings} />
+                  )}
+                  {currentTab === 'detailed' && (
+                    <ReportGenerator key="report" onOpenModelSettings={openModelSettings} />
+                  )}
+                  {currentTab === 'settings' && (
+                    <Settings key="settings" initialTab={settingsInitialTab} />
+                  )}
+                  {!VISIBLE_TABS.includes(currentTab) &&
+                    !['dashboard', 'workbench', 'agents', 'experts', 'market', 'fund_dca', 'news', 'valuation', 'dragon_tiger', 'investors', 'brief', 'saved'].includes(currentTab) && (
+                    <PlaceholderModule key="placeholder" tab={currentTab} />
+                  )}
                 </Suspense>
               </ModuleErrorBoundary>
           </div>

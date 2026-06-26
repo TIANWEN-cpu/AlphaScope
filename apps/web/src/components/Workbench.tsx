@@ -702,7 +702,7 @@ function WorkbenchChartTooltip({ active, payload, label, coordinate, viewBox }: 
   return (
     <div
       style={getFloatingTooltipStyle(coordinate, viewBox, { width: 150, height: 58 })}
-      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10]/88 px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)] backdrop-blur"
+      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10] px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)]"
     >
       <div className="flex items-center justify-between gap-3 font-mono">
         <span className="truncate text-neutral-200">{label}</span>
@@ -725,7 +725,7 @@ function CompactWorkbenchTooltip({ active, payload, label, coordinate, viewBox }
   return (
     <div
       style={getFloatingTooltipStyle(coordinate, viewBox, { width: 150, height: 58 })}
-      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10]/88 px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)] backdrop-blur"
+      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10] px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)]"
     >
       <div className="flex items-center justify-between gap-3 font-mono">
         <span className="truncate text-neutral-200">{label}</span>
@@ -1406,7 +1406,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
 
         <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-4 md:w-auto md:max-w-[48rem]">
           {financeCards.slice(0, 4).map((item, i) => (
-            <div key={`${item.label}-${i}`} title={item.detail} className="flex min-w-0 flex-col rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.04]">
+            <div key={`${item.label}-${i}`} title={item.detail} className="flex min-w-0 flex-col rounded-xl border border-white/5 bg-white/[0.03] px-4 py-3 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.05]">
               <span className="mb-1.5 truncate text-xs text-neutral-500">{item.label}</span>
               <span className={cn("truncate text-sm font-mono font-medium tracking-wide", metricToneClass(item.tone))}>
                 {item.value}
@@ -1420,7 +1420,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
         {/* Left Column: Chart & Info */}
         <div className="xl:col-span-2 flex flex-col gap-8">
           {/* Chart Panel */}
-          <div className="flex h-[500px] min-h-0 flex-col overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-2xl backdrop-blur-md">
+          <div className="flex h-[500px] min-h-0 flex-col overflow-hidden rounded-2xl border border-white/5 bg-white/[0.04] shadow-2xl">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-white/[0.01] px-5 py-4">
               <div className="flex items-center gap-3">
                  <h2 className="font-semibold text-neutral-200">行情走势</h2>
@@ -1500,10 +1500,16 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
             </div>
 
             {/* Chart Area */}
-            <div className="relative h-[360px] min-h-[320px] bg-black/40 p-5">
-               <div className="absolute right-6 top-6 text-[10px] font-mono text-neutral-600">{formatPrice(chartStats.high)}</div>
-               <div className="absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{formatPrice(chartStats.low)}</div>
-             
+            <motion.div
+              key={`kline-${currentStock.symbol}-${activePeriodConfig?.label}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: 'easeOut' }}
+              className="relative h-[360px] min-h-[320px] bg-black/40 p-5"
+            >
+               <div className="pointer-events-none absolute right-6 top-6 text-[10px] font-mono text-neutral-600">{formatPrice(chartStats.high)}</div>
+               <div className="pointer-events-none absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{formatPrice(chartStats.low)}</div>
+
              <div className="h-[calc(100%-72px)] min-h-[240px]">
                <StableChartContainer>
                  <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} onMouseMove={handleChartMouseMove}>
@@ -1517,18 +1523,20 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                      wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
                      cursor={{ stroke: '#818cf8', strokeOpacity: 0.32, strokeWidth: 1 }}
                    />
-                   <Bar dataKey="wickRange" barSize={9} shape={<WorkbenchCandlestick />}>
+                   {/* K线蜡烛点数多、逐点 rAF 重排最贵 -> 关闭逐点动画，
+                       整图由外层 motion.div 的 GPU opacity/transform 一次性淡入 */}
+                   <Bar dataKey="wickRange" barSize={9} shape={<WorkbenchCandlestick />} isAnimationActive={false}>
                       {chartData.map((entry, index) => (
                         <Cell key={`candle-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
                       ))}
                    </Bar>
-                   {showMa5Line && <Line type="monotone" dataKey="ma5" stroke="#eab308" strokeWidth={1.5} dot={false} activeDot={false} />}
-                   {showMa10Line && <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} activeDot={false} />}
-                   {showMa20Line && <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} activeDot={false} />}
+                   {showMa5Line && <Line type="monotone" dataKey="ma5" stroke="#eab308" strokeWidth={1.5} dot={false} activeDot={false} animationDuration={800} animationEasing="ease-out" />}
+                   {showMa10Line && <Line type="monotone" dataKey="ma10" stroke="#818cf8" strokeWidth={1.5} dot={false} activeDot={false} animationDuration={800} animationEasing="ease-out" />}
+                   {showMa20Line && <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} activeDot={false} animationDuration={800} animationEasing="ease-out" />}
                  </ComposedChart>
                </StableChartContainer>
              </div>
-             
+
              <div className="h-[72px]">
                <StableChartContainer>
                  <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -1540,6 +1548,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                      wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
                      cursor={{ fill: 'rgba(129,140,248,0.08)' }}
                    />
+                   {/* 成交量柱：点数中等，用 recharts 默认 400ms 动画即可，够快也够顺 */}
                    <Bar dataKey="volume" barSize={4} radius={[2, 2, 0, 0]}>
                       {chartData.map((entry, index) => (
                         <Cell key={`cell-vol-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} fillOpacity={0.4} />
@@ -1548,11 +1557,12 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                  </ComposedChart>
                </StableChartContainer>
              </div>
+            </motion.div>
           </div>
         </div>
 
         {/* Bottom News/Facts Panel */}
-        <div className="bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[380px]">
+        <div className="bg-white/[0.04] border border-white/5 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[380px]">
            <div className="flex items-center gap-8 px-6 border-b border-white/5 bg-white/[0.01] pt-1">
              {PANEL_TABS.map((tab) => (
                <button 
@@ -1681,7 +1691,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
       </div>
 
       {/* Right AI Engine Panel */}
-      <div className="bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col h-[912px] sticky top-8 relative overflow-hidden">
+      <div className="bg-white/[0.04] border border-white/5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col h-[912px] sticky top-8 relative overflow-hidden">
         {/* Glow effect at top */}
         <div className="absolute top-0 left-0 right-0 h-32 bg-indigo-500/10 blur-[50px] pointer-events-none"></div>
 
@@ -1709,7 +1719,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                     initial={{ opacity: 0, y: -4, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                    className="absolute right-0 top-8 z-50 w-64 overflow-hidden rounded-xl border border-white/10 bg-[#101010]/95 shadow-2xl backdrop-blur-xl"
+                    className="absolute right-0 top-8 z-50 w-64 overflow-hidden rounded-xl border border-white/10 bg-[#101010] shadow-2xl"
                   >
                     {ANALYSIS_MODES.map((mode) => (
                       <button
@@ -1759,13 +1769,13 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
               >
                 {msg.role !== 'user' ? (
                   <div className="min-w-0 flex-1 mr-4">
-                     <div className="bg-white/[0.04] border border-white/[0.05] rounded-xl rounded-tl-sm p-4 text-sm text-neutral-300 leading-relaxed shadow-[0_4px_15px_rgba(0,0,0,0.1)] backdrop-blur-sm">
+                     <div className="bg-white/[0.06] border border-white/[0.05] rounded-xl rounded-tl-sm p-4 text-sm text-neutral-300 leading-relaxed shadow-[0_4px_15px_rgba(0,0,0,0.1)]">
                        <p dangerouslySetInnerHTML={{ __html: formatMessageHtml(msg.content) }} />
                      </div>
                   </div>
                 ) : (
                   <div className="min-w-0 flex-1 ml-12">
-                     <div className="bg-gradient-to-br from-indigo-500/20 to-indigo-600/10 border border-indigo-500/30 text-indigo-50 rounded-xl rounded-tr-sm p-4 text-sm leading-relaxed shadow-[0_4px_15px_rgba(99,102,241,0.05)] backdrop-blur-sm">
+                     <div className="bg-gradient-to-br from-indigo-500/25 to-indigo-600/15 border border-indigo-500/30 text-indigo-50 rounded-xl rounded-tr-sm p-4 text-sm leading-relaxed shadow-[0_4px_15px_rgba(99,102,241,0.05)]">
                        {msg.content}
                      </div>
                   </div>
@@ -1779,13 +1789,13 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
             transition={{ delay: 1 }} 
             className="flex justify-center my-4 relative z-10"
           >
-             <span className="text-[10px] font-mono text-neutral-500 bg-black/40 px-3 py-1 rounded-full border border-white/5 backdrop-blur-sm">
+             <span className="text-[10px] font-mono text-neutral-500 bg-black/60 px-3 py-1 rounded-full border border-white/5">
                [系统] 已切换至 {formatStockLabel(currentStock)}
              </span>
           </motion.div>
         </div>
         
-        <div className="p-4 border-t border-white/5 bg-black/20 backdrop-blur-md relative z-10">
+        <div className="p-4 border-t border-white/5 bg-black/40 relative z-10">
           <div className="mb-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2 text-xs text-neutral-300">
@@ -1895,7 +1905,6 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
           </AnimatePresence>
         </div>
       </div>
-    </div>
     </motion.div>
   );
 }

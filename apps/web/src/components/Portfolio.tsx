@@ -158,7 +158,7 @@ function SummaryCard({
   }[tone];
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-lg backdrop-blur-md">
+    <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-6 shadow-lg">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">{label}</h3>
         <Icon className={cn('h-5 w-5', color)} />
@@ -409,7 +409,7 @@ export function Portfolio() {
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
-        <div className="relative overflow-hidden rounded-2xl border border-rose-500/20 bg-gradient-to-br from-rose-950/35 via-indigo-950/15 to-black/20 p-6 shadow-xl backdrop-blur-md md:col-span-2">
+        <div className="relative overflow-hidden rounded-2xl border border-rose-500/20 bg-gradient-to-br from-rose-950/45 via-indigo-950/20 to-black/30 p-6 shadow-xl md:col-span-2">
           <div className="pointer-events-none absolute right-0 top-0 p-3 text-rose-300 opacity-15">
             <WalletCards className="h-28 w-28 stroke-[0.5]" />
           </div>
@@ -424,7 +424,7 @@ export function Portfolio() {
         <SummaryCard label="最大行业占用" value={`${totals.maxRiskUse.toFixed(0)}%`} hint={`单行业上限 ${SECTOR_LIMIT_PCT}%`} tone={totals.maxRiskUse > SECTOR_LIMIT_PCT ? 'rose' : 'indigo'} icon={ShieldCheck} />
       </div>
 
-      <div className="mb-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 shadow-lg backdrop-blur-md">
+      <div className="mb-6 rounded-2xl border border-white/5 bg-white/[0.04] p-5 shadow-lg">
         <div className="grid gap-3 lg:grid-cols-[1.1fr_1fr_0.7fr_0.7fr_auto]">
           <label className="min-w-0">
             <span className="mb-1 block text-[10px] font-mono uppercase tracking-widest text-neutral-500">代码</span>
@@ -489,13 +489,13 @@ export function Portfolio() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-lg backdrop-blur-md">
+        <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-6 shadow-lg">
           <h3 className="mb-6 border-b border-white/5 pb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">资产配置</h3>
           {allocationData.length ? (
             <div className="flex h-72 items-center">
               <StableChartContainer className="h-full w-[52%]">
                 <PieChart>
-                  <Pie data={allocationData} cx="50%" cy="50%" innerRadius={62} outerRadius={86} paddingAngle={4} dataKey="value" stroke="none">
+                  <Pie data={allocationData} cx="50%" cy="50%" innerRadius={62} outerRadius={86} paddingAngle={4} dataKey="value" stroke="none" animationDuration={800} animationEasing="ease-out">
                     {allocationData.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
@@ -526,7 +526,7 @@ export function Portfolio() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-lg backdrop-blur-md">
+        <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-6 shadow-lg">
           <h3 className="mb-6 border-b border-white/5 pb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">行业风险暴露</h3>
           {riskBuckets.length ? (
             <div className="h-72">
@@ -548,7 +548,7 @@ export function Portfolio() {
           )}
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-lg backdrop-blur-md lg:col-span-2">
+        <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.04] shadow-lg lg:col-span-2">
           <div className="flex items-center justify-between border-b border-white/5 bg-black/40 p-5">
             <h3 className="text-xs font-mono uppercase tracking-widest text-neutral-400">核心持仓</h3>
             <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-200">

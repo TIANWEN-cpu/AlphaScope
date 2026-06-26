@@ -1525,10 +1525,10 @@ export function FundDcaLab() {
                       iconSize={10} 
                       wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }}
                     />
-                    <Area name="累计定投跟投资金" type="step" dataKey="accumulatedCost" stroke="#22c55e" strokeWidth={1} fill="url(#costColor)" opacity={0.65} />
-                    <Area name="定投总资产市值 (当前)" type="monotone" dataKey="portfolioValue" stroke="#6366f1" strokeWidth={2.5} fill="url(#areaColor)" />
-                    <Line name="期初一次性全额购买模型" type="monotone" dataKey="lumpSumValue" stroke="#f43f5e" strokeWidth={1.25} strokeDasharray="3 3" dot={false} opacity={0.7} />
-                    <Line name="基准大指数对比参考" type="monotone" dataKey="benchmarkValue" stroke="#eab308" strokeWidth={1} strokeDasharray="4 4" dot={false} opacity={0.6} />
+                    <Area name="累计定投跟投资金" type="step" dataKey="accumulatedCost" stroke="#22c55e" strokeWidth={1} fill="url(#costColor)" opacity={0.65} animationDuration={800} animationEasing="ease-out" />
+                    <Area name="定投总资产市值 (当前)" type="monotone" dataKey="portfolioValue" stroke="#6366f1" strokeWidth={2.5} fill="url(#areaColor)" animationDuration={800} animationEasing="ease-out" />
+                    <Line name="期初一次性全额购买模型" type="monotone" dataKey="lumpSumValue" stroke="#f43f5e" strokeWidth={1.25} strokeDasharray="3 3" dot={false} opacity={0.7} animationDuration={800} animationEasing="ease-out" />
+                    <Line name="基准大指数对比参考" type="monotone" dataKey="benchmarkValue" stroke="#eab308" strokeWidth={1} strokeDasharray="4 4" dot={false} opacity={0.6} animationDuration={800} animationEasing="ease-out" />
                   </ComposedChart>
                 </StableChartContainer>
               </div>

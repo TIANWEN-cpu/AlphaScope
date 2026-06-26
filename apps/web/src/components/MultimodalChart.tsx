@@ -405,7 +405,7 @@ function CustomTooltip({ active, payload, label, coordinate, viewBox }: any) {
   return (
     <div
       style={getFloatingTooltipStyle(coordinate, viewBox, { width: 150, height: 58 })}
-      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10]/88 px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)] backdrop-blur"
+      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10] px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)]"
     >
       <div className="flex items-center justify-between gap-3 font-mono">
         <span className="truncate text-neutral-200">{label}</span>
@@ -430,7 +430,7 @@ function CompactKLineTooltip({ active, payload, label, coordinate, viewBox }: an
   return (
     <div
       style={getFloatingTooltipStyle(coordinate, viewBox, { width: 150, height: 58 })}
-      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10]/88 px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)] backdrop-blur"
+      className="w-[150px] rounded-md border border-indigo-400/20 bg-[#090a10] px-2.5 py-1.5 text-[10px] text-neutral-300 shadow-[0_8px_18px_rgba(0,0,0,0.28)]"
     >
       <div className="flex items-center justify-between gap-3 font-mono">
         <span className="truncate text-neutral-200">{label}</span>
@@ -1039,13 +1039,13 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                             wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
                             cursor={{ stroke: '#818cf8', strokeOpacity: 0.32, strokeWidth: 1 }}
                           />
-                          <Bar dataKey="wickRange" barSize={9} shape={<Candlestick />}>
+                          <Bar dataKey="wickRange" barSize={9} shape={<Candlestick />} isAnimationActive={false}>
                             {chartData.map((entry, index) => (
                               <Cell key={`vision-candle-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
                             ))}
                           </Bar>
-                          {showMA && <Line type="monotone" dataKey="ma5" stroke="#facc15" strokeWidth={1.4} dot={false} activeDot={false} />}
-                          {showMA && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={1.4} dot={false} activeDot={false} />}
+                          {showMA && <Line type="monotone" dataKey="ma5" stroke="#facc15" strokeWidth={1.4} dot={false} activeDot={false} animationDuration={800} animationEasing="ease-out" />}
+                          {showMA && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={1.4} dot={false} activeDot={false} animationDuration={800} animationEasing="ease-out" />}
                         </ComposedChart>
                       </StableChartContainer>
                     </div>
@@ -1125,6 +1125,14 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                     <KLineHoverStrip point={displayHoverPoint} mode="指针行情" />
                     <span className="hidden font-mono text-[10px] text-neutral-600 sm:inline">鼠标移过图表查看该根K线</span>
                   </div>
+                  {/* K线蜡烛逐点动画重排贵 -> 关闭，整图由 motion 一次性 GPU 淡入 */}
+                  <motion.div
+                    key={`mkline-${selectedStock?.symbol ?? 'k'}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.45, ease: 'easeOut' }}
+                    className="flex min-h-0 flex-1 flex-col"
+                  >
                   <div className="min-h-0 flex-1">
                     <StableChartContainer>
                       <ComposedChart
@@ -1142,13 +1150,13 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                           wrapperStyle={{ pointerEvents: 'none', zIndex: 30, outline: 'none' }}
                           cursor={{ stroke: '#818cf8', strokeOpacity: 0.32, strokeWidth: 1 }}
                         />
-                        <Bar dataKey="wickRange" barSize={9} shape={<Candlestick />}>
+                        <Bar dataKey="wickRange" barSize={9} shape={<Candlestick />} isAnimationActive={false}>
                           {chartData.map((entry, index) => (
                             <Cell key={`kline-candle-${index}`} fill={entry.up ? '#f43f5e' : '#10b981'} />
                           ))}
                         </Bar>
-                        {showMA && <Line type="monotone" dataKey="ma5" stroke="#facc15" strokeWidth={1.5} dot={false} activeDot={false} />}
-                        {showMA && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={1.5} dot={false} activeDot={false} />}
+                        {showMA && <Line type="monotone" dataKey="ma5" stroke="#facc15" strokeWidth={1.5} dot={false} activeDot={false} animationDuration={800} animationEasing="ease-out" />}
+                        {showMA && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={1.5} dot={false} activeDot={false} animationDuration={800} animationEasing="ease-out" />}
                       </ComposedChart>
                     </StableChartContainer>
                   </div>
@@ -1173,13 +1181,14 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                             ))}
                           </Bar>
                         ) : (
-                          <Line type="monotone" dataKey="rsi" stroke="#a78bfa" strokeWidth={1.5} dot={false} />
+                          <Line type="monotone" dataKey="rsi" stroke="#a78bfa" strokeWidth={1.5} dot={false} animationDuration={800} animationEasing="ease-out" />
                         )}
                         {indicator === 'rsi' && <ReferenceLine y={70} stroke="#f43f5e" strokeOpacity={0.35} strokeDasharray="3 3" />}
                         {indicator === 'rsi' && <ReferenceLine y={30} stroke="#10b981" strokeOpacity={0.35} strokeDasharray="3 3" />}
                       </ComposedChart>
                     </StableChartContainer>
                   </div>
+                </motion.div>
                 </div>
               </motion.div>
             )}

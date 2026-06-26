@@ -201,7 +201,7 @@ function MetricCard({
   }[tone];
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-xl backdrop-blur-md">
+    <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-6 shadow-xl">
       <div className="mb-4 flex items-center justify-between">
         <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">{label}</p>
         <Icon className={cn('h-4 w-4', color)} />
@@ -472,7 +472,7 @@ export function Backtesting() {
           <p className="mt-2 text-sm font-mono tracking-wide text-neutral-400">调用后端 BacktestEngine 运行策略、股票池真实因子筛查与决策后验</p>
         </div>
 
-        <div className="flex rounded-xl border border-white/5 bg-black/40 p-1.5 backdrop-blur-md">
+        <div className="flex rounded-xl border border-white/5 bg-black/60 p-1.5">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -581,7 +581,7 @@ export function Backtesting() {
               </div>
 
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-xl backdrop-blur-md xl:col-span-2">
+                <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-6 shadow-xl xl:col-span-2">
                   <h3 className="mb-6 border-b border-white/5 pb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">
                     净值曲线 {result ? `· ${result.strategy_id} / ${result.symbol}${result.summary?.data_source_label ? ' · ' + result.summary.data_source_label : ''}` : '· 待运行'}
                   </h3>
@@ -594,7 +594,7 @@ export function Backtesting() {
                           <YAxis stroke="#737373" fontSize={11} tickFormatter={(val) => `${(Number(val) / 1000).toFixed(0)}k`} />
                           <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.82)', borderColor: 'rgba(255,255,255,0.12)', borderRadius: '12px', fontSize: '12px' }} />
                           <ReferenceLine y={initialCapital} stroke="#737373" strokeDasharray="4 4" />
-                          <Line type="monotone" dataKey="equity" name="策略净值" stroke="#f43f5e" strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="equity" name="策略净值" stroke="#f43f5e" strokeWidth={2.5} dot={false} animationDuration={800} animationEasing="ease-out" />
                         </LineChart>
                       </StableChartContainer>
                     ) : (
@@ -603,7 +603,7 @@ export function Backtesting() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 shadow-xl backdrop-blur-md">
+                <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-5 shadow-xl">
                   <h3 className="mb-4 text-xs font-mono uppercase tracking-widest text-neutral-400">风控违规</h3>
                   {result?.risk_violations?.length ? (
                     result.risk_violations.map((viol, index) => (
