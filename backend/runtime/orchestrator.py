@@ -342,6 +342,21 @@ def run_agents_with_mode(
     Returns:
         Same shape as run_custom_agents() with additional mode metadata
     """
+    # Zero-key safety net: if no model provider is configured (first launch /
+    # Demo mode), return a clearly-labelled demo skeleton instead of attempting
+    # LLM calls that will all fail. Honest: never fabricates Agent conclusions.
+    try:
+        from backend.agents.demo_fallback import has_configured_provider, build_demo_report
+
+        if not has_configured_provider():
+            logger.info("[orchestrator] no provider configured -> demo fallback report")
+            demo = build_demo_report(stock_data)
+            demo["mode"] = mode.value
+            demo["mode_name"] = "Demo"
+            return demo
+    except Exception as exc:  # noqa: BLE001 - fallback module is optional
+        logger.debug("demo fallback check skipped: %s", exc)
+
     resolver = get_mode_resolver()
     config = resolver.resolve(mode)
 

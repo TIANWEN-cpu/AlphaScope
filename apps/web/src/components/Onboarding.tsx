@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, KeyRound, Loader2, Rocket, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FlaskConical, KeyRound, Loader2, Rocket, X } from 'lucide-react';
 import { fetchApi } from '../lib/api';
 
 /**
@@ -11,6 +11,8 @@ import { fetchApi } from '../lib/api';
  */
 
 const ONBOARDED_KEY = 'alphascope:onboarded';
+// 用户从引导里点了「先用 Demo 体验」时标记,供 App 顶部展示一条"当前为 Demo 演示样本"提示。
+export const DEMO_BANNER_KEY = 'alphascope:demo-banner';
 
 interface ProviderPreset {
   id: string;
@@ -73,6 +75,16 @@ export function Onboarding() {
 
   const dismiss = () => {
     if (typeof window !== 'undefined') window.localStorage.setItem(ONBOARDED_KEY, '1');
+    setShow(false);
+  };
+
+  // 跳过配 Key,直接用内置 Demo 数据体验(后端 demo_provider/demo_fallback 自动兜底)。
+  // 仅写"已引导"标记并关闭弹窗,不改动任何后端配置。
+  const startDemo = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(ONBOARDED_KEY, '1');
+      window.localStorage.setItem(DEMO_BANNER_KEY, '1');
+    }
     setShow(false);
   };
 
@@ -240,6 +252,18 @@ export function Onboarding() {
                 className="rounded-lg bg-indigo-500 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 保存并测试
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 text-[11px] text-neutral-500">
+              <span className="text-neutral-600">还没准备好 Key?</span>
+              <button
+                type="button"
+                onClick={startDemo}
+                className="inline-flex items-center gap-1 text-emerald-400 transition-colors hover:text-emerald-300"
+              >
+                <FlaskConical className="h-3 w-3" />
+                先用 Demo 体验(内置 10 只股票示例数据,无需 Key)
               </button>
             </div>
           </div>
