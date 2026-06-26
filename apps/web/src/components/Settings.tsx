@@ -1000,7 +1000,7 @@ export function Settings({ initialTab }: SettingsProps) {
         </nav>
       </div>
 
-      <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-3xl border border-white/5 bg-white/[0.02] shadow-xl backdrop-blur-md">
+      <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-3xl border border-white/5 bg-white/[0.04] shadow-xl">
         <div className="h-2 bg-gradient-to-r from-indigo-500/40 via-emerald-500/40 to-transparent" />
 
         <div className="flex items-center justify-between border-b border-white/5 px-6 py-5">

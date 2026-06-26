@@ -112,7 +112,7 @@ export function TopBar() {
   };
 
   return (
-    <header className="relative z-[80] h-[60px] flex-shrink-0 overflow-visible border-b border-white/[0.04] bg-[#06070c]/95 px-6 text-neutral-400 shadow-[0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+    <header className="relative z-[80] h-[60px] flex-shrink-0 overflow-visible border-b border-white/[0.04] bg-[#06070c] px-6 text-neutral-400 shadow-[0_18px_60px_rgba(0,0,0,0.32)]">
       <div className="flex h-full items-center justify-between gap-6">
         <div className="flex min-w-0 flex-1 items-center gap-4">
           <div className="group relative z-[90] flex w-[min(42vw,36rem)] min-w-[20rem] max-w-[36rem] items-center">

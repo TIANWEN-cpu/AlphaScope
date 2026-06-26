@@ -76,7 +76,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
         maxWidth: isExpanded ? 220 : 72,
       }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="bg-black/20 border-r border-white/[0.02] backdrop-blur-3xl flex flex-col items-center py-6 h-full z-20 flex-shrink-0"
+      className="bg-black/40 border-r border-white/[0.02] flex flex-col items-center py-6 h-full z-20 flex-shrink-0"
     >
       <div className="mb-6 relative group flex-shrink-0">
         <div className="absolute inset-0 bg-indigo-500/20 rounded-xl blur-md group-hover:bg-indigo-500/40 transition-all duration-300"></div>

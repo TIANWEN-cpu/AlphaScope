@@ -173,7 +173,7 @@ export function ExpertPanel() {
       )}
 
       {selected.size > 0 && (
-        <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-xl border border-indigo-500/30 bg-[#0b0c12]/95 px-4 py-2.5 shadow-xl backdrop-blur">
+        <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-xl border border-indigo-500/30 bg-[#0b0c12] px-4 py-2.5 shadow-xl">
           <span className="text-[12px] text-neutral-300">已选 {selected.size} 位投资人</span>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setSelected(new Set())} className="text-[12px] text-neutral-500 transition-colors hover:text-neutral-300">

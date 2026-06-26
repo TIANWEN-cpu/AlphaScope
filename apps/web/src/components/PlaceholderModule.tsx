@@ -19,7 +19,7 @@ export const PlaceholderModule: React.FC<{ tab: string }> = ({ tab }) => {
         <div className="absolute right-10 bottom-10 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="relative z-10 flex flex-col items-center bg-white/[0.02] backdrop-blur-xl border border-white/5 p-12 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] max-w-lg w-full text-center">
+      <div className="relative z-10 flex flex-col items-center bg-white/[0.04] border border-white/5 p-12 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] max-w-lg w-full text-center">
         <div className="relative w-20 h-20 flex items-center justify-center mb-6">
           <motion.div 
             animate={{ rotate: 360 }}

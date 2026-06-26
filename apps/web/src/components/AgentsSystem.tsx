@@ -263,7 +263,7 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
                 animate={{ opacity: agent.enabled ? 1 : 0.55, scale: 1 }}
                 transition={{ delay: index * 0.04, type: 'spring', stiffness: 300, damping: 24 }}
                 className={cn(
-                  'group relative flex min-h-[260px] flex-col overflow-hidden rounded-2xl border bg-white/[0.02] p-5 shadow-xl backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.04]',
+                  'group relative flex min-h-[260px] flex-col overflow-hidden rounded-2xl border bg-white/[0.04] p-5 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.06]',
                   participating ? 'border-indigo-500/35' : 'border-white/5 hover:border-indigo-500/25',
                   !agent.enabled && 'bg-black/20',
                 )}
