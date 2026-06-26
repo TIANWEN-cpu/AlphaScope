@@ -248,6 +248,7 @@ def run_local_backtest_payload(
     end_date: str,
     initial_capital: float = 1000000.0,
     params: dict[str, Any] | None = None,
+    benchmark_symbol: str = "",
 ) -> dict[str, Any]:
     from backend.quant.engine import BacktestEngine
     from backend.quant.strategies import StrategyRegistry
@@ -264,8 +265,22 @@ def run_local_backtest_payload(
         end_date=end_date,
         initial_capital=initial_capital,
     )
+    # 可选基准(如沪深300 sh000300): 取不到数据则优雅降级, 基准指标为 0。
+    benchmark_bars = None
+    bench_name = ""
+    if benchmark_symbol:
+        try:
+            benchmark_bars, _ = load_local_bars(
+                benchmark_symbol,
+                start_date=start_date,
+                end_date=end_date,
+                initial_capital=initial_capital,
+            )
+            bench_name = benchmark_symbol
+        except Exception:
+            benchmark_bars = None
     engine = BacktestEngine(initial_capital=initial_capital, commission_rate=0.001)
-    result = engine.run(strategy, bars, symbol)
+    result = engine.run(strategy, bars, symbol, benchmark_bars=benchmark_bars, benchmark_name=bench_name)
     performance = result.performance or {}
     now = datetime.now()
     run_id = f"local-{now.strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"

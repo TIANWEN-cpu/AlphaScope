@@ -324,6 +324,7 @@ class BacktestRunRequest(BaseModel):
     days: int = Field(default=120, ge=10, le=1000, description="回测天数")
     initial_capital: float = Field(default=100000.0, gt=0, description="初始资金")
     params: dict[str, Any] = Field(default_factory=dict, description="策略参数覆盖")
+    benchmark_symbol: str = Field(default="", description="可选基准代码(如沪深300 sh000300), 用于超额/信息比率")
 
 
 class TradeRecord(BaseModel):

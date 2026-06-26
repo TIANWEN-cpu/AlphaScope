@@ -102,19 +102,112 @@ def calc_calmar(total_return: float, max_drawdown: float, days: int) -> float:
     return ann_ret / abs(max_drawdown)
 
 
+# ---------------------------------------------------------------------------
+# Benchmark-relative metrics (v1.9.4, compass §7.4-2 统计指标标准化)
+# 对标 Qlib 口径: 超额收益 / 信息比率 / beta / alpha。
+# 所有函数接受基准净值曲线(如沪深300), 无基准或长度不匹配时优雅降级返回 0,
+# 不抛异常 —— 回测不依赖基准数据可得性。
+# ---------------------------------------------------------------------------
+
+
+def calc_beta(
+    strategy_returns: list[float], benchmark_returns: list[float]
+) -> float:
+    """Beta: 策略收益对基准收益的回归斜率。
+
+    beta = Cov(R_p, R_b) / Var(R_b)
+    """
+    n = min(len(strategy_returns), len(benchmark_returns))
+    if n < 2:
+        return 0.0
+    sp = strategy_returns[-n:]
+    bp = benchmark_returns[-n:]
+    mean_s = sum(sp) / n
+    mean_b = sum(bp) / n
+    cov = sum((sp[i] - mean_s) * (bp[i] - mean_b) for i in range(n)) / (n - 1)
+    var_b = sum((b - mean_b) ** 2 for b in bp) / (n - 1)
+    if var_b == 0:
+        return 0.0
+    return cov / var_b
+
+
+def calc_alpha(
+    strategy_returns: list[float],
+    benchmark_returns: list[float],
+    risk_free_rate: float = 0.03,
+    periods_per_year: int = 252,
+) -> float:
+    """Alpha (Jensen's alpha), annualized.
+
+    alpha = R_p_annual - [R_f + beta * (R_b_annual - R_f)]
+    """
+    n = min(len(strategy_returns), len(benchmark_returns))
+    if n < 2:
+        return 0.0
+    sp = strategy_returns[-n:]
+    bp = benchmark_returns[-n:]
+    beta = calc_beta(sp, bp)
+    ann_p = (sum(sp) / n) * periods_per_year
+    ann_b = (sum(bp) / n) * periods_per_year
+    return ann_p - (risk_free_rate + beta * (ann_b - risk_free_rate))
+
+
+def calc_excess_return(
+    strategy_curve: list[float], benchmark_curve: list[float]
+) -> float:
+    """超额收益(累计, 分数): 策略总收益 - 基准总收益。
+
+    无基准或基准退化(非正)时返回 0.0。
+    """
+    if len(strategy_curve) < 2 or len(benchmark_curve) < 2:
+        return 0.0
+    if strategy_curve[0] <= 0 or benchmark_curve[0] <= 0:
+        return 0.0
+    strat_ret = (strategy_curve[-1] - strategy_curve[0]) / strategy_curve[0]
+    bench_ret = (benchmark_curve[-1] - benchmark_curve[0]) / benchmark_curve[0]
+    return strat_ret - bench_ret
+
+
+def calc_information_ratio(
+    strategy_returns: list[float],
+    benchmark_returns: list[float],
+    periods_per_year: int = 252,
+) -> float:
+    """信息比率 (年化): 超额收益均值 / 跟踪误差。
+
+    IR = mean(R_p - R_b) / std(R_p - R_b) * sqrt(periods_per_year)
+    """
+    n = min(len(strategy_returns), len(benchmark_returns))
+    if n < 2:
+        return 0.0
+    excess = [strategy_returns[-n:][i] - benchmark_returns[-n:][i] for i in range(n)]
+    mean_ex = sum(excess) / n
+    var_ex = sum((e - mean_ex) ** 2 for e in excess) / (n - 1)
+    te = math.sqrt(var_ex) if var_ex > 0 else 0.0
+    if te == 0:
+        return 0.0
+    return (mean_ex / te) * math.sqrt(periods_per_year)
+
+
 def build_performance_summary(
     equity_curve: list[float],
     trades: list[dict[str, Any]],
     initial_capital: float,
     days: int,
+    benchmark_curve: list[float] | None = None,
+    benchmark_name: str = "",
 ) -> dict[str, Any]:
-    """Build a complete performance summary from equity curve and trades."""
+    """Build a complete performance summary from equity curve and trades.
+
+    若提供 benchmark_curve(如沪深300净值), 额外计算超额收益/信息比率/alpha/beta;
+    无基准时这些字段为 0/None, 不影响主指标(优雅降级)。
+    """
     returns = calc_returns(equity_curve)
     final_equity = equity_curve[-1] if equity_curve else initial_capital
     total_ret = calc_total_return(initial_capital, final_equity)
     max_dd = calc_max_drawdown(equity_curve)
 
-    return {
+    summary = {
         "total_return": round(total_ret * 100, 2),
         "annualized_return": round(calc_annualized_return(total_ret, days) * 100, 2),
         "max_drawdown": round(max_dd * 100, 2),
@@ -128,3 +221,32 @@ def build_performance_summary(
         "final_equity": round(final_equity, 2),
         "trading_days": days,
     }
+
+    # 基准相关指标: 无基准或数据不足时优雅降级为 0, 且标记 has_benchmark=False。
+    bench_returns = calc_returns(benchmark_curve) if benchmark_curve else []
+    has_benchmark = bool(bench_curve_valid(benchmark_curve))
+    summary["has_benchmark"] = has_benchmark
+    summary["benchmark_name"] = benchmark_name if has_benchmark else ""
+    if has_benchmark:
+        summary["excess_return"] = round(
+            calc_excess_return(equity_curve, benchmark_curve) * 100, 2
+        )
+        summary["information_ratio"] = round(
+            calc_information_ratio(returns, bench_returns), 2
+        )
+        summary["beta"] = round(calc_beta(returns, bench_returns), 3)
+        summary["alpha"] = round(calc_alpha(returns, bench_returns), 3)
+    else:
+        summary["excess_return"] = 0.0
+        summary["information_ratio"] = 0.0
+        summary["beta"] = 0.0
+        summary["alpha"] = 0.0
+
+    return summary
+
+
+def bench_curve_valid(benchmark_curve: list[float] | None) -> bool:
+    """基准曲线是否可用(非空且首值正)。"""
+    if not benchmark_curve or len(benchmark_curve) < 2:
+        return False
+    return benchmark_curve[0] > 0

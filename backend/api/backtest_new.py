@@ -109,7 +109,35 @@ def run_backtest(req: BacktestRunRequest) -> ApiResponse:
         initial_capital=req.initial_capital,
         commission_rate=0.001,
     )
-    result = engine.run(strategy, bars, req.symbol)
+
+    # 可选基准(如沪深300): 取不到则优雅降级, 基准指标为 0, 不阻断回测。
+    benchmark_bars = None
+    bench_name = ""
+    if req.benchmark_symbol:
+        try:
+            db = _get_price_store()
+            benchmark_bars = db.get_price_bars(req.benchmark_symbol, limit=req.days)
+        except Exception:
+            benchmark_bars = None
+        if not benchmark_bars or len(benchmark_bars) < 30:
+            try:
+                from backend.providers.registry import ProviderRegistry
+
+                provider = ProviderRegistry.get_provider()
+                if provider:
+                    raw = provider.get_prices(req.benchmark_symbol, days=req.days)
+                    if raw:
+                        benchmark_bars = raw
+            except Exception:
+                benchmark_bars = None
+        if benchmark_bars and len(benchmark_bars) >= 30:
+            bench_name = req.benchmark_symbol
+        else:
+            benchmark_bars = None  # 数据不足 → 跳过基准指标
+
+    result = engine.run(
+        strategy, bars, req.symbol, benchmark_bars=benchmark_bars, benchmark_name=bench_name
+    )
 
     return ApiResponse(success=True, data=result.to_dict())
 

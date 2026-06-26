@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.9.4 - 2026-06-27
+
+### 统计指标补基准对比/超额收益/信息比率(compass §7.4-2)
+对标 Qlib 口径, 补齐回测绩效的基准相关指标:
+- `metrics.py` 新增纯函数: 超额收益(calc_excess_return)、信息比率(calc_information_ratio, 年化)、
+  beta(calc_beta)、Jensen's alpha(calc_alpha)。
+- `build_performance_summary` 接受可选 benchmark_curve: 有基准带 excess/IR/alpha/beta,
+  无基准优雅降级为 0 并标记 has_benchmark=False(回测不依赖基准数据可得性)。
+- engine.run() / local_runner / BacktestRunRequest / backtest_new API 全链路支持可选
+  benchmark_symbol(如沪深300 sh000300); 取不到数据则跳过基准指标, 不阻断回测。
+- 前端 Backtesting.tsx: has_benchmark 时渲染「超额收益/信息比率/Beta/Alpha」第二行指标卡。
+- 前端 package.json 版本 1.8.0→1.9.0 对齐(1.txt 点出的不一致)。
+- tests/test_metrics_benchmark.py: 10 用例(beta=1/超额=0/降级/有基准相对指标)。
+
 ## v1.9.3 - 2026-06-27
 
 ### 风控独立一票否决 gate(决策期)

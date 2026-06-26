@@ -57,6 +57,13 @@ interface PerformanceMetrics {
   final_equity?: number;
   trading_days?: number;
   volatility?: number;
+  // v1.9.4 基准相关指标(有基准时存在)
+  has_benchmark?: boolean;
+  benchmark_name?: string;
+  excess_return?: number;
+  information_ratio?: number;
+  beta?: number;
+  alpha?: number;
 }
 
 interface TradeRecord {
@@ -684,6 +691,26 @@ export function Backtesting() {
                 <MetricCard label="胜率" value={perf ? `${formatFactor(perf.win_rate)}%` : '--'} hint={perf ? `共 ${perf.trade_count ?? 0} 笔交易` : '运行回测后显示'} icon={Flag} tone="indigo" />
                 <MetricCard label="夏普比率" value={perf ? formatFactor(perf.sharpe_ratio) : '--'} hint={perf ? `Sortino ${formatFactor(perf.sortino_ratio)}` : '运行回测后显示'} icon={BarChart} />
               </div>
+
+              {perf?.has_benchmark && (
+                <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-4">
+                  <MetricCard
+                    label={`超额收益(${perf.benchmark_name || '基准'})`}
+                    value={formatPercent(perf.excess_return)}
+                    hint="策略总收益 − 基准总收益"
+                    icon={TrendingUp}
+                    tone={Number(perf.excess_return) >= 0 ? 'rose' : 'emerald'}
+                  />
+                  <MetricCard
+                    label="信息比率"
+                    value={formatFactor(perf.information_ratio)}
+                    hint="年化超额 / 跟踪误差"
+                    icon={BarChart}
+                  />
+                  <MetricCard label="Beta" value={formatFactor(perf.beta)} hint="相对基准的波动敏感度" icon={Activity} />
+                  <MetricCard label="Alpha" value={formatFactor(perf.alpha)} hint="Jensen's alpha(年化)" icon={CheckCircle2} tone="indigo" />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                 <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-6 shadow-xl xl:col-span-2">

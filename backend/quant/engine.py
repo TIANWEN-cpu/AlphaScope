@@ -121,6 +121,8 @@ class BacktestEngine:
         strategy: BaseStrategy,
         bars: list[dict[str, Any]],
         symbol: str = "",
+        benchmark_bars: list[dict[str, Any]] | None = None,
+        benchmark_name: str = "",
     ) -> BacktestResult:
         """Run a backtest.
 
@@ -128,6 +130,9 @@ class BacktestEngine:
             strategy: Strategy instance to generate signals
             bars: Historical OHLCV bars (must have 'date', 'open', 'high', 'low', 'close')
             symbol: Stock symbol for labeling
+            benchmark_bars: 可选基准 OHLCV(如沪深300), 用于计算超额/信息比率/alpha/beta。
+                长度/日期无需严格对齐——metrics 取尾部等长窗口优雅降级。无则跳过基准指标。
+            benchmark_name: 基准名称(展示用, 如 "沪深300")。
 
         Returns:
             BacktestResult with equity curve, trades, and performance metrics
@@ -214,11 +219,27 @@ class BacktestEngine:
 
         # Build performance summary
         days = len(bars)
+        # 基准净值曲线: 用基准收盘价按首日归一到 initial_capital, 便于与策略净值同图对比。
+        benchmark_curve: list[float] = []
+        if benchmark_bars:
+            bench_closes = []
+            for b in benchmark_bars:
+                try:
+                    c = float(b.get("close", 0) or 0)
+                except (TypeError, ValueError):
+                    c = 0.0
+                if c > 0:
+                    bench_closes.append(c)
+            if len(bench_closes) >= 2 and bench_closes[0] > 0:
+                base = bench_closes[0]
+                benchmark_curve = [self.initial_capital * (c / base) for c in bench_closes]
         performance = build_performance_summary(
             equity_curve=portfolio.equity_history,
             trades=[self._trade_to_dict(t) for t in portfolio.trades],
             initial_capital=self.initial_capital,
             days=days,
+            benchmark_curve=benchmark_curve or None,
+            benchmark_name=benchmark_name,
         )
 
         return BacktestResult(
