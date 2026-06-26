@@ -75,6 +75,20 @@ interface RiskViolation {
   date?: string;
 }
 
+/** Backtest engine friction assumptions (T+1 / stamp duty / slippage / etc.).
+ * Mirrors backend/quant/engine.py BacktestEngine._assumptions(). */
+interface BacktestAssumptions {
+  commission_rate?: number;
+  commission_min?: number;
+  stamp_duty_rate?: number;
+  slippage_rate?: number;
+  t_plus_1?: boolean;
+  price_limit_filter?: boolean;
+  price_limit_band?: number;
+  execution_price?: string;
+  note?: string;
+}
+
 interface BacktestEquityPoint {
   date?: string;
   equity?: number;
@@ -100,6 +114,7 @@ interface BacktestResultData {
   metrics?: PerformanceMetrics;
   risk_violations?: RiskViolation[];
   summary?: BacktestSummary;
+  assumptions?: BacktestAssumptions;
   message?: string;
 }
 
@@ -208,6 +223,92 @@ function MetricCard({
       </div>
       <h3 className="text-3xl font-mono font-medium text-white">{value}</h3>
       <p className={cn('mt-2 text-[11px] font-mono', color)}>{hint}</p>
+    </div>
+  );
+}
+
+/** Render the backtest engine's friction assumptions so users can see exactly
+ * what costs/limits were modelled (transparency / auditability). */
+function AssumptionsCard({ assumptions }: { assumptions?: BacktestAssumptions }) {
+  if (!assumptions) return null;
+  const pct = (v?: number) => (typeof v === 'number' ? `${(v * 100).toFixed(2)}%` : '--');
+  const rows: Array<{ label: string; value: string; on?: boolean }> = [
+    { label: 'T+1 结算', value: assumptions.t_plus_1 ? '启用' : '关闭', on: assumptions.t_plus_1 },
+    { label: '涨跌停封板过滤', value: assumptions.price_limit_filter ? `启用 · ±${((assumptions.price_limit_band ?? 0.1) * 100).toFixed(0)}%` : '关闭', on: assumptions.price_limit_filter },
+    { label: '佣金（双边）', value: pct(assumptions.commission_rate) + (assumptions.commission_min ? ` · 最低 ¥${assumptions.commission_min}` : '') },
+    { label: '印花税（卖出）', value: pct(assumptions.stamp_duty_rate) },
+    { label: '滑点', value: pct(assumptions.slippage_rate) },
+    { label: '成交价口径', value: assumptions.execution_price === 'open' ? '次日开盘（防未来函数）' : (assumptions.execution_price || '--') },
+  ];
+  return (
+    <div className="rounded-2xl border border-amber-500/15 bg-amber-500/[0.04] p-5 shadow-xl">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-amber-200/80">
+          <ShieldAlert className="h-4 w-4" />
+          本次回测假设
+        </h3>
+        <span className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-mono text-amber-300">真实摩擦成本</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-lg border border-white/5 bg-black/25 px-3 py-2">
+            <p className="text-[10px] text-neutral-500">{row.label}</p>
+            <p className={cn('mt-0.5 text-xs font-mono', row.on === false ? 'text-neutral-600' : 'text-neutral-200')}>{row.value}</p>
+          </div>
+        ))}
+      </div>
+      {assumptions.note && (
+        <p className="mt-3 text-[10px] leading-relaxed text-neutral-500">{assumptions.note}</p>
+      )}
+    </div>
+  );
+}
+
+/** Trade blotter — renders the `trades` field that was typed but never shown. */
+function TradeTable({ trades }: { trades?: TradeRecord[] }) {
+  if (!trades || trades.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-5 shadow-xl">
+        <h3 className="mb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">交易明细</h3>
+        <p className="text-xs text-neutral-500">本次回测无成交记录。</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-5 shadow-xl">
+      <h3 className="mb-3 text-xs font-mono uppercase tracking-widest text-neutral-400">交易明细 · 共 {trades.length} 笔</h3>
+      <div className="max-h-72 overflow-auto custom-scrollbar">
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 bg-black/40 text-[10px] uppercase tracking-wider text-neutral-500">
+            <tr>
+              <th className="px-2 py-2 font-medium">时间</th>
+              <th className="px-2 py-2 font-medium">方向</th>
+              <th className="px-2 py-2 text-right font-medium">数量</th>
+              <th className="px-2 py-2 text-right font-medium">成交价</th>
+              <th className="px-2 py-2 text-right font-medium">佣金</th>
+              <th className="px-2 py-2 text-right font-medium">盈亏</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono text-neutral-300">
+            {trades.map((t, i) => (
+              <tr key={i} className="border-t border-white/5">
+                <td className="px-2 py-1.5 text-neutral-500">{t.timestamp || '--'}</td>
+                <td className="px-2 py-1.5">
+                  <span className={cn('rounded px-1.5 py-0.5 text-[10px]', t.side === 'buy' ? 'bg-rose-500/10 text-rose-300' : 'bg-emerald-500/10 text-emerald-300')}>
+                    {t.side === 'buy' ? '买入' : '卖出'}
+                  </span>
+                </td>
+                <td className="px-2 py-1.5 text-right">{t.shares ?? '--'}</td>
+                <td className="px-2 py-1.5 text-right">{t.price != null ? t.price.toFixed(2) : '--'}</td>
+                <td className="px-2 py-1.5 text-right text-neutral-500">{t.commission != null ? t.commission.toFixed(2) : '--'}</td>
+                <td className={cn('px-2 py-1.5 text-right', (t.pnl ?? 0) >= 0 ? 'text-rose-300' : 'text-emerald-300')}>
+                  {t.pnl != null ? (t.pnl >= 0 ? '+' : '') + t.pnl.toFixed(2) : '--'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -494,6 +595,10 @@ export function Backtesting() {
       </div>
 
       <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar">
+        <div className="mb-3 rounded-xl border border-rose-500/20 bg-rose-500/[0.06] px-4 py-2 text-[11px] leading-relaxed text-rose-200/80">
+          <ShieldAlert className="mr-1 inline h-3.5 w-3.5 align-text-bottom" />
+          本页所有回测结果<strong className="font-medium text-rose-100"> 仅用于历史研究与策略逻辑验证，不代表未来收益，不构成任何投资建议</strong>。回测已计入佣金、印花税（卖方）、滑点等真实摩擦成本，详见下方「本次回测假设」。
+        </div>
         <div className="mb-5 rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-4 py-3 text-xs text-indigo-100/80">
           {actionMessage}
         </div>
@@ -623,6 +728,17 @@ export function Backtesting() {
                   )}
                 </div>
               </div>
+
+              {result && (
+                <>
+                  <div className="mb-6">
+                    <AssumptionsCard assumptions={result.assumptions} />
+                  </div>
+                  <div>
+                    <TradeTable trades={result.trades} />
+                  </div>
+                </>
+              )}
             </motion.div>
           )}
 

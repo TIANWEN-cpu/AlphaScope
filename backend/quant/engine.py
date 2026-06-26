@@ -1,10 +1,26 @@
-"""Core backtesting engine - runs strategies against historical price data."""
+"""Core backtesting engine - runs strategies against historical price data.
+
+The engine models realistic A-share trading frictions so that backtest results
+are not systematically overstated:
+
+* **T+1 settlement** - a position bought on day D cannot be sold on day D.
+* **Commission + stamp duty + slippage** - see :class:`constraints.TradingCostModel`.
+* **Price-limit filter** - orders against a limit-locked bar are rejected.
+* **No look-ahead** - a signal generated on bar ``i`` is executed on bar ``i+1``
+  at the open price, so the strategy can never trade on the same bar whose close
+  it used to compute the signal.
+
+The friction models are optional and default to realistic A-share values, but
+they can be disabled for parity with legacy runs. The public ``BacktestResult``
+shape is unchanged so existing API consumers and tests keep working.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
+from .constraints import PriceLimitFilter, T1Constraint, TradingCostModel
 from .metrics import build_performance_summary
 from .portfolio import Portfolio, Trade
 from .risk_controller import RiskConfig, RiskController
@@ -23,6 +39,9 @@ class BacktestResult:
     trades: list[dict[str, Any]]
     performance: dict[str, Any]
     risk_violations: list[dict[str, Any]]
+    # Engine-assumption disclosure, surfaced in the result so consumers (and the
+    # report generator) can show "本次回测假设: T+1 / 印花税 / 滑点 / 次日开盘成交".
+    assumptions: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -34,14 +53,34 @@ class BacktestResult:
             "trades": self.trades,
             "performance": self.performance,
             "risk_violations": self.risk_violations,
+            "assumptions": self.assumptions,
         }
 
 
 class BacktestEngine:
     """Core backtesting engine.
 
-    Runs a strategy against historical price bars with portfolio simulation
-    and risk control.
+    Runs a strategy against historical price bars with portfolio simulation,
+    realistic trading frictions and risk control.
+
+    Args:
+        initial_capital: Starting cash.
+        commission_rate: Broker commission rate (double-sided). For historical
+            compatibility the default is 0.001; when a :class:`TradingCostModel`
+            is supplied this value is ignored in favour of the model's rate.
+        risk_config: Optional risk-controller configuration.
+        cost_model: Trading cost model (commission + stamp duty + slippage).
+            Defaults to a realistic A-share model. Pass ``None`` and keep
+            ``commission_rate`` to fall back to the legacy commission-only path.
+        enable_t_plus_1: Enforce T+1 settlement (default True).
+        enable_price_limit: Reject orders against limit-locked bars (default True).
+        execution_price: Which reference price fills a deferred order:
+
+            * ``"open"`` (default) - execute at next bar's open. This is the
+              look-ahead-safe choice: a signal computed from bar ``i``'s close
+              is filled at bar ``i+1``'s open.
+            * ``"close"`` - legacy behaviour, fill at the signal bar's close.
+              Kept for backwards comparison but not look-ahead-safe.
     """
 
     def __init__(
@@ -49,10 +88,33 @@ class BacktestEngine:
         initial_capital: float = 100000.0,
         commission_rate: float = 0.001,
         risk_config: RiskConfig | None = None,
+        cost_model: TradingCostModel | None = None,
+        enable_t_plus_1: bool = True,
+        enable_price_limit: bool = True,
+        execution_price: str = "open",
     ):
         self.initial_capital = initial_capital
         self.commission_rate = commission_rate
         self.risk_config = risk_config or RiskConfig()
+        # When no explicit cost model is provided we still want honest frictions
+        # (stamp duty + slippage) beyond the legacy commission-only behaviour.
+        self.cost_model = cost_model if cost_model is not None else TradingCostModel()
+        self.t1 = T1Constraint(enabled=enable_t_plus_1)
+        self.price_limit = PriceLimitFilter(enabled=enable_price_limit)
+        self.execution_price = execution_price
+
+    def _assumptions(self) -> dict[str, Any]:
+        return {
+            "commission_rate": self.cost_model.commission_rate,
+            "commission_min": self.cost_model.commission_min,
+            "stamp_duty_rate": self.cost_model.stamp_duty_rate,
+            "slippage_rate": self.cost_model.slippage_rate,
+            "t_plus_1": self.t1.enabled,
+            "price_limit_filter": self.price_limit.enabled,
+            "price_limit_band": self.price_limit.band,
+            "execution_price": self.execution_price,
+            "note": "T日信号于T+1开盘价成交（防未来函数）；含佣金、印花税（卖方）、滑点。",
+        }
 
     def run(
         self,
@@ -80,6 +142,7 @@ class BacktestEngine:
                 trades=[],
                 performance={},
                 risk_violations=[],
+                assumptions=self._assumptions(),
             )
 
         # Add symbol to bars for signal generation
@@ -92,29 +155,62 @@ class BacktestEngine:
         )
         risk_controller = RiskController(self.risk_config)
 
-        # Generate all signals
+        # Generate all signals up front (strategy contract is unchanged). The
+        # engine guarantees look-ahead safety by *deferring* execution: a signal
+        # at index i is filled at index i+1, never at i.
         signals = strategy.generate_signals(bars, {"equity": portfolio.get_equity()})
 
-        # Execute signals bar by bar
+        # pending_orders holds (signal, generated_at_index) waiting to be filled
+        # on the *next* bar. This is the mechanism that kills look-ahead bias.
+        pending_orders: list[tuple[Signal, int]] = []
+
+        prev_close: float | None = None
         for i, bar in enumerate(bars):
             date = bar.get("date", f"day_{i}")
             price = bar["close"]
 
-            # Update position prices
+            # Update position mark-to-market prices.
             portfolio.update_prices({symbol: price})
 
-            # Check risk limits before processing signal
+            # Check drawdown circuit-breaker before any trading this bar.
             dd_check = risk_controller.check_drawdown(portfolio.equity_history)
             if not dd_check.allowed:
                 risk_controller.record_violation(dd_check.rule, dd_check.reason, date)
+                pending_orders = []  # risk freeze: drop pending orders too
                 portfolio.record_equity(date)
+                prev_close = price
                 continue
 
+            # Fill orders that were generated on a *previous* bar (look-ahead-safe).
+            still_pending: list[tuple[Signal, int]] = []
+            for signal, gen_idx in pending_orders:
+                filled = self._fill_order(
+                    signal=signal,
+                    generated_at=gen_idx,
+                    bar_index=i,
+                    bar=bar,
+                    prev_close=prev_close,
+                    portfolio=portfolio,
+                    risk_controller=risk_controller,
+                    date=date,
+                )
+                if not filled and gen_idx == i - 1:
+                    # An order from the immediately preceding bar that did not
+                    # fill (e.g. limit-locked) is dropped to avoid stale fills.
+                    still_pending.append((signal, gen_idx))
+                elif not filled:
+                    # Older unfilled orders are dropped rather than retried.
+                    pass
+            pending_orders = still_pending
+
+            # Generate a new order for this bar (to be filled next bar).
             if i < len(signals):
-                signal = signals[i]
-                self._execute_signal(signal, portfolio, risk_controller, price, date)
+                new_signal = signals[i]
+                if new_signal.action in ("buy", "sell"):
+                    pending_orders.append((new_signal, i))
 
             portfolio.record_equity(date)
+            prev_close = price
 
         # Build performance summary
         days = len(bars)
@@ -134,41 +230,93 @@ class BacktestEngine:
             trades=[self._trade_to_dict(t) for t in portfolio.trades],
             performance=performance,
             risk_violations=risk_controller.violations,
+            assumptions=self._assumptions(),
         )
 
-    def _execute_signal(
+    def _fill_order(
         self,
         signal: Signal,
+        generated_at: int,
+        bar_index: int,
+        bar: dict[str, Any],
+        prev_close: float | None,
         portfolio: Portfolio,
         risk_controller: RiskController,
-        price: float,
         date: str,
-    ) -> None:
-        """Execute a trading signal with risk checks."""
-        if signal.action == "buy" and signal.shares > 0:
+    ) -> bool:
+        """Attempt to fill a deferred order on ``bar``. Returns True if filled."""
+        ref_price = bar.get("open") if self.execution_price == "open" else bar.get("close")
+        ref_price = bar.get("open", bar.get("close")) if ref_price is None else ref_price
+        if not ref_price or ref_price <= 0:
+            return False
+
+        side = signal.action
+        symbol = signal.symbol
+
+        # Price-limit filter: cannot buy at limit-up, cannot sell at limit-down.
+        if not self.price_limit.tradable(bar, prev_close, side):
+            risk_controller.record_violation(
+                "price_limit_locked",
+                f"{date} {symbol} 涨跌停封板，委托未成交",
+                date,
+            )
+            return False
+
+        if side == "buy" and signal.shares > 0:
             check = risk_controller.validate_buy(
-                symbol=signal.symbol,
+                symbol=symbol,
                 shares=signal.shares,
-                price=price,
+                price=ref_price,
                 equity=portfolio.get_equity(),
                 current_positions=portfolio.positions,
             )
-            if check.allowed:
-                portfolio.execute_buy(signal.symbol, signal.shares, price, date)
-            else:
+            if not check.allowed:
                 risk_controller.record_violation(check.rule, check.reason, date)
+                return False
+            fill_price, turnover, commission = self.cost_model.buy_cost(signal.shares, ref_price)
+            ok = portfolio.execute_buy(
+                symbol, signal.shares, fill_price, date, commission=commission
+            )
+            if ok:
+                self.t1.record_buy(symbol, bar_index)
+            else:
+                risk_controller.record_violation("insufficient_cash", f"{date} 现金不足", date)
+            return ok
 
-        elif signal.action == "sell" and signal.symbol in portfolio.positions:
+        if side == "sell":
+            if symbol not in portfolio.positions:
+                return False
+            # T+1: cannot sell a lot bought today (or any bar index not yet passed).
+            if not self.t1.can_sell(symbol, bar_index):
+                risk_controller.record_violation(
+                    "t_plus_1",
+                    f"{date} {symbol} T+1 约束：当日买入不可卖出",
+                    date,
+                )
+                return False
             check = risk_controller.validate_sell(
-                symbol=signal.symbol,
-                shares=portfolio.positions[signal.symbol].shares,
+                symbol=symbol,
+                shares=portfolio.positions[symbol].shares,
                 current_positions=portfolio.positions,
             )
-            if check.allowed:
-                shares = portfolio.positions[signal.symbol].shares
-                portfolio.execute_sell(signal.symbol, shares, price, date)
-            else:
+            if not check.allowed:
                 risk_controller.record_violation(check.rule, check.reason, date)
+                return False
+            shares = portfolio.positions[symbol].shares
+            fill_price, turnover, commission, stamp = self.cost_model.sell_proceeds(
+                shares, ref_price
+            )
+            ok = portfolio.execute_sell(
+                symbol,
+                shares,
+                fill_price,
+                date,
+                commission=commission,
+                stamp_duty=stamp,
+            )
+            return ok
+
+        return False
 
     @staticmethod
     def _trade_to_dict(trade: Trade) -> dict[str, Any]:

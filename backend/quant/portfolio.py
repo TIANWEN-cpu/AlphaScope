@@ -62,11 +62,22 @@ class Portfolio:
         self.date_history: list[str] = []
 
     def execute_buy(
-        self, symbol: str, shares: int, price: float, timestamp: str = ""
+        self,
+        symbol: str,
+        shares: int,
+        price: float,
+        timestamp: str = "",
+        commission: float | None = None,
     ) -> bool:
-        """Execute a buy order. Returns True if successful."""
+        """Execute a buy order. Returns True if successful.
+
+        ``commission`` lets the engine pass a pre-computed fee (e.g. with a
+        minimum-charge rule from :class:`constraints.TradingCostModel`). When
+        omitted, the legacy ``commission_rate`` fallback is used.
+        """
         cost = shares * price
-        commission = cost * self.commission_rate
+        if commission is None:
+            commission = cost * self.commission_rate
         total_cost = cost + commission
 
         if total_cost > self.cash:
@@ -76,6 +87,8 @@ class Portfolio:
 
         if symbol in self.positions:
             pos = self.positions[symbol]
+            # Weighted-average cost of the combined holding, fee excluded (the
+            # commission is already deducted from cash, not capitalised).
             total_shares = pos.shares + shares
             pos.avg_cost = (pos.cost_basis + cost) / total_shares
             pos.shares = total_shares
@@ -99,9 +112,20 @@ class Portfolio:
         return True
 
     def execute_sell(
-        self, symbol: str, shares: int, price: float, timestamp: str = ""
+        self,
+        symbol: str,
+        shares: int,
+        price: float,
+        timestamp: str = "",
+        commission: float | None = None,
+        stamp_duty: float = 0.0,
     ) -> bool:
-        """Execute a sell order. Returns True if successful."""
+        """Execute a sell order. Returns True if successful.
+
+        ``commission`` and ``stamp_duty`` are the pre-computed fees. When
+        ``commission`` is omitted the legacy ``commission_rate`` fallback applies;
+        ``stamp_duty`` defaults to 0 (A-share stamp duty is paid by the seller).
+        """
         if symbol not in self.positions:
             return False
 
@@ -110,10 +134,11 @@ class Portfolio:
             return False
 
         proceeds = shares * price
-        commission = proceeds * self.commission_rate
-        pnl = (price - pos.avg_cost) * shares - commission
+        if commission is None:
+            commission = proceeds * self.commission_rate
+        pnl = (price - pos.avg_cost) * shares - commission - stamp_duty
 
-        self.cash += proceeds - commission
+        self.cash += proceeds - commission - stamp_duty
 
         if shares == pos.shares:
             del self.positions[symbol]

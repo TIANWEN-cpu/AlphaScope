@@ -282,6 +282,7 @@ def run_local_backtest_payload(
         "strategy_id": strategy.name,
         "symbol": symbol,
         "status": "completed",
+        "assumptions": getattr(result, "assumptions", {}) or {},
         "metrics": {
             "total_return": performance.get("total_return", 0.0),
             "annual_return": performance.get("annualized_return", 0.0),

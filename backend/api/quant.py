@@ -278,6 +278,7 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
         "strategy_id": strategy.name,
         "symbol": body.symbol,
         "status": "completed",
+        "assumptions": getattr(result, "assumptions", {}) or {},
         "metrics": {
             "total_return": performance.get("total_return", 0.0),
             "annual_return": performance.get("annualized_return", 0.0),
