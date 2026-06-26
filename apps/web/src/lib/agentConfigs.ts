@@ -229,8 +229,15 @@ export function loadAgentConfigs(): AgentConfig[] {
       .map((item, index) => normalizeAgentConfig(item, DEFAULT_AGENT_CONFIGS[index]))
       .filter((item): item is AgentConfig => Boolean(item));
     if (normalized.length) {
-      window.localStorage.setItem(AGENT_CONFIG_STORAGE_KEY, JSON.stringify(normalized));
-      return normalized;
+      // 自动合并:把用户 localStorage 里缺失的"新预设 agent"补回来(保留用户已有配置与自定义)。
+      // 这样发版新增预设(如「买方深度调研」)后,老用户也能自动看到,无需手动新增或重置。
+      const existingIds = new Set(normalized.map((a) => a.id));
+      const missingDefaults = DEFAULT_AGENT_CONFIGS.filter((d) => !existingIds.has(d.id));
+      const merged = missingDefaults.length ? [...normalized, ...missingDefaults] : normalized;
+      if (missingDefaults.length) {
+        window.localStorage.setItem(AGENT_CONFIG_STORAGE_KEY, JSON.stringify(merged));
+      }
+      return merged;
     }
     return DEFAULT_AGENT_CONFIGS;
   } catch {

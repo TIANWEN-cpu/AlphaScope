@@ -4,6 +4,7 @@ import { Check, Download, Loader2, Search, Users } from 'lucide-react';
 import { fetchApi } from '../lib/api';
 import { downloadText } from '../lib/download';
 import { dispatchTabChange } from '../lib/workspaceEvents';
+import { loadAgentConfigs, saveAgentConfigs, type AgentConfig } from '../lib/agentConfigs';
 
 /**
  * 投资人库面板(纯新增模块)。
@@ -52,7 +53,8 @@ export function ExpertPanel() {
   };
 
   const createTeam = () => {
-    const ids = experts.filter((e) => selected.has(e.id)).map((e) => e.id);
+    const members = experts.filter((e) => selected.has(e.id));
+    const ids = members.map((e) => e.id);
     if (!ids.length) return;
     setCreating(true);
     void fetchApi('/api/experts/team', {
@@ -60,6 +62,33 @@ export function ExpertPanel() {
       body: JSON.stringify({ member_ids: ids, name: `自定义投资人团(${ids.length}位)` }),
     })
       .then(() => {
+        // 关键修复:把选中的 persona 合并进前端 agent 配置(localStorage),
+        // 否则跳到「多Agent网络」tab 后看不到刚组建的专家团(前后端态未打通)。
+        const existing = loadAgentConfigs();
+        const existingIds = new Set(existing.map((a) => a.id));
+        const newAgents: AgentConfig[] = members.map((e) => ({
+          id: e.id,
+          name: e.name || e.id,
+          role: 'Expert Panel',
+          status: 'idle',
+          task: '暂无任务',
+          description: e.style || `${e.name || e.id} 视角分析`,
+          iconKey: 'custom',
+          enabled: true,
+          provider: '',
+          model: e.model || 'gpt-4.1-mini',
+          temperature: 0.3,
+          prompt: `${e.style || ''} 请以此投资大师的视角分析当前标的，结合其标志性方法论（价值/成长/宏观/趋势/游资）给出独立判断。`,
+        }));
+        // 去重:已存在的同 id agent 替换(更新),不存在的追加
+        const merged = [...existing];
+        for (const na of newAgents) {
+          const idx = merged.findIndex((a) => a.id === na.id);
+          if (idx >= 0) merged[idx] = na;
+          else merged.push(na);
+        }
+        saveAgentConfigs(merged); // 内部会 dispatch 'agent-configs-changed' 事件
+        void existingIds; // 触发上面 Set 的使用(保留用于调试)
         setSelected(new Set());
         dispatchTabChange('agents'); // 创建后跳转「多Agent网络」
       })
