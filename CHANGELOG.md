@@ -2,6 +2,16 @@
 
 ## v1.9.4 - 2026-06-27
 
+### ProviderCapability 能力 schema(deep-research 独有)
+对标 tickflow tiers.yaml「能力驱动」, 用统一 schema 表达每个数据源能力:
+- BaseProvider.capability(): 返回标准化能力字典(markets/data_types/data_class/
+  freshness/latency_tier/cost_tier/rate_limit/trust_level/priority/requires_key/
+  available/degradable), 纯读取类属性不触发网络。
+- registry.get_all_capabilities() 聚合; 新增 /api/providers/capabilities 端点。
+- 修复 BaseProvider 非数据类的 field(default_factory=) 默认值未实例化的潜在 bug
+  (markets/data_types/rate_limit 在子类未覆盖时会是 Field 对象)。
+- tests/test_provider_capability.py: 4 用例(schema/latency_tier/degradable/聚合)。
+
 ### 数据源质量评分 quality_score(compass §7.2 + 1.txt)
 把数据源终端从"只有健康/降级/不可用"升级为可量化质量分:
 - `observability/source_health.py` 新增纯函数 compute_quality_score: 成功率 × 新鲜度 × 完整度(0-100),

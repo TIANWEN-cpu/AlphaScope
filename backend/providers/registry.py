@@ -213,6 +213,14 @@ class ProviderRegistry:
         """获取所有 Provider 的健康状态"""
         return [p.health_check() for p in self._providers.values()]
 
+    def get_all_capabilities(self) -> list[dict]:
+        """获取所有 Provider 的标准化能力描述(v1.9.4)。
+
+        对标 tickflow tiers.yaml 的能力驱动: 用同一套 schema 表达每个数据源的
+        市场/数据类型/粒度/延迟/成本/速率限制/凭证需求/优先级/可降级, 供前端筛选展示。
+        """
+        return [p.capability() for p in self._providers.values()]
+
     def get_source_trust_level(self, source: str) -> str:
         """获取数据源的可信度等级 (S/A/B/C/D)"""
         trust_levels = self._config.get("source_trust_levels", {})

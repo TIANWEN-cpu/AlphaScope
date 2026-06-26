@@ -312,6 +312,25 @@ if HAS_FASTAPI:
             },
         )
 
+    @app.get("/api/providers/capabilities", response_model=ApiResponse[dict[str, Any]])
+    def providers_capabilities():
+        """数据源能力描述(v1.9.4, deep-research ProviderCapability)
+
+        用统一 schema 表达每个数据源的市场/数据类型/粒度/延迟/成本/速率限制/
+        凭证需求/优先级/可降级, 供前端用同一套 UI 筛选展示(对标 tickflow tiers.yaml)。
+        """
+        from backend.providers.registry import get_registry
+
+        registry = get_registry()
+        caps = registry.get_all_capabilities()
+        return ApiResponse(
+            success=True,
+            data={
+                "total": len(caps),
+                "capabilities": caps,
+            },
+        )
+
     # ============== 对话 API ==============
 
     @app.post("/api/conversations", response_model=ApiResponse[ConversationData])

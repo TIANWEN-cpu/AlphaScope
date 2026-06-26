@@ -76,6 +76,17 @@ class BaseProvider(ABC):
     def __init__(self) -> None:
         self._health = ProviderHealth()
         self._logger = logging.getLogger(f"provider.{self.name}")
+        # v1.9.4: 类级 field(default_factory=...) 默认值在非 dataclass 上不会自动实例化,
+        # 这里把未被子类覆盖的 list/dict 默认值实例化, 避免 capability()/health 遇到 Field 对象。
+        from dataclasses import Field
+
+        if isinstance(self.markets, Field):
+            self.markets = list(self.markets.default_factory())  # type: ignore[misc]
+        if isinstance(self.data_types, Field):
+            self.data_types = list(self.data_types.default_factory())  # type: ignore[misc]
+        if isinstance(self.rate_limit, Field):
+            rl = self.rate_limit.default_factory
+            self.rate_limit = rl() if callable(rl) else {}  # type: ignore[assignment]
 
     @property
     def health(self) -> ProviderHealth:
@@ -127,6 +138,43 @@ class BaseProvider(ABC):
             "avg_latency_ms": round(self._health.avg_latency_ms, 1),
             "error": self._health.error_message,
         }
+
+    def capability(self) -> dict:
+        """返回标准化的能力描述(v1.9.4, deep-research ProviderCapability)。
+
+        统一所有数据源(AkShare/Tushare/CSV/Demo…)的能力表达, 对标 tickflow
+        tiers.yaml 的「能力驱动」思想, 供前端用同一套 UI 展示与筛选。
+        纯读取类属性, 不触发网络。
+        """
+        rl = self.rate_limit if isinstance(self.rate_limit, dict) else {}
+        return {
+            "name": self.name,
+            "markets": list(self.markets or []),
+            "data_types": list(self.data_types or []),
+            "data_class": self.data_class,
+            "freshness": self.freshness,  # realtime|intraday|daily|weekly|monthly
+            "latency_tier": self._latency_tier(),
+            "cost_tier": self.cost_tier,  # free|freemium|paid
+            "rate_limit": {
+                "per_minute": rl.get("per_minute"),
+                "per_day": rl.get("per_day"),
+            },
+            "trust_level": self.license_level,
+            "priority": self.priority,
+            "requires_key": self.requires_key,
+            "available": self.is_available(),
+            "degradable": self.priority < 100,  # 非最高优先级源可作降级备用
+        }
+
+    def _latency_tier(self) -> str:
+        """按 freshness 推断延迟等级(展示用)。"""
+        return {
+            "realtime": "realtime",
+            "intraday": "low",
+            "daily": "medium",
+            "weekly": "high",
+            "monthly": "high",
+        }.get(self.freshness, "medium")
 
     # ---- 数据获取接口 (子类按需实现) ----
 
