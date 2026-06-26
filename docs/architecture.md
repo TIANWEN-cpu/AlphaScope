@@ -1,219 +1,136 @@
-# Architecture (v0.40)
+# Architecture (v1.9.x)
 
-This document describes the system architecture and data flow of 研策中枢 AlphaScope.
+This document describes the system architecture and data flow of 研策中枢 AlphaScope — a local-first AI investment-research and quantitative decision workbench.
+
+> 本文档随版本更新。上一版（v0.40）描述的是早期 Streamlit 形态，已与现状脱节；本文反映 **v1.9.x** 的分层架构（FastAPI 100+ 接口、自研多 Agent 编排、量化层独立、Provider 插件化）。
 
 ## System Overview
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                 Presentation Layer                        │
-│  Streamlit Dashboard · FastAPI (27 endpoints) · Vite UI  │
-└───────────────────────────┬─────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│                  Analysis Layer                           │
-│  5 Agents → Critic → Chairman · Expert Panel (10 experts)│
-│  Intent Router · Vision Pipeline · Compliance Checker    │
-└───────────────────────────┬─────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│                   Quality Layer                           │
-│  Dedup · SourceRank · Evidence Aggregator · Anomaly Det  │
-└───────────────────────────┬─────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│              Data & Storage Layer                         │
-│  20+ Providers · SQLite (20+ tables) · ChromaDB (opt.)  │
-│  Pipeline · Context Builder · Model Registry · Task Queue│
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  UI["<b>用户界面层</b><br/>Vite + React 19 工作台 · Streamlit 调试台 · Windows 一键包 / Docker"]
+  API["<b>API 层 · FastAPI</b><br/>REST 100+ · SSE 流式 · 鉴权 / 设置 / 任务中心"]
+  ORCH["<b>Agent 编排层（自研）</b><br/>研究员 Agent 群 · Tool Router · Critic 7 维 · Chairman 会签 · 降级策略"]
+  QUANT["<b>量化层</b><br/>指标 / 因子库 · 一策略一文件(自动发现) · 回测引擎(T+1/费用/滑点/防未来函数) · 风控规则"]
+  DATA["<b>数据层</b><br/>Provider 插件(20 源自动注册) · 健康检查 / 三级降级 · SQLite / 证据链 · Demo 兜底 · RAG 向量检索"]
+  UI --> API --> ORCH
+  API --> QUANT
+  ORCH --> QUANT
+  ORCH --> DATA
+  QUANT --> DATA
 ```
 
-Each layer is independently testable and replaceable.
+每一层独立可测、可替换。新增 Provider / 策略只需放一个文件（importlib 自动发现），无需改核心代码。
 
 ## Layer Details
 
-### 1. Provider Layer (`backend/providers/`)
+### 1. 数据层 · Provider 插件 (`backend/providers/`)
 
-20+ data source plugins behind a unified `BaseProvider` interface:
+20 个真实数据源 + 1 个 Demo 兜底，统一 `BaseProvider` 接口：
 
-| Provider | Market | Data Type | Trust Level |
-|----------|--------|-----------|-------------|
-| CNInfo | CN | Announcements | S |
-| SEC EDGAR | US | Filings | S |
-| HKEXnews | HK | Announcements | S |
-| Tushare Pro | CN | Reports, prices | A |
-| CLS | CN | News flash | A |
-| OpenBB | Global | Prices, fundamentals | A |
-| EastMoney | CN | News, reports | B |
-| AkShare | CN | All-round | B |
-| BaoStock | CN | Price fallback | C |
-| Finnhub | US | News, prices | B |
-| FRED | Global | Macro data | A |
-| Northbound | CN | Fund flow | B |
-| Reddit | US | Sentiment | C |
-| Google Trends | Global | Sentiment | C |
+| Provider | 市场 | 数据类型 | 说明 |
+|----------|------|----------|------|
+| AkShare | CN | 全品类 | 主力源，已集成 1.18.60 |
+| EastMoney | CN | 新闻/资金流 | 三级兜底之一 |
+| BaoStock | CN | 价格兜底 | 三级兜底之一 |
+| Tushare | CN | 报告/行情 | 需 Key |
+| CNInfo | CN | 公告 | S 级信任 |
+| CLS (财联社) | CN | 快讯 | A 级 |
+| DragonTiger | CN | 龙虎榜/游资 | — |
+| Northbound | CN | 北向资金流 | — |
+| SEC EDGAR | US | Filings | S 级 |
+| Finnhub | US | 新闻/行情 | — |
+| HKEXnews | HK | 公告 | S 级 |
+| OpenBB | Global | 行情/基本面 | — |
+| FRED | Global | 宏观 | A 级 |
+| Reddit / StockTwits | US | 舆情 | C 级 |
+| Google Trends / Wikipedia Views | Global | 另类舆情 | C 级 |
+| Web Search | Global | 检索补全 | — |
+| **Demo** | — | 内置示例 | 零 Key 兜底，读 seed DB |
 
-`ProviderRegistry` handles auto-discovery, priority routing, and failover. Configuration lives in `config/data_sources.yaml`.
+`ProviderRegistry` 负责 importlib 自动发现、优先级路由、`is_available()` 健康检查与失败 failover。价格取数走 **三级兜底**（AkShare → 东财 → 腾讯/BaoStock）。配置见 `config/data_sources.yaml`。健康状态经 `SourceHealthMonitor` 跟踪，可通过 `GET /api/providers/health` 查询。
 
-Each provider tracks health status (HEALTHY/DEGRADED/UNHEALTHY) via `_record_success()`/`_record_failure()`. Health status available at `GET /api/providers/health`.
+> Demo Provider (`demo_provider.py`)：`requires_key=False`、低优先级，读取打包的 `seed/ai_finance.db`（10 只股票真实价格），数据标记 `source=demo_seed`，让用户不配 Key 也能走完整路径。
 
-### 2. Quality Layer (`backend/quality/`)
+### 2. 存储与证据层
 
-Four independent quality gates:
+- **SQLite** — 结构化存储：新闻、研报、公告、行情、证据项、来源抓取日志、回测运行记录等。写操作线程安全（mutex）。
+- **Evidence Store** (`backend/evidence_store.py`) — 证据链 CRUD，每条证据带 `evidence_type / source_url / claim / confidence / symbols / data_date`。Agent 结论力求反链到具体 `evidence_id`，构成「可审计」核心。
+- **RAG** (`backend/rag/`) — 6 个模块（chunker / document_pipeline / hybrid_retriever / retriever / vector_store），可选向量库做语义检索，把相关证据注入 Agent 上下文。
+- **Report Archive** (`backend/archive.py` + `archive_tagger.py`) — 每次深度分析自动归档为 Markdown，含决策、置信度、模型组合快照、Critic 质量分，支持事后复盘。
 
-- **Deduplicator** — content fingerprinting. Same article from two sources? Merged.
-- **SourceRanker** — trust-level scoring (S/A/B/C/D) from config.
-- **EvidenceAggregator** — cross-source validation. Multi-source agreement boosts confidence; contradictions are flagged.
-- **AnomalyDetector** — zero/negative prices, limit violations, garbled text, duplicate timestamps.
+### 3. Agent 编排层（自研）(`backend/runtime/` + `backend/agents/`)
 
-### 3. Storage Layer (`backend/storage/`)
+- **Orchestrator** (`runtime/orchestrator.py`) — 调度核心，三种模式：
+  - **Standard** — 少量 Agent + 单模型，快速。
+  - **Deep** — 5 默认角色 Agent（基本面 / 技术面 / 情绪 / 风控 / 资金行为）+ Critic + Chairman，多模型异构。
+  - **Auto** — Standard 预筛，置信度模糊（30–70%）时升级到 Deep。
+- **Tool Router** (`runtime/tool_router.py`) — Agent 工具调用路由。
+- **Critic** (`critic.py`) — 对每个 Agent 输出做 **7 维评分**：证据质量 / 逻辑一致性 / 矛盾检测 / 缺失证据 / 过度自信标记 / 证据覆盖率 / 因子一致性。
+- **Chairman** (`agents/chairman.py`) — `summarize_with_chairman()` 汇总多模型信号 + 置信度 + 理由，产出最终会签结论。
+- **Expert Panel** — 可配置专家团（`config/experts.yaml`），5 种辩论模式（QUICK_VOTE / ROUNDTABLE / DEVILS_ADVOCATE / CHAIRMAN_RULING / HUMAN_INTERVENTION）。
+- **降级策略** — 单 Agent 失败降级备用模型并标 `degraded=true`；全部失败时走 `demo_fallback`（无 Key）或返回结构化失败，**绝不返回伪造的"正常成功"**。
 
-- **SQLite** — 6 core tables: `news_items`, `research_reports`, `announcements`, `price_bars`, `source_fetch_logs`, `evidence_items`. All write operations are thread-safe (mutex-locked).
-- **ChromaDB** — vector store for semantic search over evidence. Used by the RAG retriever.
+### 4. 量化层 (`backend/quant/`)
 
-### 4. Ingestion Layer (`backend/ingestion/`)
+- **回测引擎** (`engine.py`) — 自研事件驱动引擎，主循环接入真实 A 股交易摩擦：
+  - **防未来函数**：T 日信号于 **T+1 开盘价成交**（不再用当天 close 既算信号又成交），最后一根 bar 的信号无下一 bar 可成交则丢弃。
+  - **T+1 结算**、**印花税（卖出单边）**、**滑点**、**涨跌停封板**（见 `constraints.py` 的 `T1Constraint` / `TradingCostModel` / `LimitUpDownFilter`）。
+- **策略库** (`strategies/` 包) — 一策略一文件 + `StrategyRegistry` 自动发现，内置 8 个策略（MA / MACD / RSI / 布林突破 / 海龟 / 超跌反弹 / 动量TopN / 放量突破）。
+- **指标** (`metrics.py`) — Sharpe / Sortino / Calmar / Profit Factor / 年化 / 最大回撤 / 胜率。
+- **风控** (`risk_controller.py`) — 6 条硬规则（单笔仓位 / 总仓位 / 止损 / 最大回撤 / 日亏损熔断 / 集中度），回测主循环逐 bar 调用，触发即拦截交易。
+- **Portfolio** (`portfolio.py`) — 持仓与成本核算，`execute_buy/sell` 支持可选佣金/印花税参数。
 
-`DataScheduler` runs configurable fetch jobs:
+### 5. 视觉/多模态 (`backend/vision/`)
 
-| Job | Interval | Source |
-|-----|----------|--------|
-| CN News | 5 min | CLS, AkShare |
-| CN Reports | 1 hr | Tushare, EastMoney |
-| CN Announcements | 1 hr | CNInfo, AkShare |
-| Market Snapshot | 1 hr | AkShare |
-| CN Prices | Daily | AkShare, BaoStock |
-| US SEC Filings | 15 min | SEC EDGAR |
+图像 / K 线图分析带真实数据交叉验证：检测图表类型 → LLM 解读趋势/支撑阻力/形态 → 拉取真实 OHLCV → 视觉结论与真实数据比对，避免模型「自信地看图说话」。
 
-### 5. Analysis Layer (`backend/llm_agents.py`)
+### 6. API 层 (`backend/api/`)
 
-Three analysis modes:
+FastAPI 提供 100+ REST / SSE 接口，按域拆分（`quant.py` / `analysis.py` / `news.py` / `evidence.py` / `settings.py` / `providers.py` 等）。SSE 流式用于 AI 对话与研报生成进度。回测响应透出 `assumptions` 字段，让「本次回测假设」对用户可见。
 
-**Standard Mode** — 3 agents, DeepSeek only:
-1. Fundamentals Analyst
-2. Technical Analyst
-3. Sentiment Analyst
+### 7. 用户界面层
 
-**Deep Mode** — 5 heterogeneous agents + Critic + Chairman:
-1. Fundamentals (Claude Sonnet 4.5)
-2. Technicals (GPT-5.2)
-3. Sentiment (DeepSeek Chat)
-4. Risk Control (SenseNova)
-5. Retail Behavior (Mimo v2.5-pro)
-6. Critic — scores all outputs, flags contradictions
-7. Chairman (Claude Opus 4.7) — produces final executive decision
-
-**Auto Mode** — pre-screen with Standard, escalate to Deep if confidence is ambiguous (30-70%).
-
-All agents have automatic DeepSeek fallback on provider failure.
-
-### 6. Vision Pipeline (`backend/vision/`)
-
-Image/K-line chart analysis with real data cross-validation:
-
-1. `detect_chart()` — LLM-based chart type detection (kline/line/bar/table)
-2. `interpret_kline()` — LLM extracts trend, support/resistance, patterns
-3. `_fetch_real_price_data()` — fetches actual OHLCV from providers
-4. `_compare_vision_with_real_data()` — cross-validates vision vs reality
-
-User can provide ticker to skip detection follow-up. Results include `KlineAnalysisData` and `RealDataComparison` schemas.
-
-### 7. Evidence & Factor Injection
-
-Before agents analyze, the system automatically:
-
-1. Retrieves relevant evidence from ChromaDB via RAG
-2. Computes 5 quantitative factors (sentiment, events, ratings, fund flow, momentum)
-3. Injects both into the market brief
-
-This grounds agent reasoning in actual data, not just the model's training knowledge.
-
-### 8. Critic Layer (`backend/critic.py`)
-
-The Critic evaluates each agent's output on 7 dimensions:
-
-1. Evidence quality
-2. Logical consistency
-3. Contradiction detection
-4. Missing evidence identification
-5. Overconfidence flagging
-6. Evidence coverage rate
-7. Factor consistency
-
-Output: per-agent scores (0-100), divergence explanation, and aggregate quality metrics.
-
-### 8. Presentation Layer (`frontend/dashboard.py`)
-
-Streamlit dashboard with 10 tabs:
-
-1. K-line & Technical Indicators
-2. Agent Analysis (mode selector + model lineup)
-3. News & Reports
-4. Fund Flow
-5. Data Details
-6. Fundamentals
-7. Research Archive
-8. Expert Roundtable
-9. Factor Analysis
-10. Source Health
-
-### 9. Archive Layer (`backend/archive.py`)
-
-Every deep analysis is automatically archived:
-
-```
-reports/archive/{symbol}/{timestamp}-{stock_name}.md
-reports/archive/index.json
-```
-
-Archive metadata includes:
-- Decision (buy/sell/hold)
-- Confidence score
-- Agent model combination snapshot
-- Fallback count
-- Critic quality metrics
-
-This enables post-hoc analysis of which model combinations produce better outcomes.
+- **`apps/web`** — Vite + React 19 + TypeScript 工作台，状态驱动 SPA（无 React Router），Sidebar 分两组（投研核心 / 量化研究引擎）约 14 个模块。SSE 流式对话、证据链反查、回测交易明细与免责声明已接入。
+- **Streamlit 调试台** — 保留用于快速实验与诊断（非主交付形态）。
+- **Windows 一键包** — PyInstaller + Inno Setup，首启自动生成 master key 做 AES-GCM 加密。
 
 ## Data Flow Example
 
 ```
-User selects stock 600519 (Kweichow Moutai)
+用户选 600519 (贵州茅台)
     ↓
-Pipeline fetches: news (CLS + AkShare), announcements (CNInfo),
-  reports (Tushare), prices (AkShare), fund flow (AkShare)
+Provider 层取数: 新闻(CLS+AkShare) · 公告(CNInfo) · 行情(AkShare,三级兜底) · 资金流
     ↓
-Quality layer: dedup → rank → cross-validate → anomaly check
+质量层: 去重 → 来源排序 → 跨源验证 → 异常检测
     ↓
-Storage: SQLite (structured) + ChromaDB (indexed)
+存储: SQLite(结构化) + Evidence Store(证据) + RAG(向量索引)
     ↓
-RAG retrieves relevant evidence for 600519
+RAG 检索相关证据 + 因子生成器算 5 维分数, 注入 Agent 上下文
     ↓
-Factor generator computes 5-dimensional scores
+5 Agent 并行分析(注入证据+因子) → Critic 7 维评分 → Chairman 会签
     ↓
-5 agents analyze in parallel (injected with evidence + factors)
+研报生成(质量门控: 禁空话/覆盖率/矛盾呈现/免责, critical 不清零拒绝发布)
     ↓
-Critic scores all outputs, flags issues
-    ↓
-Chairman synthesizes executive decision
-    ↓
-Dashboard displays results + auto-archives to reports/
+前端展示 + 自动归档; 用户可一键回测(带真实摩擦) + 导出
 ```
 
-## Thread Safety
+## Thread Safety & 并发
 
-All shared state uses double-checked locking:
-
-- `Database` singleton — mutex on all write operations
-- `VectorStore` singleton — mutex on collection operations
-- `DataPipeline` singleton — mutex on ingestion operations
-
-This is necessary because Streamlit runs each page load in a separate thread.
+- 共享状态用双重检查锁：Database 写操作 mutex、VectorStore collection 操作 mutex、Task Queue 串行化。
+- async 路由解阻塞：长任务（资金流、模型列表）移入 worker thread + 超时，避免阻塞事件循环（见 v1.9.0 性能优化）。
+- 关键路径有 TTL 缓存（如资金流），上游不可用时返回缓存并标 `degraded=true`。
 
 ## Configuration
 
-| File | Purpose | Hot-reload |
-|------|---------|------------|
-| `config/models.yaml` | LLM model assignments per agent | Yes |
-| `config/data_sources.yaml` | Provider priority, timeout, retry | Yes |
-| `config/experts.yaml` | Expert persona definitions | No |
-| `.env` | API keys and base URLs | No |
+| 文件 | 用途 | 热重载 |
+|------|------|--------|
+| `config/models.yaml` | 每个 Agent 的模型分配 | 是 |
+| `config/data_sources.yaml` | Provider 优先级 / 超时 / 重试 | 是 |
+| `config/experts.yaml` | 专家人设定义 | 否 |
+| `config/agent_teams.yaml` | Agent 编队 / 辩论模式 | 是 |
+| `.env` | API Key 与 Base URL（AES-GCM 加密存储） | 否 |
+
+## Compliance
+
+所有能力限定于「研究、回测、决策支持、可审计」范畴：**不荐股、不预测、不承诺收益、不接实盘 / 自动下单**。回测页与导出报告显著标注「回测结果不代表未来收益」。

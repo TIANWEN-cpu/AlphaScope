@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Onboarding } from './components/Onboarding';
+import { GoldenPathTour } from './components/GoldenPathTour';
 import { subscribeTabChange } from './lib/workspaceEvents';
 import type { ErrorInfo, ReactNode } from 'react';
 import { KeepAlive } from './components/KeepAlive';
@@ -189,6 +190,7 @@ export default function App() {
       </div>
     </div>
     <Onboarding />
+    <GoldenPathTour onNavigate={(tab) => setCurrentTab(tab as TabID)} />
   </div>
 );
 }
