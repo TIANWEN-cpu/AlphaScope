@@ -163,6 +163,7 @@ def build_demo_report(stock_data: Dict[str, Any]) -> Dict[str, Any]:
         "agent_order": [],
         "critic": None,
         "chairman_summary": None,
+        "evidence_pool": [],
         "model_status": model_status,
         "demo_sample": True,
     }

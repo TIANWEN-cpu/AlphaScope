@@ -583,11 +583,13 @@ if HAS_FASTAPI:
                             "signal": v.get("signal"),
                             "confidence": v.get("confidence"),
                             "reason": v.get("reason"),
+                            "evidence_ids": v.get("evidence_ids", []),
                         }
                         for k, v in result.get("agents", {}).items()
                     },
                     "critic": result.get("critic"),
                     "chairman_summary": result.get("chairman_summary"),
+                    "evidence_pool": result.get("evidence_pool", []),
                     "model_status": model_status,
                     "mode_name": result.get("mode_name"),
                 },

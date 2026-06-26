@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.9.2 - 2026-06-27
+
+### Agent 结论可溯源：绑定 evidence_id
+此前证据链虽已存储, 但 Agent 结论没有反链到具体证据, "可审计"是半成品。本次补齐:
+
+- **结构化证据池**: `context_builder.fetch_evidence_pool()` 返回带稳定 `evidence_id` 的证据条目,
+  简报里的 `[n]` 编号与证据 ID 一一对应。
+- **结论反链**: orchestrator 把每个 Agent reason/evidence 里的 `[n]` 引用解析成真实 `evidence_id`,
+  幻觉引用(编号不存在)被静默丢弃。三种模式(STANDARD/DEEP/AUTO)响应统一带 `evidence_pool`。
+- **API 透出**: `/api/analysis/run` 每个 agent 块带 `evidence_ids[]`, 顶层带 `evidence_pool[]`。
+- **前端溯源**: AgentOpinionCards 渲染「结论溯源」标签, 点击跳转证据来源(新闻/研报/公告)。
+- 新增 `tests/test_evidence_binding.py` 契约测试(4 用例)。
+
 ## v1.9.1 - 2026-06-26
 
 ### 回测可信度底线：真实 A 股交易摩擦

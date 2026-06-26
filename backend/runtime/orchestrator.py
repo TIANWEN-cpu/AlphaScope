@@ -38,6 +38,35 @@ CARD_STYLE_MAP = {
 }
 
 
+def _resolve_evidence_ids(agent_text: Any, number_to_id: Dict[int, str]) -> List[str]:
+    """从 Agent 结论文本里解析 [n] 引用, 映射回真实 evidence_id (v1.9.x)
+
+    Agent 简报里以 [1] [2] ... 标注可用证据;Agent 在 reason/evidence 里会回引这些编号。
+    本函数把文本里的编号解析成 evidence_pool 中的稳定 ID,实现"结论可反查证据"。
+    未命中编号(模型幻觉引用)会被静默忽略,只保留真实存在的证据。
+    """
+    import re as _re
+
+    text = " ".join(
+        str(x)
+        for x in (
+            agent_text
+            if isinstance(agent_text, (list, tuple))
+            else [agent_text]
+        )
+        if x is not None
+    )
+    ids: List[str] = []
+    seen = set()
+    for match in _re.finditer(r"\[(\d{1,3})\]", text):
+        num = int(match.group(1))
+        eid = number_to_id.get(num)
+        if eid and eid not in seen:
+            seen.add(eid)
+            ids.append(eid)
+    return ids
+
+
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
         if value is None or value == "":
@@ -379,6 +408,7 @@ def run_agents_with_mode(
     from backend.runtime.context_builder import (
         build_market_brief,
         fetch_evidence_context,
+        fetch_evidence_pool,
         fetch_factor_context,
     )
 
@@ -387,10 +417,15 @@ def run_agents_with_mode(
 
     evidence_ctx = ""
     factor_ctx = ""
+    evidence_pool: List[dict] = []
     if config.enable_evidence:
+        evidence_pool = fetch_evidence_pool(symbol, stock_name)
         evidence_ctx = fetch_evidence_context(symbol, stock_name)
     if config.enable_factors:
         factor_ctx = fetch_factor_context(symbol, stock_name)
+
+    # 简报里的证据编号 [n] → 真实 evidence_id 映射, 供 Agent 结论反链溯源。
+    number_to_id = {item["number"]: item["evidence_id"] for item in evidence_pool}
 
     brief = build_market_brief(
         stock_data, evidence_context=evidence_ctx, factor_context=factor_ctx
@@ -424,6 +459,7 @@ def run_agents_with_mode(
             "agent_order": [],
             "critic": None,
             "chairman_summary": None,
+            "evidence_pool": evidence_pool,
             "model_status": model_status,
             "mode": mode.value,
             "mode_name": config.name,
@@ -448,6 +484,17 @@ def run_agents_with_mode(
         for fut in as_completed(futures):
             r = fut.result()
             results[r["key"]] = r
+
+    # 把每个 Agent 结论里的 [n] 证据引用解析成真实 evidence_id,
+    # 实现"点开结论可反查来源"的可审计能力(evidence 招牌落地)。
+    if number_to_id:
+        for r in results.values():
+            r["evidence_ids"] = _resolve_evidence_ids(
+                [r.get("reason", ""), r.get("evidence", [])], number_to_id
+            )
+    else:
+        for r in results.values():
+            r.setdefault("evidence_ids", [])
 
     buy = sum(1 for r in results.values() if r["signal"] == "买入")
     sell = sum(1 for r in results.values() if r["signal"] == "卖出")
@@ -531,6 +578,7 @@ def run_agents_with_mode(
         "chairman_summary": chairman_summary,
         "research_report": research_report,
         "model_status": model_status,
+        "evidence_pool": evidence_pool,
         "mode": mode.value,
         "mode_name": config.name,
     }
@@ -602,6 +650,7 @@ def _run_auto_mode(
                     "vendor": config.pre_screen_provider,
                     "model": config.pre_screen_model,
                     "ok": True,
+                    "evidence_ids": [],
                 }
             },
             "summary": {
@@ -615,6 +664,7 @@ def _run_auto_mode(
             "agent_order": ["pre_screen"],
             "critic": None,
             "chairman_summary": None,
+            "evidence_pool": [],
             "mode": "auto",
             "mode_name": "自动模式 (预筛直接输出)",
             "auto_escalated": False,

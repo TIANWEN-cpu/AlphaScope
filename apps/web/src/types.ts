@@ -90,6 +90,19 @@ export interface AgentOpinion {
   structured_fallback?: boolean;
   risk_points?: string[];
   evidence_refs?: string[];
+  /** 结论反链到的真实 evidence_id 列表(可溯源)。 */
+  evidence_ids?: string[];
+}
+
+/** 简报里 [n] 编号对应的证据池条目,供结论反查。 */
+export interface EvidencePoolItem {
+  number: number;
+  evidence_id: string;
+  doc_type?: string;
+  source?: string;
+  source_url?: string;
+  published_at?: string;
+  preview?: string;
 }
 
 export interface AnalysisModelStatus {
@@ -117,6 +130,7 @@ export interface AnalysisResult {
   critic?: string;
   chairman_summary?: string;
   model_status?: AnalysisModelStatus;
+  evidence_pool?: EvidencePoolItem[];
   evidence: ProviderEvidence[];
   provider_traces: ProviderTrace[];
   source_appendix: SourceAppendixItem[];

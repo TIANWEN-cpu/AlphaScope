@@ -10,44 +10,70 @@ Context Builder: 市场简报与上下文构建。
 """
 
 import logging
-from typing import Dict, Any
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
 
-def fetch_evidence_context(symbol: str, stock_name: str = "", limit: int = 8) -> str:
-    """从 RAG 检索相关证据, 格式化为简报上下文 (v0.40)
+_TYPE_ICON = {"news": "📰", "report": "📊", "announcement": "📋"}
 
-    每条证据包含编号、来源、时间、URL，供 Agent 引用。
+
+def fetch_evidence_pool(
+    symbol: str, stock_name: str = "", limit: int = 8
+) -> List[Dict[str, Any]]:
+    """检索相关证据, 返回结构化证据池 (v1.9.x)
+
+    每条证据带稳定 `evidence_id`(DB 主键), 供 Agent 结论反链溯源。
+    编号 `number` 与 fetch_evidence_context() 简报里的 [n] 一一对应——
+    因此 Agent 文本里引用的 [n] 可解析回真实 evidence_id。
     """
     try:
         from backend.pipeline import search_evidence
 
         query = f"{stock_name} {symbol} 投资分析"
         results = search_evidence(query, symbol=symbol, n_results=limit)
-        if not results:
-            return ""
-        lines = ["【可用证据 (来自数据源平台)】"]
-        lines.append("请在分析中引用证据编号 [1] [2] ...，以支撑你的观点。")
-        for i, r in enumerate(results, 1):
-            meta = r.get("metadata", {})
-            doc_type = meta.get("doc_type", "unknown")
-            source = meta.get("source", "unknown")
-            source_url = meta.get("source_url", "")
-            published = meta.get("published_at", "")
-            text_preview = r.get("text", "")[:120]
-            type_icon = {"news": "📰", "report": "📊", "announcement": "📋"}.get(
-                doc_type, "📄"
-            )
-            url_part = f" | 来源: {source_url}" if source_url else ""
-            lines.append(
-                f"  [{i}] {type_icon} [{source}] {published}{url_part} — {text_preview}..."
-            )
-        lines.append(f"\n共检索到 {len(results)} 条相关证据, 覆盖新闻/研报/公告。")
-        return "\n".join(lines)
     except Exception as e:
         logger.debug("RAG 证据检索失败: %s", e)
+        return []
+
+    pool: List[Dict[str, Any]] = []
+    for i, r in enumerate(results, 1):
+        meta = r.get("metadata", {}) or {}
+        doc_type = meta.get("doc_type", "unknown")
+        pool.append(
+            {
+                "number": i,
+                "evidence_id": str(meta.get("id") or r.get("id") or ""),
+                "doc_type": doc_type,
+                "source": meta.get("source", "unknown"),
+                "source_url": meta.get("source_url", ""),
+                "published_at": meta.get("published_at", ""),
+                "preview": (r.get("text", "") or "")[:120],
+            }
+        )
+    return pool
+
+
+def fetch_evidence_context(symbol: str, stock_name: str = "", limit: int = 8) -> str:
+    """从 RAG 检索相关证据, 格式化为简报上下文 (v0.40)
+
+    每条证据包含编号、来源、时间、URL，供 Agent 引用。
+    编号与 fetch_evidence_pool() 返回的 `number` 一一对应。
+    """
+    pool = fetch_evidence_pool(symbol, stock_name, limit=limit)
+    if not pool:
         return ""
+    lines = ["【可用证据 (来自数据源平台)】"]
+    lines.append("请在分析中引用证据编号 [1] [2] ...，以支撑你的观点。")
+    for item in pool:
+        type_icon = _TYPE_ICON.get(item["doc_type"], "📄")
+        url_part = f" | 来源: {item['source_url']}" if item["source_url"] else ""
+        lines.append(
+            f"  [{item['number']}] {type_icon} [{item['source']}] "
+            f"{item['published_at']}{url_part} — {item['preview']}..."
+        )
+    lines.append(f"\n共检索到 {len(pool)} 条相关证据, 覆盖新闻/研报/公告。")
+    return "\n".join(lines)
 
 
 def fetch_factor_context(symbol: str, stock_name: str = "", days: int = 30) -> str:

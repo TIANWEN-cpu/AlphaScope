@@ -1,16 +1,25 @@
 import React from 'react';
-import { AgentOpinion } from '../../types';
-import { ShieldAlert, Fingerprint } from 'lucide-react';
+import { AgentOpinion, EvidencePoolItem } from '../../types';
+import { ShieldAlert, Fingerprint, Link2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface Props {
   agents: Record<string, AgentOpinion>;
+  /** 结论反查用的证据池(来自 /api/analysis/run 的 evidence_pool)。 */
+  evidencePool?: EvidencePoolItem[];
 }
 
-export const AgentOpinionCards: React.FC<Props> = ({ agents }) => {
+export const AgentOpinionCards: React.FC<Props> = ({ agents, evidencePool }) => {
   const agentEntries = Object.entries(agents) as Array<[string, AgentOpinion]>;
 
   if (agentEntries.length === 0) return null;
+
+  // evidence_id → 证据池条目, 供结论反查来源。
+  const poolById = React.useMemo(() => {
+    const m = new Map<string, EvidencePoolItem>();
+    (evidencePool ?? []).forEach((item) => m.set(item.evidence_id, item));
+    return m;
+  }, [evidencePool]);
 
   const formatAgentName = (agentId: string, opinion: AgentOpinion) => {
     const name = opinion.name?.trim();
@@ -90,6 +99,43 @@ export const AgentOpinionCards: React.FC<Props> = ({ agents }) => {
                     #{ref}
                   </span>
                 ))}
+              </div>
+            )}
+
+            {opinion.evidence_ids && opinion.evidence_ids.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/5">
+                <div className="flex items-center gap-1.5 text-emerald-400/80 mb-1.5">
+                  <Link2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[10px] font-medium uppercase tracking-wider">结论溯源</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {opinion.evidence_ids.map((eid) => {
+                    const item = poolById.get(eid);
+                    const label = item?.source || eid.slice(0, 8);
+                    const url = item?.source_url;
+                    return url ? (
+                      <a
+                        key={eid}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={item?.preview || url}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-[10px] text-emerald-300/90 hover:bg-emerald-500/20 transition-colors"
+                      >
+                        <Link2 className="w-2.5 h-2.5" />
+                        {label}
+                      </a>
+                    ) : (
+                      <span
+                        key={eid}
+                        title={item?.preview}
+                        className="px-1.5 py-0.5 bg-black/40 border border-white/5 rounded text-[10px] text-neutral-500 font-mono"
+                      >
+                        {label}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

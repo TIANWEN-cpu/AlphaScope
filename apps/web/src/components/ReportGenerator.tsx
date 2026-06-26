@@ -745,7 +745,7 @@ export function ReportGenerator({ onOpenModelSettings }: ReportGeneratorProps) {
                       <Award className="w-4 h-4 text-indigo-400" />
                       专家会签明细
                     </h3>
-                    <AgentOpinionCards agents={analysisResult.agents} />
+                    <AgentOpinionCards agents={analysisResult.agents} evidencePool={analysisResult.evidence_pool} />
                   </div>
 
                   {/* P1: Field Source Table */}
