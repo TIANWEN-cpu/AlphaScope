@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { fetchApi } from '../lib/api';
 import { findStockTarget, resolveStockTarget, STOCK_UNIVERSE, StockTarget } from '../lib/stocks';
-import { getPersistedStock } from '../lib/workspaceEvents';
+import { getPersistedStock, subscribeWatchlistChanged } from '../lib/workspaceEvents';
 import { StableChartContainer } from './StableChartContainer';
 
 const PORTFOLIO_STORAGE_KEY = 'alphascope:research-portfolio-positions';
@@ -195,6 +195,9 @@ export function Portfolio() {
     writeStoredPositions(positions);
   }, [positions]);
 
+  const [watchlistReloadKey, setWatchlistReloadKey] = useState(0);
+  useEffect(() => subscribeWatchlistChanged(() => setWatchlistReloadKey((k) => k + 1)), []);
+
   useEffect(() => {
     let cancelled = false;
     async function loadWatchlist() {
@@ -209,7 +212,7 @@ export function Portfolio() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [watchlistReloadKey]);
 
   useEffect(() => {
     if (draft.symbol || !activeStock) return;

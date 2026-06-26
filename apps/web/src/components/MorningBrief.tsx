@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronDown, Loader2, Plus, RefreshCcw, Sunrise, X } from 'lucide-react';
 import { fetchApi } from '../lib/api';
-import { dispatchStockSelected, getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
+import { dispatchStockSelected, getPersistedStock, subscribeStockSelected, dispatchWatchlistChanged } from '../lib/workspaceEvents';
 import type { StockTarget } from '../lib/stocks';
 
 /**
@@ -131,9 +131,11 @@ export function MorningBrief() {
           setWatchlist(items);
           saveWatchlist(items);
         }
+        dispatchWatchlistChanged();
       })
       .catch(() => {
         /* 后端不可用时仅本地保存 */
+        dispatchWatchlistChanged();
       });
   };
 
@@ -142,9 +144,12 @@ export function MorningBrief() {
     setWatchlist(next);
     saveWatchlist(next);
     loadBrief(next);
-    void fetchApi(`/api/watchlist/${encodeURIComponent(symbol)}`, { method: 'DELETE' }).catch(() => {
-      /* 后端不可用时仅本地移除 */
-    });
+    void fetchApi(`/api/watchlist/${encodeURIComponent(symbol)}`, { method: 'DELETE' })
+      .then(() => dispatchWatchlistChanged())
+      .catch(() => {
+        /* 后端不可用时仅本地移除 */
+        dispatchWatchlistChanged();
+      });
   };
 
   const toggleExpand = (symbol: string) => {

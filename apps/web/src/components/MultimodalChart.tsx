@@ -28,7 +28,7 @@ import {
 } from 'recharts';
 import { cn } from '../lib/utils';
 import { STOCK_UNIVERSE, StockTarget, findStockTarget, formatStockLabel } from '../lib/stocks';
-import { dispatchStockSelected, getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
+import { dispatchStockSelected, getPersistedStock, subscribeStockSelected, subscribeSettingsChanged } from '../lib/workspaceEvents';
 import { fetchApi } from '../lib/api';
 import {
   buildModelOptions,
@@ -646,6 +646,9 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
     };
   }, [selectedStock]);
 
+  const [visionModelsReloadKey, setVisionModelsReloadKey] = useState(0);
+  useEffect(() => subscribeSettingsChanged(() => setVisionModelsReloadKey((k) => k + 1)), []);
+
   useEffect(() => {
     let cancelled = false;
     async function loadModels() {
@@ -694,7 +697,7 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [visionModelsReloadKey]);
 
   useEffect(() => {
     if (uploadedUrl) {

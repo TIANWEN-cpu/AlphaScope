@@ -68,6 +68,7 @@ import {
   saveAgentConfigs,
 } from '../lib/agentConfigs';
 import { ThemedSelect, type ThemedSelectOption } from './ThemedSelect';
+import { dispatchSettingsChanged } from '../lib/workspaceEvents';
 
 type SettingTab = 'general' | 'models' | 'agents' | 'api' | 'network' | 'security' | 'data';
 const DEFAULT_API_BASE_URL = 'http://localhost:8000';
@@ -543,6 +544,7 @@ export function Settings({ initialTab }: SettingsProps) {
       const saved = await saveAiModelRoutesToApi(routes);
       setAiModelRoutes(saved);
       setSavedMessage(`已保存模型路由，${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`);
+      dispatchSettingsChanged('ai-routes');
     } catch (error) {
       setSavedMessage(error instanceof Error ? `模型路由保存失败：${error.message}` : '模型路由保存失败');
     } finally {
@@ -693,6 +695,7 @@ export function Settings({ initialTab }: SettingsProps) {
     await saveKnowledgePreferences();
     await loadProviders(result.data.id);
     setProviderStatus(`已保存 Provider：${result.data.name}`);
+    dispatchSettingsChanged('providers');
     return result.data;
   };
 
@@ -739,6 +742,7 @@ export function Settings({ initialTab }: SettingsProps) {
 
     await loadProviders();
     setProviderStatus('已删除 Provider');
+    dispatchSettingsChanged('providers');
   };
 
   const testProvider = async () => {

@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { STOCK_UNIVERSE, StockTarget, findStockTarget, formatStockLabel } from '../lib/stocks';
-import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
+import { getPersistedStock, subscribeStockSelected, subscribeSettingsChanged } from '../lib/workspaceEvents';
 import { fetchApi } from '../lib/api';
 import {
   buildModelOptions,
@@ -709,6 +709,9 @@ export function NewsAggregator({ onOpenModelSettings }: NewsAggregatorProps) {
     setSelectedSource('');
   }), []);
 
+  const [modelsReloadKey, setModelsReloadKey] = useState(0);
+  useEffect(() => subscribeSettingsChanged(() => setModelsReloadKey((k) => k + 1)), []);
+
   useEffect(() => {
     let cancelled = false;
     async function loadModels() {
@@ -739,7 +742,7 @@ export function NewsAggregator({ onOpenModelSettings }: NewsAggregatorProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [modelsReloadKey]);
 
   useEffect(() => {
     let cancelled = false;

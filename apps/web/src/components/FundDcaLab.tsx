@@ -36,6 +36,7 @@ import { StableChartContainer } from './StableChartContainer';
 import { cn } from '../lib/utils';
 import { fetchApi } from '../lib/api';
 import { getErrorMessage } from '../lib/dataFetch';
+import { subscribeSettingsChanged } from '../lib/workspaceEvents';
 import {
   buildModelOptions,
   getModelKey,
@@ -467,6 +468,9 @@ export function FundDcaLab() {
   const [selectedChatModelKey, setSelectedChatModelKey] = useState<string>('');
   const selectedChatModel = chatModelOptions.find((o) => o.key === selectedChatModelKey) ?? chatModelOptions[0];
 
+  const [chatModelsReloadKey, setChatModelsReloadKey] = useState(0);
+  useEffect(() => subscribeSettingsChanged(() => setChatModelsReloadKey((k) => k + 1)), []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -486,7 +490,7 @@ export function FundDcaLab() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [chatModelsReloadKey]);
 
   // Load recipe helper
   const handleLoadRecipe = (recipe: PortfolioRecipe) => {

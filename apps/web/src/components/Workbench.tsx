@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
 import { STOCK_UNIVERSE, StockTarget, findStockTarget, formatStockLabel, resolveStockTarget } from '../lib/stocks';
-import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
+import { getPersistedStock, subscribeStockSelected, subscribeSettingsChanged } from '../lib/workspaceEvents';
 import { fetchApi, API_BASE_URL, API_KEY, LOCAL_API_TOKEN } from '../lib/api';
 import {
   buildModelOptions,
@@ -955,6 +955,12 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
     ]);
   };
 
+  const [providersReloadKey, setProvidersReloadKey] = useState(0);
+  useEffect(() => {
+    const unsub = subscribeSettingsChanged(() => setProvidersReloadKey((k) => k + 1));
+    return unsub;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -994,7 +1000,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [providersReloadKey]);
 
   useEffect(() => {
     return subscribeStockSelected(({ stock }) => {

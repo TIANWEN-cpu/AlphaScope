@@ -24,7 +24,7 @@ import { FieldSourceTable } from './report/FieldSourceTable';
 import { EvidenceAppendix } from './report/EvidenceAppendix';
 import { mockAnalysisResult } from '../lib/mockAnalysisData';
 import { STOCK_UNIVERSE, findStockTarget, formatStockLabel } from '../lib/stocks';
-import { dispatchStockSelected, getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
+import { dispatchStockSelected, getPersistedStock, subscribeStockSelected, subscribeSettingsChanged } from '../lib/workspaceEvents';
 import { fetchApi } from '../lib/api';
 import {
   buildModelOptions,
@@ -391,6 +391,9 @@ export function ReportGenerator({ onOpenModelSettings }: ReportGeneratorProps) {
     };
   }, []);
 
+  const [reportModelsReloadKey, setReportModelsReloadKey] = useState(0);
+  useEffect(() => subscribeSettingsChanged(() => setReportModelsReloadKey((k) => k + 1)), []);
+
   useEffect(() => {
     let cancelled = false;
     async function loadModels() {
@@ -423,7 +426,7 @@ export function ReportGenerator({ onOpenModelSettings }: ReportGeneratorProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reportModelsReloadKey]);
 
   const startGeneration = async () => {
     stopTaskListeners();
