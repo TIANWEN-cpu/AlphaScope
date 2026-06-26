@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 文档 / 快速上手
+    url: https://github.com/TIANWEN-cpu/AlphaScope#readme
+    about: 部署、零 Key Demo、架构与各模块说明先看 README 与 docs/。
+  - name: 💬 讨论 / 提问
+    url: https://github.com/TIANWEN-cpu/AlphaScope/discussions
+    about: 用法咨询、投研思路、非 Bug 的开放讨论请走 Discussions。

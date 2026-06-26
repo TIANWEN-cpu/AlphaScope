@@ -1,0 +1,72 @@
+name: 🐛 Bug 报告
+description: 报告一个可复现的问题（崩溃 / 数据异常 / 行为不符预期）
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量提供可复现信息——AlphaScope 是本地优先工具，复现步骤 + 环境 + 日志能极大加快定位。
+        > 注意：本项目是研究/回测/决策支持工具，**不荐股、不预测、不接实盘**。涉及"为什么不推荐某股/为什么没下单"的诉求不属于 Bug。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 清晰描述异常现象。
+      placeholder: 点击「运行回测」后前端报错 / 资金流数据全为 0 / 研报顶部出现风控否决但不该触发……
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 一步步怎么触发。
+      placeholder: |
+        1. 选择标的 600519
+        2. 进入「低代码策略编辑器」
+        3. 加买入规则 rsi < 30
+        4. 点运行回测 → 报错
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: dropdown
+    id: deploy-mode
+    attributes:
+      label: 部署形态
+      options:
+        - 本地开发（pip + npm run dev）
+        - Docker compose
+        - Windows 一键安装包（.exe）
+        - 其他
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 见 README badge / pyproject.toml / CHANGELOG 顶部（如 v1.9.4）。
+      placeholder: v1.9.4
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: OS + Python 版本 + 浏览器（前端问题时）。
+      placeholder: Windows 11 / Python 3.12 / Chrome 126
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 报错信息
+      description: 后端 `data/logs/` 或控制台、前端 DevTools Console 的关键栈。会自动按代码块渲染。
+      render: shell
+  - type: textarea
+    id: data-source
+    attributes:
+      label: 数据源情况（数据类问题必填）
+      description: 是否配了 Key？走的是真实源还是 Demo 兜底？`/api/providers/health` 质量分如何？

@@ -2,6 +2,8 @@
 
 ## v1.9.4 - 2026-06-27
 
+> **里程碑**:落地 guide 四份战略报告合并去重后的 P1 全部未完成项——围绕「可复核 / 数据可信 / 上手低门槛 / 工程化」六项增强:低代码策略编辑器、数据核验 Agent、CSV/Excel 自带数据源、ProviderCapability 能力 schema、数据源质量评分、回测基准相对指标。配套 Issue/PR 模板与架构文档更新。只增不减,合规红线不变(不荐股/不预测/不实盘)。
+
 ### 低代码策略编辑器 + custom_rule 规则策略(1.txt + deep-research)
 让用户用「字段+操作符+阈值」无代码组合买卖信号, 复用现有回测引擎(不新建引擎):
 - `quant/strategies/custom_rule.py`: 规则驱动策略插件, 走同一套自动发现+BacktestEngine;

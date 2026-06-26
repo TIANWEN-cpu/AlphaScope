@@ -1,0 +1,49 @@
+name: ✨ 功能建议
+description: 提出一个新功能或增强（符合"研究/回测/决策支持"定位）
+title: "[Feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        AlphaScope 是个人投研工具，欢迎"做加法"的增强建议。请先看 `guide/` 战略报告与 README 的「明确不做」清单，避免与定位冲突。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题 / 场景
+      description: 你在投研/回测/复盘的哪个环节卡住了？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 期望的功能形态。能给出对标产品 / 数据口径 / 文件路径更佳。
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: 涉及层
+      multiple: true
+      options:
+        - 数据层 / Provider 插件
+        - Agent 编排（研究员 / Critic / Chairman / 专家团）
+        - 量化层（策略 / 回测 / 指标 / 风控）
+        - 证据链 / 可审计
+        - 前端 UI / 工作台
+        - 文档 / 传播 / 工程化
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案 / 已知现状
+      description: 现在你是怎么绕过的？现有哪个模块最接近？
+  - type: checkboxes
+    id: compliance
+    attributes:
+      label: 合规确认
+      options:
+        - label: 我理解本项目不做实盘下单 / 荐股 / 收益承诺 / 刷 star，此建议不违反该红线。
+          required: true
