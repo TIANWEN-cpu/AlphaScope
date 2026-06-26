@@ -163,4 +163,10 @@ export interface ProviderHealthItem {
   risk_note: string;
   data_types: string[];
   markets: string[];
+  // v1.9.4 质量分
+  quality_score?: number;
+  grade?: 'good' | 'warn' | 'poor';
+  success_rate?: number;
+  freshness_score?: number;
+  completeness_score?: number;
 }

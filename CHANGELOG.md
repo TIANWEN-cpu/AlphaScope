@@ -2,6 +2,17 @@
 
 ## v1.9.4 - 2026-06-27
 
+### 数据源质量评分 quality_score(compass §7.2 + 1.txt)
+把数据源终端从"只有健康/降级/不可用"升级为可量化质量分:
+- `observability/source_health.py` 新增纯函数 compute_quality_score: 成功率 × 新鲜度 × 完整度(0-100),
+  带 good/warn/poor 红黄绿 grade; SourceHealthMonitor.get_quality_report() 汇总。
+- `/api/providers/health` 为每个 provider 附加 quality_score/grade/success_rate/
+  freshness_score/completeness_score + 顶层 quality_good/warn/poor 计数与 avg_quality。
+- 前端 ProviderHealthPanel: 每个 provider 卡片显示质量分(红黄绿着色)+ 成功率/新鲜度。
+- tests/test_source_quality.py: 6 用例(纯函数口径 + 聚合)。
+
+### 统计指标补基准对比/超额收益/信息比率(compass §7.4-2)
+
 ### 统计指标补基准对比/超额收益/信息比率(compass §7.4-2)
 对标 Qlib 口径, 补齐回测绩效的基准相关指标:
 - `metrics.py` 新增纯函数: 超额收益(calc_excess_return)、信息比率(calc_information_ratio, 年化)、

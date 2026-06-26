@@ -367,6 +367,28 @@ export const ProviderHealthPanel: React.FC = () => {
                   )}
                 </div>
 
+                <div className="flex flex-col items-end gap-2 lg:min-w-[150px]">
+                  <div>
+                    <div className="mb-1 text-right text-xs text-neutral-500">质量分</div>
+                    <div
+                      className={`text-right font-mono text-lg font-semibold ${
+                        provider.grade === 'good'
+                          ? 'text-emerald-400'
+                          : provider.grade === 'warn'
+                            ? 'text-amber-400'
+                            : 'text-red-400'
+                      }`}
+                    >
+                      {typeof provider.quality_score === 'number' ? provider.quality_score.toFixed(0) : '--'}
+                    </div>
+                  </div>
+                  <div className="text-right text-[10px] leading-relaxed text-neutral-600">
+                    成功率 {typeof provider.success_rate === 'number' ? provider.success_rate.toFixed(0) : '--'}%
+                    <br />
+                    新鲜度 {typeof provider.freshness_score === 'number' ? provider.freshness_score.toFixed(0) : '--'}%
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3 text-right sm:grid-cols-4 lg:min-w-[460px]">
                   <div>
                     <div className="mb-1 text-xs text-neutral-500">平均延迟</div>

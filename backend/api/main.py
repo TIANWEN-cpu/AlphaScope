@@ -255,12 +255,14 @@ if HAS_FASTAPI:
 
     @app.get("/api/providers/health", response_model=ApiResponse[dict[str, Any]])
     def providers_health():
-        """数据源健康状态"""
+        """数据源健康状态(含质量分 v1.9.4)"""
+        from backend.observability.source_health import compute_quality_score
         from backend.providers.registry import get_registry
 
         registry = get_registry()
         providers = []
         healthy = degraded = unhealthy = 0
+        good = warn = poor = 0
         for name, provider in registry._providers.items():
             h = provider.health
             status = h.status.value if hasattr(h.status, "value") else str(h.status)
@@ -270,17 +272,31 @@ if HAS_FASTAPI:
                 degraded += 1
             else:
                 unhealthy += 1
-            providers.append(
-                {
-                    "name": name,
-                    "status": status,
-                    "consecutive_failures": h.consecutive_failures,
-                    "avg_latency_ms": round(h.avg_latency_ms, 1),
-                    "last_error": h.error_message,
-                    "data_types": provider.data_types,
-                    "markets": provider.markets,
-                }
-            )
+            entry = {
+                "name": name,
+                "status": status,
+                "consecutive_failures": h.consecutive_failures,
+                "avg_latency_ms": round(h.avg_latency_ms, 1),
+                "last_success": h.last_success,
+                "last_error": h.error_message,
+                "data_types": provider.data_types,
+                "markets": provider.markets,
+            }
+            # 质量分: 成功率 × 新鲜度 × 完整度, 0-100 + 红黄绿 grade
+            q = compute_quality_score(entry)
+            entry.update(q)
+            if q["grade"] == "good":
+                good += 1
+            elif q["grade"] == "warn":
+                warn += 1
+            else:
+                poor += 1
+            providers.append(entry)
+        avg_quality = (
+            round(sum(p["quality_score"] for p in providers) / len(providers), 1)
+            if providers
+            else 0.0
+        )
         return ApiResponse(
             success=True,
             data={
@@ -288,6 +304,10 @@ if HAS_FASTAPI:
                 "healthy": healthy,
                 "degraded": degraded,
                 "unhealthy": unhealthy,
+                "quality_good": good,
+                "quality_warn": warn,
+                "quality_poor": poor,
+                "avg_quality": avg_quality,
                 "providers": providers,
             },
         )
