@@ -2,6 +2,19 @@
 
 ## v1.9.4 - 2026-06-27
 
+### 低代码策略编辑器 + custom_rule 规则策略(1.txt + deep-research)
+让用户用「字段+操作符+阈值」无代码组合买卖信号, 复用现有回测引擎(不新建引擎):
+- `quant/strategies/custom_rule.py`: 规则驱动策略插件, 走同一套自动发现+BacktestEngine;
+  compute_fields 提供 13 个按 bar 对齐的字段(rsi/macd/量比/距均线%/金叉态/回撤% 等),
+  仅用 ≤i 数据(配合引擎 i→i+1 成交天然防未来函数); buy/sell 规则 and/or 组合。
+- 前端 `StrategyLab.tsx`(新 tab「低代码策略编辑器」, 量化研究引擎组): 内置模板卡
+  (RSI 超卖/均线金叉/放量突破/回调买入) + 可视化规则构建器 + 单次仓位 + 运行真实回测
+  (透出累计/年化/回撤/夏普/胜率/笔数 + 引擎假设); localStorage 策略库, 三类标签
+  builtin/custom/ai, 支持粘贴 AI 规则 JSON 导入。
+- 编译产物 {strategy_id: "custom_rule", params:{buy_rules,sell_rules,logic,position_size_pct}}
+  直接走 /api/quant/backtest。
+- tests/test_custom_rule_strategy.py: 6 用例(字段对齐/and-or/NaN/触发/端到端回测)。
+
 ### 数据核验 Agent + CSV/Excel 数据源(compass §7.3 + §7.2)
 让「数据缺失」不再被 LLM 脑补, 并让用户自带数据零 Key 入查询面:
 - `agents/data_verifier.py`: 确定性预检(纯规则/不触网/失败不阻断), 逐维度核验

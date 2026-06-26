@@ -12,6 +12,7 @@ import type { TabID } from './types';
 const AgentsSystem = lazy(() => import('./components/AgentsSystem').then((module) => ({ default: module.AgentsSystem })));
 const Portfolio = lazy(() => import('./components/Portfolio').then((module) => ({ default: module.Portfolio })));
 const Backtesting = lazy(() => import('./components/Backtesting').then((module) => ({ default: module.Backtesting })));
+const StrategyLab = lazy(() => import('./components/StrategyLab').then((module) => ({ default: module.StrategyLab })));
 const FundDcaLab = lazy(() => import('./components/FundDcaLab').then((module) => ({ default: module.FundDcaLab })));
 const NewsAggregator = lazy(() => import('./components/NewsAggregator').then((module) => ({ default: module.NewsAggregator })));
 const MultimodalChart = lazy(() => import('./components/MultimodalChart').then((module) => ({ default: module.MultimodalChart })));
@@ -24,7 +25,7 @@ const DragonTiger = lazy(() => import('./components/DragonTiger').then((module) 
 const ExpertPanel = lazy(() => import('./components/ExpertPanel').then((module) => ({ default: module.ExpertPanel })));
 const MorningBrief = lazy(() => import('./components/MorningBrief').then((module) => ({ default: module.MorningBrief })));
 
-const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'settings'];
+const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'settings'];
 
 function ModuleLoading() {
   return (
@@ -169,6 +170,9 @@ export default function App() {
                   {/* 非缓存类：按需挂载 */}
                   {currentTab === 'tasks' && (
                     <Backtesting key="backtesting" />
+                  )}
+                  {currentTab === 'strategy_lab' && (
+                    <StrategyLab key="strategy_lab" />
                   )}
                   {currentTab === 'chart' && (
                     <MultimodalChart key="chart" onOpenModelSettings={openModelSettings} />

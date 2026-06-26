@@ -10,8 +10,9 @@ import {
   BrainCircuit, 
   Bookmark, 
   Users, 
-  ListTodo, 
-  LineChart, 
+  ListTodo,
+  LineChart,
+  Beaker,
   Settings,
   ChevronRight,
   ChevronLeft,
@@ -61,6 +62,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
       title: '量化研究引擎',
       items: [
         { id: 'tasks', label: '量化回测与执行', icon: Activity },
+        { id: 'strategy_lab', label: '低代码策略编辑器', icon: Beaker },
         { id: 'fund_dca', label: '基金与定投研究室', icon: Coins },
         { id: 'valuation', label: '估值建模', icon: Calculator },
       ]
