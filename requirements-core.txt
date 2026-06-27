@@ -5,6 +5,7 @@ streamlit==1.57.0
 pandas==3.0.3
 numpy==2.4.5
 plotly==6.7.0
+duckdb>=1.0,<2  # DuckDB/Parquet 数据湖 (批量选股/因子扫描); 缺失时数据湖能力优雅降级, 不影响其余功能
 akshare==1.18.60
 requests==2.32.3
 curl_cffi==0.13.0

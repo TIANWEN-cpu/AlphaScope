@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.9.20 - 2026-06-27
+
+> **Phase 3 / DuckDB·Parquet 数据湖**:三份战略报告一致点名的基础设施。把零散的逐标的行情沉淀成**列式数据湖**,用一条 SQL 跨上千标的批量扫描——批量选股、因子计算的底座。**零硬依赖、失败安全降级**:`duckdb` 用 import-guard 包裹,没装照常运行(数据湖能力报告 `available=False`,装上即生效)。
+
+### 数据湖 datalake(后端)
+- 新增依赖 `duckdb>=1.0,<2`(requirements-core.txt;**缺失时优雅降级,不影响其余功能**)。
+- `backend/quant/datalake.py`:
+  - 纯函数(无需 duckdb 即可单测):`normalize_bars`(统一列/去重/升序)、`build_screen_sql`
+    (筛选规格 → WHERE 子句 + 参数,**字段/操作符白名单 + 占位符绑定防注入**)、`is_select_only`
+    (只读守卫,拒 DDL/DML/多语句)。
+  - duckdb-gated 失败安全:`ingest_prices`(规范化 → 写 `data/datalake/prices/<symbol>.parquet` 列存)、
+    `ingest_from_provider`(复用价格面取数入湖,逐标的失败安全)、`query`(只读 SQL,表名 `prices`)、
+    `screen`(每标的最新一根 bar 批量筛选)、`latest_snapshot`、`stats`、`list_symbols`、`clear_*`。
+  - 每标的一个 parquet 文件,读取用 `read_parquet(glob)` 联合扫描;写入仅在显式入湖时发生。
+- `backend/api/datalake.py`:`GET status/symbols/latest`、`POST ingest/screen/query`、
+  `DELETE symbol/{id}|all`(请求体为模块级 Pydantic),注册进 `main.py`。
+- tests/test_datalake.py:18 用例(规范化/选股 SQL 注入防护/只读守卫/降级纯函数组 +
+  `importorskip("duckdb")` 的入湖·stats·快照·筛选·只读查询·清理往返组)。
+
+### 数据湖(前端)
+- `DataLakeManager.tsx` 侧栏「数据湖」页(量化研究引擎组):状态卡(标的数/行数/日期范围/占用)+
+  **行情入湖**(批量代码输入)+ **批量筛选**(字段/操作符/阈值多条件 + 排序)+ **只读 SQL** 框 + 结果表;
+  未装 duckdb 时显示友好提示(`pip install duckdb`),其余功能不受影响。
+- 接线:`types.ts` TabID +`datalake`;`App.tsx` 懒加载 + VISIBLE_TABS + 渲染分支;`Sidebar.tsx` 菜单项(Database 图标)。
+- 零回归:全量离线套件 **1206 passed, 1 skipped**(较前 1188 增 18);tsc 零错误;build 通过(DataLakeManager 懒分块 11.7KB)。
+- 合规:数据湖为历史行情的列式副本,批量筛选描述「过去满足条件的标的」,既不预测也不构成选股建议,SQL 仅只读,均附免责。
+
 ## v1.9.19 - 2026-06-27
 
 > **Phase 3 / TickFlow 自定义表(HTTP/JSON)**:v1.9.4 的 CSV/Excel 上传补齐了「上传文件」一路;本版补上「HTTP/JSON 接口」一路——用户配置外部 JSON 行情接口(URL + 记录路径 + 字段映射),点「拉取」即把远端 JSON 映射成标准 OHLCV **物化到本地缓存**,此后像 csv_upload 一样进入价格查询与回测面板。延续 csv 的「显式导入 → 离线可查」哲学:**网络只发生在试抓/拉取时且失败安全**,热路径只读本地缓存(离线确定性);映射/抽取是纯函数可单测。
