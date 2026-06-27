@@ -41,6 +41,7 @@ import {
 } from '../lib/aiModelRouting';
 import { StableChartContainer } from './StableChartContainer';
 import { ThemedSelect } from './ThemedSelect';
+import { LightweightKLine } from './LightweightKLine';
 
 type ChartTab = 'vision' | 'kline';
 type Indicator = 'macd' | 'rsi';
@@ -527,6 +528,8 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
   const [activeTab, setActiveTab] = useState<ChartTab>('vision');
   const [indicator, setIndicator] = useState<Indicator>('macd');
   const [showMA, setShowMA] = useState(true);
+  // K 线渲染模式:专业(Lightweight Charts,真缩放/十字光标)↔ 经典(recharts 自绘)。
+  const [klineRenderer, setKlineRenderer] = useState<'pro' | 'classic'>('pro');
   const [isDiagnosticRunning, setIsDiagnosticRunning] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -1109,6 +1112,17 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                       <input type="checkbox" checked={showMA} onChange={() => setShowMA((value) => !value)} />
                       显示均线
                     </label>
+                    <div className="flex rounded-lg border border-white/5 bg-black/30 p-0.5" title="K线渲染模式">
+                      {([['pro', '专业'], ['classic', '经典']] as Array<['pro' | 'classic', string]>).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          onClick={() => setKlineRenderer(mode)}
+                          className={cn('rounded px-3 py-1 text-[10px]', klineRenderer === mode ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-300')}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                     <div className="flex rounded-lg border border-white/5 bg-black/30 p-0.5">
                       {(['macd', 'rsi'] as Indicator[]).map((item) => (
                         <button
@@ -1137,6 +1151,9 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                     className="flex min-h-0 flex-1 flex-col"
                   >
                   <div className="min-h-0 flex-1">
+                    {klineRenderer === 'pro' ? (
+                      <LightweightKLine data={chartData} showMA={showMA} />
+                    ) : (
                     <StableChartContainer>
                       <ComposedChart
                         data={chartData}
@@ -1162,6 +1179,7 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                         {showMA && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={1.5} dot={false} activeDot={false} animationDuration={800} animationEasing="ease-out" />}
                       </ComposedChart>
                     </StableChartContainer>
+                    )}
                   </div>
                   <div className="my-3 h-px bg-white/5" />
                   <div className="h-28">

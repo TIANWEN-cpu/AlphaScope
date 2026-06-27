@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.9.12 - 2026-06-27
+
+> **Phase 2 续**:把「交互K线」迁到 **TradingView Lightweight Charts** 专业渲染器——真·缩放/平移/十字光标/价格刻度对齐,适合密集 K 线。遵循「只增不替」:作为**专业模式**接入,与原 recharts**经典模式**并存,用户一键切换,默认专业。
+
+### K 线迁 Lightweight Charts(Phase 2)
+- 新增依赖 `lightweight-charts@^4.2.0`,**懒加载**进 MultimodalChart 分包(仅打开「K线/多模态解析」页时才加载,
+  主包体积不变)。
+- `components/LightweightKLine.tsx`: 自包含可复用组件,沿用既有 `KLinePoint` 形状(date/open/high/low/close +
+  可选 ma5/ma20),**无需新取数**。蜡烛 + MA5/MA20 线 + 十字光标 OHLC 浮标;A 股配色(涨红/跌绿);
+  `autoSize` 自适应容器;卸载时 `chart.remove()` 释放。对时间**去重 + 升序**(满足 Lightweight Charts 唯一/有序
+  约束),均线只取有限正值跳过预热段 NaN —— 脏数据不崩、最多少画。
+- `MultimodalChart.tsx` 交互K线页新增「专业 / 经典」渲染切换(默认专业);经典 recharts 自绘蜡烛**完整保留**为可选项,
+  成交量/指标(MACD/RSI)面板不动。
+- tsc 零错误,前端 build 通过(lightweight-charts 进 MultimodalChart 懒分包,主 index 包不变)。
+
 ## v1.9.11 - 2026-06-27
 
 > **Phase 2 续**:新增**遗传算法策略参数寻优(策略进化)**——用确定性、可复现的 GA 在策略的数值参数空间里搜索更优组合,适应度=复用回测引擎跑一遍的绩效。与样本外走查天然配套(寻优找最优、走查验稳健)。纯本地、失败安全;**强免责**:样本内寻优极易过拟合,样本内最优≠未来有效。

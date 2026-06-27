@@ -95,6 +95,8 @@ flowchart TB
 
 图像 / K 线图分析带真实数据交叉验证：检测图表类型 → LLM 解读趋势/支撑阻力/形态 → 拉取真实 OHLCV → 视觉结论与真实数据比对，避免模型「自信地看图说话」。
 
+> **专业 K 线渲染**（`LightweightKLine.tsx` + `lightweight-charts`，v1.9.12）：「交互K线」页可在 **专业**（TradingView Lightweight Charts，真缩放/平移/十字光标/价格刻度对齐）与 **经典**（recharts 自绘蜡烛)两种渲染器间一键切换,默认专业。组件自包含、懒加载进 MultimodalChart 分包(主包不变),沿用既有 OHLCV 数据不新取数,对时间去重升序、均线跳过预热 NaN(脏数据不崩)。遵循「只增不替」:经典模式完整保留。
+
 ### 6. API 层 (`backend/api/`)
 
 FastAPI 提供 100+ REST / SSE 接口，按域拆分（`quant.py` / `analysis.py` / `news.py` / `evidence.py` / `settings.py` / `providers.py` / `diagnostics.py` / `monitor.py` 等）。SSE 流式用于 AI 对话与研报生成进度。回测响应透出 `assumptions` 字段，让「本次回测假设」对用户可见。
