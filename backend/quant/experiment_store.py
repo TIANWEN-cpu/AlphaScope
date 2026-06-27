@@ -100,6 +100,16 @@ def _summarize(mode: str, payload: dict[str, Any]) -> dict[str, Any]:
                 "top_strategy": top.get("strategy_id", ""),
                 "top_total_return": top.get("total_return", 0.0),
             }
+        if mode == "evolution":
+            best = payload.get("best", {}) or {}
+            return {
+                "fitness_metric": payload.get("fitness_metric", ""),
+                "generations": payload.get("generations", 0),
+                "population_size": payload.get("population_size", 0),
+                "best_fitness": best.get("fitness"),
+                "improvement": payload.get("improvement"),
+                "evaluations": payload.get("evaluations", 0),
+            }
     except Exception:
         return {}
     return {}

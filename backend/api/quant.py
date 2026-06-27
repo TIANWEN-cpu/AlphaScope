@@ -586,6 +586,66 @@ def _run_walk_forward_local(body: "WalkForwardRequestBody") -> dict[str, Any]:
     return payload
 
 
+def _run_evolution_local(body: "EvolveRequestBody") -> dict[str, Any]:
+    """加载本地行情并运行遗传算法参数寻优,返回 API 载荷。
+
+    复用回测取数链路(_load_local_bars)与策略注册表;GA 本身纯确定性(同 seed
+    同结果)、失败安全(backend.quant.evolution),适应度=复用回测引擎。
+    """
+    from backend.quant.evolution import run_evolution
+    from backend.quant.strategies import StrategyRegistry
+
+    if StrategyRegistry.get(body.strategy_id) is None:
+        raise ValueError(f"策略不存在: {body.strategy_id}")
+
+    bars, data_source = _load_local_bars(
+        body.symbol,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        initial_capital=body.initial_capital,
+    )
+    report = run_evolution(
+        body.strategy_id,
+        bars,
+        symbol=body.symbol,
+        param_space=body.param_space or None,
+        population_size=body.population_size,
+        generations=body.generations,
+        fitness_metric=body.fitness_metric,
+        initial_capital=body.initial_capital,
+        seed=body.seed,
+        base_params=body.params or None,
+    )
+    now = datetime.now()
+    run_id = f"evo-{now.strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"
+    payload = report.to_dict()
+    payload.update(
+        {
+            "run_id": run_id,
+            "mode": "evolution",
+            "data_source": data_source,
+            "data_source_label": (
+                "本地样例行情"
+                if data_source == "local_preview"
+                else "实时数据源"
+                if data_source == "provider"
+                else "本地行情库"
+            ),
+            "bar_count": len(bars),
+            "degraded": data_source == "local_preview" or report.status != "ok",
+            "started_at": now.isoformat(),
+            "finished_at": now.isoformat(),
+            "message": (
+                "已使用本地样例行情完成寻优，仅用于功能预览。"
+                if data_source == "local_preview"
+                else report.message
+            ),
+        }
+    )
+    _persist_experiment(payload)
+    return payload
+
+
 class BacktestRequestBody(BaseModel):
     """回测请求体"""
 
@@ -636,6 +696,31 @@ class ExperimentCompareBody(BaseModel):
     """实验横向对比请求体。"""
 
     run_ids: list[str] = Field(default_factory=list, description="要对比的实验 run_id 列表")
+
+
+class EvolveRequestBody(BaseModel):
+    """遗传算法策略参数寻优请求体。
+
+    复用回测的取数与策略;在策略的数值参数空间内用确定性 GA 搜索更优组合。
+    样本内寻优极易过拟合,结果附强免责并建议再做样本外走查。
+    """
+
+    strategy_id: str = Field(description="策略ID")
+    symbol: str = Field(description="标的代码")
+    start_date: str = Field(description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(description="结束日期 YYYY-MM-DD")
+    initial_capital: float = Field(default=1000000.0, description="初始资金")
+    params: dict[str, Any] = Field(default_factory=dict, description="固定基底参数(不被进化)")
+    param_space: dict[str, Any] = Field(
+        default_factory=dict, description="可选显式搜索空间;缺省由默认参数推断"
+    )
+    population_size: int = Field(default=16, description="种群规模(4-40, 自动夹紧)")
+    generations: int = Field(default=8, description="进化代数(1-20, 受算力预算约束)")
+    fitness_metric: str = Field(
+        default="sharpe_ratio",
+        description="适应度指标: sharpe_ratio|calmar_ratio|sortino_ratio|total_return|annualized_return|profit_factor|win_rate",
+    )
+    seed: int = Field(default=42, description="随机种子(决定可复现性)")
 
 
 class TdxCompileRequestBody(BaseModel):
@@ -874,6 +959,44 @@ async def run_strategy_comparison_endpoint(body: StrategyCompareRequestBody):
             error=str(e),
             error_code="LOCAL_STRATEGY_COMPARE_ERROR",
         )
+
+
+@router.post("/evolve")
+async def run_evolution_endpoint(body: EvolveRequestBody):
+    """遗传算法策略参数寻优。
+
+    在策略的数值参数空间内用**确定性**遗传算法(同 seed 同结果)搜索更优组合,
+    适应度=复用回测引擎跑一遍的某项绩效(默认夏普)。纯本地、失败安全。
+    同步重计算丢线程池,避免阻塞事件循环。
+
+    合规:样本内寻优极易过拟合,样本内最优≠未来有效;响应附强免责并建议对最优
+    参数再做样本外走查验证。不构成任何投资建议。
+    """
+    try:
+        result = await asyncio.to_thread(_run_evolution_local, body)
+        return ApiResponse(success=True, data=result, message=result.get("message"))
+    except Exception as e:
+        return ApiResponse(
+            success=False,
+            error=str(e),
+            error_code="LOCAL_EVOLUTION_ERROR",
+        )
+
+
+@router.get("/param-space/{strategy_name}")
+async def get_param_space_endpoint(strategy_name: str):
+    """返回某策略可寻优的数值参数空间(供进化面板预填默认范围)。"""
+    from backend.quant.evolution import infer_param_space
+
+    space = await asyncio.to_thread(infer_param_space, strategy_name)
+    return ApiResponse(
+        success=True,
+        data={
+            "strategy_id": strategy_name,
+            "param_space": space,
+            "evolvable": bool(space),
+        },
+    )
 
 
 @router.get("/experiments")

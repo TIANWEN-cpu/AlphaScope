@@ -83,6 +83,7 @@ flowchart TB
 - **策略库** (`strategies/` 包) — 一策略一文件 + `StrategyRegistry` 自动发现，内置 10 个策略（MA / MACD / RSI / 布林突破 / 海龟 / 超跌反弹 / 动量TopN / 放量突破 / **低代码 custom_rule** / **通达信 tdx**）。`custom_rule`（v1.9.4）由前端「低代码策略编辑器」编译;`tdx`（v1.9.9）由通达信公式编译器编译。二者均复用同一回测引擎、不新建引擎。
 - **指标** (`metrics.py`) — Sharpe / Sortino / Calmar / Profit Factor / 年化 / 最大回撤 / 胜率；v1.9.4 补**基准相对指标**（超额收益 / 信息比率 / Jensen's alpha / beta，对标 Qlib 口径，无基准时优雅降级）。
 - **样本外走查** (`walk_forward.py`，v1.9.5) — 把历史切成顺序的 IS+OOS 窗口（`anchored` 锚定 / `rolling` 滚动），逐窗用同一固定参数策略回测，度量**时间稳健性**（收益是否跨区间一致，而非集中在某段运气）。每窗只跑一次引擎覆盖连续 IS+OOS 切片（指标有预热、无信号断层），再按权益曲线在分界处切分 OOS 重新归一；输出走查效率 WFE、样本外胜率、一致性评分与稳健性描述。纯确定性、失败安全、复用回测引擎，附「样本外≠未来」免责。`POST /api/quant/walk-forward`。
+- **遗传算法参数寻优** (`evolution.py`，v1.9.11) — 用**确定性、可复现**的遗传算法(全程 `random.Random(seed)` 驱动,同 seed 同结果)在策略的**数值参数空间**里搜索更优组合,适应度=复用回测引擎跑一遍取某绩效键(夏普/卡玛/索提诺/收益/胜率)。只进化参数、不进化代码(合规等同对历史做确定性参数搜索);锦标赛+均匀交叉+变异+精英保留,初始种群含「默认参数投影」故全局最优不劣于默认;失败安全(单体异常被淘汰、样本不足 insufficient、无可寻优参数 degraded)、算力有界(种群/代数夹紧+预算上限+去重缓存)。与样本外走查天然配套(寻优找最优、走查验稳健),**强免责**:样本内寻优极易过拟合。`POST /api/quant/evolve`、`GET /api/quant/param-space/{name}`。
 - **筹码分布** (`chip_distribution.py`，v1.9.6) — A 股成本分布:换手率扩散模型(老筹码按 1−t 衰减、新筹码按当日价格区间三角分布铺开,逐日累积),读出获利盘%/平均成本/70%-90% 集中度/上下方筹码密集价。优先用真实换手率,缺失退回量能代理(标 `model=volume_proxy`)。纯确定性、失败安全;描述历史成本结构,不预测价格。`POST /api/quant/chip-distribution`。
 - **策略横向对比榜** (v1.9.7) — 同一标的一次取数、跑完全部内置策略并按指标(夏普/累计收益/Calmar 等)排名,复用同一回测引擎;模板策略 `custom_rule` 跳过。纯本地确定性,仅历史对比、不构成选股建议。`POST /api/quant/compare-strategies`。
 - **实验记录持久化** (`experiment_store.py`，v1.9.8) — 把回测/走查/筹码/策略榜结果落 SQLite(独立表 `quant_experiments`,懒建表不改核心 schema),跨会话可查/调阅/横比;全失败安全(持久化失败不影响运行),`_prune` 保留最近 300 条。端点 `GET/DELETE /api/quant/experiments[/{run_id}]`、`POST /api/quant/experiments/compare`。与内存态 `_local_runs` 并存。
@@ -102,7 +103,7 @@ FastAPI 提供 100+ REST / SSE 接口，按域拆分（`quant.py` / `analysis.py
 
 ### 7. 用户界面层
 
-- **`apps/web`** — Vite + React 19 + TypeScript 工作台，状态驱动 SPA（无 React Router），Sidebar 分两组（投研核心 / 量化研究引擎）约 15 个模块。SSE 流式对话、证据链反查、回测交易明细与免责声明、**低代码策略编辑器**（字段+操作符+阈值无代码组合信号）、**样本外走查 Tab**（IS/OOS 窗口稳健性体检，v1.9.5）、**筹码分布 / 策略榜 / 实验记录 Tab**（v1.9.6–1.9.8）、**系统监控中心**（v1.9.10，单页总览数据源/引擎/成本/调用健康，20s 自动刷新）已接入。
+- **`apps/web`** — Vite + React 19 + TypeScript 工作台，状态驱动 SPA（无 React Router），Sidebar 分两组（投研核心 / 量化研究引擎）约 15 个模块。SSE 流式对话、证据链反查、回测交易明细与免责声明、**低代码策略编辑器**（字段+操作符+阈值无代码组合信号）、**样本外走查 Tab**（IS/OOS 窗口稳健性体检，v1.9.5）、**筹码分布 / 策略榜 / 实验记录 Tab**（v1.9.6–1.9.8）、**策略进化 Tab**（遗传算法参数寻优 + 收敛曲线 + 一键转样本外走查，v1.9.11）、**系统监控中心**（v1.9.10，单页总览数据源/引擎/成本/调用健康，20s 自动刷新）已接入。
 - **Streamlit 调试台** — 保留用于快速实验与诊断（非主交付形态）。
 - **Windows 一键包** — PyInstaller + Inno Setup，首启自动生成 master key 做 AES-GCM 加密。
 
