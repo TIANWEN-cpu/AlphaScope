@@ -26,8 +26,9 @@ const ExpertPanel = lazy(() => import('./components/ExpertPanel').then((module) 
 const MorningBrief = lazy(() => import('./components/MorningBrief').then((module) => ({ default: module.MorningBrief })));
 const MonitoringCenter = lazy(() => import('./components/MonitoringCenter').then((module) => ({ default: module.MonitoringCenter })));
 const ResearchMemory = lazy(() => import('./components/ResearchMemory').then((module) => ({ default: module.ResearchMemory })));
+const TickFlowManager = lazy(() => import('./components/TickFlowManager').then((module) => ({ default: module.TickFlowManager })));
 
-const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'monitor', 'research_memory', 'settings'];
+const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'monitor', 'research_memory', 'tickflow', 'settings'];
 
 function ModuleLoading() {
   return (
@@ -187,6 +188,9 @@ export default function App() {
                   )}
                   {currentTab === 'research_memory' && (
                     <ResearchMemory key="research_memory" />
+                  )}
+                  {currentTab === 'tickflow' && (
+                    <TickFlowManager key="tickflow" />
                   )}
                   {currentTab === 'settings' && (
                     <Settings key="settings" initialTab={settingsInitialTab} />

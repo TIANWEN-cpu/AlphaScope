@@ -25,7 +25,8 @@ import {
   Swords,
   Sunrise,
   Gauge,
-  History
+  History,
+  Webhook
 } from 'lucide-react';
 import type { TabID } from '../types';
 import { cn } from '../lib/utils';
@@ -68,6 +69,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
         { id: 'strategy_lab', label: '低代码策略编辑器', icon: Beaker },
         { id: 'fund_dca', label: '基金与定投研究室', icon: Coins },
         { id: 'valuation', label: '估值建模', icon: Calculator },
+        { id: 'tickflow', label: '自定义数据表', icon: Webhook },
         { id: 'monitor', label: '系统监控中心', icon: Gauge },
       ]
     }

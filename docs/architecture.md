@@ -47,11 +47,14 @@ flowchart TB
 | Google Trends / Wikipedia Views | Global | 另类舆情 | C 级 |
 | Web Search | Global | 检索补全 | — |
 | **CSV Upload** | Any | 用户行情 | 上传 CSV/Excel→schema 自动发现→入查询面，标 `source=csv_upload` |
+| **HTTP/JSON (TickFlow)** | Any | 用户行情 | 配置外部 JSON 接口→字段映射→显式拉取物化→入查询面，标 `source=http_json`（v1.9.19） |
 | **Demo** | — | 内置示例 | 零 Key 兜底，读 seed DB |
 
 `ProviderRegistry` 负责 importlib 自动发现、优先级路由、`is_available()` 健康检查与失败 failover。价格取数走 **三级兜底**（AkShare → 东财 → 腾讯/BaoStock）。配置见 `config/data_sources.yaml`。健康状态经 `SourceHealthMonitor` 跟踪，可通过 `GET /api/providers/health` 查询。
 
 > **v1.9.4 能力 schema 与质量分**：`BaseProvider.capability()` 用统一 schema 表达每个源的市场/数据类型/粒度/延迟/成本/速率/凭证/优先级/可降级（对标 tickflow tiers.yaml），经 `GET /api/providers/capabilities` 聚合透出。`observability/source_health.py` 的 `compute_quality_score()` 把健康度量化为 0–100 质量分（成功率 × 新鲜度 × 完整度）+ 红黄绿 grade，附加在 `/api/providers/health` 每个源上。`CsvUploadProvider`（`csv_provider.py`，priority=15）让用户上传自带行情零 Key 入回测/查询面，`discover_schema` 认中英文表头，数据明确标注 `user_upload` 绝不冒充在线源。
+
+> **v1.9.19 TickFlow HTTP/JSON 自定义表**：`HttpJsonProvider`（`http_json_provider.py`，priority=14）补齐「外部 JSON 接口」一路——用户配置 URL + 记录点路径 + 字段映射，显式「拉取」时（**唯一触网处**，`fetch_json` 优先 requests 回退 urllib、失败安全）把远端 JSON 经纯函数 `extract_records`/`apply_field_map` 映射成标准 OHLCV，**物化到 `data/uploads/tickflow/data/<symbol>.json`**;热路径 `get_prices` 只读物化缓存（离线确定性），数据标 `source=http_json` / `user_provided`。延续 csv 的「显式导入→离线可查」哲学，拉取失败不清空既有缓存。端点 `GET/POST /api/tickflow/sources`、`DELETE .../sources/{id}`、`POST .../sources/{id}/refresh`、`POST .../preview`（试抓返回样本 + 推断字段映射,辅助配置）。
 
 > Demo Provider (`demo_provider.py`)：`requires_key=False`、低优先级，读取打包的 `seed/ai_finance.db`（10 只股票真实价格），数据标记 `source=demo_seed`，让用户不配 Key 也能走完整路径。
 
@@ -108,7 +111,7 @@ FastAPI 提供 100+ REST / SSE 接口，按域拆分（`quant.py` / `analysis.py
 
 ### 7. 用户界面层
 
-- **`apps/web`** — Vite + React 19 + TypeScript 工作台，状态驱动 SPA（无 React Router），Sidebar 分两组（投研核心 / 量化研究引擎）约 16 个模块。SSE 流式对话、证据链反查、回测交易明细与免责声明、**低代码策略编辑器**（字段+操作符+阈值无代码组合信号）、**样本外走查 Tab**（IS/OOS 窗口稳健性体检，v1.9.5）、**筹码分布 / 策略榜 / 实验记录 Tab**（v1.9.6–1.9.8）、**策略进化 Tab**（遗传算法参数寻优 + 收敛曲线 + 一键转样本外走查，v1.9.11）、**系统监控中心**（v1.9.10，单页总览数据源/引擎/成本/调用健康，20s 自动刷新）、**研究记忆**（v1.9.18，同一股票结论随时间变化轨迹 + 转折点 + 置信度趋势）已接入。
+- **`apps/web`** — Vite + React 19 + TypeScript 工作台，状态驱动 SPA（无 React Router），Sidebar 分两组（投研核心 / 量化研究引擎）约 17 个模块。SSE 流式对话、证据链反查、回测交易明细与免责声明、**低代码策略编辑器**（字段+操作符+阈值无代码组合信号）、**样本外走查 Tab**（IS/OOS 窗口稳健性体检，v1.9.5）、**筹码分布 / 策略榜 / 实验记录 Tab**（v1.9.6–1.9.8）、**策略进化 Tab**（遗传算法参数寻优 + 收敛曲线 + 一键转样本外走查，v1.9.11）、**系统监控中心**（v1.9.10，单页总览数据源/引擎/成本/调用健康，20s 自动刷新）、**研究记忆**（v1.9.18，同一股票结论随时间变化轨迹 + 转折点 + 置信度趋势）已接入。
 - **Streamlit 调试台** — 保留用于快速实验与诊断（非主交付形态）。
 - **Windows 一键包** — PyInstaller + Inno Setup，首启自动生成 master key 做 AES-GCM 加密。
 

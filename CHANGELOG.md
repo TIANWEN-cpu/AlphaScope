@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.9.19 - 2026-06-27
+
+> **Phase 3 / TickFlow 自定义表(HTTP/JSON)**:v1.9.4 的 CSV/Excel 上传补齐了「上传文件」一路;本版补上「HTTP/JSON 接口」一路——用户配置外部 JSON 行情接口(URL + 记录路径 + 字段映射),点「拉取」即把远端 JSON 映射成标准 OHLCV **物化到本地缓存**,此后像 csv_upload 一样进入价格查询与回测面板。延续 csv 的「显式导入 → 离线可查」哲学:**网络只发生在试抓/拉取时且失败安全**,热路径只读本地缓存(离线确定性);映射/抽取是纯函数可单测。
+
+### TickFlow HTTP/JSON 源(后端)
+- `backend/providers/http_json_provider.py`:
+  - 纯函数 `extract_records`(点路径 `data.klines` / 数组下标定位记录数组)、`apply_field_map`
+    (字段映射 → 标准 OHLCV,支持 dict 记录按键 / list 记录按下标,时间戳秒·毫秒自动识别,失败安全)、
+    `infer_field_map`(复用 csv `discover_schema` 从样本键推断映射)、`normalize_source`(配置校验)。
+  - `fetch_json`(**唯一触网处**,优先 requests 回退 stdlib urllib,任何错误返回结构化失败、绝不抛出,
+    可注入替身供测试)、`refresh_source`(拉取 → 映射 → **物化到 `data/uploads/tickflow/data/<symbol>.json`**;
+    失败不清空既有缓存)、`preview_fetch`(试抓返回样本 + 推断映射)、`materialized_bars`(读本地缓存)。
+  - `HttpJsonProvider(BaseProvider)`:priority=14(demo<http_json<csv_upload<在线源),requires_key=False,
+    `get_prices` 只读物化缓存,数据标 `source=http_json` / `user_provided`,**绝不冒充在线源**,自动注册。
+- `backend/api/tickflow.py`:`GET/POST /api/tickflow/sources`、`DELETE .../sources/{id}`、
+  `POST .../sources/{id}/refresh`、`POST .../preview`(请求体为模块级 Pydantic 模型),注册进 `main.py`。
+- tests/test_http_json_provider.py:29 用例(记录抽取/日期归一/字段映射/推断/配置校验纯函数组 +
+  注入 fetcher 不触网的注册·拉取·物化·失败保留缓存·占位符·预览 + URL 守卫)。
+
+### TickFlow(前端)
+- `TickFlowManager.tsx` 侧栏「自定义数据表」页(量化研究引擎组):左源列表(状态/根数/最近拉取 + 拉取·删除),
+  右配置表单(名称/代码/URL 含 `{symbol}` 占位/方法/记录路径/请求头 JSON/八字段映射)+ **「试抓并推断映射」**
+  (一键填好字段映射)+ 样本记录预览。
+- 接线:`types.ts` TabID +`tickflow`;`App.tsx` 懒加载 + VISIBLE_TABS + 渲染分支;`Sidebar.tsx` 菜单项(Webhook 图标)。
+- 零回归:全量离线套件 **1188 passed, 1 skipped**(较前 1159 增 29);tsc 零错误;build 通过(TickFlowManager 懒分块 10KB)。
+- 合规:网络仅在显式操作时发生且失败安全;数据明确标注用户来源,入库后仅供历史查询与回测,不预测不建议,附免责。
+
 ## v1.9.18 - 2026-06-27
 
 > **Phase 3 / 研究记忆**:`1.txt` 规划的「同一股票可查看历史研究变化」。把每次 Agent 分析的**结论快照**(买入/卖出/观望 + 置信度 + 多空裁决 + 风控 + 数据核验)旁路落 SQLite,于是同一只股票可回看「上周看多、本周转观望」这类**结论随时间的变化轨迹**,辅助复盘。自包含、失败安全、纯函数可单测,仅记录与回看历史、不预测不建议。
