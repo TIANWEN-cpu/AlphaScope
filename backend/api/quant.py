@@ -352,6 +352,63 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
 # ============================================================
 
 
+def _run_walk_forward_local(body: "WalkForwardRequestBody") -> dict[str, Any]:
+    """加载本地行情并运行样本外走查分析，返回 API 载荷。
+
+    复用回测的取数链路(_load_local_bars)与策略注册表；走查本身是纯确定性计算
+    (backend.quant.walk_forward)，不触网、失败安全。
+    """
+    from backend.quant.strategies import StrategyRegistry
+    from backend.quant.walk_forward import run_walk_forward
+
+    if StrategyRegistry.get(body.strategy_id) is None:
+        raise ValueError(f"策略不存在: {body.strategy_id}")
+
+    bars, data_source = _load_local_bars(
+        body.symbol,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        initial_capital=body.initial_capital,
+    )
+    report = run_walk_forward(
+        body.strategy_id,
+        bars,
+        symbol=body.symbol,
+        n_splits=body.n_splits,
+        scheme=body.scheme,
+        initial_capital=body.initial_capital,
+        params=body.params,
+    )
+    now = datetime.now()
+    run_id = f"wf-{now.strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"
+    payload = report.to_dict()
+    payload.update(
+        {
+            "run_id": run_id,
+            "strategy_id": body.strategy_id,
+            "mode": "walk_forward",
+            "data_source": data_source,
+            "data_source_label": (
+                "本地样例行情"
+                if data_source == "local_preview"
+                else "实时数据源"
+                if data_source == "provider"
+                else "本地行情库"
+            ),
+            "bar_count": len(bars),
+            "degraded": data_source == "local_preview" or report.status != "ok",
+            "started_at": now.isoformat(),
+            "finished_at": now.isoformat(),
+            "message": (
+                "已使用本地样例行情完成走查，仅用于功能预览。"
+                if data_source == "local_preview"
+                else report.note
+            ),
+        }
+    )
+    return payload
+
+
 class BacktestRequestBody(BaseModel):
     """回测请求体"""
 
@@ -361,6 +418,22 @@ class BacktestRequestBody(BaseModel):
     end_date: str = Field(description="结束日期 YYYY-MM-DD")
     initial_capital: float = Field(default=1000000.0, description="初始资金")
     params: dict[str, Any] = Field(default_factory=dict, description="策略参数覆盖")
+
+
+class WalkForwardRequestBody(BaseModel):
+    """走查(walk-forward)样本外稳健性分析请求体。
+
+    复用回测的取数与策略，额外指定样本外窗口数与切分方案。
+    """
+
+    strategy_id: str = Field(description="策略ID")
+    symbol: str = Field(description="标的代码")
+    start_date: str = Field(description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(description="结束日期 YYYY-MM-DD")
+    initial_capital: float = Field(default=1000000.0, description="初始资金")
+    params: dict[str, Any] = Field(default_factory=dict, description="策略参数覆盖")
+    n_splits: int = Field(default=5, description="样本外窗口数(2-12, 数据不足时自动收敛)")
+    scheme: str = Field(default="anchored", description="切分方案: anchored(锚定) | rolling(滚动)")
 
 
 class LiveStartBody(BaseModel):
@@ -536,6 +609,25 @@ async def run_backtest(body: BacktestRequestBody):
             success=False,
             error=str(e),
             error_code="LOCAL_BACKTEST_ERROR",
+        )
+
+
+@router.post("/walk-forward")
+async def run_walk_forward_endpoint(body: WalkForwardRequestBody):
+    """样本外走查(walk-forward)稳健性分析。
+
+    把历史切成锚定/滚动的 IS+OOS 窗口，逐窗用同一策略回测，评估策略在不同
+    历史区间的稳健性(而非单一窗口的运气)。纯确定性、失败安全。
+    同步重计算丢线程池，避免阻塞事件循环。
+    """
+    try:
+        result = await asyncio.to_thread(_run_walk_forward_local, body)
+        return ApiResponse(success=True, data=result, message=result.get("message"))
+    except Exception as e:
+        return ApiResponse(
+            success=False,
+            error=str(e),
+            error_code="LOCAL_WALK_FORWARD_ERROR",
         )
 
 
