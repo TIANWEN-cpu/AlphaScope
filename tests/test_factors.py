@@ -299,15 +299,24 @@ class TestFactorGenerator:
         assert report.missing_dimensions == []
 
     def test_momentum_uses_clean_price_store_data(self):
+        from datetime import datetime, timedelta
+
         from backend.factors.generator import FactorGenerator, FactorReport
 
         gen = FactorGenerator()
         report = FactorReport(symbol="600519")
+        # 日期相对 now 生成, 始终落在动量的 days 窗口内, 避免硬编码日期随时间漂出
+        # 截止线 (now - days) 而成为时间炸弹; 收盘价/成交量保持不变, 数值断言不受影响。
+        base = datetime.now()
+
+        def _d(offset: int) -> str:
+            return (base - timedelta(days=offset)).strftime("%Y-%m-%d")
+
         clean_rows = [
-            {"date": "2026-05-21", "close": 1296.0, "volume": 10},
-            {"date": "2026-05-22", "close": 1290.0, "volume": 12},
-            {"date": "2026-05-25", "close": 1286.0, "volume": 14},
-            {"date": "2026-05-26", "close": 1273.0, "volume": 16},
+            {"date": _d(6), "close": 1296.0, "volume": 10},
+            {"date": _d(5), "close": 1290.0, "volume": 12},
+            {"date": _d(4), "close": 1286.0, "volume": 14},
+            {"date": _d(3), "close": 1273.0, "volume": 16},
         ]
 
         with patch(
