@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { Bot, Maximize2, RefreshCw, Send, Zap, Clock, LineChart as LineChartIcon, Settings2, Sparkles, ChevronDown, ImagePlus } from 'lucide-react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Cell, Tooltip } from 'recharts';
@@ -18,6 +18,8 @@ import {
 } from '../lib/aiModelRouting';
 import { ThemedSelect } from './ThemedSelect';
 import { StableChartContainer } from './StableChartContainer';
+// 专业 K 线懒加载, 把 lightweight-charts 拆出主包(Workbench 是默认页, 仍是首屏并行加载的独立分块)。
+const LightweightKLine = lazy(() => import('./LightweightKLine').then((m) => ({ default: m.LightweightKLine })));
 
 interface WorkbenchChartPoint {
   date: string;
@@ -838,6 +840,8 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
   const [customLimit, setCustomLimit] = useState('120');
   const [activePanelTab, setActivePanelTab] = useState<PanelTabId>('news');
   const [chartData, setChartData] = useState(() => generateKlineData(40, currentStock.startPrice));
+  // K 线渲染模式:专业(Lightweight Charts)↔ 经典(recharts 自绘)。只增不替。
+  const [klineRenderer, setKlineRenderer] = useState<'pro' | 'classic'>('pro');
   const [analysisMode, setAnalysisMode] = useState<AnalysisModeId>('standard');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1492,6 +1496,17 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                <span className={cn('flex items-center gap-2', showMa5Line ? 'text-yellow-500/90' : 'text-neutral-600')}><div className={cn('h-0.5 w-2', showMa5Line ? 'bg-yellow-500/90' : 'bg-neutral-700')}></div>MA5: {showMa5Line ? formatPrice(chartStats.ma5) : '--'}</span>
                <span className={cn('flex items-center gap-2', showMa10Line ? 'text-indigo-400/90' : 'text-neutral-600')}><div className={cn('h-0.5 w-2', showMa10Line ? 'bg-indigo-400/90' : 'bg-neutral-700')}></div>MA10: {showMa10Line ? formatPrice(chartStats.ma10) : '--'}</span>
                <span className={cn('flex items-center gap-2', showMa20Line ? 'text-emerald-400/90' : 'text-neutral-600')}><div className={cn('h-0.5 w-2', showMa20Line ? 'bg-emerald-400/90' : 'bg-neutral-700')}></div>MA20: {showMa20Line ? formatPrice(chartStats.ma20) : '--'}</span>
+               <div className="flex rounded-md border border-white/5 bg-black/30 p-0.5" title="K线渲染模式">
+                 {([['pro', '专业'], ['classic', '经典']] as Array<['pro' | 'classic', string]>).map(([mode, label]) => (
+                   <button
+                     key={mode}
+                     onClick={() => setKlineRenderer(mode)}
+                     className={cn('rounded px-2 py-0.5 text-[10px]', klineRenderer === mode ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-300')}
+                   >
+                     {label}
+                   </button>
+                 ))}
+               </div>
                {displayChartPoint && (
                  <span className="min-w-0 truncate rounded border border-white/10 bg-white/[0.03] px-2 py-1 text-neutral-400">
                    {displayChartPoint.date} · 收 {formatPrice(displayChartPoint.close)} · <span className={displayChartPointUp ? 'text-rose-400' : 'text-emerald-400'}>{displayChartPointUp ? '+' : ''}{displayChartPoint.changePct.toFixed(2)}%</span>
@@ -1517,6 +1532,11 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                <div className="pointer-events-none absolute right-6 bottom-24 text-[10px] font-mono text-neutral-600">{formatPrice(chartStats.low)}</div>
 
              <div className="h-[calc(100%-72px)] min-h-[240px]">
+               {klineRenderer === 'pro' ? (
+                 <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-neutral-600">专业K线加载中…</div>}>
+                   <LightweightKLine data={chartData} showMa5={showMa5Line} showMa10={showMa10Line} showMa20={showMa20Line} />
+                 </Suspense>
+               ) : (
                <StableChartContainer>
                  <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} onMouseMove={handleChartMouseMove}>
                    <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="4 4" vertical={false} />
@@ -1541,6 +1561,7 @@ export function Workbench({ onOpenModelSettings }: WorkbenchProps) {
                    {showMa20Line && <Line type="monotone" dataKey="ma20" stroke="#34d399" strokeWidth={1.5} dot={false} activeDot={false} animationDuration={800} animationEasing="ease-out" />}
                  </ComposedChart>
                </StableChartContainer>
+               )}
              </div>
 
              <div className="h-[72px]">

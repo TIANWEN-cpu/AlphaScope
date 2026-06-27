@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.9.13 - 2026-06-27
+
+> **Phase 2 续**:把**主仪表盘(对话式研究)的 K 线**也迁到 Lightweight Charts 专业渲染,复用同一 `LightweightKLine` 组件。至此两处 K 线(交互K线 + 主仪表盘)均可专业/经典一键切换。同时把组件改**懒加载**,将 lightweight-charts 从主包拆成共享异步分块,主包体积复原。
+
+### K 线迁 Lightweight Charts(主仪表盘 + 分包优化)
+- `LightweightKLine.tsx` 扩展:新增 `ma10` 与**细粒度均线开关** `showMa5/showMa10/showMa20`(未指定时回退 `showMA`
+  总开关,ma10 默认关),适配主仪表盘的三均线(MA5/MA10/MA20)独立显隐;`showMA` 向后兼容,交互K线页用法不变。
+- `Workbench.tsx` 主仪表盘 K 线加「专业 / 经典」渲染切换(默认专业);经典 recharts 蜡烛 + 三均线**完整保留**为可选项,
+  成交量/坐标/高低标注不动。
+- **分包优化**:`LightweightKLine` 在 Workbench(默认页, 非懒加载)里改用 `React.lazy` + `Suspense`,把
+  lightweight-charts(~165KB)从主 index 包拆成**共享异步分块**——主包体积复原(848KB,≈持平),MultimodalChart 分包
+  也随之回落(不再各自打包一份)。首屏并行加载、不阻塞渲染,带「专业K线加载中」兜底。
+- tsc 零错误,build 通过(主 index 848KB·gzip 261KB,lightweight-charts 独立分块 165KB·gzip 53KB 按需加载)。
+
 ## v1.9.12 - 2026-06-27
 
 > **Phase 2 续**:把「交互K线」迁到 **TradingView Lightweight Charts** 专业渲染器——真·缩放/平移/十字光标/价格刻度对齐,适合密集 K 线。遵循「只增不替」:作为**专业模式**接入,与原 recharts**经典模式**并存,用户一键切换,默认专业。

@@ -27,12 +27,18 @@ export interface KLineBar {
   low: number;
   close: number;
   ma5?: number;
+  ma10?: number;
   ma20?: number;
 }
 
 interface Props {
   data: KLineBar[];
+  /** 总开关(向后兼容):未单独指定 showMa5/showMa20 时控制两条均线。 */
   showMA?: boolean;
+  /** 细粒度均线开关(覆盖 showMA)。 */
+  showMa5?: boolean;
+  showMa10?: boolean;
+  showMa20?: boolean;
 }
 
 const UP = '#f43f5e'; // 涨红
@@ -44,11 +50,12 @@ function toTime(date: string): UTCTimestamp {
   return Math.floor((Number.isNaN(ms) ? 0 : ms) / 1000) as UTCTimestamp;
 }
 
-export function LightweightKLine({ data, showMA = true }: Props) {
+export function LightweightKLine({ data, showMA = true, showMa5, showMa10, showMa20 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const ma5Ref = useRef<ISeriesApi<'Line'> | null>(null);
+  const ma10Ref = useRef<ISeriesApi<'Line'> | null>(null);
   const ma20Ref = useRef<ISeriesApi<'Line'> | null>(null);
   const legendRef = useRef<HTMLDivElement | null>(null);
 
@@ -82,11 +89,13 @@ export function LightweightKLine({ data, showMA = true }: Props) {
       wickDownColor: DOWN,
     });
     const ma5 = chart.addLineSeries({ color: '#facc15', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    const ma10 = chart.addLineSeries({ color: '#818cf8', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
     const ma20 = chart.addLineSeries({ color: '#38bdf8', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
 
     chartRef.current = chart;
     candleRef.current = candle;
     ma5Ref.current = ma5;
+    ma10Ref.current = ma10;
     ma20Ref.current = ma20;
 
     // 十字光标移动时在左上角显示该根 K 线的 OHLC。
@@ -108,6 +117,7 @@ export function LightweightKLine({ data, showMA = true }: Props) {
       chartRef.current = null;
       candleRef.current = null;
       ma5Ref.current = null;
+      ma10Ref.current = null;
       ma20Ref.current = null;
     };
   }, []);
@@ -128,20 +138,28 @@ export function LightweightKLine({ data, showMA = true }: Props) {
     const candles = [...seen.values()].sort((a, b) => (a.time as number) - (b.time as number));
 
     const m5: LineData[] = [];
+    const m10: LineData[] = [];
     const m20: LineData[] = [];
     for (const c of candles) {
       const t = c.time as number;
       const b = byTime.get(t);
       if (!b) continue;
       if (typeof b.ma5 === 'number' && Number.isFinite(b.ma5) && b.ma5 > 0) m5.push({ time: t as UTCTimestamp, value: b.ma5 });
+      if (typeof b.ma10 === 'number' && Number.isFinite(b.ma10) && b.ma10 > 0) m10.push({ time: t as UTCTimestamp, value: b.ma10 });
       if (typeof b.ma20 === 'number' && Number.isFinite(b.ma20) && b.ma20 > 0) m20.push({ time: t as UTCTimestamp, value: b.ma20 });
     }
 
+    // 细粒度开关优先;未指定则回退到 showMA 总开关(ma10 默认关)。
+    const ma5On = showMa5 ?? showMA;
+    const ma10On = showMa10 ?? false;
+    const ma20On = showMa20 ?? showMA;
+
     candle.setData(candles);
-    ma5Ref.current?.setData(showMA ? m5 : []);
-    ma20Ref.current?.setData(showMA ? m20 : []);
+    ma5Ref.current?.setData(ma5On ? m5 : []);
+    ma10Ref.current?.setData(ma10On ? m10 : []);
+    ma20Ref.current?.setData(ma20On ? m20 : []);
     chart.timeScale().fitContent();
-  }, [data, showMA]);
+  }, [data, showMA, showMa5, showMa10, showMa20]);
 
   return (
     <div className="relative h-full w-full" style={{ minHeight: 220 }}>
