@@ -1,0 +1,142 @@
+"""K 线形态识别测试 (v1.9.16)。
+
+用精心构造的确定性 OHLCV 夹具触发各形态:吞没/锤子/十字星/红三兵/三只乌鸦/
+跳空/突破/金叉/双底,以及样本不足与失败安全。全部离线、确定性。
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+
+from backend.quant.patterns import detect_patterns
+
+
+def _d(i: int) -> str:
+    return (datetime(2024, 1, 1) + timedelta(days=i)).strftime("%Y-%m-%d")
+
+
+def _bar(i, o, h, l, c):
+    return {"date": _d(i), "open": o, "high": h, "low": l, "close": c, "volume": 10000}
+
+
+def _flat(i, c):
+    return _bar(i, c, c + 0.1, c - 0.1, c)
+
+
+def _names(report):
+    return [p.name for p in report.patterns]
+
+
+class TestInsufficientAndFailSafe:
+    def test_insufficient(self):
+        r = detect_patterns([_flat(0, 10), _flat(1, 10), _flat(2, 10)], "T")
+        assert r.status == "insufficient"
+        assert r.patterns == []
+
+    def test_empty_never_raises(self):
+        r = detect_patterns([], "T")
+        assert r.status == "insufficient"
+
+    def test_garbage_never_raises(self):
+        r = detect_patterns([{"x": 1}, "junk", None, 123], "T")  # type: ignore[list-item]
+        assert r.status == "insufficient"
+
+
+class TestCandlestick:
+    def test_bullish_engulfing(self):
+        bars = [
+            _flat(0, 11), _flat(1, 10.5),
+            _bar(2, 10.0, 10.2, 8.8, 9.0),    # 阴线
+            _bar(3, 8.9, 10.3, 8.8, 10.1),    # 阳线吞没
+        ]
+        # 补足到 >=5 根
+        bars = [_flat(-2 + 0, 11.5), _flat(-1 + 1, 11.2)] + bars
+        r = detect_patterns(bars, "T")
+        assert "看涨吞没" in _names(r)
+
+    def test_bearish_engulfing(self):
+        bars = [
+            _flat(0, 8.5), _flat(1, 9.0), _flat(2, 9.5),
+            _bar(3, 10.0, 11.2, 9.8, 11.0),   # 阳线
+            _bar(4, 11.1, 11.2, 9.7, 9.9),    # 阴线吞没
+        ]
+        r = detect_patterns(bars, "T")
+        assert "看跌吞没" in _names(r)
+
+    def test_hammer_in_downtrend(self):
+        bars = [
+            _bar(0, 20.5, 20.6, 19.9, 20.0),
+            _bar(1, 20.0, 20.1, 18.9, 19.0),
+            _bar(2, 19.0, 19.1, 17.9, 18.0),
+            _bar(3, 18.0, 18.1, 16.9, 17.0),
+            _bar(4, 17.0, 17.1, 15.9, 16.0),
+            _bar(5, 16.0, 16.3, 15.0, 16.2),   # 长下影小实体锤子
+        ]
+        assert "锤子线" in _names(detect_patterns(bars, "T"))
+
+    def test_doji(self):
+        bars = [_flat(i, 10) for i in range(5)] + [_bar(5, 10.0, 10.5, 9.5, 10.02)]
+        assert "十字星" in _names(detect_patterns(bars, "T"))
+
+    def test_three_white_soldiers(self):
+        bars = [
+            _flat(0, 10), _flat(1, 10),
+            _bar(2, 10.0, 10.6, 9.95, 10.5),
+            _bar(3, 10.5, 11.1, 10.45, 11.0),
+            _bar(4, 11.0, 11.6, 10.95, 11.5),
+        ]
+        assert "红三兵" in _names(detect_patterns(bars, "T"))
+
+    def test_three_black_crows(self):
+        bars = [
+            _flat(0, 12), _flat(1, 12),
+            _bar(2, 11.5, 11.55, 10.9, 11.0),
+            _bar(3, 11.0, 11.05, 10.4, 10.5),
+            _bar(4, 10.5, 10.55, 9.9, 10.0),
+        ]
+        assert "三只乌鸦" in _names(detect_patterns(bars, "T"))
+
+
+class TestStructure:
+    def test_gap_up(self):
+        bars = [_flat(i, 10) for i in range(5)] + [_bar(5, 11.0, 11.3, 10.9, 11.2)]
+        assert "向上跳空" in _names(detect_patterns(bars, "T"))
+
+    def test_breakout_new_high(self):
+        bars = [_flat(i, 10) for i in range(21)] + [_bar(21, 11.0, 11.2, 10.9, 11.0)]
+        names = _names(detect_patterns(bars, "T"))
+        assert any("突破" in n for n in names)
+
+    def test_golden_cross(self):
+        closes = [10.0] * 20 + [12.0] * 6
+        bars = [_flat(i, c) for i, c in enumerate(closes)]
+        names = _names(detect_patterns(bars, "T"))
+        assert any("金叉" in n for n in names)
+
+    def test_double_bottom(self):
+        closes = [12, 11, 10, 9, 8, 9, 10, 11, 10, 9, 8.1, 9, 10, 11, 12]
+        bars = [_flat(i, c) for i, c in enumerate(closes)]
+        assert "双底(W底)" in _names(detect_patterns(bars, "T"))
+
+
+class TestReportShape:
+    def test_to_dict_and_counts(self):
+        bars = [
+            _flat(0, 10), _flat(1, 10),
+            _bar(2, 10.0, 10.6, 9.95, 10.5),
+            _bar(3, 10.5, 11.1, 10.45, 11.0),
+            _bar(4, 11.0, 11.6, 10.95, 11.5),
+        ]
+        d = detect_patterns(bars, "600519").to_dict()
+        for key in ("status", "symbol", "bars_used", "patterns", "counts", "note", "disclaimer"):
+            assert key in d
+        assert d["symbol"] == "600519"
+        assert d["counts"]["total"] == len(d["patterns"])
+        assert "不构成任何投资建议" in d["disclaimer"]
+
+    def test_patterns_sorted_recent_first(self):
+        closes = [10.0] * 20 + [12.0] * 6
+        bars = [_flat(i, c) for i, c in enumerate(closes)]
+        r = detect_patterns(bars, "T")
+        idxs = [p.index for p in r.patterns]
+        assert idxs == sorted(idxs, reverse=True)

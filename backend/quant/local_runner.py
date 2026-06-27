@@ -80,6 +80,7 @@ def local_status_payload() -> dict[str, Any]:
             "live_trading": False,
             "tdx_compile": True,
             "strategy_evolution": True,
+            "pattern_recognition": True,
             "stock_pool_parse": True,
         },
     }

@@ -93,6 +93,8 @@ def _local_status_payload() -> dict[str, Any]:
             "risk_audit": True,
             "live_trading": False,
             "tdx_compile": True,
+            "strategy_evolution": True,
+            "pattern_recognition": True,
             "stock_pool_parse": True,
         },
     }
@@ -358,6 +360,34 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
     for stale_run_id in list(_local_run_details.keys())[50:]:
         _local_run_details.pop(stale_run_id, None)
     _persist_experiment(payload)
+    return payload
+
+
+def _run_patterns_local(body: "PatternsRequestBody") -> dict[str, Any]:
+    """加载本地行情并做 K 线形态识别, 返回 API 载荷。形态识别纯确定性、不触网。"""
+    from backend.quant.patterns import detect_patterns
+
+    bars, data_source = _load_local_bars(
+        body.symbol,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        initial_capital=1_000_000.0,
+    )
+    report = detect_patterns(bars, symbol=body.symbol, lookback=body.lookback)
+    payload = report.to_dict()
+    payload.update(
+        {
+            "data_source": data_source,
+            "data_source_label": (
+                "本地样例行情"
+                if data_source == "local_preview"
+                else "实时数据源"
+                if data_source == "provider"
+                else "本地行情库"
+            ),
+            "degraded": data_source == "local_preview" or report.status != "ok",
+        }
+    )
     return payload
 
 
@@ -682,6 +712,15 @@ class ChipDistributionRequestBody(BaseModel):
     price_levels: int = Field(default=100, description="价位离散桶数(20-400)")
 
 
+class PatternsRequestBody(BaseModel):
+    """K 线形态识别请求体。"""
+
+    symbol: str = Field(description="标的代码")
+    start_date: str = Field(description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(description="结束日期 YYYY-MM-DD")
+    lookback: int = Field(default=60, description="蜡烛形态扫描窗口(最近 N 根)")
+
+
 class StrategyCompareRequestBody(BaseModel):
     """策略横向对比请求体:同一标的/区间跑全部内置策略并排名。"""
 
@@ -940,6 +979,23 @@ async def run_chip_distribution_endpoint(body: ChipDistributionRequestBody):
             success=False,
             error=str(e),
             error_code="LOCAL_CHIP_DISTRIBUTION_ERROR",
+        )
+
+
+@router.post("/patterns")
+async def run_patterns_endpoint(body: PatternsRequestBody):
+    """K 线形态识别。确定性检出蜡烛形态(吞没/锤子/十字星/启明星-黄昏星/红三兵-三只乌鸦)
+    与结构信号(跳空/N 日突破/均线金叉死叉/双顶双底)。纯本地、失败安全;描述历史形态,
+    不预测涨跌、不构成任何投资建议。同步重计算丢线程池,避免阻塞事件循环。
+    """
+    try:
+        result = await asyncio.to_thread(_run_patterns_local, body)
+        return ApiResponse(success=True, data=result, message=result.get("note") or None)
+    except Exception as e:
+        return ApiResponse(
+            success=False,
+            error=str(e),
+            error_code="LOCAL_PATTERNS_ERROR",
         )
 
 
