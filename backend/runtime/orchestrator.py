@@ -471,6 +471,7 @@ def run_agents_with_mode(
             "chairman_summary": None,
             "evidence_pool": evidence_pool,
             "risk_gate": None,
+            "debate": None,
             "model_status": model_status,
             "data_verification": verification.to_dict(),
             "mode": mode.value,
@@ -598,6 +599,26 @@ def run_agents_with_mode(
     except Exception as exc:  # noqa: BLE001 - 风控 gate 失败不应阻断研报
         logger.debug("风控 gate 评估失败, 跳过: %s", exc)
 
+    # 多空辩论裁决(v1.9.14): 确定性合成「看多/看空(反方质询)/裁决」, 复用已算出的
+    # Agent 信号 + Critic 分歧 + 风控否决 + 数据缺失, 不新增任何 LLM 调用; 失败安全。
+    debate = None
+    try:
+        from backend.agents.debate import format_debate_section, synthesize_debate
+
+        debate_report = synthesize_debate(
+            results,
+            summary=summary,
+            critic=critic_block,
+            risk_gate=risk_gate,
+            data_verification=verification.to_dict(),
+        )
+        debate = debate_report.to_dict()
+        section = format_debate_section(debate_report)
+        if section:
+            research_report = f"{research_report}\n{section}"
+    except Exception as exc:  # noqa: BLE001 - 辩论合成失败不应阻断研报
+        logger.debug("多空辩论合成失败, 跳过: %s", exc)
+
     return {
         "agents": results,
         "summary": summary,
@@ -609,6 +630,7 @@ def run_agents_with_mode(
         "model_status": model_status,
         "evidence_pool": evidence_pool,
         "risk_gate": risk_gate,
+        "debate": debate,
         "data_verification": verification.to_dict(),
         "mode": mode.value,
         "mode_name": config.name,

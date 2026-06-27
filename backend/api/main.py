@@ -634,6 +634,7 @@ if HAS_FASTAPI:
                     "chairman_summary": result.get("chairman_summary"),
                     "evidence_pool": result.get("evidence_pool", []),
                     "risk_gate": result.get("risk_gate"),
+                    "debate": result.get("debate"),
                     "data_verification": result.get("data_verification"),
                     "model_status": model_status,
                     "mode_name": result.get("mode_name"),

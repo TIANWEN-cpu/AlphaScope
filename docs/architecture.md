@@ -72,6 +72,7 @@ flowchart TB
 - **Tool Router** (`runtime/tool_router.py`) — Agent 工具调用路由。
 - **Critic** (`critic.py`) — 对每个 Agent 输出做 **7 维评分**：证据质量 / 逻辑一致性 / 矛盾检测 / 缺失证据 / 过度自信标记 / 证据覆盖率 / 因子一致性。
 - **Chairman** (`agents/chairman.py`) — `summarize_with_chairman()` 汇总多模型信号 + 置信度 + 理由，产出最终会签结论。
+- **多空辩论裁决** (`agents/debate.py`，v1.9.14) — 在风控 gate 之后**确定性**合成「看多方 / 看空方(反方质询)/ 主席裁决」:**不新增任何 LLM Agent、不触网、不增成本**,而是复用一次分析里已算出的 Agent 信号(买入/卖出/观望)+ Critic 评审分歧 + 风控否决 + `data_verifier` 数据缺失,把单一结论升级为可审计的多空对峙。反方质询四来源:看空 Agent / 看多但信心不足 / 风控一票否决 / 数据缺失·过期·异常 / Critic 中·高分歧。三份战略报告(compass/deep-research/1.txt)一致把「反方质询 + 裁决理由入报」列为差异化核心,且都警告「治理稳定前别堆 Agent」——故以纯函数失败安全合成器落地。合规:描述研究分歧与共识度/置信度,**绝不给买卖指令**,附免责;裁决小节并入研报正文,经 `/api/analysis/run` 透出 `debate`。
 - **Expert Panel** — 可配置专家团（`config/experts.yaml`），5 种辩论模式（QUICK_VOTE / ROUNDTABLE / DEVILS_ADVOCATE / CHAIRMAN_RULING / HUMAN_INTERVENTION）。
 - **降级策略** — 单 Agent 失败降级备用模型并标 `degraded=true`；全部失败时走 `demo_fallback`（无 Key）或返回结构化失败，**绝不返回伪造的"正常成功"**。
 
