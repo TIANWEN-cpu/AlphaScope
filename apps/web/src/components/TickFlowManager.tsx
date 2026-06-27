@@ -37,6 +37,12 @@ interface Source {
   bar_count: number;
 }
 
+interface TickFlowPreview {
+  sample?: unknown;
+  inferred_field_map?: Record<string, string>;
+  record_count?: number;
+}
+
 const EMPTY: Source = {
   id: '',
   name: '',
@@ -62,7 +68,7 @@ export const TickFlowManager: React.FC = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<any>(null);
+  const [preview, setPreview] = useState<TickFlowPreview | null>(null);
 
   const load = useCallback(async () => {
     setError('');
@@ -107,7 +113,7 @@ export const TickFlowManager: React.FC = () => {
     setError('');
     setNotice('');
     try {
-      const res = await fetchApi<any>('/api/tickflow/preview', {
+      const res = await fetchApi<TickFlowPreview>('/api/tickflow/preview', {
         method: 'POST',
         body: JSON.stringify({
           url: editing.url,
@@ -165,7 +171,7 @@ export const TickFlowManager: React.FC = () => {
     setError('');
     setNotice('');
     try {
-      const res = await fetchApi<any>(`/api/tickflow/sources/${encodeURIComponent(s.id)}/refresh`, { method: 'POST' });
+      const res = await fetchApi<{ bar_count?: number; date_range?: string[] }>(`/api/tickflow/sources/${encodeURIComponent(s.id)}/refresh`, { method: 'POST' });
       setNotice(`「${s.name}」拉取成功:${res?.bar_count ?? 0} 根 K 线 (${(res?.date_range || []).join(' ~ ')})`);
       await load();
     } catch (err) {

@@ -109,7 +109,14 @@ export function DragonTiger() {
     if (!stock) return;
     setTrapLoading(true);
     setTrap(null);
-    void fetchApi<any>(
+    void fetchApi<{
+      trap_level?: string;
+      trap_score?: number | null;
+      signals_hit?: string;
+      signals_hit_count?: number;
+      recommendation?: string;
+      signals_hit_detail?: Array<{ name: string }>;
+    }>(
       `/api/dragon-tiger/${encodeURIComponent(stock.symbol)}/trap?name=${encodeURIComponent(stock.name ?? stock.symbol)}`,
     )
       .then((d) => setTrap(d))

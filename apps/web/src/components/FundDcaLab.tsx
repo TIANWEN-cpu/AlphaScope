@@ -992,7 +992,7 @@ export function FundDcaLab() {
                           <label className="text-[11px] text-neutral-400 block mb-1">标的属性分类</label>
                           <select 
                             value={customFundType}
-                            onChange={(e: any) => setCustomFundType(e.target.value)}
+                            onChange={(e) => setCustomFundType(e.target.value as typeof customFundType)}
                             className="w-full bg-black/40 border border-white/5 rounded px-2.5 py-1.5 text-sm text-neutral-100 cursor-pointer"
                           >
                             <option value="mixed">偏股型主动混合基金</option>
@@ -1237,7 +1237,7 @@ export function FundDcaLab() {
                 <label className="text-xs font-sans text-neutral-300 block">定投跟投周期频次</label>
                 <select
                   value={dcaFrequency}
-                  onChange={(e: any) => setDcaFrequency(e.target.value)}
+                  onChange={(e) => setDcaFrequency(e.target.value as typeof dcaFrequency)}
                   className="w-full bg-[#0c0c12] border border-white/5 rounded px-2.5 py-1.5 text-sm text-neutral-100 cursor-pointer"
                 >
                   <option value="weekly">极速周投 (每周跟进)</option>
@@ -1309,7 +1309,7 @@ export function FundDcaLab() {
                   </label>
                   <select
                     value={buyTheDipRule}
-                    onChange={(e: any) => setBuyTheDipRule(e.target.value)}
+                    onChange={(e) => setBuyTheDipRule(e.target.value as typeof buyTheDipRule)}
                     className="w-full bg-[#0c0c12] border border-white/5 rounded px-2.5 py-1.5 text-sm text-neutral-100 cursor-pointer font-medium"
                   >
                     <option value="none">常規固定额跟投</option>

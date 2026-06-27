@@ -156,9 +156,13 @@ export function MorningBrief() {
     setExpanded((cur) => (cur === symbol ? null : symbol));
     if (enrich[symbol]?.loaded || enrich[symbol]?.loading) return;
     setEnrich((m) => ({ ...m, [symbol]: { ...m[symbol], loading: true } }));
-    const val = fetchApi<any>(`/api/valuation/${encodeURIComponent(symbol)}`).catch(() => null);
-    const dt = fetchApi<any>(`/api/dragon-tiger/${encodeURIComponent(symbol)}`).catch(() => null);
-    void Promise.all([val, dt]).then(([v, d]: [any, any]) => {
+    const val = fetchApi<{ summary?: { dcf_verdict?: string; dcf_intrinsic_per_share?: number | null; lbo_irr_pct?: number | null } }>(
+      `/api/valuation/${encodeURIComponent(symbol)}`,
+    ).catch(() => null);
+    const dt = fetchApi<{ inst_vs_youzi?: { institutional_net?: number | null; youzi_net?: number | null }; matched_youzi?: string[] }>(
+      `/api/dragon-tiger/${encodeURIComponent(symbol)}`,
+    ).catch(() => null);
+    void Promise.all([val, dt]).then(([v, d]) => {
       setEnrich((m) => ({
         ...m,
         [symbol]: {

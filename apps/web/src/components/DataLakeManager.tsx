@@ -91,7 +91,7 @@ export const DataLakeManager: React.FC = () => {
     setError('');
     setNotice('');
     try {
-      const res = await fetchApi<any>('/api/datalake/ingest', {
+      const res = await fetchApi<{ ingested?: number; requested?: number }>('/api/datalake/ingest', {
         method: 'POST',
         body: JSON.stringify({ symbols }),
       });
@@ -111,7 +111,7 @@ export const DataLakeManager: React.FC = () => {
       const cleanFilters = filters
         .filter((f) => f.value.trim() !== '' && !Number.isNaN(Number(f.value)))
         .map((f) => ({ field: f.field, op: f.op, value: Number(f.value) }));
-      const res = await fetchApi<any>('/api/datalake/screen', {
+      const res = await fetchApi<{ rows?: ScreenRow[]; matched?: number }>('/api/datalake/screen', {
         method: 'POST',
         body: JSON.stringify({ filters: cleanFilters, order_by: orderBy, descending, limit: 200 }),
       });
@@ -128,7 +128,7 @@ export const DataLakeManager: React.FC = () => {
     setBusy(true);
     setError('');
     try {
-      const res = await fetchApi<any>('/api/datalake/query', {
+      const res = await fetchApi<{ columns?: string[]; rows?: Record<string, unknown>[]; row_count?: number }>('/api/datalake/query', {
         method: 'POST',
         body: JSON.stringify({ sql, limit: 500 }),
       });
