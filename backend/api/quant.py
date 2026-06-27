@@ -411,6 +411,101 @@ def _run_chip_distribution_local(body: "ChipDistributionRequestBody") -> dict[st
     return payload
 
 
+# 策略横向对比不参与对比的模板策略(需用户配置规则才有信号)。
+_COMPARE_SKIP_STRATEGIES = {"custom_rule"}
+_COMPARE_RANK_KEYS = {"sharpe_ratio", "total_return", "calmar_ratio", "annual_return", "win_rate"}
+
+
+def _run_strategy_comparison_local(body: "StrategyCompareRequestBody") -> dict[str, Any]:
+    """同一标的/区间跑全部内置策略并按指标排名,返回 API 载荷。
+
+    只取一次行情,所有策略复用同一份 bar(各自拷贝避免互相污染),复用已测回测引擎。
+    纯本地、确定性;模板策略(custom_rule)无默认信号,跳过并在 skipped 中标注。
+    """
+    from backend.quant.engine import BacktestEngine
+    from backend.quant.strategies import StrategyRegistry
+
+    rank_by = body.rank_by if body.rank_by in _COMPARE_RANK_KEYS else "sharpe_ratio"
+    bars, data_source = _load_local_bars(
+        body.symbol,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        initial_capital=body.initial_capital,
+    )
+
+    rows: list[dict[str, Any]] = []
+    skipped: list[str] = []
+    for meta in StrategyRegistry.list_strategies():
+        name = meta.get("name", "")
+        if not name or name in _COMPARE_SKIP_STRATEGIES:
+            if name:
+                skipped.append(name)
+            continue
+        strategy = StrategyRegistry.create(name, {})
+        if strategy is None:
+            continue
+        engine = BacktestEngine(initial_capital=body.initial_capital, commission_rate=0.001)
+        result = engine.run(strategy, [dict(b) for b in bars], body.symbol)
+        perf = result.performance or {}
+        rows.append(
+            {
+                "strategy_id": name,
+                "strategy_name": name,
+                "description": meta.get("description", ""),
+                "total_return": perf.get("total_return", 0.0),
+                "annual_return": perf.get("annualized_return", 0.0),
+                "sharpe_ratio": perf.get("sharpe_ratio", 0.0),
+                "sortino_ratio": perf.get("sortino_ratio", 0.0),
+                "calmar_ratio": perf.get("calmar_ratio", 0.0),
+                "max_drawdown": perf.get("max_drawdown", 0.0),
+                "win_rate": perf.get("win_rate", 0.0),
+                "profit_factor": perf.get("profit_factor", 0.0),
+                "trade_count": perf.get("total_trades", len(result.trades)),
+                "risk_violations": len(result.risk_violations),
+            }
+        )
+
+    # 排名:指标越大越好(max_drawdown 是负数,这里不作为默认排名键)。
+    rows.sort(key=lambda r: r.get(rank_by, 0.0), reverse=True)
+    for i, row in enumerate(rows):
+        row["rank"] = i + 1
+
+    now = datetime.now()
+    run_id = f"cmp-{now.strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"
+    assumptions: dict[str, Any] = {}
+    if bars:
+        # 任一引擎实例的假设都一致,取一次披露给前端。
+        assumptions = BacktestEngine(initial_capital=body.initial_capital)._assumptions()
+    return {
+        "run_id": run_id,
+        "mode": "strategy_compare",
+        "symbol": body.symbol,
+        "rank_by": rank_by,
+        "ranking": rows,
+        "skipped": skipped,
+        "evaluated": len(rows),
+        "assumptions": assumptions,
+        "data_source": data_source,
+        "data_source_label": (
+            "本地样例行情"
+            if data_source == "local_preview"
+            else "实时数据源"
+            if data_source == "provider"
+            else "本地行情库"
+        ),
+        "bar_count": len(bars),
+        "degraded": data_source == "local_preview",
+        "started_at": now.isoformat(),
+        "finished_at": now.isoformat(),
+        "message": (
+            "已使用本地样例行情完成策略对比,仅用于功能预览。"
+            if data_source == "local_preview"
+            else f"已对 {len(rows)} 个内置策略完成横向对比(按 {rank_by} 排名)。"
+        ),
+        "disclaimer": "对比基于历史回测,不代表未来表现,不构成投资建议或选股推荐。",
+    }
+
+
 # ============================================================
 # 请求模型
 # ============================================================
@@ -507,6 +602,16 @@ class ChipDistributionRequestBody(BaseModel):
     start_date: str = Field(description="开始日期 YYYY-MM-DD")
     end_date: str = Field(description="结束日期 YYYY-MM-DD")
     price_levels: int = Field(default=100, description="价位离散桶数(20-400)")
+
+
+class StrategyCompareRequestBody(BaseModel):
+    """策略横向对比请求体:同一标的/区间跑全部内置策略并排名。"""
+
+    symbol: str = Field(description="标的代码")
+    start_date: str = Field(description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(description="结束日期 YYYY-MM-DD")
+    initial_capital: float = Field(default=1000000.0, description="初始资金")
+    rank_by: str = Field(default="sharpe_ratio", description="排名指标: sharpe_ratio|total_return|calmar_ratio")
 
 
 class LiveStartBody(BaseModel):
@@ -720,6 +825,24 @@ async def run_chip_distribution_endpoint(body: ChipDistributionRequestBody):
             success=False,
             error=str(e),
             error_code="LOCAL_CHIP_DISTRIBUTION_ERROR",
+        )
+
+
+@router.post("/compare-strategies")
+async def run_strategy_comparison_endpoint(body: StrategyCompareRequestBody):
+    """策略横向对比:同一标的/区间跑全部内置策略并按指标排名。
+
+    一次取数、复用已测回测引擎逐策略回测,帮助快速看哪些策略在该标的上历史表现更好。
+    纯本地、确定性;同步重计算丢线程池,避免阻塞事件循环。结果仅供历史研究,不构成选股建议。
+    """
+    try:
+        result = await asyncio.to_thread(_run_strategy_comparison_local, body)
+        return ApiResponse(success=True, data=result, message=result.get("message"))
+    except Exception as e:
+        return ApiResponse(
+            success=False,
+            error=str(e),
+            error_code="LOCAL_STRATEGY_COMPARE_ERROR",
         )
 
 

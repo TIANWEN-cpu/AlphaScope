@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.9.7 - 2026-06-27
+
+> **Phase 2 续**:新增**策略横向对比榜**——对同一标的一次取数、跑完全部内置策略并按指标排名,帮你快速看哪些策略在该标的历史上表现更好。复用已测回测引擎,纯本地确定性,合规(历史回测 ≠ 选股建议)。
+
+### 策略横向对比榜 strategy leaderboard(Phase 2)
+- `POST /api/quant/compare-strategies`: 一次 `_load_local_bars` 取数,所有内置策略复用同一份
+  bar(各自拷贝避免污染),逐策略 `BacktestEngine.run` 回测,按 `rank_by`
+  (sharpe_ratio/total_return/calmar_ratio/annual_return/win_rate)降序排名。模板策略
+  `custom_rule` 无默认信号 → 跳过并在 `skipped` 标注。透出 assumptions 与免责。
+- 前端 `Backtesting.tsx` 新增「策略榜」Tab(复用标的/资金状态):标的选择 + 排名指标三选
+  (夏普/累计收益/Calmar) + 一键对比 → 排行榜表(累计收益/年化/最大回撤/夏普/Calmar/胜率/笔数,
+  冠军行高亮 + 奖杯标),复用 AssumptionsCard 与免责声明。
+- 合规: 仅历史回测对比, 不构成选股推荐;附「不代表未来、不构成投资建议」免责。
+- tests/test_strategy_compare.py: 8 用例(排名形状/跳过模板/降序/非法键回退/字段/确定性/免责/路由)。
+
 ## v1.9.6 - 2026-06-27
 
 > **Phase 2 续**:新增 A 股特色的**筹码分布(成本分布)**分析——用换手率扩散模型重建当前持仓成本结构,读出获利盘比例、平均成本、筹码集中度与上下方密集价。纯确定性、失败安全、合规(描述历史成本结构 ≠ 价格预测/荐股)。

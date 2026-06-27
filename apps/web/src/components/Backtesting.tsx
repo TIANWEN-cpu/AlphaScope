@@ -17,6 +17,7 @@ import {
   Settings2,
   ShieldAlert,
   TrendingUp,
+  Trophy,
   Upload,
 } from 'lucide-react';
 import { Bar, BarChart as RBarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from 'recharts';
@@ -28,11 +29,12 @@ import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvent
 import { getErrorMessage, stripSymbolSuffix, useAsync } from '../lib/dataFetch';
 import { StableChartContainer } from './StableChartContainer';
 
-type TabID = 'overview' | 'workshop' | 'walkforward' | 'chips' | 'pool' | 'compare';
+type TabID = 'overview' | 'workshop' | 'leaderboard' | 'walkforward' | 'chips' | 'pool' | 'compare';
 
 const TABS: Array<{ id: TabID; label: string; icon: ComponentType<{ className?: string }> }> = [
   { id: 'overview', label: '回测大厅', icon: History },
   { id: 'workshop', label: '策略工坊', icon: Code2 },
+  { id: 'leaderboard', label: '策略榜', icon: Trophy },
   { id: 'walkforward', label: '样本外走查', icon: GitBranch },
   { id: 'chips', label: '筹码分布', icon: Coins },
   { id: 'pool', label: '股票池解析', icon: Layers },
@@ -221,6 +223,39 @@ interface ChipDistributionData {
   note?: string;
   disclaimer?: string;
   data_source_label?: string;
+  message?: string;
+}
+
+// ---- Strategy comparison contract (backend/api/quant.py compare-strategies) ----
+
+interface StrategyCompareRow {
+  rank?: number;
+  strategy_id: string;
+  strategy_name?: string;
+  description?: string;
+  total_return?: number;
+  annual_return?: number;
+  sharpe_ratio?: number;
+  sortino_ratio?: number;
+  calmar_ratio?: number;
+  max_drawdown?: number;
+  win_rate?: number;
+  profit_factor?: number;
+  trade_count?: number;
+  risk_violations?: number;
+}
+
+interface StrategyCompareData {
+  run_id?: string;
+  symbol?: string;
+  rank_by?: string;
+  ranking?: StrategyCompareRow[];
+  skipped?: string[];
+  evaluated?: number;
+  assumptions?: BacktestAssumptions;
+  data_source_label?: string;
+  bar_count?: number;
+  disclaimer?: string;
   message?: string;
 }
 
@@ -440,6 +475,12 @@ export function Backtesting() {
   const [chipRunning, setChipRunning] = useState(false);
   const [chipResult, setChipResult] = useState<ChipDistributionData | null>(null);
   const [chipError, setChipError] = useState<string | null>(null);
+
+  // Strategy leaderboard (策略榜) state — reuses symbol/capital above.
+  const [cmpRunning, setCmpRunning] = useState(false);
+  const [cmpResult, setCmpResult] = useState<StrategyCompareData | null>(null);
+  const [cmpError, setCmpError] = useState<string | null>(null);
+  const [cmpRankBy, setCmpRankBy] = useState<'sharpe_ratio' | 'total_return' | 'calmar_ratio'>('sharpe_ratio');
 
   // Strategy catalogue (real)
   const strategiesAsync = useAsync<StrategyInfo[]>(
@@ -682,6 +723,42 @@ export function Backtesting() {
       setActionMessage(`筹码分布失败：${msg}`);
     } finally {
       setChipRunning(false);
+    }
+  };
+
+  const runStrategyComparison = async () => {
+    setCmpRunning(true);
+    setCmpError(null);
+    setCmpResult(null);
+    setActionMessage(`正在对 ${selectedStockName}(${stripSymbolSuffix(selectedSymbol)}) 横向对比全部内置策略...`);
+    try {
+      const lookbackDays = Math.max(days, 120);
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - lookbackDays);
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const res = await fetchApi<StrategyCompareData>('/api/quant/compare-strategies', {
+        method: 'POST',
+        body: JSON.stringify({
+          symbol: stripSymbolSuffix(selectedSymbol),
+          start_date: fmt(startDate),
+          end_date: fmt(endDate),
+          initial_capital: initialCapital,
+          rank_by: cmpRankBy,
+        }),
+      });
+      setCmpResult(res);
+      const top = res.ranking?.[0];
+      setActionMessage(
+        `策略对比完成：评估 ${res.evaluated ?? 0} 个策略${top ? `，${cmpRankBy === 'total_return' ? '收益' : cmpRankBy === 'calmar_ratio' ? 'Calmar' : '夏普'}居首为「${top.strategy_id}」` : ''}。${res.data_source_label ? ' 数据来源：' + res.data_source_label : ''}`,
+      );
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      setCmpError(msg);
+      setActionMessage(`策略对比失败：${msg}`);
+    } finally {
+      setCmpRunning(false);
     }
   };
 
@@ -1555,6 +1632,136 @@ export function Backtesting() {
               {!chipResult && !chipError && (
                 <div className="flex h-64 items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] text-xs text-neutral-500">
                   选择标的后点击「重建筹码分布」，查看当前持仓成本结构与获利盘比例。
+                </div>
+              )}
+            </motion.div>
+          )}
+          {activeTab === 'leaderboard' && (
+            <motion.div key="leaderboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <div className="mb-5 rounded-xl border border-indigo-500/15 bg-indigo-500/[0.04] px-4 py-3 text-[11px] leading-relaxed text-indigo-100/75">
+                <Trophy className="mr-1 inline h-3.5 w-3.5 align-text-bottom" />
+                策略榜对当前标的<strong className="font-medium text-indigo-50"> 一次取数、跑完全部内置策略 </strong>并按所选指标排名,帮你快速看哪些策略在该标的历史上表现更好。<strong className="font-medium text-indigo-50"> 仅基于历史回测,不构成选股建议</strong>。
+              </div>
+
+              <div className="mb-6 flex flex-wrap items-end gap-3">
+                <div className="rounded-xl border border-white/5 bg-black/40 px-4 py-2.5">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">标的</p>
+                  <select
+                    value={selectedSymbol}
+                    onChange={(e) => {
+                      const stock = stockOptions.find((item) => item.symbol === e.target.value);
+                      if (stock) {
+                        setSelectedSymbol(stock.symbol);
+                        setSelectedStockName(stock.name);
+                      }
+                    }}
+                    className="mt-1 bg-transparent text-sm text-indigo-300 outline-none"
+                  >
+                    {stockOptions.map((stock) => (
+                      <option key={stock.symbol} value={stock.symbol} className="bg-[#0f0f15] text-neutral-200">
+                        {stock.name} ({stock.symbol})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="rounded-xl border border-white/5 bg-black/40 px-4 py-2.5">
+                  <p className="mb-1 text-[10px] font-mono uppercase tracking-widest text-neutral-500">排名指标</p>
+                  <div className="flex overflow-hidden rounded-lg border border-white/10">
+                    {([['sharpe_ratio', '夏普'], ['total_return', '累计收益'], ['calmar_ratio', 'Calmar']] as const).map(([key, label]) => (
+                      <button
+                        key={key}
+                        onClick={() => setCmpRankBy(key)}
+                        className={cn('px-3 py-1 text-xs transition-colors', cmpRankBy === key ? 'bg-indigo-600 text-white' : 'bg-transparent text-neutral-400 hover:text-neutral-200')}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={runStrategyComparison}
+                  disabled={cmpRunning}
+                  className="flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-600 px-8 py-2.5 text-xs font-medium text-white shadow-[0_0_20px_rgba(99,102,241,0.2)] transition-all hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  {cmpRunning ? <Activity className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+                  {cmpRunning ? '对比计算中...' : '一键对比全部策略'}
+                </button>
+              </div>
+
+              {cmpError && (
+                <div className="mb-6 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+                  策略对比失败：{cmpError}（请确认该标的有足够行情数据）
+                </div>
+              )}
+
+              {cmpResult && cmpResult.ranking && (
+                <>
+                  <div className="mb-3 text-[11px] text-neutral-500">
+                    评估 {cmpResult.evaluated ?? 0} 个内置策略 · 按{cmpRankBy === 'total_return' ? '累计收益' : cmpRankBy === 'calmar_ratio' ? 'Calmar' : '夏普比率'}降序
+                    {cmpResult.skipped && cmpResult.skipped.length > 0 && <span> · 跳过模板策略 {cmpResult.skipped.join('、')}</span>}
+                    {cmpResult.data_source_label && <span> · 数据来源：{cmpResult.data_source_label}</span>}
+                  </div>
+                  <div className="mb-6 overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-xl">
+                    <div className="max-h-[480px] overflow-auto custom-scrollbar">
+                      <table className="w-full border-collapse text-left text-xs">
+                        <thead className="sticky top-0 border-b border-white/5 bg-black/40 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+                          <tr>
+                            <th className="px-4 py-3">#</th>
+                            <th className="px-4 py-3">策略</th>
+                            <th className="px-4 py-3 text-right">累计收益</th>
+                            <th className="px-4 py-3 text-right">年化</th>
+                            <th className="px-4 py-3 text-right">最大回撤</th>
+                            <th className="px-4 py-3 text-right">夏普</th>
+                            <th className="px-4 py-3 text-right">Calmar</th>
+                            <th className="px-4 py-3 text-right">胜率</th>
+                            <th className="px-4 py-3 text-right">笔数</th>
+                          </tr>
+                        </thead>
+                        <tbody className="font-mono text-neutral-300">
+                          {cmpResult.ranking.map((row) => (
+                            <tr key={row.strategy_id} className={cn('border-b border-white/5 hover:bg-white/[0.025]', row.rank === 1 && 'bg-amber-500/[0.05]')}>
+                              <td className="px-4 py-3">
+                                <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded text-[10px]', row.rank === 1 ? 'bg-amber-500/20 text-amber-300' : row.rank && row.rank <= 3 ? 'bg-white/10 text-neutral-300' : 'text-neutral-500')}>
+                                  {row.rank}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="font-sans font-medium text-neutral-200">{row.strategy_name || row.strategy_id}</span>
+                                {row.rank === 1 && <Trophy className="ml-1.5 inline h-3 w-3 text-amber-300" />}
+                              </td>
+                              <td className={cn('px-4 py-3 text-right', (row.total_return ?? 0) >= 0 ? 'text-rose-300' : 'text-emerald-300')}>{formatPercent(row.total_return)}</td>
+                              <td className="px-4 py-3 text-right text-neutral-400">{formatPercent(row.annual_return)}</td>
+                              <td className="px-4 py-3 text-right text-emerald-300/80">{formatPercent(row.max_drawdown)}</td>
+                              <td className="px-4 py-3 text-right text-neutral-200">{formatFactor(row.sharpe_ratio)}</td>
+                              <td className="px-4 py-3 text-right text-neutral-400">{formatFactor(row.calmar_ratio)}</td>
+                              <td className="px-4 py-3 text-right text-neutral-400">{formatFactor(row.win_rate)}%</td>
+                              <td className="px-4 py-3 text-right text-neutral-500">{row.trade_count ?? 0}</td>
+                            </tr>
+                          ))}
+                          {cmpResult.ranking.length === 0 && (
+                            <tr><td colSpan={9} className="px-4 py-8 text-center text-xs text-neutral-500">无可对比策略。</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="mb-6">
+                    <AssumptionsCard assumptions={cmpResult.assumptions} />
+                  </div>
+
+                  {cmpResult.disclaimer && (
+                    <div className="rounded-xl border border-rose-500/20 bg-rose-500/[0.06] px-4 py-2.5 text-[11px] leading-relaxed text-rose-200/80">
+                      <ShieldAlert className="mr-1 inline h-3.5 w-3.5 align-text-bottom" />
+                      {cmpResult.disclaimer}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!cmpResult && !cmpError && (
+                <div className="flex h-64 items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] text-xs text-neutral-500">
+                  选择标的与排名指标后点击「一键对比全部策略」，生成该标的上的策略表现排行榜。
                 </div>
               )}
             </motion.div>
