@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.9.21 - 2026-06-27
+
+> **Phase 3 / 因子注册中心 · 研究流水线**:项目已有 5 个「软因子」(舆情/事件/评级/资金/动量,触网),但缺一个**统一因子目录**,也没把**确定性技术因子**(纯 OHLCV 算出)纳入框架,更没有「一次算一篮子标的」的批量流水线。本版对标 Qlib 的 factor/alpha 研究流程(保持本项目确定性·失败安全·不触网基线)补齐:**注册(catalog)+ 确定性技术因子 + SQLite 缓存 + 跨标的因子矩阵**。
+
+### 因子注册中心 factor_registry(后端)
+- `backend/quant/factor_registry.py`:
+  - **注册目录**:`FactorDef`(id/名称/类别/方向/口径/来源)统一登记 15+ 因子——10 个确定性技术因子
+    (本模块算)+ 5 个已有软因子(登记入目录,数值仍走 FactorGenerator)。`list_factors`/`get_factor`。
+  - **确定性技术因子(纯函数,可单测)**:`compute_technical_factors` 从 OHLCV 算 20/60 日动量、20 日年化波动率、
+    MA20/60 乖离、RSI(14)、60 日最大回撤、量比(5/20)、距 60 日高点、60 日区间位置;数据不足/脏数据 → None,失败安全。
+  - **缓存**:自包含懒建表 `factor_vectors`(仿 experiment_store,不改 db 核心 schema),`cache_vector`/`get_cached_vector`/`_prune`(留 2000),全失败安全。
+  - **研究流水线**:`compute_for_symbol`(单标的因子向量,`bars`/`loader` 可注入不触网)、
+    `compute_matrix`(跨标的因子矩阵,逐标的失败安全)。
+- `backend/api/factor_registry.py`:`GET /api/factor-registry/catalog`、`GET .../symbol/{symbol}`、
+  `POST .../matrix`、`GET .../cached/{symbol}`,注册进 `main.py`。
+- tests/test_factor_registry.py:16 用例(目录过滤 + 10 因子纯函数含失败安全 + 临时 SQLite 缓存 + 注入 loader 的流水线/矩阵/失败降级)。
+
+### 因子注册中心(前端)
+- `FactorRegistry.tsx` 侧栏「因子注册中心」页(量化研究引擎组):单标的因子向量(方向徽标 + 数值)+
+  批量因子矩阵(多代码 → 因子矩阵表)+ 因子目录(类别/方向/来源/口径)。
+- 接线:`types.ts` TabID +`factor_registry`;`App.tsx` 懒加载 + VISIBLE_TABS + 渲染分支;`Sidebar.tsx` 菜单项(Sigma 图标)。
+- 零回归:全量离线套件 **1222 passed, 1 skipped**(较前 1206 增 16);tsc 零错误;build 通过(FactorRegistry 懒分块 7.6KB)。
+- 合规:因子是对历史量价/舆情结构的确定性度量,方向仅为口径标注,不据此给买卖指令、不预测、不构成选股建议,附免责。
+
 ## v1.9.20 - 2026-06-27
 
 > **Phase 3 / DuckDB·Parquet 数据湖**:三份战略报告一致点名的基础设施。把零散的逐标的行情沉淀成**列式数据湖**,用一条 SQL 跨上千标的批量扫描——批量选股、因子计算的底座。**零硬依赖、失败安全降级**:`duckdb` 用 import-guard 包裹,没装照常运行(数据湖能力报告 `available=False`,装上即生效)。

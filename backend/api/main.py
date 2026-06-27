@@ -188,6 +188,7 @@ if HAS_FASTAPI:
     from backend.api.research_memory import router as research_memory_router
     from backend.api.tickflow import router as tickflow_router
     from backend.api.datalake import router as datalake_router
+    from backend.api.factor_registry import router as factor_registry_router
 
     # 启动时把已保存的数据源凭证注入环境变量, 使 provider 自动注册时可用
     from backend.datasource_config import init_credentials_on_startup
@@ -225,6 +226,7 @@ if HAS_FASTAPI:
     app.include_router(research_memory_router)
     app.include_router(tickflow_router)
     app.include_router(datalake_router)
+    app.include_router(factor_registry_router)
 
     # ============== 全局错误处理 ==============
 

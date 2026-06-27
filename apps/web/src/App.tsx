@@ -28,8 +28,9 @@ const MonitoringCenter = lazy(() => import('./components/MonitoringCenter').then
 const ResearchMemory = lazy(() => import('./components/ResearchMemory').then((module) => ({ default: module.ResearchMemory })));
 const TickFlowManager = lazy(() => import('./components/TickFlowManager').then((module) => ({ default: module.TickFlowManager })));
 const DataLakeManager = lazy(() => import('./components/DataLakeManager').then((module) => ({ default: module.DataLakeManager })));
+const FactorRegistry = lazy(() => import('./components/FactorRegistry').then((module) => ({ default: module.FactorRegistry })));
 
-const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'monitor', 'research_memory', 'tickflow', 'datalake', 'settings'];
+const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'monitor', 'research_memory', 'tickflow', 'datalake', 'factor_registry', 'settings'];
 
 function ModuleLoading() {
   return (
@@ -195,6 +196,9 @@ export default function App() {
                   )}
                   {currentTab === 'datalake' && (
                     <DataLakeManager key="datalake" />
+                  )}
+                  {currentTab === 'factor_registry' && (
+                    <FactorRegistry key="factor_registry" />
                   )}
                   {currentTab === 'settings' && (
                     <Settings key="settings" initialTab={settingsInitialTab} />
