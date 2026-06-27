@@ -78,7 +78,7 @@ def local_status_payload() -> dict[str, Any]:
             "run_history": True,
             "risk_audit": True,
             "live_trading": False,
-            "tdx_compile": False,
+            "tdx_compile": True,
             "stock_pool_parse": True,
         },
     }

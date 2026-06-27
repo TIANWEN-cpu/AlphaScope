@@ -92,7 +92,7 @@ def _local_status_payload() -> dict[str, Any]:
             "run_history": True,
             "risk_audit": True,
             "live_trading": False,
-            "tdx_compile": False,
+            "tdx_compile": True,
             "stock_pool_parse": True,
         },
     }
@@ -426,8 +426,8 @@ def _run_chip_distribution_local(body: "ChipDistributionRequestBody") -> dict[st
     return payload
 
 
-# 策略横向对比不参与对比的模板策略(需用户配置规则才有信号)。
-_COMPARE_SKIP_STRATEGIES = {"custom_rule"}
+# 策略横向对比不参与对比的模板策略(需用户配置规则/公式才有信号)。
+_COMPARE_SKIP_STRATEGIES = {"custom_rule", "tdx"}
 _COMPARE_RANK_KEYS = {"sharpe_ratio", "total_return", "calmar_ratio", "annual_return", "win_rate"}
 
 
@@ -636,6 +636,12 @@ class ExperimentCompareBody(BaseModel):
     """实验横向对比请求体。"""
 
     run_ids: list[str] = Field(default_factory=list, description="要对比的实验 run_id 列表")
+
+
+class TdxCompileRequestBody(BaseModel):
+    """通达信公式编译(语法检查/预览)请求体。"""
+
+    formula: str = Field(description="通达信(TDX)公式源码")
 
 
 class LiveStartBody(BaseModel):
@@ -911,6 +917,27 @@ async def compare_experiments_endpoint(body: ExperimentCompareBody):
 
     rows = await asyncio.to_thread(compare_experiments, body.run_ids)
     return ApiResponse(success=True, data={"items": rows, "count": len(rows)})
+
+
+@router.post("/tdx/compile")
+async def compile_tdx_endpoint(body: TdxCompileRequestBody):
+    """编译/校验通达信(TDX)公式(不回测),返回解析结构、买卖信号与错误/告警。
+
+    用于前端「编译」按钮即时反馈语法是否合法、识别出哪些买卖信号。要回测时,用
+    `/api/quant/backtest` 传 strategy_id="tdx", params={"formula": ...}。
+    """
+    from backend.quant.tdx_compiler import compile_formula
+
+    compiled = compile_formula(body.formula)
+    return ApiResponse(
+        success=compiled.ok,
+        data=compiled.to_dict(),
+        message=(
+            "公式编译通过。"
+            if compiled.ok
+            else "公式有错误,请查看 errors。"
+        ),
+    )
 
 
 @router.post("/live/start")

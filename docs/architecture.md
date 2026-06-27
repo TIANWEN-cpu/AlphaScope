@@ -80,12 +80,13 @@ flowchart TB
 - **回测引擎** (`engine.py`) — 自研事件驱动引擎，主循环接入真实 A 股交易摩擦：
   - **防未来函数**：T 日信号于 **T+1 开盘价成交**（不再用当天 close 既算信号又成交），最后一根 bar 的信号无下一 bar 可成交则丢弃。
   - **T+1 结算**、**印花税（卖出单边）**、**滑点**、**涨跌停封板**（见 `constraints.py` 的 `T1Constraint` / `TradingCostModel` / `LimitUpDownFilter`）。
-- **策略库** (`strategies/` 包) — 一策略一文件 + `StrategyRegistry` 自动发现，内置 9 个策略（MA / MACD / RSI / 布林突破 / 海龟 / 超跌反弹 / 动量TopN / 放量突破 / **低代码 custom_rule**）。`custom_rule`（v1.9.4）由前端「低代码策略编辑器」用「字段+操作符+阈值」可视化组合编译而来，复用同一回测引擎、不新建引擎。
+- **策略库** (`strategies/` 包) — 一策略一文件 + `StrategyRegistry` 自动发现，内置 10 个策略（MA / MACD / RSI / 布林突破 / 海龟 / 超跌反弹 / 动量TopN / 放量突破 / **低代码 custom_rule** / **通达信 tdx**）。`custom_rule`（v1.9.4）由前端「低代码策略编辑器」编译;`tdx`（v1.9.9）由通达信公式编译器编译。二者均复用同一回测引擎、不新建引擎。
 - **指标** (`metrics.py`) — Sharpe / Sortino / Calmar / Profit Factor / 年化 / 最大回撤 / 胜率；v1.9.4 补**基准相对指标**（超额收益 / 信息比率 / Jensen's alpha / beta，对标 Qlib 口径，无基准时优雅降级）。
 - **样本外走查** (`walk_forward.py`，v1.9.5) — 把历史切成顺序的 IS+OOS 窗口（`anchored` 锚定 / `rolling` 滚动），逐窗用同一固定参数策略回测，度量**时间稳健性**（收益是否跨区间一致，而非集中在某段运气）。每窗只跑一次引擎覆盖连续 IS+OOS 切片（指标有预热、无信号断层），再按权益曲线在分界处切分 OOS 重新归一；输出走查效率 WFE、样本外胜率、一致性评分与稳健性描述。纯确定性、失败安全、复用回测引擎，附「样本外≠未来」免责。`POST /api/quant/walk-forward`。
 - **筹码分布** (`chip_distribution.py`，v1.9.6) — A 股成本分布:换手率扩散模型(老筹码按 1−t 衰减、新筹码按当日价格区间三角分布铺开,逐日累积),读出获利盘%/平均成本/70%-90% 集中度/上下方筹码密集价。优先用真实换手率,缺失退回量能代理(标 `model=volume_proxy`)。纯确定性、失败安全;描述历史成本结构,不预测价格。`POST /api/quant/chip-distribution`。
 - **策略横向对比榜** (v1.9.7) — 同一标的一次取数、跑完全部内置策略并按指标(夏普/累计收益/Calmar 等)排名,复用同一回测引擎;模板策略 `custom_rule` 跳过。纯本地确定性,仅历史对比、不构成选股建议。`POST /api/quant/compare-strategies`。
 - **实验记录持久化** (`experiment_store.py`，v1.9.8) — 把回测/走查/筹码/策略榜结果落 SQLite(独立表 `quant_experiments`,懒建表不改核心 schema),跨会话可查/调阅/横比;全失败安全(持久化失败不影响运行),`_prune` 保留最近 300 条。端点 `GET/DELETE /api/quant/experiments[/{run_id}]`、`POST /api/quant/experiments/compare`。与内存态 `_local_runs` 并存。
+- **通达信(TDX)公式编译器** (`tdx_compiler.py`，v1.9.9) — 词法→递归下降语法→向量化序列求值,把 TDX 公式子集(MA/EMA/SMA/REF/CROSS/HHV/LLV/COUNT… + 赋值/输出/AND·OR)编译成防未来函数的买卖信号,经 `TdxStrategy`(注册名 `tdx`)走现有引擎回测。纯确定性、失败安全(坏公式→无信号)。`POST /api/quant/tdx/compile` 校验预览;回测复用 `/api/quant/backtest`。
 - **风控** — 双层职责分离：① 回测期 `risk_controller.py` 6 条硬规则逐 bar 拦截交易；② 决策期 `risk/engine.py`（v1.9.3）在研报发布前做独立一票否决 gate（黑名单/仓位/集中度/置信度门控，纯规则可单测），critical 触发则研报顶部红字否决、方向性结论不作为投资依据。
 - **Portfolio** (`portfolio.py`) — 持仓与成本核算，`execute_buy/sell` 支持可选佣金/印花税参数。
 

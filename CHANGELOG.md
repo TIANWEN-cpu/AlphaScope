@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.9.9 - 2026-06-27
+
+> **Phase 2 续**:把策略工坊里「TDX 公式编译(演示)/后端能力未启用」的占位做成**真能编译+回测**的通达信公式编译器——支持常用 TDX 子集,编译成防未来函数的买卖信号走现有回测引擎。纯确定性、失败安全、合规(用户自定义公式,只做确定性计算)。
+
+### 通达信(TDX)公式编译器(A 股特色 / Phase 2)
+- `quant/tdx_compiler.py`: 纯函数编译器(词法→递归下降语法→向量化序列求值),不触网。
+  - 子集:数据引用 CLOSE/OPEN/HIGH/LOW/VOL;函数 MA/EMA/SMA/REF/CROSS/HHV/LLV/SUM/COUNT/
+    MAX/MIN/ABS/IF/STD/AVEDEV;算术/比较/AND·OR·NOT;`:=` 赋值、`:` 输出、ENTERLONG/EXITLONG
+    (或 BUY/SELL)定义买卖;`{}`、`//` 注释。
+  - **防未来函数**:每条序列在 i 处只用 ≤i 数据;配合引擎 T→T+1 成交天然防前视。
+  - **失败安全**:词法/语法/求值错误统一收敛成 `errors`(绝不抛出);坏公式 → 无信号 → 回测 0 交易,
+    不伪造成功。周期参数须为字面量且 1-1000,函数名/参数个数编译期校验。
+- `quant/strategies/tdx.py`: `TdxStrategy`(注册名 `tdx`)把公式求值成逐 bar 信号回测,复用引擎不新建。
+  策略数 9→10;`tdx`/`custom_rule` 在策略榜对比中跳过(需用户公式/规则)。
+- `POST /api/quant/tdx/compile`: 编译/校验(不回测),返回买卖信号、变量、引用与错误/告警,供编辑器即时反馈。
+  回测复用 `/api/quant/backtest`(strategy_id="tdx", params.formula)。能力位 `tdx_compile` 翻 True。
+- 前端 `Backtesting.tsx` 策略工坊:把静态演示占位换成**真编辑器**——可编辑公式 textarea + 「编译校验」
+  (展示买卖信号/变量/引用/错误告警)+「直接回测」(走 tdx 策略并切到回测大厅看净值)+「恢复示例」。
+- tests/test_tdx_compiler.py: 16 用例(编译/未知函数/参数数/语法失败安全/MA 金叉/REF/预热不前视/
+  HHV+逻辑/坏公式无信号/注册/端到端回测)。
+
 ## v1.9.8 - 2026-06-27
 
 > **Phase 2 续**:新增**实验记录持久化(experiment_store)**——把回测/走查/筹码/策略榜的结果落 SQLite,跨会话可查、可调阅、可横向对比。补足此前 `_local_runs` 内存态重启即丢的缺口。失败安全、只增不减(与内存态并存)。

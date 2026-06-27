@@ -301,6 +301,25 @@ interface ExperimentRow {
   summary?: Record<string, number | string>;
 }
 
+// ---- TDX compile contract (backend/quant/tdx_compiler.py to_dict) ----
+
+interface TdxCompileResult {
+  ok: boolean;
+  errors?: string[];
+  warnings?: string[];
+  var_names?: string[];
+  buy_signals?: string[];
+  sell_signals?: string[];
+  refs_used?: string[];
+  statement_count?: number;
+}
+
+const DEFAULT_TDX_FORMULA = `DIFF:=EMA(CLOSE,12)-EMA(CLOSE,26);
+DEA:=EMA(DIFF,9);
+MACD:2*(DIFF-DEA);
+ENTERLONG:CROSS(DIFF,DEA) AND MACD>0;
+EXITLONG:CROSS(DEA,DIFF);`;
+
 interface FactorResponse {
   symbol: string;
   stock_name?: string;
@@ -533,6 +552,12 @@ export function Backtesting() {
   const [expTotal, setExpTotal] = useState(0);
   const [expRefresh, setExpRefresh] = useState(0);
   const [expCompareRows, setExpCompareRows] = useState<ExperimentRow[] | null>(null);
+
+  // TDX formula editor (策略工坊) state.
+  const [tdxFormula, setTdxFormula] = useState<string>(DEFAULT_TDX_FORMULA);
+  const [tdxCompile, setTdxCompile] = useState<TdxCompileResult | null>(null);
+  const [tdxCompiling, setTdxCompiling] = useState(false);
+  const [tdxRunning, setTdxRunning] = useState(false);
 
   // Strategy catalogue (real)
   const strategiesAsync = useAsync<StrategyInfo[]>(
@@ -836,6 +861,64 @@ export function Backtesting() {
       setExpCompareRows(res.items || []);
     } catch (err) {
       setExpError(getErrorMessage(err));
+    }
+  };
+
+  const compileTdx = async () => {
+    setTdxCompiling(true);
+    try {
+      const res = await fetchApi<TdxCompileResult>('/api/quant/tdx/compile', {
+        method: 'POST',
+        body: JSON.stringify({ formula: tdxFormula }),
+      });
+      setTdxCompile(res);
+      setActionMessage(
+        res.ok
+          ? `公式编译通过：识别买入信号 ${(res.buy_signals || []).join('、') || '无'}、卖出信号 ${(res.sell_signals || []).join('、') || '无'}。`
+          : `公式有 ${res.errors?.length ?? 0} 处错误，请查看编译结果。`,
+      );
+    } catch (err) {
+      setTdxCompile({ ok: false, errors: [getErrorMessage(err)] });
+    } finally {
+      setTdxCompiling(false);
+    }
+  };
+
+  const runTdxBacktest = async () => {
+    setTdxRunning(true);
+    setRunError(null);
+    setActionMessage(`正在用 TDX 公式回测 ${selectedStockName}(${stripSymbolSuffix(selectedSymbol)})...`);
+    try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const res = await fetchApi<BacktestResultData>('/api/quant/backtest', {
+        method: 'POST',
+        body: JSON.stringify({
+          strategy_id: 'tdx',
+          symbol: stripSymbolSuffix(selectedSymbol),
+          start_date: fmt(startDate),
+          end_date: fmt(endDate),
+          initial_capital: initialCapital,
+          params: { formula: tdxFormula },
+        }),
+      });
+      setResult(res);
+      setActiveTab('overview');
+      const tradeCount = res.metrics?.trade_count ?? 0;
+      setActionMessage(
+        tradeCount === 0
+          ? 'TDX 回测完成但 0 笔交易：公式未触发买卖信号，或本金按 100 股整手买不进。可调整公式或提高本金。'
+          : `TDX 回测完成：${tradeCount} 笔交易，累计收益 ${formatPercent(res.metrics?.total_return)}。已切到回测大厅查看净值曲线。`,
+      );
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      setRunError(msg);
+      setActionMessage(`TDX 回测失败：${msg}`);
+    } finally {
+      setTdxRunning(false);
     }
   };
 
@@ -1172,18 +1255,75 @@ export function Backtesting() {
             <motion.div key="workshop" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               <div className="min-h-[500px] overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-xl">
                 <div className="flex items-center justify-between border-b border-white/5 bg-black/40 p-5">
-                  <h3 className="text-sm font-medium text-white">TDX 公式编译（演示）</h3>
-                  <span className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] font-mono text-amber-300">客户端演示</span>
+                  <h3 className="flex items-center gap-2 text-sm font-medium text-white">
+                    <Code2 className="h-4 w-4 text-indigo-400" />
+                    通达信(TDX)公式编译器
+                  </h3>
+                  <span className="flex items-center gap-1.5 rounded border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-mono text-emerald-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    可编译回测
+                  </span>
                 </div>
-                <div className="min-h-[430px] bg-[#050505] p-6 font-mono text-sm leading-relaxed text-neutral-300">
-                  <span className="text-emerald-400">DIFF</span> := <span className="text-yellow-300">EMA</span>(CLOSE, 12) - <span className="text-yellow-300">EMA</span>(CLOSE, 26);<br /><br />
-                  <span className="text-emerald-400">DEA</span> := <span className="text-yellow-300">EMA</span>(DIFF, 9);<br /><br />
-                  <span className="text-emerald-400">MACD</span> := 2 * (DIFF - DEA);<br /><br />
-                  <span className="text-indigo-400">ENTERLONG</span>: <span className="text-sky-400">CROSS</span>(DIFF, DEA) <span className="text-rose-400">AND</span> MACD &gt; 0;<br /><br />
-                  <span className="text-indigo-400">EXITLONG</span>: <span className="text-sky-400">CROSS</span>(DEA, DIFF);
-                  <div className="mt-8 rounded-xl border border-neutral-500/20 bg-neutral-500/5 p-4 font-sans text-xs leading-relaxed text-neutral-400">
-                    后端 tdx_compile 能力未启用，此处仅作公式语法演示。可改用下方内置策略直接回测。
+                <div className="p-5">
+                  <textarea
+                    value={tdxFormula}
+                    onChange={(e) => setTdxFormula(e.target.value)}
+                    spellCheck={false}
+                    className="h-56 w-full resize-none rounded-xl border border-white/10 bg-[#050505] p-4 font-mono text-[13px] leading-relaxed text-emerald-200/90 outline-none focus:border-indigo-500/50"
+                  />
+                  <p className="mt-2 text-[10px] leading-relaxed text-neutral-600">
+                    支持 CLOSE/OPEN/HIGH/LOW/VOL · MA/EMA/SMA/REF/CROSS/HHV/LLV/SUM/COUNT/MAX/MIN/ABS/IF/STD ·
+                    赋值 := · 输出 : · ENTERLONG/EXITLONG(或 BUY/SELL)定义买卖。防未来函数,T+1 成交。
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={compileTdx}
+                      disabled={tdxCompiling}
+                      className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-neutral-200 hover:bg-white/[0.08] disabled:opacity-50"
+                    >
+                      {tdxCompiling ? <Activity className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      编译校验
+                    </button>
+                    <button
+                      onClick={runTdxBacktest}
+                      disabled={tdxRunning}
+                      className="flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                    >
+                      {tdxRunning ? <Activity className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+                      直接回测（{stripSymbolSuffix(selectedSymbol)}）
+                    </button>
+                    <button
+                      onClick={() => { setTdxFormula(DEFAULT_TDX_FORMULA); setTdxCompile(null); }}
+                      className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-neutral-500 hover:text-neutral-300"
+                    >
+                      恢复示例
+                    </button>
                   </div>
+
+                  {tdxCompile && (
+                    <div className={cn('mt-4 rounded-xl border p-4', tdxCompile.ok ? 'border-emerald-500/15 bg-emerald-500/[0.04]' : 'border-rose-500/20 bg-rose-500/[0.05]')}>
+                      <div className="mb-2 flex items-center gap-2 text-xs font-medium">
+                        {tdxCompile.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <ShieldAlert className="h-4 w-4 text-rose-400" />}
+                        <span className={tdxCompile.ok ? 'text-emerald-300' : 'text-rose-300'}>
+                          {tdxCompile.ok ? '编译通过' : '编译有错误'}
+                        </span>
+                      </div>
+                      {tdxCompile.ok && (
+                        <div className="space-y-1 text-[11px] font-mono text-neutral-400">
+                          <p>买入信号：<span className="text-indigo-300">{(tdxCompile.buy_signals || []).join('、') || '— 未定义'}</span></p>
+                          <p>卖出信号：<span className="text-rose-300">{(tdxCompile.sell_signals || []).join('、') || '— 未定义'}</span></p>
+                          <p>中间变量：<span className="text-neutral-300">{(tdxCompile.var_names || []).join('、') || '—'}</span></p>
+                          <p>数据引用：<span className="text-neutral-300">{(tdxCompile.refs_used || []).join('、') || '—'}</span></p>
+                        </div>
+                      )}
+                      {(tdxCompile.errors || []).map((e, i) => (
+                        <p key={i} className="text-[11px] leading-relaxed text-rose-300/90">• {e}</p>
+                      ))}
+                      {(tdxCompile.warnings || []).map((w, i) => (
+                        <p key={i} className="text-[11px] leading-relaxed text-amber-300/80">⚠ {w}</p>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
