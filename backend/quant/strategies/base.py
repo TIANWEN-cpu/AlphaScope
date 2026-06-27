@@ -153,7 +153,9 @@ class StrategyRegistry:
         cls._discovered = True
         # This module lives at ``backend.quant.strategies.base``; the package to
         # scan is ``backend.quant.strategies`` (one level up).
-        package_name = __name__.rsplit(".base", 1)[0] if __name__.endswith(".base") else __name__
+        package_name = (
+            __name__.rsplit(".base", 1)[0] if __name__.endswith(".base") else __name__
+        )
         try:
             package = importlib.import_module(package_name)
         except Exception:

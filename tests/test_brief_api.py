@@ -18,15 +18,19 @@ client = TestClient(app)
 
 def test_brief_aggregates(monkeypatch):
     monkeypatch.setattr(
-        ps, "get_prices",
+        ps,
+        "get_prices",
         lambda s, **k: [
             {"date": "2026-06-17", "close": 1600, "change_pct": 1.2},
             {"date": "2026-06-18", "close": 1620, "change_pct": 1.25},
         ],
     )
     monkeypatch.setattr(
-        ns, "list_news",
-        lambda symbol=None, limit=3: [{"title": "利好消息", "published_at": "2026-06-18", "url": "x"}],
+        ns,
+        "list_news",
+        lambda symbol=None, limit=3: [
+            {"title": "利好消息", "published_at": "2026-06-18", "url": "x"}
+        ],
     )
     resp = client.get("/api/brief?symbols=600519,000001")
     assert resp.status_code == 200

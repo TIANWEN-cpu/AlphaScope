@@ -192,6 +192,7 @@ if HAS_FASTAPI:
 
     # 启动时把已保存的数据源凭证注入环境变量, 使 provider 自动注册时可用
     from backend.datasource_config import init_credentials_on_startup
+
     init_credentials_on_startup()
 
     app.include_router(settings_router)

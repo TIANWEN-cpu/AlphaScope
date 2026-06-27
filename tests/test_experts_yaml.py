@@ -33,11 +33,20 @@ class TestExpertsYaml:
 
     def test_new_personas_present(self):
         keys = {e["key"] for e in (_load().get("experts") or [])}
-        for k in ["duan", "fengliu", "zhangkun", "dengxiaofeng", "dalio", "munger", "graham", "soros"]:
+        for k in [
+            "duan",
+            "fengliu",
+            "zhangkun",
+            "dengxiaofeng",
+            "dalio",
+            "munger",
+            "graham",
+            "soros",
+        ]:
             assert k in keys, f"缺少新增 persona: {k}"
 
     def test_focus_dims_are_lists(self):
-        for e in (_load().get("experts") or []):
+        for e in _load().get("experts") or []:
             fd = e.get("focus_dims")
             if fd is not None:
                 assert isinstance(fd, list)
@@ -61,7 +70,12 @@ class TestExpertPanelConsumes:
         import backend.expert_panel as ep
 
         loader = None
-        for name in ("load_expert_configs", "load_experts", "_load_experts", "load_team_configs"):
+        for name in (
+            "load_expert_configs",
+            "load_experts",
+            "_load_experts",
+            "load_team_configs",
+        ):
             if hasattr(ep, name):
                 loader = getattr(ep, name)
                 break

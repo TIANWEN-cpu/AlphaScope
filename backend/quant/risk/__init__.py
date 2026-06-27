@@ -80,7 +80,9 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def check_blacklist(stock_data: Dict[str, Any], cfg: Dict[str, Any]) -> Optional[RiskFinding]:
+def check_blacklist(
+    stock_data: Dict[str, Any], cfg: Dict[str, Any]
+) -> Optional[RiskFinding]:
     """ST / 退市 / 暂停上市 → critical 否决。"""
     if not cfg.get("enabled", True):
         return None
@@ -118,7 +120,9 @@ def check_position(
     return None
 
 
-def check_concentration(summary: Dict[str, Any], cfg: Dict[str, Any]) -> List[RiskFinding]:
+def check_concentration(
+    summary: Dict[str, Any], cfg: Dict[str, Any]
+) -> List[RiskFinding]:
     """总仓位/集中度超限 → warn。"""
     findings: List[RiskFinding] = []
     if not cfg.get("enabled", True):

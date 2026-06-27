@@ -19,7 +19,10 @@ from backend.providers.registry import ProviderRegistry, _discover_and_register
 class TestSeatDb:
     def test_match_seats_finds_youzi(self):
         rows = [
-            {"营业部名称": "国泰君安证券股份有限公司上海江苏路证券营业部", "买入金额": 1e8},
+            {
+                "营业部名称": "国泰君安证券股份有限公司上海江苏路证券营业部",
+                "买入金额": 1e8,
+            },
             {"营业部名称": "某不知名营业部", "买入金额": 1e6},
         ]
         matched = match_seats_in_lhb(rows)
@@ -33,7 +36,11 @@ class TestSeatDb:
     def test_split_inst_vs_youzi(self):
         rows = [
             {"营业部名称": "机构专用", "买入金额": 5e7, "卖出金额": 1e7},
-            {"营业部名称": "华鑫证券有限责任公司上海红宝石路证券营业部", "买入金额": 2e7, "卖出金额": 8e6},
+            {
+                "营业部名称": "华鑫证券有限责任公司上海红宝石路证券营业部",
+                "买入金额": 2e7,
+                "卖出金额": 8e6,
+            },
         ]
         split = split_inst_vs_youzi(rows)
         assert split["institutional_net"] == 5e7 - 1e7
@@ -48,14 +55,29 @@ class TestSeatDb:
     def test_is_in_range_mcap_bounds(self):
         feats_ok = {"market_cap": 30_000_000_000, "trend": "up", "style_match": "trend"}
         assert is_in_range("章盟主", feats_ok) is True
-        feats_small = {"market_cap": 10_000_000_000, "trend": "up", "style_match": "trend"}
+        feats_small = {
+            "market_cap": 10_000_000_000,
+            "trend": "up",
+            "style_match": "trend",
+        }
         assert is_in_range("章盟主", feats_small) is False  # 低于 min_mcap 200亿
 
     def test_is_in_range_implicit_megacap_cap(self):
         # 孙哥无显式 max_mcap → 隐式 500 亿上限
-        assert is_in_range("孙哥", {"market_cap": 60_000_000_000, "is_sector_leader": True}) is False
+        assert (
+            is_in_range(
+                "孙哥", {"market_cap": 60_000_000_000, "is_sector_leader": True}
+            )
+            is False
+        )
         # 章盟主在 allowlist，可做大盘
-        assert is_in_range("章盟主", {"market_cap": 900_000_000_000, "trend": "up", "style_match": "trend"}) is True
+        assert (
+            is_in_range(
+                "章盟主",
+                {"market_cap": 900_000_000_000, "trend": "up", "style_match": "trend"},
+            )
+            is True
+        )
 
 
 class TestTrapSignals:
@@ -71,7 +93,13 @@ class TestTrapSignals:
 
     def test_scan_clean_when_no_promo(self):
         def fake_search(query: str, max_results: int = 3):
-            return [{"title": "正常财经新闻", "body": "公司发布季度财报，营收稳健。", "url": ""}]
+            return [
+                {
+                    "title": "正常财经新闻",
+                    "body": "公司发布季度财报，营收稳健。",
+                    "url": "",
+                }
+            ]
 
         out = trap.scan_trap_signals("测试股份", search_fn=fake_search)
         assert out["signals_hit_count"] == 0
@@ -101,10 +129,16 @@ class TestProvider:
 
     def test_get_dragon_tiger_summary(self, monkeypatch):
         fake_records = [
-            {"营业部名称": "国泰君安证券股份有限公司上海江苏路证券营业部", "买入金额": 1e8, "卖出金额": 2e7},
+            {
+                "营业部名称": "国泰君安证券股份有限公司上海江苏路证券营业部",
+                "买入金额": 1e8,
+                "卖出金额": 2e7,
+            },
             {"营业部名称": "机构专用", "买入金额": 3e7, "卖出金额": 5e7},
         ]
-        monkeypatch.setattr(lhb_mod, "fetch_lhb_recent", lambda code, days=30: fake_records)
+        monkeypatch.setattr(
+            lhb_mod, "fetch_lhb_recent", lambda code, days=30: fake_records
+        )
         monkeypatch.setattr(lhb_mod, "fetch_sector_lhb", lambda top=30: [])
 
         out = DragonTigerProvider().get_dragon_tiger({"symbol": "600519"})

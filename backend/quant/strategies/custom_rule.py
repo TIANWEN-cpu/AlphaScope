@@ -125,7 +125,9 @@ def compute_fields(bars: List[dict]) -> Dict[str, List[float]]:
     f: Dict[str, List[float]] = {
         "close": closes,
         "pct_change": [
-            _NAN if i == 0 or closes[i - 1] == 0 else (closes[i] / closes[i - 1] - 1) * 100
+            _NAN
+            if i == 0 or closes[i - 1] == 0
+            else (closes[i] / closes[i - 1] - 1) * 100
             for i in range(n)
         ],
         "rsi": _rsi_series(closes, 14),
@@ -143,7 +145,9 @@ def compute_fields(bars: List[dict]) -> Dict[str, List[float]]:
         "close_vs_ma60_pct": [_safe_div_pct(closes[i], ma60[i]) for i in range(n)],
         "ma5_vs_ma20_pct": [_safe_div_pct(ma5[i], ma20[i]) for i in range(n)],
         "ma10_vs_ma20_pct": [_safe_div_pct(ma10[i], ma20[i]) for i in range(n)],
-        "drawdown_from_high_pct": [_safe_div_pct(closes[i], run_max[i]) for i in range(n)],
+        "drawdown_from_high_pct": [
+            _safe_div_pct(closes[i], run_max[i]) for i in range(n)
+        ],
     }
     return f
 

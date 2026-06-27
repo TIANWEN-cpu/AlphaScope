@@ -23,7 +23,9 @@ router = APIRouter(prefix="/api/datasources", tags=["datasources"])
 
 class ProviderConfigUpdate(BaseModel):
     provider: str = Field(..., description="数据源名称, 如 tushare")
-    data_type: str = Field(..., description="数据类型, 如 prices / fundamentals / reports")
+    data_type: str = Field(
+        ..., description="数据类型, 如 prices / fundamentals / reports"
+    )
     enabled: bool | None = None
     priority: int | None = Field(default=None, ge=0, le=100)
 
@@ -56,7 +58,9 @@ def put_config(req: ProviderConfigUpdate) -> ApiResponse:
             enabled=req.enabled,
             priority=req.priority,
         )
-        return ApiResponse(success=True, data=result, message="数据源配置已保存并热生效。")
+        return ApiResponse(
+            success=True, data=result, message="数据源配置已保存并热生效。"
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -73,7 +77,9 @@ def save_credential(req: CredentialSave) -> ApiResponse:
     """保存数据源 API Key (加密落盘 + 注入环境变量 + 热重载)。"""
     try:
         result = dsc.save_credential(req.name, req.api_key, req.token_env)
-        return ApiResponse(success=True, data=result, message="API Key 已加密保存并立即生效。")
+        return ApiResponse(
+            success=True, data=result, message="API Key 已加密保存并立即生效。"
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -91,6 +97,7 @@ def delete_credential(name: str) -> ApiResponse:
 def test_credential(name: str) -> ApiResponse:
     """测试某数据源连通性 (检查 registry 中该 provider 是否已注册并 healthy)。"""
     from backend.providers.registry import get_registry
+
     registry = get_registry()
     target = registry.get_provider(name)
     if target is None:
@@ -101,7 +108,9 @@ def test_credential(name: str) -> ApiResponse:
         )
     # provider.health 是 ProviderHealth 对象 (注意不是 health_check() 那个返回 dict 的方法)
     health = target.health
-    status = health.status.value if hasattr(health.status, "value") else str(health.status)
+    status = (
+        health.status.value if hasattr(health.status, "value") else str(health.status)
+    )
     return ApiResponse(
         success=True,
         data={

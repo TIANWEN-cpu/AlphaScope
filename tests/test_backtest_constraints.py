@@ -18,8 +18,6 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
-
 
 # ----------------------------------------------------------------
 # Shared fixtures
@@ -29,11 +27,46 @@ import pytest
 def _trailing_bars() -> list[dict]:
     """Monotonically rising bars with explicit opens for next-bar execution."""
     return [
-        {"date": "2025-01-01", "open": 10.0, "high": 10.5, "low": 9.8, "close": 10.0, "volume": 1000},
-        {"date": "2025-01-02", "open": 10.1, "high": 10.6, "low": 10.0, "close": 10.2, "volume": 1000},
-        {"date": "2025-01-03", "open": 10.3, "high": 10.7, "low": 10.2, "close": 10.4, "volume": 1000},
-        {"date": "2025-01-04", "open": 10.5, "high": 10.9, "low": 10.4, "close": 10.6, "volume": 1000},
-        {"date": "2025-01-05", "open": 10.7, "high": 11.1, "low": 10.6, "close": 10.8, "volume": 1000},
+        {
+            "date": "2025-01-01",
+            "open": 10.0,
+            "high": 10.5,
+            "low": 9.8,
+            "close": 10.0,
+            "volume": 1000,
+        },
+        {
+            "date": "2025-01-02",
+            "open": 10.1,
+            "high": 10.6,
+            "low": 10.0,
+            "close": 10.2,
+            "volume": 1000,
+        },
+        {
+            "date": "2025-01-03",
+            "open": 10.3,
+            "high": 10.7,
+            "low": 10.2,
+            "close": 10.4,
+            "volume": 1000,
+        },
+        {
+            "date": "2025-01-04",
+            "open": 10.5,
+            "high": 10.9,
+            "low": 10.4,
+            "close": 10.6,
+            "volume": 1000,
+        },
+        {
+            "date": "2025-01-05",
+            "open": 10.7,
+            "high": 11.1,
+            "low": 10.6,
+            "close": 10.8,
+            "volume": 1000,
+        },
     ]
 
 
@@ -306,14 +339,22 @@ class TestEngineFrictions:
         from backend.quant.engine import BacktestEngine
 
         bars = _trailing_bars()
-        common = dict(initial_capital=100000, enable_t_plus_1=False,
-                      enable_price_limit=False, execution_price="open")
+        common = dict(
+            initial_capital=100000,
+            enable_t_plus_1=False,
+            enable_price_limit=False,
+            execution_price="open",
+        )
         zero = BacktestEngine(
-            cost_model=TradingCostModel(slippage_rate=0.0, commission_rate=0.0, stamp_duty_rate=0.0),
+            cost_model=TradingCostModel(
+                slippage_rate=0.0, commission_rate=0.0, stamp_duty_rate=0.0
+            ),
             **common,
         ).run(_RoundTrip(), bars, "TEST")
         costly = BacktestEngine(
-            cost_model=TradingCostModel(slippage_rate=0.002, commission_rate=0.0003, stamp_duty_rate=0.0005),
+            cost_model=TradingCostModel(
+                slippage_rate=0.002, commission_rate=0.0003, stamp_duty_rate=0.0005
+            ),
             **common,
         ).run(_RoundTrip(), bars, "TEST")
 
@@ -329,8 +370,14 @@ class TestEngineFrictions:
 
         engine = BacktestEngine(initial_capital=100000)
         bars = [
-            {"date": f"2025-01-{i+1:02d}", "open": 10.0 + i, "high": 10.5 + i,
-             "low": 9.8 + i, "close": 10.0 + i, "volume": 1000}
+            {
+                "date": f"2025-01-{i + 1:02d}",
+                "open": 10.0 + i,
+                "high": 10.5 + i,
+                "low": 9.8 + i,
+                "close": 10.0 + i,
+                "volume": 1000,
+            }
             for i in range(30)
         ]
         result = engine.run(MAStrategy(), bars, "TEST")
@@ -357,8 +404,14 @@ class TestBackwardCompat:
 
         engine = BacktestEngine(initial_capital=100000, commission_rate=0.001)
         bars = [
-            {"date": f"2025-01-{i+1:02d}", "open": 10.0, "high": 10.5, "low": 9.8,
-             "close": 10.0 + (i % 5) * 0.2, "volume": 1000}
+            {
+                "date": f"2025-01-{i + 1:02d}",
+                "open": 10.0,
+                "high": 10.5,
+                "low": 9.8,
+                "close": 10.0 + (i % 5) * 0.2,
+                "volume": 1000,
+            }
             for i in range(60)
         ]
         result = engine.run(MACDMomentumStrategy(), bars, "TEST")
@@ -375,6 +428,11 @@ class TestBackwardCompat:
         # new call with explicit commission + stamp duty
         p2 = Portfolio(initial_capital=100000)
         assert p2.execute_buy("600519", 100, 10.0, "2025-01-01", commission=5.0) is True
-        assert p2.execute_sell("600519", 100, 11.0, "2025-01-02", commission=5.0, stamp_duty=0.55) is True
+        assert (
+            p2.execute_sell(
+                "600519", 100, 11.0, "2025-01-02", commission=5.0, stamp_duty=0.55
+            )
+            is True
+        )
         sell_trade = [t for t in p2.trades if t.side == "sell"][0]
         assert abs(sell_trade.pnl - ((11.0 - 10.0) * 100 - 5.0 - 0.55)) < 1e-9

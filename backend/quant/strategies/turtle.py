@@ -19,7 +19,7 @@ class TurtleBreakoutStrategy(BaseStrategy):
     description = "海龟突破策略: 突破N日新高买入，跌破M日新低卖出(唐奇安通道)"
     default_params = {
         "entry_period": 20,  # breakout above 20-day high
-        "exit_period": 10,   # exit below 10-day low
+        "exit_period": 10,  # exit below 10-day low
         "position_size_pct": 20,
     }
 
@@ -36,7 +36,9 @@ class TurtleBreakoutStrategy(BaseStrategy):
         closes = self._closes(bars)
         signals: list[Signal] = []
         for i in range(entry, len(bars)):
-            prev_high = max(highs[i - entry : i])  # exclude today's high (no look-ahead)
+            prev_high = max(
+                highs[i - entry : i]
+            )  # exclude today's high (no look-ahead)
             prev_low = min(lows[i - exit_p : i])
             symbol = bars[i].get("symbol", "")
             close = closes[i]

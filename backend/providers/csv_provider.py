@@ -34,19 +34,39 @@ logger = logging.getLogger(__name__)
 # 规范字段 → 可识别的表头别名(小写匹配英文, 原样匹配中文)
 _COLUMN_ALIASES: Dict[str, List[str]] = {
     "date": [
-        "date", "datetime", "time", "trade_date", "tradedate",
-        "日期", "时间", "交易日期", "交易日",
+        "date",
+        "datetime",
+        "time",
+        "trade_date",
+        "tradedate",
+        "日期",
+        "时间",
+        "交易日期",
+        "交易日",
     ],
     "open": ["open", "o", "open_price", "openprice", "开盘", "开盘价", "今开"],
     "high": ["high", "h", "high_price", "highprice", "最高", "最高价"],
     "low": ["low", "l", "low_price", "lowprice", "最低", "最低价"],
     "close": [
-        "close", "c", "close_price", "closeprice", "adj_close", "adjclose",
-        "收盘", "收盘价", "今收", "最新价",
+        "close",
+        "c",
+        "close_price",
+        "closeprice",
+        "adj_close",
+        "adjclose",
+        "收盘",
+        "收盘价",
+        "今收",
+        "最新价",
     ],
     "volume": ["volume", "vol", "v", "turnover_volume", "成交量", "总手"],
     "amount": [
-        "amount", "turnover", "turnover_amount", "成交额", "成交金额", "成交额(元)",
+        "amount",
+        "turnover",
+        "turnover_amount",
+        "成交额",
+        "成交金额",
+        "成交额(元)",
     ],
     "symbol": ["symbol", "code", "ticker", "代码", "股票代码", "证券代码"],
 }
@@ -117,7 +137,9 @@ def parse_rows(
 
     bars: List[Dict[str, Any]] = []
     for row in rows:
-        date_val = str(row.get(schema["date"], "")).strip()[:10] if schema["date"] else ""
+        date_val = (
+            str(row.get(schema["date"], "")).strip()[:10] if schema["date"] else ""
+        )
         if not date_val:
             continue
         close = _to_float(row.get(schema["close"])) if schema["close"] else 0.0

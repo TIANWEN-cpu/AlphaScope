@@ -14,9 +14,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
-import pytest
-
-
 class TestBuildDemoReport:
     def _stock_data(self) -> dict:
         return {
@@ -40,7 +37,14 @@ class TestBuildDemoReport:
 
         result = build_demo_report(self._stock_data())
         # Must match orchestrator.run_agents_with_mode top-level keys.
-        for key in ("agents", "summary", "brief", "research_report", "model_status", "demo_sample"):
+        for key in (
+            "agents",
+            "summary",
+            "brief",
+            "research_report",
+            "model_status",
+            "demo_sample",
+        ):
             assert key in result
 
     def test_is_marked_as_demo(self):
@@ -103,7 +107,12 @@ class TestHasConfiguredProvider:
 
         # Temporarily clear real keys and set a placeholder to simulate first launch.
         saved = {}
-        keys = ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "DASHSCOPE_API_KEY", "MOONSHOT_API_KEY")
+        keys = (
+            "DEEPSEEK_API_KEY",
+            "OPENAI_API_KEY",
+            "DASHSCOPE_API_KEY",
+            "MOONSHOT_API_KEY",
+        )
         for k in keys:
             saved[k] = os.environ.pop(k, None)
         try:

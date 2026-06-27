@@ -16,7 +16,9 @@ class TdxStrategy(BaseStrategy):
     """通达信公式策略: ENTERLONG/EXITLONG(或 BUY/SELL)条件编译回测。"""
 
     name = "tdx"
-    description = "通达信(TDX)公式: 编译 ENTERLONG/EXITLONG 条件为买卖信号(需传 formula 参数)"
+    description = (
+        "通达信(TDX)公式: 编译 ENTERLONG/EXITLONG 条件为买卖信号(需传 formula 参数)"
+    )
     default_params: dict[str, Any] = {
         "formula": "",
         "position_size_pct": 20,

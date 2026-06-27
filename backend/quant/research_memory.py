@@ -141,8 +141,14 @@ def build_snapshot(
 
     summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
     debate = result.get("debate") if isinstance(result.get("debate"), dict) else {}
-    risk_gate = result.get("risk_gate") if isinstance(result.get("risk_gate"), dict) else {}
-    dv = result.get("data_verification") if isinstance(result.get("data_verification"), dict) else {}
+    risk_gate = (
+        result.get("risk_gate") if isinstance(result.get("risk_gate"), dict) else {}
+    )
+    dv = (
+        result.get("data_verification")
+        if isinstance(result.get("data_verification"), dict)
+        else {}
+    )
 
     signal = _norm_signal(summary.get("final"))
     sid = f"{symbol}-{now.strftime('%Y%m%d%H%M%S%f')}"
@@ -200,7 +206,11 @@ def compute_changes(snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "direction": _change_direction(prev["sig"], sig),
                 }
             )
-        prev = {"sig": sig, "date": str(s.get("created_at") or ""), "conf": s.get("confidence")}
+        prev = {
+            "sig": sig,
+            "date": str(s.get("created_at") or ""),
+            "conf": s.get("confidence"),
+        }
     return out
 
 
@@ -315,10 +325,14 @@ def list_symbols(limit: int = 100) -> list[dict[str, Any]]:
     """列举有研究记忆的股票(按最近一次分析倒序),每只带次数/最新信号/置信度。失败返回 []。"""
     try:
         _ensure_table()
-        rows = _db().conn.execute(
-            f"SELECT symbol, name, created_at, signal, confidence "
-            f"FROM {_TABLE} ORDER BY created_at DESC"
-        ).fetchall()
+        rows = (
+            _db()
+            .conn.execute(
+                f"SELECT symbol, name, created_at, signal, confidence "
+                f"FROM {_TABLE} ORDER BY created_at DESC"
+            )
+            .fetchall()
+        )
         agg: dict[str, dict[str, Any]] = {}
         for r in rows:
             sym = r["symbol"]
@@ -342,10 +356,14 @@ def get_history(symbol: str, limit: int = 200) -> list[dict[str, Any]]:
     """取某股票的快照(**时间倒序**,新在前),供表格展示。失败返回 []。"""
     try:
         _ensure_table()
-        rows = _db().conn.execute(
-            f"SELECT * FROM {_TABLE} WHERE symbol = ? ORDER BY created_at DESC LIMIT ?",
-            (symbol, max(1, min(500, int(limit) if limit else 200))),
-        ).fetchall()
+        rows = (
+            _db()
+            .conn.execute(
+                f"SELECT * FROM {_TABLE} WHERE symbol = ? ORDER BY created_at DESC LIMIT ?",
+                (symbol, max(1, min(500, int(limit) if limit else 200))),
+            )
+            .fetchall()
+        )
         return [_row_to_snapshot(r) for r in rows]
     except Exception:
         return []
@@ -364,7 +382,13 @@ def get_timeline(symbol: str, limit: int = 200) -> dict[str, Any]:
             "summary": summarize_history(snaps_asc),
         }
     except Exception:
-        return {"symbol": symbol, "name": "", "snapshots": [], "changes": [], "summary": summarize_history([])}
+        return {
+            "symbol": symbol,
+            "name": "",
+            "snapshots": [],
+            "changes": [],
+            "summary": summarize_history([]),
+        }
 
 
 def delete_snapshot(snapshot_id: str) -> bool:
@@ -373,7 +397,9 @@ def delete_snapshot(snapshot_id: str) -> bool:
         _ensure_table()
         with _write_lock:
             conn = _db().conn
-            cur = conn.execute(f"DELETE FROM {_TABLE} WHERE snapshot_id = ?", (snapshot_id,))
+            cur = conn.execute(
+                f"DELETE FROM {_TABLE} WHERE snapshot_id = ?", (snapshot_id,)
+            )
             conn.commit()
             return cur.rowcount > 0
     except Exception:

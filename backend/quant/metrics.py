@@ -110,9 +110,7 @@ def calc_calmar(total_return: float, max_drawdown: float, days: int) -> float:
 # ---------------------------------------------------------------------------
 
 
-def calc_beta(
-    strategy_returns: list[float], benchmark_returns: list[float]
-) -> float:
+def calc_beta(strategy_returns: list[float], benchmark_returns: list[float]) -> float:
     """Beta: 策略收益对基准收益的回归斜率。
 
     beta = Cov(R_p, R_b) / Var(R_b)

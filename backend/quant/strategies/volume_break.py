@@ -46,12 +46,14 @@ class VolumeBreakStrategy(BaseStrategy):
                         "buy",
                         symbol,
                         shares=shares,
-                        reason=f"放量上涨 (量比 {vol/avg_vol:.2f}×)",
+                        reason=f"放量上涨 (量比 {vol / avg_vol:.2f}×)",
                     )
                 )
             elif avg_vol > 0 and vol < avg_vol * 0.7 and price_down:
                 signals.append(
-                    Signal("sell", symbol, reason=f"缩量下跌 (量比 {vol/avg_vol:.2f}×)")
+                    Signal(
+                        "sell", symbol, reason=f"缩量下跌 (量比 {vol / avg_vol:.2f}×)"
+                    )
                 )
             else:
                 signals.append(Signal("hold", symbol, reason="量价未触发"))

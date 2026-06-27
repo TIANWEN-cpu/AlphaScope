@@ -22,6 +22,7 @@ def _pyproject_version() -> str:
     with pyproject.open("rb") as f:
         return tomllib.load(f)["project"]["version"]
 
+
 PNG_BYTES = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
     b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"

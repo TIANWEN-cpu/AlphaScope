@@ -15,8 +15,8 @@ def _d(i: int) -> str:
     return (datetime(2024, 1, 1) + timedelta(days=i)).strftime("%Y-%m-%d")
 
 
-def _bar(i, o, h, l, c):
-    return {"date": _d(i), "open": o, "high": h, "low": l, "close": c, "volume": 10000}
+def _bar(i, o, h, lo, c):
+    return {"date": _d(i), "open": o, "high": h, "low": lo, "close": c, "volume": 10000}
 
 
 def _flat(i, c):
@@ -45,9 +45,10 @@ class TestInsufficientAndFailSafe:
 class TestCandlestick:
     def test_bullish_engulfing(self):
         bars = [
-            _flat(0, 11), _flat(1, 10.5),
-            _bar(2, 10.0, 10.2, 8.8, 9.0),    # 阴线
-            _bar(3, 8.9, 10.3, 8.8, 10.1),    # 阳线吞没
+            _flat(0, 11),
+            _flat(1, 10.5),
+            _bar(2, 10.0, 10.2, 8.8, 9.0),  # 阴线
+            _bar(3, 8.9, 10.3, 8.8, 10.1),  # 阳线吞没
         ]
         # 补足到 >=5 根
         bars = [_flat(-2 + 0, 11.5), _flat(-1 + 1, 11.2)] + bars
@@ -56,9 +57,11 @@ class TestCandlestick:
 
     def test_bearish_engulfing(self):
         bars = [
-            _flat(0, 8.5), _flat(1, 9.0), _flat(2, 9.5),
-            _bar(3, 10.0, 11.2, 9.8, 11.0),   # 阳线
-            _bar(4, 11.1, 11.2, 9.7, 9.9),    # 阴线吞没
+            _flat(0, 8.5),
+            _flat(1, 9.0),
+            _flat(2, 9.5),
+            _bar(3, 10.0, 11.2, 9.8, 11.0),  # 阳线
+            _bar(4, 11.1, 11.2, 9.7, 9.9),  # 阴线吞没
         ]
         r = detect_patterns(bars, "T")
         assert "看跌吞没" in _names(r)
@@ -70,7 +73,7 @@ class TestCandlestick:
             _bar(2, 19.0, 19.1, 17.9, 18.0),
             _bar(3, 18.0, 18.1, 16.9, 17.0),
             _bar(4, 17.0, 17.1, 15.9, 16.0),
-            _bar(5, 16.0, 16.3, 15.0, 16.2),   # 长下影小实体锤子
+            _bar(5, 16.0, 16.3, 15.0, 16.2),  # 长下影小实体锤子
         ]
         assert "锤子线" in _names(detect_patterns(bars, "T"))
 
@@ -80,7 +83,8 @@ class TestCandlestick:
 
     def test_three_white_soldiers(self):
         bars = [
-            _flat(0, 10), _flat(1, 10),
+            _flat(0, 10),
+            _flat(1, 10),
             _bar(2, 10.0, 10.6, 9.95, 10.5),
             _bar(3, 10.5, 11.1, 10.45, 11.0),
             _bar(4, 11.0, 11.6, 10.95, 11.5),
@@ -89,7 +93,8 @@ class TestCandlestick:
 
     def test_three_black_crows(self):
         bars = [
-            _flat(0, 12), _flat(1, 12),
+            _flat(0, 12),
+            _flat(1, 12),
             _bar(2, 11.5, 11.55, 10.9, 11.0),
             _bar(3, 11.0, 11.05, 10.4, 10.5),
             _bar(4, 10.5, 10.55, 9.9, 10.0),
@@ -122,13 +127,22 @@ class TestStructure:
 class TestReportShape:
     def test_to_dict_and_counts(self):
         bars = [
-            _flat(0, 10), _flat(1, 10),
+            _flat(0, 10),
+            _flat(1, 10),
             _bar(2, 10.0, 10.6, 9.95, 10.5),
             _bar(3, 10.5, 11.1, 10.45, 11.0),
             _bar(4, 11.0, 11.6, 10.95, 11.5),
         ]
         d = detect_patterns(bars, "600519").to_dict()
-        for key in ("status", "symbol", "bars_used", "patterns", "counts", "note", "disclaimer"):
+        for key in (
+            "status",
+            "symbol",
+            "bars_used",
+            "patterns",
+            "counts",
+            "note",
+            "disclaimer",
+        ):
             assert key in d
         assert d["symbol"] == "600519"
         assert d["counts"]["total"] == len(d["patterns"])

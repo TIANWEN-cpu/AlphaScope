@@ -24,7 +24,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install --prefer-binary -r requirements-dev.txt
+        pip install --prefer-binary -r requirements-dev.txt -r requirements-api.txt
 
     - name: Lint with ruff
       run: |
@@ -36,7 +36,7 @@ jobs:
         DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
       run: |
-        python -m pytest tests/ -v --tb=short
+        python -m pytest tests/ -v --tb=short -m "not network" --ignore=tests/probes
 
   web-build:
     runs-on: ubuntu-latest

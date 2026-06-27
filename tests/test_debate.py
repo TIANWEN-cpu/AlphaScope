@@ -107,7 +107,9 @@ class TestFailSafe:
         assert r.n_bull == 0 and r.n_bear == 0
 
     def test_non_numeric_confidence_safe(self):
-        agents = {"a": {"signal": "买入", "confidence": "high", "reason": "x", "name": "A"}}
+        agents = {
+            "a": {"signal": "买入", "confidence": "high", "reason": "x", "name": "A"}
+        }
         r = synthesize_debate(agents)  # 不抛
         assert r.status == OK
         assert r.n_bull == 1
@@ -118,16 +120,29 @@ class TestRulingAndShape:
         agents = {"fund": _agent("买入", 80), "tech": _agent("卖出", 60)}
         d = synthesize_debate(agents).to_dict()
         for key in (
-            "status", "consensus", "consensus_score", "divergence_level",
-            "bull_strength", "bear_strength", "n_bull", "n_bear", "n_neutral",
-            "bull_points", "bear_points", "ruling", "disclaimer",
+            "status",
+            "consensus",
+            "consensus_score",
+            "divergence_level",
+            "bull_strength",
+            "bear_strength",
+            "n_bull",
+            "n_bear",
+            "n_neutral",
+            "bull_points",
+            "bear_points",
+            "ruling",
+            "disclaimer",
         ):
             assert key in d
         assert d["disclaimer"]
         assert isinstance(d["bull_points"], list)
 
     def test_format_section_contains_ruling_and_disclaimer(self):
-        agents = {"fund": _agent("买入", 80, "基本面"), "tech": _agent("卖出", 70, "技术面")}
+        agents = {
+            "fund": _agent("买入", 80, "基本面"),
+            "tech": _agent("卖出", 70, "技术面"),
+        }
         r = synthesize_debate(agents)
         section = format_debate_section(r)
         assert "多空辩论与裁决" in section

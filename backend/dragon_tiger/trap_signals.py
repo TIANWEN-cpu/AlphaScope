@@ -20,42 +20,50 @@ logger = logging.getLogger(__name__)
 # 每个信号: id / name / queries(查询模板，{name} 占位) / positive_kws(命中关键词)
 SIGNALS: list[dict] = [
     {
-        "id": 1, "name": "大量低质量账号同时推荐",
+        "id": 1,
+        "name": "大量低质量账号同时推荐",
         "queries": ["{name} 强烈推荐 必涨", "{name} 内部消息 暴涨"],
         "positive_kws": ["必涨", "强烈推荐", "内部", "稳赚"],
     },
     {
-        "id": 2, "name": "推荐话术模板化",
+        "id": 2,
+        "name": "推荐话术模板化",
         "queries": ["{name} 主力建仓完毕 即将爆发", "{name} 翻倍 目标价"],
         "positive_kws": ["即将爆发", "主力建仓完毕", "翻倍", "目标翻倍"],
     },
     {
-        "id": 3, "name": "付费社群/VIP直播间引流",
+        "id": 3,
+        "name": "付费社群/VIP直播间引流",
         "queries": ["{name} 股票 微信群", "{name} 老师 带单 VIP 直播间"],
         "positive_kws": ["微信群", "VIP 直播", "老师带", "收费群", "加入群聊"],
     },
     {
-        "id": 4, "name": "基本面与热度脱节",
+        "id": 4,
+        "name": "基本面与热度脱节",
         "queries": ["{name} 业绩亏损 推荐 暴涨", "{name} ST 推荐 拉升"],
         "positive_kws": ["亏损但推荐", "ST", "垃圾股 推荐"],
     },
     {
-        "id": 5, "name": "K线异常配合",
+        "id": 5,
+        "name": "K线异常配合",
         "queries": ["{name} 异动 操纵 拉升"],
         "positive_kws": ["异动", "操纵", "快速拉升", "直线拉升"],
     },
     {
-        "id": 6, "name": "老师/股神人设推广",
+        "id": 6,
+        "name": "老师/股神人设推广",
         "queries": ["{name} 老师 股神 跟单", "{name} 实盘 老师"],
         "positive_kws": ["老师", "股神", "跟单", "操盘手"],
     },
     {
-        "id": 7, "name": "跨平台联动推广",
+        "id": 7,
+        "name": "跨平台联动推广",
         "queries": ["小红书 {name} 股票 推荐", "抖音 {name} 股票"],
         "positive_kws": ["小红书", "抖音", "快手", "B站 推荐"],
     },
     {
-        "id": 8, "name": "虚假研报/伪造消息",
+        "id": 8,
+        "name": "虚假研报/伪造消息",
         "queries": ["{name} 虚假研报 谣言", "{name} 辟谣 澄清"],
         "positive_kws": ["虚假", "谣言", "澄清", "辟谣", "伪造"],
     },
@@ -79,7 +87,9 @@ def _default_search_fn() -> Optional[SearchFn]:
                 out.append(
                     {
                         "title": r.get("title", ""),
-                        "body": r.get("summary") or r.get("body") or r.get("content", ""),
+                        "body": r.get("summary")
+                        or r.get("body")
+                        or r.get("content", ""),
                         "url": r.get("url", ""),
                     }
                 )
@@ -159,7 +169,11 @@ def scan_trap_signals(
     elif n <= 5:
         level, score, rec = "🟠 警惕", 4, f"发现 {n} 个推广信号，强烈建议谨慎。"
     else:
-        level, score, rec = "🔴 高度可疑", 1, f"发现 {n} 个推广信号，疑似杀猪盘特征，强烈建议回避。"
+        level, score, rec = (
+            "🔴 高度可疑",
+            1,
+            f"发现 {n} 个推广信号，疑似杀猪盘特征，强烈建议回避。",
+        )
 
     return {
         "trap_level": level,
@@ -168,6 +182,8 @@ def scan_trap_signals(
         "signals_hit_count": n,
         "signals_hit_detail": hit_signals,
         "recommendation": rec,
-        "high_risk_kw": ", ".join(s["name"] for s in hit_signals[:3]) if hit_signals else "未发现",
+        "high_risk_kw": ", ".join(s["name"] for s in hit_signals[:3])
+        if hit_signals
+        else "未发现",
         "snippets": snippets,
     }

@@ -7,6 +7,7 @@
 """
 
 import json
+import logging
 import re
 import tempfile
 from datetime import datetime
@@ -16,6 +17,8 @@ try:
     from backend.project_paths import REPORTS_DIR
 except ImportError:
     from project_paths import REPORTS_DIR
+
+logger = logging.getLogger(__name__)
 
 ARCHIVE_ROOT = REPORTS_DIR / "archive"
 INDEX_FILE = ARCHIVE_ROOT / "index.json"
@@ -68,7 +71,7 @@ def _load_index() -> list:
             INDEX_FILE.replace(backup)
         except Exception:
             pass
-        print(f"[Archive] 索引读取失败,已保留损坏文件: {e}")
+        logger.warning("[Archive] 索引读取失败,已保留损坏文件: %s", e)
         return []
 
 

@@ -17,7 +17,7 @@ duckdb 未安装时优雅降级(status.available=False);写入仅在显式「入
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -84,10 +84,16 @@ def datalake_ingest(body: IngestBody):
     from backend.quant import datalake
 
     result = datalake.ingest_from_provider(
-        body.symbols, start_date=body.start_date, end_date=body.end_date, limit=body.limit
+        body.symbols,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        limit=body.limit,
     )
-    return ApiResponse(success=bool(result.get("ok")), data=result,
-                       error=result.get("reason") if not result.get("ok") else None)
+    return ApiResponse(
+        success=bool(result.get("ok")),
+        data=result,
+        error=result.get("reason") if not result.get("ok") else None,
+    )
 
 
 @router.post("/screen", response_model=ApiResponse[dict])
@@ -96,9 +102,14 @@ def datalake_screen(body: ScreenBody):
     from backend.quant import datalake
 
     filters = [f.model_dump() for f in body.filters]
-    result = datalake.screen(filters, order_by=body.order_by, descending=body.descending, limit=body.limit)
-    return ApiResponse(success=bool(result.get("ok")), data=result,
-                       error=result.get("reason") if not result.get("ok") else None)
+    result = datalake.screen(
+        filters, order_by=body.order_by, descending=body.descending, limit=body.limit
+    )
+    return ApiResponse(
+        success=bool(result.get("ok")),
+        data=result,
+        error=result.get("reason") if not result.get("ok") else None,
+    )
 
 
 @router.post("/query", response_model=ApiResponse[dict])
@@ -107,8 +118,11 @@ def datalake_query(body: QueryBody):
     from backend.quant import datalake
 
     result = datalake.query(body.sql, limit=body.limit)
-    return ApiResponse(success=bool(result.get("ok")), data=result,
-                       error=result.get("reason") if not result.get("ok") else None)
+    return ApiResponse(
+        success=bool(result.get("ok")),
+        data=result,
+        error=result.get("reason") if not result.get("ok") else None,
+    )
 
 
 @router.delete("/symbol/{symbol}", response_model=ApiResponse[dict])

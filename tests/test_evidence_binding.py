@@ -18,10 +18,24 @@ from backend.runtime import orchestrator
 def _pool():
     """模拟 RAG 检索返回的结构化证据池(编号 → evidence_id)。"""
     return [
-        {"number": 1, "evidence_id": "ev-news-1", "doc_type": "news",
-         "source": "财联社", "source_url": "https://cls/1", "published_at": "", "preview": "利好消息"},
-        {"number": 2, "evidence_id": "ev-report-2", "doc_type": "report",
-         "source": "东财研报", "source_url": "", "published_at": "", "preview": "买入评级"},
+        {
+            "number": 1,
+            "evidence_id": "ev-news-1",
+            "doc_type": "news",
+            "source": "财联社",
+            "source_url": "https://cls/1",
+            "published_at": "",
+            "preview": "利好消息",
+        },
+        {
+            "number": 2,
+            "evidence_id": "ev-report-2",
+            "doc_type": "report",
+            "source": "东财研报",
+            "source_url": "",
+            "published_at": "",
+            "preview": "买入评级",
+        },
     ]
 
 
@@ -39,24 +53,49 @@ def test_resolve_evidence_ids_maps_brackets_and_drops_hallucinations():
 
 def test_standard_mode_binds_evidence_ids_to_each_agent():
     managed_agents = [
-        {"id": "fundamental", "name": "基本面", "system_prompt": "", "provider": "deepseek",
-         "model": "deepseek-chat", "enabled": True},
+        {
+            "id": "fundamental",
+            "name": "基本面",
+            "system_prompt": "",
+            "provider": "deepseek",
+            "model": "deepseek-chat",
+            "enabled": True,
+        },
     ]
 
     def fake_agent(config, *_a, **_k):
         # 引用证据 [1](存在) 和 [9](幻觉)
-        return {"key": config["key"], "signal": "买入", "confidence": 70,
-                "reason": "财务强劲,参考[1];另见[9]", "evidence": [], "ok": True}
+        return {
+            "key": config["key"],
+            "signal": "买入",
+            "confidence": 70,
+            "reason": "财务强劲,参考[1];另见[9]",
+            "evidence": [],
+            "ok": True,
+        }
 
     with (
         patch("backend.agent_store.list_agents", return_value=managed_agents),
-        patch("backend.runtime.context_builder.build_market_brief", return_value="brief"),
-        patch("backend.runtime.context_builder.fetch_evidence_pool", return_value=_pool()),
-        patch("backend.runtime.context_builder.fetch_evidence_context", return_value="ctx"),
+        patch(
+            "backend.runtime.context_builder.build_market_brief", return_value="brief"
+        ),
+        patch(
+            "backend.runtime.context_builder.fetch_evidence_pool", return_value=_pool()
+        ),
+        patch(
+            "backend.runtime.context_builder.fetch_evidence_context", return_value="ctx"
+        ),
         patch("backend.runtime.context_builder.fetch_factor_context", return_value=""),
-        patch("backend.critic.run_batch_critic", return_value={"agents": {}, "divergence": {"level": "无"}, "ok": False}),
-        patch("backend.agents.chairman.summarize_with_chairman", return_value="主席总结"),
-        patch("backend.agents.financial_agents.run_custom_agent", side_effect=fake_agent),
+        patch(
+            "backend.critic.run_batch_critic",
+            return_value={"agents": {}, "divergence": {"level": "无"}, "ok": False},
+        ),
+        patch(
+            "backend.agents.chairman.summarize_with_chairman", return_value="主席总结"
+        ),
+        patch(
+            "backend.agents.financial_agents.run_custom_agent", side_effect=fake_agent
+        ),
     ):
         result = orchestrator.run_agents_with_mode(
             {"symbol": "600519", "name": "贵州茅台"}, mode=AnalysisMode.DEEP
@@ -69,21 +108,39 @@ def test_standard_mode_binds_evidence_ids_to_each_agent():
 
 def test_standard_mode_no_evidence_pool_yields_empty_ids():
     managed_agents = [
-        {"id": "technical", "name": "技术面", "system_prompt": "", "provider": "deepseek",
-         "model": "deepseek-chat", "enabled": True},
+        {
+            "id": "technical",
+            "name": "技术面",
+            "system_prompt": "",
+            "provider": "deepseek",
+            "model": "deepseek-chat",
+            "enabled": True,
+        },
     ]
 
     def fake_agent(config, *_a, **_k):
-        return {"key": config["key"], "signal": "观望", "confidence": 50,
-                "reason": "无明确证据", "evidence": [], "ok": True}
+        return {
+            "key": config["key"],
+            "signal": "观望",
+            "confidence": 50,
+            "reason": "无明确证据",
+            "evidence": [],
+            "ok": True,
+        }
 
     with (
         patch("backend.agent_store.list_agents", return_value=managed_agents),
-        patch("backend.runtime.context_builder.build_market_brief", return_value="brief"),
+        patch(
+            "backend.runtime.context_builder.build_market_brief", return_value="brief"
+        ),
         patch("backend.runtime.context_builder.fetch_evidence_pool", return_value=[]),
-        patch("backend.runtime.context_builder.fetch_evidence_context", return_value=""),
+        patch(
+            "backend.runtime.context_builder.fetch_evidence_context", return_value=""
+        ),
         patch("backend.runtime.context_builder.fetch_factor_context", return_value=""),
-        patch("backend.agents.financial_agents.run_custom_agent", side_effect=fake_agent),
+        patch(
+            "backend.agents.financial_agents.run_custom_agent", side_effect=fake_agent
+        ),
     ):
         result = orchestrator.run_agents_with_mode(
             {"symbol": "600519", "name": "贵州茅台"}, mode=AnalysisMode.STANDARD
@@ -97,8 +154,13 @@ def test_standard_mode_no_evidence_pool_yields_empty_ids():
 def test_auto_mode_direct_prescreen_carries_empty_evidence_contract():
     """AUTO 模式预筛直接输出时也要带 evidence_pool=[] 与 evidence_ids=[]。"""
     with (
-        patch("backend.runtime.context_builder.build_market_brief", return_value="brief"),
-        patch("backend.runtime.orchestrator._call_with", return_value='{"signal":"买入","confidence":90,"reason":"高置信"}'),
+        patch(
+            "backend.runtime.context_builder.build_market_brief", return_value="brief"
+        ),
+        patch(
+            "backend.runtime.orchestrator._call_with",
+            return_value='{"signal":"买入","confidence":90,"reason":"高置信"}',
+        ),
     ):
         result = orchestrator._run_auto_mode(
             {"symbol": "600519", "name": "贵州茅台"},

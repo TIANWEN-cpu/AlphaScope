@@ -21,7 +21,10 @@ async def list_memory_symbols(limit: int = 100):
 
     return ApiResponse(
         success=True,
-        data={"symbols": research_memory.list_symbols(limit), "total": research_memory.count()},
+        data={
+            "symbols": research_memory.list_symbols(limit),
+            "total": research_memory.count(),
+        },
     )
 
 

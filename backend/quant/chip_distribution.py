@@ -228,7 +228,8 @@ def compute_chip_distribution(
             symbol=symbol,
             status=INSUFFICIENT,
             model=MODEL_VOLUME_PROXY,
-            current_price=current_price or (_to_float(rows[-1].get("close")) if rows else 0.0),
+            current_price=current_price
+            or (_to_float(rows[-1].get("close")) if rows else 0.0),
             avg_cost=0.0,
             profit_ratio=0.0,
             concentration_70=0.0,
@@ -275,16 +276,31 @@ def compute_chip_distribution(
     if total <= 0:
         # 理论上不会发生(每天都会加入 t>0 的筹码),兜底返回不足
         return ChipDistribution(
-            symbol=symbol, status=INSUFFICIENT, model=MODEL_VOLUME_PROXY,
+            symbol=symbol,
+            status=INSUFFICIENT,
+            model=MODEL_VOLUME_PROXY,
             current_price=current_price or _to_float(rows[-1].get("close")),
-            avg_cost=0.0, profit_ratio=0.0, concentration_70=0.0, concentration_90=0.0,
-            range_70_low=0.0, range_70_high=0.0, range_90_low=0.0, range_90_high=0.0,
-            support_price=0.0, resistance_price=0.0, bars_used=len(rows), levels=[],
+            avg_cost=0.0,
+            profit_ratio=0.0,
+            concentration_70=0.0,
+            concentration_90=0.0,
+            range_70_low=0.0,
+            range_70_high=0.0,
+            range_90_low=0.0,
+            range_90_high=0.0,
+            support_price=0.0,
+            resistance_price=0.0,
+            bars_used=len(rows),
+            levels=[],
             note="筹码质量为空,无法分布。",
         )
     chips = [c / total for c in chips]
 
-    cur = current_price if (current_price and current_price > 0) else _to_float(rows[-1].get("close"))
+    cur = (
+        current_price
+        if (current_price and current_price > 0)
+        else _to_float(rows[-1].get("close"))
+    )
     avg_cost = sum(centers[i] * chips[i] for i in range(n))
     profit_ratio = sum(chips[i] for i in range(n) if centers[i] <= cur) * 100.0
 

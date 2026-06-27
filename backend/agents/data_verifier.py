@@ -324,23 +324,17 @@ def verify_data(
             overall = INSUFFICIENT
         else:
             core_ok = all(
-                d.status in (OK, STALE)
-                for d in dims
-                if d.dimension in _CORE_DIMS
+                d.status in (OK, STALE) for d in dims if d.dimension in _CORE_DIMS
             )
             supp_ok = sum(
-                1
-                for d in dims
-                if d.dimension not in _CORE_DIMS and d.status == OK
+                1 for d in dims if d.dimension not in _CORE_DIMS and d.status == OK
             )
             if core_ok and supp_ok >= 2:
                 overall = COMPLETE
             else:
                 overall = PARTIAL
 
-        return DataVerification(
-            overall=overall, dimensions=dims, anomalies=anomalies
-        )
+        return DataVerification(overall=overall, dimensions=dims, anomalies=anomalies)
     except Exception:  # noqa: BLE001 - 核验失败绝不阻断主分析流程
         # 安全降级: 返回一个不阻断、不误导的中性结果。
         return DataVerification(

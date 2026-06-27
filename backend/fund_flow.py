@@ -139,14 +139,18 @@ def _read_flow_cache(
                 saved_at = datetime.fromisoformat(payload["saved_at"])
             except (KeyError, ValueError):
                 return None
-            if (datetime.now() - saved_at).total_seconds() > FUND_FLOW_CACHE_TTL_SECONDS:
+            if (
+                datetime.now() - saved_at
+            ).total_seconds() > FUND_FLOW_CACHE_TTL_SECONDS:
                 return None
         df = pd.DataFrame(records, columns=payload.get("columns") or None)
         df = _normalize_flow_frame(df, days)
         df.attrs["source"] = payload.get("source") or "cache"
         df.attrs["degraded"] = fresh_only  # TTL 命中视为新鲜，不算降级
         df.attrs["source_status"] = "cache" if not fresh_only else "cache"
-        df.attrs["error"] = "" if fresh_only else "Using cached fund-flow data; provider unavailable"
+        df.attrs["error"] = (
+            "" if fresh_only else "Using cached fund-flow data; provider unavailable"
+        )
         df.attrs["cached_at"] = payload.get("saved_at", "")
         return df
     except Exception:

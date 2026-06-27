@@ -17,17 +17,23 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 _NAN = float("nan")
 
 # 数据引用(大小写不敏感,含单字母简写)。
 _DATA_REFS = {
-    "CLOSE": "close", "C": "close",
-    "OPEN": "open", "O": "open",
-    "HIGH": "high", "H": "high",
-    "LOW": "low", "L": "low",
-    "VOL": "volume", "V": "volume", "VOLUME": "volume",
+    "CLOSE": "close",
+    "C": "close",
+    "OPEN": "open",
+    "O": "open",
+    "HIGH": "high",
+    "H": "high",
+    "LOW": "low",
+    "L": "low",
+    "VOL": "volume",
+    "V": "volume",
+    "VOLUME": "volume",
 }
 
 # 买/卖信号关键字(大小写不敏感)。
@@ -36,9 +42,21 @@ _SELL_KEYWORDS = {"EXITLONG", "SELL", "SIG_SELL"}
 
 # 支持的函数及其参数个数(period 类参数必须是字面量整数)。
 _FUNCS = {
-    "MA": 2, "EMA": 2, "SMA": 3, "REF": 2, "HHV": 2, "LLV": 2,
-    "SUM": 2, "COUNT": 2, "MAX": 2, "MIN": 2, "ABS": 1, "CROSS": 2,
-    "IF": 3, "AVEDEV": 2, "STD": 2,
+    "MA": 2,
+    "EMA": 2,
+    "SMA": 3,
+    "REF": 2,
+    "HHV": 2,
+    "LLV": 2,
+    "SUM": 2,
+    "COUNT": 2,
+    "MAX": 2,
+    "MIN": 2,
+    "ABS": 1,
+    "CROSS": 2,
+    "IF": 3,
+    "AVEDEV": 2,
+    "STD": 2,
 }
 
 _MAX_FORMULA_LEN = 8000
@@ -228,7 +246,9 @@ class CompiledFormula:
     ok: bool
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    statements: list[tuple[str, str, Any]] = field(default_factory=list)  # (kind, name, ast)
+    statements: list[tuple[str, str, Any]] = field(
+        default_factory=list
+    )  # (kind, name, ast)
     buy_names: list[str] = field(default_factory=list)
     sell_names: list[str] = field(default_factory=list)
     var_names: list[str] = field(default_factory=list)
@@ -252,7 +272,9 @@ def compile_formula(src: str) -> CompiledFormula:
     if not src or not src.strip():
         return CompiledFormula(ok=False, errors=["公式为空。"])
     if len(src) > _MAX_FORMULA_LEN:
-        return CompiledFormula(ok=False, errors=[f"公式过长(>{_MAX_FORMULA_LEN} 字符)。"])
+        return CompiledFormula(
+            ok=False, errors=[f"公式过长(>{_MAX_FORMULA_LEN} 字符)。"]
+        )
 
     statements: list[tuple[str, str, Any]] = []
     buy_names: list[str] = []
@@ -335,7 +357,9 @@ def _find_output_colon(text: str) -> int:
     return -1
 
 
-def _collect_refs(ast: Any, refs: set[str], var_names: list[str], errors: list[str]) -> None:
+def _collect_refs(
+    ast: Any, refs: set[str], var_names: list[str], errors: list[str]
+) -> None:
     """遍历 AST 记录用到的数据引用,并校验函数名/参数。"""
     if not isinstance(ast, tuple):
         return
@@ -482,7 +506,8 @@ class _Evaluator:
         col = _DATA_REFS[ref_name]
         if ref_name not in self.refs:
             self.refs[ref_name] = [
-                float(b.get(col)) if b.get(col) is not None else _NAN for b in self._bars
+                float(b.get(col)) if b.get(col) is not None else _NAN
+                for b in self._bars
             ]
         return self.refs[ref_name]
 
@@ -528,13 +553,18 @@ class _Evaluator:
 
     def _compare(self, op: str, a: list[float], b: list[float]) -> list[float]:
         ops = {
-            ">": lambda x, y: x > y, "<": lambda x, y: x < y,
-            ">=": lambda x, y: x >= y, "<=": lambda x, y: x <= y,
-            "=": lambda x, y: x == y, "<>": lambda x, y: x != y,
+            ">": lambda x, y: x > y,
+            "<": lambda x, y: x < y,
+            ">=": lambda x, y: x >= y,
+            "<=": lambda x, y: x <= y,
+            "=": lambda x, y: x == y,
+            "<>": lambda x, y: x != y,
         }
         fn = ops[op]
         return [
-            0.0 if (math.isnan(a[i]) or math.isnan(b[i])) else (1.0 if fn(a[i], b[i]) else 0.0)
+            0.0
+            if (math.isnan(a[i]) or math.isnan(b[i]))
+            else (1.0 if fn(a[i], b[i]) else 0.0)
             for i in range(self.n)
         ]
 
@@ -544,7 +574,11 @@ class _Evaluator:
         if fname == "EMA":
             return _ema(self.eval(args[0]), _const_int(args[1], "EMA"))
         if fname == "SMA":
-            return _sma(self.eval(args[0]), _const_int(args[1], "SMA"), _const_int(args[2], "SMA"))
+            return _sma(
+                self.eval(args[0]),
+                _const_int(args[1], "SMA"),
+                _const_int(args[2], "SMA"),
+            )
         if fname == "REF":
             return _ref(self.eval(args[0]), _const_int(args[1], "REF"))
         if fname == "HHV":
@@ -558,7 +592,9 @@ class _Evaluator:
         if fname == "AVEDEV":
             return _rolling(self.eval(args[0]), _const_int(args[1], "AVEDEV"), _avedev)
         if fname == "COUNT":
-            return _rolling(_bool_series(self.eval(args[0])), _const_int(args[1], "COUNT"), sum)
+            return _rolling(
+                _bool_series(self.eval(args[0])), _const_int(args[1], "COUNT"), sum
+            )
         if fname == "MAX":
             return _elementwise(self.eval(args[0]), self.eval(args[1]), max)
         if fname == "MIN":

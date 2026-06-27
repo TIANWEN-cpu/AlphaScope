@@ -122,10 +122,19 @@ def save_experiment(payload: dict[str, Any]) -> Optional[str]:
             return None
         _ensure_table()
         mode = str(payload.get("mode") or "unknown")
-        run_id = str(payload.get("run_id") or f"{mode}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}")
+        run_id = str(
+            payload.get("run_id")
+            or f"{mode}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        )
         symbol = str(payload.get("symbol") or "")
-        strategy_id = str(payload.get("strategy_id") or payload.get("strategy_name") or "")
-        created_at = str(payload.get("finished_at") or payload.get("started_at") or datetime.now().isoformat())
+        strategy_id = str(
+            payload.get("strategy_id") or payload.get("strategy_name") or ""
+        )
+        created_at = str(
+            payload.get("finished_at")
+            or payload.get("started_at")
+            or datetime.now().isoformat()
+        )
         summary = _summarize(mode, payload)
         with _write_lock:
             conn = _db().conn
@@ -191,9 +200,11 @@ def get_experiment(run_id: str) -> Optional[dict[str, Any]]:
     """取一次实验的**完整载荷**。失败/不存在返回 None。"""
     try:
         _ensure_table()
-        r = _db().conn.execute(
-            f"SELECT payload FROM {_TABLE} WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        r = (
+            _db()
+            .conn.execute(f"SELECT payload FROM {_TABLE} WHERE run_id = ?", (run_id,))
+            .fetchone()
+        )
         return json.loads(r["payload"]) if r and r["payload"] else None
     except Exception:
         return None
@@ -226,7 +237,8 @@ def compare_experiments(run_ids: list[str]) -> list[dict[str, Any]]:
                     "run_id": rid,
                     "mode": mode,
                     "symbol": exp.get("symbol", ""),
-                    "strategy_id": exp.get("strategy_id") or exp.get("strategy_name", ""),
+                    "strategy_id": exp.get("strategy_id")
+                    or exp.get("strategy_name", ""),
                     "created_at": exp.get("finished_at") or exp.get("started_at", ""),
                     "summary": _summarize(mode, exp),
                 }

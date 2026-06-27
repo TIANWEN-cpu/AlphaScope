@@ -48,15 +48,30 @@ class TestBuildSnapshot:
     def _result(self):
         return {
             "mode": "deep",
-            "summary": {"final": "买入", "buy": 3, "sell": 1, "hold": 1, "avg_confidence": 68.0},
-            "debate": {"consensus": "偏看多", "consensus_score": 62.0, "divergence_level": "中"},
+            "summary": {
+                "final": "买入",
+                "buy": 3,
+                "sell": 1,
+                "hold": 1,
+                "avg_confidence": 68.0,
+            },
+            "debate": {
+                "consensus": "偏看多",
+                "consensus_score": 62.0,
+                "divergence_level": "中",
+            },
             "risk_gate": {"vetoed": False},
             "data_verification": {"overall": "ok"},
         }
 
     def test_maps_all_fields(self):
-        snap = rm.build_snapshot("600519", "贵州茅台", self._result(), {"close": 1720.5},
-                                 now=datetime(2026, 6, 27, 10, 0, 0))
+        snap = rm.build_snapshot(
+            "600519",
+            "贵州茅台",
+            self._result(),
+            {"close": 1720.5},
+            now=datetime(2026, 6, 27, 10, 0, 0),
+        )
         assert snap["symbol"] == "600519"
         assert snap["name"] == "贵州茅台"
         assert snap["signal"] == "买入"
@@ -72,15 +87,21 @@ class TestBuildSnapshot:
         assert snap["snapshot_id"].startswith("600519-")
 
     def test_failure_safe_on_empty_result(self):
-        snap = rm.build_snapshot("000001", "", {}, None, now=datetime(2026, 6, 27, 10, 0, 0))
+        snap = rm.build_snapshot(
+            "000001", "", {}, None, now=datetime(2026, 6, 27, 10, 0, 0)
+        )
         assert snap["symbol"] == "000001"
         assert snap["signal"] == "未知"
         assert snap["confidence"] == 0.0
 
     def test_is_meaningful_filters_empty(self):
-        empty = rm.build_snapshot("X", "", {}, None, now=datetime(2026, 6, 27, 10, 0, 0))
+        empty = rm.build_snapshot(
+            "X", "", {}, None, now=datetime(2026, 6, 27, 10, 0, 0)
+        )
         assert rm._is_meaningful(empty) is False
-        full = rm.build_snapshot("X", "", self._result(), None, now=datetime(2026, 6, 27, 10, 0, 0))
+        full = rm.build_snapshot(
+            "X", "", self._result(), None, now=datetime(2026, 6, 27, 10, 0, 0)
+        )
         assert rm._is_meaningful(full) is True
 
 
@@ -156,8 +177,18 @@ def mem(tmp_path, monkeypatch):
 def _result(final="买入", conf=68.0):
     return {
         "mode": "deep",
-        "summary": {"final": final, "buy": 3, "sell": 1, "hold": 1, "avg_confidence": conf},
-        "debate": {"consensus": "偏看多", "consensus_score": 62.0, "divergence_level": "中"},
+        "summary": {
+            "final": final,
+            "buy": 3,
+            "sell": 1,
+            "hold": 1,
+            "avg_confidence": conf,
+        },
+        "debate": {
+            "consensus": "偏看多",
+            "consensus_score": 62.0,
+            "divergence_level": "中",
+        },
         "risk_gate": {"vetoed": False},
         "data_verification": {"overall": "ok"},
     }
@@ -165,8 +196,13 @@ def _result(final="买入", conf=68.0):
 
 class TestRecordAndTimeline:
     def test_record_then_timeline_roundtrip(self, mem):
-        rid = mem.record_snapshot("600519", "贵州茅台", _result("买入"),
-                                  {"close": 1700}, now=datetime(2026, 6, 1, 9, 0, 0))
+        rid = mem.record_snapshot(
+            "600519",
+            "贵州茅台",
+            _result("买入"),
+            {"close": 1700},
+            now=datetime(2026, 6, 1, 9, 0, 0),
+        )
         assert rid is not None
         tl = mem.get_timeline("600519")
         assert tl["symbol"] == "600519"
@@ -174,9 +210,27 @@ class TestRecordAndTimeline:
         assert tl["summary"]["latest_signal"] == "买入"
 
     def test_multiple_snapshots_track_change(self, mem):
-        mem.record_snapshot("600519", "贵州茅台", _result("买入"), {"close": 1700}, now=datetime(2026, 6, 1, 9, 0, 0))
-        mem.record_snapshot("600519", "贵州茅台", _result("观望"), {"close": 1680}, now=datetime(2026, 6, 5, 9, 0, 0))
-        mem.record_snapshot("600519", "贵州茅台", _result("卖出"), {"close": 1600}, now=datetime(2026, 6, 9, 9, 0, 0))
+        mem.record_snapshot(
+            "600519",
+            "贵州茅台",
+            _result("买入"),
+            {"close": 1700},
+            now=datetime(2026, 6, 1, 9, 0, 0),
+        )
+        mem.record_snapshot(
+            "600519",
+            "贵州茅台",
+            _result("观望"),
+            {"close": 1680},
+            now=datetime(2026, 6, 5, 9, 0, 0),
+        )
+        mem.record_snapshot(
+            "600519",
+            "贵州茅台",
+            _result("卖出"),
+            {"close": 1600},
+            now=datetime(2026, 6, 9, 9, 0, 0),
+        )
         tl = mem.get_timeline("600519")
         assert len(tl["snapshots"]) == 3
         assert tl["summary"]["change_count"] == 2
@@ -185,7 +239,9 @@ class TestRecordAndTimeline:
         assert tl["snapshots"][-1]["signal"] == "卖出"
 
     def test_skips_empty_result(self, mem):
-        rid = mem.record_snapshot("000001", "", {}, None, now=datetime(2026, 6, 1, 9, 0, 0))
+        rid = mem.record_snapshot(
+            "000001", "", {}, None, now=datetime(2026, 6, 1, 9, 0, 0)
+        )
         assert rid is None
         assert mem.count() == 0
 
@@ -196,9 +252,27 @@ class TestRecordAndTimeline:
 
 class TestListSymbols:
     def test_aggregates_count_and_latest(self, mem):
-        mem.record_snapshot("600519", "茅台", _result("买入"), {"close": 1700}, now=datetime(2026, 6, 1, 9, 0, 0))
-        mem.record_snapshot("600519", "茅台", _result("观望"), {"close": 1680}, now=datetime(2026, 6, 5, 9, 0, 0))
-        mem.record_snapshot("000001", "平安", _result("卖出"), {"close": 11}, now=datetime(2026, 6, 3, 9, 0, 0))
+        mem.record_snapshot(
+            "600519",
+            "茅台",
+            _result("买入"),
+            {"close": 1700},
+            now=datetime(2026, 6, 1, 9, 0, 0),
+        )
+        mem.record_snapshot(
+            "600519",
+            "茅台",
+            _result("观望"),
+            {"close": 1680},
+            now=datetime(2026, 6, 5, 9, 0, 0),
+        )
+        mem.record_snapshot(
+            "000001",
+            "平安",
+            _result("卖出"),
+            {"close": 11},
+            now=datetime(2026, 6, 3, 9, 0, 0),
+        )
         syms = mem.list_symbols()
         by = {s["symbol"]: s for s in syms}
         assert by["600519"]["count"] == 2
@@ -210,20 +284,43 @@ class TestListSymbols:
 
 class TestDeleteAndPrune:
     def test_delete_snapshot(self, mem):
-        rid = mem.record_snapshot("600519", "茅台", _result("买入"), {"close": 1700}, now=datetime(2026, 6, 1, 9, 0, 0))
+        rid = mem.record_snapshot(
+            "600519",
+            "茅台",
+            _result("买入"),
+            {"close": 1700},
+            now=datetime(2026, 6, 1, 9, 0, 0),
+        )
         assert mem.delete_snapshot(rid) is True
         assert mem.count() == 0
 
     def test_delete_symbol(self, mem):
-        mem.record_snapshot("600519", "茅台", _result("买入"), {"close": 1700}, now=datetime(2026, 6, 1, 9, 0, 0))
-        mem.record_snapshot("600519", "茅台", _result("观望"), {"close": 1680}, now=datetime(2026, 6, 5, 9, 0, 0))
+        mem.record_snapshot(
+            "600519",
+            "茅台",
+            _result("买入"),
+            {"close": 1700},
+            now=datetime(2026, 6, 1, 9, 0, 0),
+        )
+        mem.record_snapshot(
+            "600519",
+            "茅台",
+            _result("观望"),
+            {"close": 1680},
+            now=datetime(2026, 6, 5, 9, 0, 0),
+        )
         assert mem.delete_symbol("600519") == 2
         assert mem.count() == 0
 
     def test_prune_keeps_recent(self, mem):
         for i in range(5):
-            mem.record_snapshot("600519", "茅台", _result("买入"),
-                                {"close": 1700 + i}, now=datetime(2026, 6, 1 + i, 9, 0, 0))
+            mem.record_snapshot(
+                "600519",
+                "茅台",
+                _result("买入"),
+                {"close": 1700 + i},
+                now=datetime(2026, 6, 1 + i, 9, 0, 0),
+            )
         mem._prune_symbol("600519", keep=3)
         assert mem.count() == 3
         tl = mem.get_timeline("600519")

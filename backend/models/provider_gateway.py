@@ -243,7 +243,7 @@ def load_providers(config_path: Optional[str] = None) -> Dict[str, Any]:
             }
         return providers
     except Exception as e:
-        print(f"[Provider] 加载配置失败: {e}")
+        logger.warning("[Provider] 加载配置失败: %s", e)
         return {}
 
 
@@ -310,7 +310,7 @@ if _PROVIDER_CONFIG:
                 "label": cfg.get("label", prov_id),
                 "models": cfg.get("models", {}),
             }
-            print(f"[Provider] 已加载: {prov_id} -> {cfg['base_url']}")
+            logger.info("[Provider] 已加载: %s -> %s", prov_id, cfg["base_url"])
 
 
 def _models_from_config_json(config_json: Any) -> list[str]:

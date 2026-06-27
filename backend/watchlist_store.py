@@ -31,7 +31,10 @@ def list_watchlist() -> list[dict[str, Any]]:
     rows = conn.execute(
         "SELECT symbol, name, added_at FROM watchlist ORDER BY added_at DESC"
     ).fetchall()
-    return [{"symbol": r["symbol"], "name": r["name"], "added_at": r["added_at"]} for r in rows]
+    return [
+        {"symbol": r["symbol"], "name": r["name"], "added_at": r["added_at"]}
+        for r in rows
+    ]
 
 
 def add_watchlist(symbol: str, name: str = "") -> None:

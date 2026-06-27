@@ -76,7 +76,9 @@ class DebatePoint:
 @dataclass
 class DebateReport:
     status: str
-    consensus: str  # 看多共识|偏看多|多空分歧|高度分歧|偏看空|看空共识|中性观望|风控否决|未知
+    consensus: (
+        str  # 看多共识|偏看多|多空分歧|高度分歧|偏看空|看空共识|中性观望|风控否决|未知
+    )
     consensus_score: float  # 0-100, 越大越一边倒
     divergence_level: str  # 借 Critic: 无/低/中/高
     bull_strength: float
@@ -172,8 +174,11 @@ def _synthesize(
             if 0 < conf < 50:
                 bear_points.append(
                     DebatePoint(
-                        "bear", key, "low_conviction",
-                        f"{name} 看多但信心仅 {conf:.0f}%,确定性不足", 50.0 - conf,
+                        "bear",
+                        key,
+                        "low_conviction",
+                        f"{name} 看多但信心仅 {conf:.0f}%,确定性不足",
+                        50.0 - conf,
                     )
                 )
         elif signal in _BEAR_SIGNALS:
@@ -189,17 +194,31 @@ def _synthesize(
     rg = risk_gate or {}
     vetoed = bool(rg.get("vetoed"))
     for vr in rg.get("veto_reasons", []) or []:
-        bear_points.append(DebatePoint("bear", "risk", "risk_veto", f"风控否决:{vr}", _W_RISK_VETO))
+        bear_points.append(
+            DebatePoint("bear", "risk", "risk_veto", f"风控否决:{vr}", _W_RISK_VETO)
+        )
         bear_strength += _W_RISK_VETO
 
     # 反方来源 3:数据缺失 / 过期 / 异常(data_verifier)
     dv = data_verification or {}
     for lbl in dv.get("missing", []) or []:
-        bear_points.append(DebatePoint("bear", "data", "data_gap", f"数据缺失:{lbl}(下游严禁编造)", _W_DATA_MISSING))
+        bear_points.append(
+            DebatePoint(
+                "bear",
+                "data",
+                "data_gap",
+                f"数据缺失:{lbl}(下游严禁编造)",
+                _W_DATA_MISSING,
+            )
+        )
     for lbl in dv.get("anomalies", []) or []:
-        bear_points.append(DebatePoint("bear", "data", "data_gap", f"数值异常:{lbl}", _W_DATA_ANOMALY))
+        bear_points.append(
+            DebatePoint("bear", "data", "data_gap", f"数值异常:{lbl}", _W_DATA_ANOMALY)
+        )
     for lbl in dv.get("stale", []) or []:
-        bear_points.append(DebatePoint("bear", "data", "data_gap", f"数据过期:{lbl}", _W_DATA_STALE))
+        bear_points.append(
+            DebatePoint("bear", "data", "data_gap", f"数据过期:{lbl}", _W_DATA_STALE)
+        )
 
     # 反方来源 4:Critic 评审分歧
     div = (critic or {}).get("divergence") or {}
@@ -207,7 +226,13 @@ def _synthesize(
     div_summary = str(div.get("summary") or "").strip()
     if div_summary and divergence_level in ("中", "高"):
         bear_points.append(
-            DebatePoint("bear", "critic", "critic_divergence", f"评审分歧({divergence_level}):{div_summary}", _W_CRITIC_DIVERGENCE)
+            DebatePoint(
+                "bear",
+                "critic",
+                "critic_divergence",
+                f"评审分歧({divergence_level}):{div_summary}",
+                _W_CRITIC_DIVERGENCE,
+            )
         )
 
     # 强论点排前(便于 UI 与裁决取最强)
@@ -234,8 +259,12 @@ def _synthesize(
         )
 
     total = bull_strength + bear_strength
-    consensus_score = round(abs(bull_strength - bear_strength) / total * 100, 1) if total else 0.0
-    consensus = _label(has_bull_agent, has_bear_agent, n_neutral, consensus_score, divergence_level)
+    consensus_score = (
+        round(abs(bull_strength - bear_strength) / total * 100, 1) if total else 0.0
+    )
+    consensus = _label(
+        has_bull_agent, has_bear_agent, n_neutral, consensus_score, divergence_level
+    )
     ruling = _ruling(consensus, bull_points, bear_points, n_bull, n_bear)
 
     return DebateReport(
@@ -270,7 +299,10 @@ def _label(
 
 
 def _ruling_vetoed(rg: dict[str, Any]) -> str:
-    reasons = ";".join(str(r) for r in (rg.get("veto_reasons") or [])) or "触发 critical 风控规则"
+    reasons = (
+        ";".join(str(r) for r in (rg.get("veto_reasons") or []))
+        or "触发 critical 风控规则"
+    )
     return (
         f"风控一票否决({reasons})。方向性结论一律不作为投资依据,"
         f"建议先消除风控触发项再重新评估。"
@@ -286,13 +318,15 @@ def _ruling(
 ) -> str:
     top_bull = bull_points[0].claim if bull_points else "—"
     bear_agent_pts = [p for p in bear_points if p.kind == "agent"]
-    top_bear = (bear_agent_pts[0].claim if bear_agent_pts else (bear_points[0].claim if bear_points else "—"))
+    top_bear = (
+        bear_agent_pts[0].claim
+        if bear_agent_pts
+        else (bear_points[0].claim if bear_points else "—")
+    )
     n_challenges = len(bear_points)
 
     if consensus == "中性观望":
-        return (
-            "各方信号偏中性,缺乏明确方向共识,确定性低;建议补充缺失维度数据后再评估。"
-        )
+        return "各方信号偏中性,缺乏明确方向共识,确定性低;建议补充缺失维度数据后再评估。"
     if consensus in ("看多共识", "偏看多"):
         base = (
             f"看多方以 {n_bull} 票占据主导(最强论据:{top_bull})"
@@ -320,7 +354,15 @@ def format_debate_section(report: DebateReport) -> str:
     """把辩论裁决渲染成可嵌入研报的纯文本小节(可审计、带免责)。"""
     if report is None or report.status != OK:
         return ""
-    lines = ["", "## 多空辩论与裁决", "", f"**裁决：{report.consensus}**（共识度 {report.consensus_score:.0f}/100）", "", report.ruling, ""]
+    lines = [
+        "",
+        "## 多空辩论与裁决",
+        "",
+        f"**裁决：{report.consensus}**（共识度 {report.consensus_score:.0f}/100）",
+        "",
+        report.ruling,
+        "",
+    ]
     if report.bull_points:
         lines.append("**看多方：**")
         for p in report.bull_points[:5]:

@@ -22,15 +22,15 @@ from __future__ import annotations
 # ────────────────────────────────────────────────────────────────
 # A 股默认假设
 # ────────────────────────────────────────────────────────────────
-DEFAULT_RF = 0.025              # 10Y 国债收益率
-DEFAULT_ERP = 0.06              # A 股历史股权风险溢价
+DEFAULT_RF = 0.025  # 10Y 国债收益率
+DEFAULT_ERP = 0.06  # A 股历史股权风险溢价
 DEFAULT_BETA = 1.00
 DEFAULT_TAX = 0.25
-DEFAULT_TERMINAL_G = 0.025      # 长期名义 GDP
+DEFAULT_TERMINAL_G = 0.025  # 长期名义 GDP
 DEFAULT_STAGE1_YEARS = 5
 DEFAULT_STAGE2_YEARS = 5
-DEFAULT_STAGE1_GROWTH = 0.10    # 高增长期
-DEFAULT_STAGE2_GROWTH = 0.05    # 过渡期
+DEFAULT_STAGE1_GROWTH = 0.10  # 高增长期
+DEFAULT_STAGE2_GROWTH = 0.05  # 过渡期
 
 
 def _num(v, default=0.0) -> float:
@@ -43,6 +43,7 @@ def _num(v, default=0.0) -> float:
 # ═══════════════════════════════════════════════════════════════
 # 1. DCF
 # ═══════════════════════════════════════════════════════════════
+
 
 def compute_wacc(
     rf: float = DEFAULT_RF,
@@ -63,8 +64,13 @@ def compute_wacc(
         "after_tax_kd": round(after_tax_kd, 4),
         "equity_weight": equity_weight,
         "debt_weight": target_debt_ratio,
-        "inputs": {"rf": rf, "erp": erp, "beta": beta,
-                   "kd_pretax": cost_of_debt_pretax, "tax": tax},
+        "inputs": {
+            "rf": rf,
+            "erp": erp,
+            "beta": beta,
+            "kd_pretax": cost_of_debt_pretax,
+            "tax": tax,
+        },
     }
 
 
@@ -90,7 +96,9 @@ def compute_dcf(features: dict, assumptions: dict | None = None) -> dict:
     a.update(assumptions or {})
 
     wacc_info = compute_wacc(
-        beta=a["beta"], tax=a["tax"], target_debt_ratio=a["target_debt_ratio"],
+        beta=a["beta"],
+        tax=a["tax"],
+        target_debt_ratio=a["target_debt_ratio"],
     )
     wacc = wacc_info["wacc"]
 
@@ -107,11 +115,11 @@ def compute_dcf(features: dict, assumptions: dict | None = None) -> dict:
     year_labels: list[str] = []
     cur = fcf0
     for i in range(1, a["stage1_years"] + 1):
-        cur *= (1 + a["stage1_growth"])
+        cur *= 1 + a["stage1_growth"]
         projected_fcf.append(round(cur, 3))
         year_labels.append(f"Y{i}")
     for i in range(1, a["stage2_years"] + 1):
-        cur *= (1 + a["stage2_growth"])
+        cur *= 1 + a["stage2_growth"]
         projected_fcf.append(round(cur, 3))
         year_labels.append(f"Y{a['stage1_years'] + i}")
 
@@ -147,8 +155,12 @@ def compute_dcf(features: dict, assumptions: dict | None = None) -> dict:
         safety_margin = 0
 
     sensitivity = _sensitivity_table(
-        fcf0=fcf0, a=a, net_debt=net_debt, shares_yi=shares_yi,
-        wacc_center=wacc, g_center=a["terminal_g"],
+        fcf0=fcf0,
+        a=a,
+        net_debt=net_debt,
+        shares_yi=shares_yi,
+        wacc_center=wacc,
+        g_center=a["terminal_g"],
     )
 
     return {
@@ -161,7 +173,9 @@ def compute_dcf(features: dict, assumptions: dict | None = None) -> dict:
         "pv_explicit_yi": pv_explicit,
         "terminal_value_yi": round(tv_at_end, 3),
         "tv_pv_yi": tv_pv,
-        "tv_pct_of_ev": round(tv_pv / enterprise_value * 100, 1) if enterprise_value > 0 else 0,
+        "tv_pct_of_ev": round(tv_pv / enterprise_value * 100, 1)
+        if enterprise_value > 0
+        else 0,
         "enterprise_value_yi": enterprise_value,
         "net_debt_yi": round(net_debt, 3),
         "equity_value_yi": equity_value,
@@ -173,11 +187,11 @@ def compute_dcf(features: dict, assumptions: dict | None = None) -> dict:
         "sensitivity_table": sensitivity,
         "assumptions": a,
         "methodology_log": [
-            f"Step 1 · WACC: CAPM k_e={wacc_info['cost_of_equity']*100:.2f}%, 税后 k_d={wacc_info['after_tax_kd']*100:.2f}%, 加权 WACC={wacc*100:.2f}%",
+            f"Step 1 · WACC: CAPM k_e={wacc_info['cost_of_equity'] * 100:.2f}%, 税后 k_d={wacc_info['after_tax_kd'] * 100:.2f}%, 加权 WACC={wacc * 100:.2f}%",
             f"Step 2 · 基期 FCF={fcf0:.2f} 亿",
-            f"Step 3 · 两段增长 {a['stage1_growth']*100:.0f}% ({a['stage1_years']}年) → {a['stage2_growth']*100:.0f}% ({a['stage2_years']}年)",
+            f"Step 3 · 两段增长 {a['stage1_growth'] * 100:.0f}% ({a['stage1_years']}年) → {a['stage2_growth'] * 100:.0f}% ({a['stage2_years']}年)",
             f"Step 4 · 显式期 PV 合计 {pv_explicit:.1f} 亿",
-            f"Step 5 · 终值 @ g={a['terminal_g']*100:.1f}% → PV={tv_pv:.1f} 亿(占 EV {round(tv_pv/enterprise_value*100, 0) if enterprise_value>0 else 0:.0f}%)",
+            f"Step 5 · 终值 @ g={a['terminal_g'] * 100:.1f}% → PV={tv_pv:.1f} 亿(占 EV {round(tv_pv / enterprise_value * 100, 0) if enterprise_value > 0 else 0:.0f}%)",
             f"Step 6 · EV {enterprise_value:.1f} 亿 − 净债 {net_debt:.1f} 亿 = 股权价值 {equity_value:.1f} 亿",
             f"Step 7 · 每股内在价值 ¥{per_share:.2f}(当前价 ¥{cur_price:.2f}，安全边际 {safety_margin:+.1f}%)",
         ],
@@ -186,10 +200,20 @@ def compute_dcf(features: dict, assumptions: dict | None = None) -> dict:
 
 def _sensitivity_table(fcf0, a, net_debt, shares_yi, wacc_center, g_center) -> dict:
     """5x5 敏感性:WACC(行) × 终值增长(列)。"""
-    wacc_row = [wacc_center - 0.02, wacc_center - 0.01, wacc_center,
-                wacc_center + 0.01, wacc_center + 0.02]
-    g_col = [g_center - 0.01, g_center - 0.005, g_center,
-             g_center + 0.005, g_center + 0.01]
+    wacc_row = [
+        wacc_center - 0.02,
+        wacc_center - 0.01,
+        wacc_center,
+        wacc_center + 0.01,
+        wacc_center + 0.02,
+    ]
+    g_col = [
+        g_center - 0.01,
+        g_center - 0.005,
+        g_center,
+        g_center + 0.005,
+        g_center + 0.01,
+    ]
 
     rows = []
     for w in wacc_row:
@@ -198,10 +222,10 @@ def _sensitivity_table(fcf0, a, net_debt, shares_yi, wacc_center, g_center) -> d
             cur = fcf0
             proj = []
             for _ in range(a["stage1_years"]):
-                cur *= (1 + a["stage1_growth"])
+                cur *= 1 + a["stage1_growth"]
                 proj.append(cur)
             for _ in range(a["stage2_years"]):
-                cur *= (1 + a["stage2_growth"])
+                cur *= 1 + a["stage2_growth"]
                 proj.append(cur)
             pv_exp = sum(f / (1 + w) ** (i + 1) for i, f in enumerate(proj))
             tv = proj[-1] * (1 + g) / (w - g) if w - g > 0 else 0
@@ -235,6 +259,7 @@ def _dcf_verdict(safety_margin: float) -> str:
 # 2. COMPS
 # ═══════════════════════════════════════════════════════════════
 
+
 def build_comps_table(target: dict, peers: list[dict]) -> dict:
     """同业倍数对标(中位/分位 + 隐含价)。
 
@@ -244,10 +269,19 @@ def build_comps_table(target: dict, peers: list[dict]) -> dict:
     if not peers:
         return {"error": "no peers provided", "target": target}
 
-    metrics = ["pe", "pb", "ps", "ev_ebitda", "ev_sales",
-               "roe", "net_margin", "revenue_growth"]
+    metrics = [
+        "pe",
+        "pb",
+        "ps",
+        "ev_ebitda",
+        "ev_sales",
+        "roe",
+        "net_margin",
+        "revenue_growth",
+    ]
 
     import statistics
+
     stats: dict[str, dict] = {}
     for m in metrics:
         values = [_num(p.get(m)) for p in peers if _num(p.get(m)) > 0]
@@ -255,9 +289,15 @@ def build_comps_table(target: dict, peers: list[dict]) -> dict:
             continue
         stats[m] = {
             "min": round(min(values), 2),
-            "p25": round(statistics.quantiles(values, n=4)[0] if len(values) > 1 else values[0], 2),
+            "p25": round(
+                statistics.quantiles(values, n=4)[0] if len(values) > 1 else values[0],
+                2,
+            ),
             "median": round(statistics.median(values), 2),
-            "p75": round(statistics.quantiles(values, n=4)[2] if len(values) > 1 else values[0], 2),
+            "p75": round(
+                statistics.quantiles(values, n=4)[2] if len(values) > 1 else values[0],
+                2,
+            ),
             "max": round(max(values), 2),
             "mean": round(sum(values) / len(values), 2),
             "n": len(values),
@@ -275,9 +315,13 @@ def build_comps_table(target: dict, peers: list[dict]) -> dict:
     cur_px = _num(target.get("price"))
     implied = {}
     if stats.get("pe") and target.get("eps"):
-        implied["via_median_pe"] = round(stats["pe"]["median"] * _num(target.get("eps")), 2)
+        implied["via_median_pe"] = round(
+            stats["pe"]["median"] * _num(target.get("eps")), 2
+        )
     if stats.get("pb") and target.get("bvps"):
-        implied["via_median_pb"] = round(stats["pb"]["median"] * _num(target.get("bvps")), 2)
+        implied["via_median_pb"] = round(
+            stats["pb"]["median"] * _num(target.get("bvps")), 2
+        )
 
     pe_pct = target_pct.get("pe", 50)
     if pe_pct <= 25:
@@ -312,6 +356,7 @@ def build_comps_table(target: dict, peers: list[dict]) -> dict:
 # 3. 三表预测(5 年)
 # ═══════════════════════════════════════════════════════════════
 
+
 def project_three_stmt(features: dict, assumptions: dict | None = None) -> dict:
     """简化版 5 年 利润表/资产负债表/现金流量表 预测(内部联动)。"""
     a = {
@@ -334,8 +379,13 @@ def project_three_stmt(features: dict, assumptions: dict | None = None) -> dict:
         return {"error": "no base revenue", "methodology_log": ["缺少基期营收"]}
 
     years = ["Y1", "Y2", "Y3", "Y4", "Y5"]
-    growth = [a["revenue_growth_y1"], a["revenue_growth_y2"], a["revenue_growth_y3"],
-              a["revenue_growth_y4"], a["revenue_growth_y5"]]
+    growth = [
+        a["revenue_growth_y1"],
+        a["revenue_growth_y2"],
+        a["revenue_growth_y3"],
+        a["revenue_growth_y4"],
+        a["revenue_growth_y5"],
+    ]
 
     rev, cogs, gross, opex, ebit, tax, ni = [], [], [], [], [], [], []
     prev_rev = rev0
@@ -358,14 +408,18 @@ def project_three_stmt(features: dict, assumptions: dict | None = None) -> dict:
 
     dep = [round(r * a["dep_pct_revenue"], 2) for r in rev]
     capex = [round(r * a["capex_pct_revenue"], 2) for r in rev]
-    nwc_chg = [round((rev[i] - (rev[i-1] if i > 0 else rev0)) * a["nwc_pct_revenue"], 2)
-               for i in range(len(rev))]
+    nwc_chg = [
+        round((rev[i] - (rev[i - 1] if i > 0 else rev0)) * a["nwc_pct_revenue"], 2)
+        for i in range(len(rev))
+    ]
     ocf = [round(ni[i] + dep[i] - nwc_chg[i], 2) for i in range(len(rev))]
     fcf = [round(ocf[i] - capex[i], 2) for i in range(len(rev))]
 
     equity0 = _num(features.get("equity_yi"))
     if equity0 <= 0:
-        equity0 = _num(features.get("market_cap_yi")) / max(_num(features.get("pb")) or 2.0, 0.1)
+        equity0 = _num(features.get("market_cap_yi")) / max(
+            _num(features.get("pb")) or 2.0, 0.1
+        )
     equity_series = []
     eq = equity0
     for n in ni:
@@ -376,19 +430,28 @@ def project_three_stmt(features: dict, assumptions: dict | None = None) -> dict:
         "method": "3-Statement Projection (5-year, linked)",
         "years": years,
         "income_statement": {
-            "revenue": rev, "cogs": cogs, "gross_profit": gross,
-            "opex": opex, "ebit": ebit, "tax": tax, "net_income": ni,
+            "revenue": rev,
+            "cogs": cogs,
+            "gross_profit": gross,
+            "opex": opex,
+            "ebit": ebit,
+            "tax": tax,
+            "net_income": ni,
         },
         "cash_flow": {
-            "net_income": ni, "dep_amort": dep, "nwc_change": nwc_chg,
-            "ocf": ocf, "capex": capex, "fcf": fcf,
+            "net_income": ni,
+            "dep_amort": dep,
+            "nwc_change": nwc_chg,
+            "ocf": ocf,
+            "capex": capex,
+            "fcf": fcf,
         },
         "balance_sheet": {"equity_rollforward": equity_series},
         "assumptions": a,
-        "growth_path": [f"{g*100:.0f}%" for g in growth],
+        "growth_path": [f"{g * 100:.0f}%" for g in growth],
         "methodology_log": [
-            f"Step 1 · 基期营收 {rev0:.1f} 亿 · 5 年增速 {[f'{g*100:.0f}%' for g in growth]}",
-            f"Step 2 · 毛利率 {a['gross_margin']*100:.0f}% · 运营费率 {a['opex_pct_revenue']*100:.0f}%",
+            f"Step 1 · 基期营收 {rev0:.1f} 亿 · 5 年增速 {[f'{g * 100:.0f}%' for g in growth]}",
+            f"Step 2 · 毛利率 {a['gross_margin'] * 100:.0f}% · 运营费率 {a['opex_pct_revenue'] * 100:.0f}%",
             f"Step 3 · Y5 营收 {rev[-1]:.1f} 亿 · 净利 {ni[-1]:.1f} 亿",
             f"Step 4 · 5 年累计 FCF {sum(fcf):.1f} 亿",
         ],
@@ -398,6 +461,7 @@ def project_three_stmt(features: dict, assumptions: dict | None = None) -> dict:
 # ═══════════════════════════════════════════════════════════════
 # 4. QUICK LBO
 # ═══════════════════════════════════════════════════════════════
+
 
 def quick_lbo(
     features: dict,
@@ -423,7 +487,7 @@ def quick_lbo(
     path = []
     cur = ebitda
     for _ in range(1, hold_years + 1):
-        cur *= (1 + ebitda_growth)
+        cur *= 1 + ebitda_growth
         path.append(round(cur, 2))
 
     debt = entry_debt
@@ -442,7 +506,7 @@ def quick_lbo(
 
     if entry_equity > 0 and exit_equity > 0:
         moic = exit_equity / entry_equity
-        irr = (moic ** (1 / hold_years) - 1)
+        irr = moic ** (1 / hold_years) - 1
     else:
         moic = 0
         irr = 0
@@ -464,13 +528,15 @@ def quick_lbo(
         "moic": round(moic, 2),
         "irr_pct": round(irr * 100, 1),
         "pass_pe_test": irr >= 0.20,
-        "verdict": "🟢 PE 买方可赚 20%+ IRR" if irr >= 0.20 else ("🟡 PE 买方 15-20% IRR" if irr >= 0.15 else "🔴 低于 PE 收益门槛"),
+        "verdict": "🟢 PE 买方可赚 20%+ IRR"
+        if irr >= 0.20
+        else ("🟡 PE 买方 15-20% IRR" if irr >= 0.15 else "🔴 低于 PE 收益门槛"),
         "methodology_log": [
             f"Step 1 · 入场 EBITDA {ebitda:.1f} 亿 × {entry_multiple}x = EV {entry_ev:.1f} 亿",
             f"Step 2 · {debt_multiple}x 杠杆 → 债 {entry_debt:.1f} 亿 + 股本 {entry_equity:.1f} 亿",
-            f"Step 3 · {hold_years} 年 {ebitda_growth*100:.0f}% 成长 → Y{hold_years} EBITDA {exit_ebitda:.1f} 亿",
+            f"Step 3 · {hold_years} 年 {ebitda_growth * 100:.0f}% 成长 → Y{hold_years} EBITDA {exit_ebitda:.1f} 亿",
             f"Step 4 · 退出 {exit_multiple}x × {exit_ebitda:.1f} = {exit_ev:.1f} 亿 EV",
-            f"Step 5 · 退出股权 {exit_equity:.1f} / 入场股权 {entry_equity:.1f} = {moic:.2f}x MOIC ({irr*100:.1f}% IRR)",
+            f"Step 5 · 退出股权 {exit_equity:.1f} / 入场股权 {entry_equity:.1f} = {moic:.2f}x MOIC ({irr * 100:.1f}% IRR)",
         ],
     }
 
@@ -478,6 +544,7 @@ def quick_lbo(
 # ═══════════════════════════════════════════════════════════════
 # 5. 并购 / 增厚-摊薄
 # ═══════════════════════════════════════════════════════════════
+
 
 def accretion_dilution(
     acquirer: dict,
@@ -526,10 +593,12 @@ def accretion_dilution(
         "pro_forma_eps": round(pro_forma_eps, 3),
         "standalone_eps": round(a_eps, 3),
         "accretion_pct": round(accretion, 1),
-        "verdict": "🟢 增厚" if accretion > 3 else ("⚪ 中性" if -3 <= accretion <= 3 else "🔴 摊薄"),
+        "verdict": "🟢 增厚"
+        if accretion > 3
+        else ("⚪ 中性" if -3 <= accretion <= 3 else "🔴 摊薄"),
         "methodology_log": [
-            f"Step 1 · 报价 ¥{offer_px:.2f}(溢价 {premium_pct*100:.0f}%)→ 总对价 {equity_value:.1f} 亿",
-            f"Step 2 · 现金 {cash_pct*100:.0f}% = {cash_needed:.1f} 亿; 换股 {stock_needed:.1f} 亿 → 新增 {new_shares_issued:.2f} 亿股",
+            f"Step 1 · 报价 ¥{offer_px:.2f}(溢价 {premium_pct * 100:.0f}%)→ 总对价 {equity_value:.1f} 亿",
+            f"Step 2 · 现金 {cash_pct * 100:.0f}% = {cash_needed:.1f} 亿; 换股 {stock_needed:.1f} 亿 → 新增 {new_shares_issued:.2f} 亿股",
             f"Step 3 · 合并 NI = {a_ni:.1f} + {t_ni:.1f} + 协同 {synergies_yi:.1f} − 利息 {after_tax_interest:.1f} = {pro_forma_ni:.1f}",
             f"Step 4 · Pro-forma EPS = {pro_forma_eps:.3f}(vs 独立 {a_eps:.3f}，{'增厚' if accretion > 0 else '摊薄'} {abs(accretion):.1f}%)",
         ],

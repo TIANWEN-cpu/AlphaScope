@@ -5,8 +5,12 @@ from __future__ import annotations
 import math
 from datetime import datetime, timedelta
 
+import pytest
 
-def _make_bars(n: int, start: float = 100.0, drift: float = 0.2, with_turnover: bool = True):
+
+def _make_bars(
+    n: int, start: float = 100.0, drift: float = 0.2, with_turnover: bool = True
+):
     """确定性 OHLCV(+可选换手率)。固定基准日期,完全可复现。"""
     base = datetime(2024, 1, 1)
     bars = []
@@ -30,7 +34,10 @@ def _make_bars(n: int, start: float = 100.0, drift: float = 0.2, with_turnover: 
 
 class TestInsufficient:
     def test_too_few_bars_is_failsafe(self):
-        from backend.quant.chip_distribution import compute_chip_distribution, INSUFFICIENT
+        from backend.quant.chip_distribution import (
+            compute_chip_distribution,
+            INSUFFICIENT,
+        )
 
         r = compute_chip_distribution(_make_bars(10), symbol="T")
         assert r.status == INSUFFICIENT
@@ -39,7 +46,10 @@ class TestInsufficient:
         assert "需≥" in r.note
 
     def test_empty_bars(self):
-        from backend.quant.chip_distribution import compute_chip_distribution, INSUFFICIENT
+        from backend.quant.chip_distribution import (
+            compute_chip_distribution,
+            INSUFFICIENT,
+        )
 
         r = compute_chip_distribution([], symbol="T")
         assert r.status == INSUFFICIENT
@@ -104,13 +114,19 @@ class TestProfitRatioSemantics:
 
 class TestModelSelection:
     def test_real_turnover_model(self):
-        from backend.quant.chip_distribution import compute_chip_distribution, MODEL_TURNOVER
+        from backend.quant.chip_distribution import (
+            compute_chip_distribution,
+            MODEL_TURNOVER,
+        )
 
         r = compute_chip_distribution(_make_bars(120, with_turnover=True), symbol="T")
         assert r.model == MODEL_TURNOVER
 
     def test_volume_proxy_model(self):
-        from backend.quant.chip_distribution import compute_chip_distribution, MODEL_VOLUME_PROXY
+        from backend.quant.chip_distribution import (
+            compute_chip_distribution,
+            MODEL_VOLUME_PROXY,
+        )
 
         r = compute_chip_distribution(_make_bars(120, with_turnover=False), symbol="T")
         assert r.model == MODEL_VOLUME_PROXY
@@ -150,8 +166,12 @@ class TestRobustness:
         from backend.quant.chip_distribution import compute_chip_distribution, OK
 
         bars = _make_bars(120)
-        bars.insert(5, {"date": "2024-01-05x", "close": 0, "high": 0, "low": 0, "volume": 0})
-        bars.insert(9, {"date": "2024-01-09x", "close": "nan", "high": 1, "low": 1, "volume": 1})
+        bars.insert(
+            5, {"date": "2024-01-05x", "close": 0, "high": 0, "low": 0, "volume": 0}
+        )
+        bars.insert(
+            9, {"date": "2024-01-09x", "close": "nan", "high": 1, "low": 1, "volume": 1}
+        )
         r = compute_chip_distribution(bars, symbol="T")
         assert r.status == OK
         assert r.bars_used == 120  # 两条坏行被跳过
@@ -166,8 +186,12 @@ class TestRobustness:
         bars = [
             {
                 "date": (base + timedelta(days=i)).strftime("%Y-%m-%d"),
-                "open": 50.0, "high": 50.2, "low": 49.8, "close": 50.0,
-                "volume": 10000, "turnover": 2.0,
+                "open": 50.0,
+                "high": 50.2,
+                "low": 49.8,
+                "close": 50.0,
+                "volume": 10000,
+                "turnover": 2.0,
             }
             for i in range(60)
         ]
@@ -177,13 +201,20 @@ class TestRobustness:
 
 class TestApiPayload:
     def test_local_chip_payload_uses_raw_turnover_bars(self):
+        pytest.importorskip("fastapi")
         from unittest.mock import patch
 
-        from backend.api.quant import ChipDistributionRequestBody, _run_chip_distribution_local
+        from backend.api.quant import (
+            ChipDistributionRequestBody,
+            _run_chip_distribution_local,
+        )
 
         bars = _make_bars(160, with_turnover=True)
         body = ChipDistributionRequestBody(
-            symbol="600519", start_date="2024-01-01", end_date="2024-12-31", price_levels=100
+            symbol="600519",
+            start_date="2024-01-01",
+            end_date="2024-12-31",
+            price_levels=100,
         )
         with (
             patch("backend.price_store.get_prices", return_value=bars),
@@ -202,21 +233,34 @@ class TestApiPayload:
         assert "不预测价格" in payload["disclaimer"]
 
     def test_local_chip_falls_back_when_raw_too_short(self):
+        pytest.importorskip("fastapi")
         from unittest.mock import patch
 
-        from backend.api.quant import ChipDistributionRequestBody, _run_chip_distribution_local
+        from backend.api.quant import (
+            ChipDistributionRequestBody,
+            _run_chip_distribution_local,
+        )
 
         body = ChipDistributionRequestBody(
             symbol="600519", start_date="2024-01-01", end_date="2024-12-31"
         )
         cleaned = [
-            {"date": f"2024-02-{i+1:02d}", "open": 50, "high": 51, "low": 49, "close": 50, "volume": 1000}
+            {
+                "date": f"2024-02-{i + 1:02d}",
+                "open": 50,
+                "high": 51,
+                "low": 49,
+                "close": 50,
+                "volume": 1000,
+            }
             for i in range(60)
         ]
         with (
             patch("backend.price_store.get_prices", return_value=[]),  # 原始取数为空
             patch("backend.price_store.normalize_symbol", return_value="600519"),
-            patch("backend.api.quant._load_local_bars", return_value=(cleaned, "provider")) as mock_load,
+            patch(
+                "backend.api.quant._load_local_bars", return_value=(cleaned, "provider")
+            ) as mock_load,
         ):
             payload = _run_chip_distribution_local(body)
 

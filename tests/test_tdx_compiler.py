@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from datetime import datetime, timedelta
 
 
@@ -14,7 +13,11 @@ def _bars_from_closes(closes, volumes=None):
         out.append(
             {
                 "date": (base + timedelta(days=i)).strftime("%Y-%m-%d"),
-                "open": c, "high": c + 1, "low": c - 1, "close": c, "volume": v,
+                "open": c,
+                "high": c + 1,
+                "low": c - 1,
+                "close": c,
+                "volume": v,
                 "symbol": "T",
             }
         )
@@ -149,7 +152,11 @@ class TestStrategy:
         closes = [100 - i for i in range(15)] + [85 + 2 * i for i in range(25)]
         bars = _bars_from_closes(closes)
         strat = StrategyRegistry.create(
-            "tdx", {"formula": "ENTERLONG:CROSS(MA(CLOSE,5),MA(CLOSE,10));EXITLONG:CROSS(MA(CLOSE,10),MA(CLOSE,5));", "position_size_pct": 20}
+            "tdx",
+            {
+                "formula": "ENTERLONG:CROSS(MA(CLOSE,5),MA(CLOSE,10));EXITLONG:CROSS(MA(CLOSE,10),MA(CLOSE,5));",
+                "position_size_pct": 20,
+            },
         )
         sigs = strat.generate_signals(bars, {"equity": 1000000})
         assert len(sigs) == len(bars)
@@ -163,7 +170,10 @@ class TestStrategy:
         closes = [100 - i for i in range(15)] + [85 + 1.5 * i for i in range(35)]
         bars = _bars_from_closes(closes)
         strat = StrategyRegistry.create(
-            "tdx", {"formula": "ENTERLONG:CROSS(MA(CLOSE,5),MA(CLOSE,10));EXITLONG:CLOSE<MA(CLOSE,5);"}
+            "tdx",
+            {
+                "formula": "ENTERLONG:CROSS(MA(CLOSE,5),MA(CLOSE,10));EXITLONG:CLOSE<MA(CLOSE,5);"
+            },
         )
         engine = BacktestEngine(initial_capital=1000000)
         result = engine.run(strat, bars, "T")

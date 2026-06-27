@@ -16,7 +16,9 @@ from backend.quant.evolution import (
 )
 
 
-def _make_bars(n: int, start_close: float = 100.0, drift: float = 0.3, wobble: float = 6.0):
+def _make_bars(
+    n: int, start_close: float = 100.0, drift: float = 0.3, wobble: float = 6.0
+):
     """确定性 OHLCV:温和上行 + 正弦扰动, 固定 base date(可复现)。"""
     base = datetime(2024, 1, 1)
     bars = []
@@ -83,8 +85,12 @@ class TestFailSafe:
 class TestEvolution:
     def test_basic_run_ok(self):
         report = run_evolution(
-            "ma_crossover", _make_bars(260), symbol="T",
-            population_size=8, generations=3, seed=1,
+            "ma_crossover",
+            _make_bars(260),
+            symbol="T",
+            population_size=8,
+            generations=3,
+            seed=1,
         )
         assert report.status == "ok"
         assert report.best is not None
@@ -96,20 +102,40 @@ class TestEvolution:
         assert len(report.history) == 4
 
     def test_determinism_same_seed(self):
-        a = run_evolution("ma_crossover", _make_bars(260), symbol="T",
-                          population_size=8, generations=3, seed=7)
-        b = run_evolution("ma_crossover", _make_bars(260), symbol="T",
-                          population_size=8, generations=3, seed=7)
+        a = run_evolution(
+            "ma_crossover",
+            _make_bars(260),
+            symbol="T",
+            population_size=8,
+            generations=3,
+            seed=7,
+        )
+        b = run_evolution(
+            "ma_crossover",
+            _make_bars(260),
+            symbol="T",
+            population_size=8,
+            generations=3,
+            seed=7,
+        )
         assert a.best is not None and b.best is not None
         assert a.best.genome == b.best.genome
         assert a.best.fitness == b.best.fitness
-        assert [h.best_fitness for h in a.history] == [h.best_fitness for h in b.history]
+        assert [h.best_fitness for h in a.history] == [
+            h.best_fitness for h in b.history
+        ]
 
     def test_best_not_worse_than_default(self):
         # 默认参数落在推断空间内 → 初始种群含「默认投影」个体, 精英保留 →
         # 全局最优至少不劣于基线(默认参数)。
-        report = run_evolution("ma_crossover", _make_bars(260), symbol="T",
-                              population_size=10, generations=4, seed=3)
+        report = run_evolution(
+            "ma_crossover",
+            _make_bars(260),
+            symbol="T",
+            population_size=10,
+            generations=4,
+            seed=3,
+        )
         assert report.best is not None and report.baseline is not None
         assert report.best.fitness >= report.baseline.fitness - 1e-9
 
@@ -117,9 +143,18 @@ class TestEvolution:
         space = infer_param_space("ma_crossover")
         one_key = sorted(space.keys())[0]
         spec = space[one_key]
-        explicit = {one_key: {"type": spec["type"], "min": spec["min"], "max": spec["max"]}}
-        report = run_evolution("ma_crossover", _make_bars(200), symbol="T",
-                              param_space=explicit, population_size=6, generations=2, seed=5)
+        explicit = {
+            one_key: {"type": spec["type"], "min": spec["min"], "max": spec["max"]}
+        }
+        report = run_evolution(
+            "ma_crossover",
+            _make_bars(200),
+            symbol="T",
+            param_space=explicit,
+            population_size=6,
+            generations=2,
+            seed=5,
+        )
         assert report.status == "ok"
         assert report.best is not None
         # 只进化这一个键
@@ -128,13 +163,31 @@ class TestEvolution:
         assert spec["min"] <= val <= spec["max"]
 
     def test_to_dict_shape(self):
-        report = run_evolution("ma_crossover", _make_bars(200), symbol="600519",
-                              population_size=6, generations=2, seed=2)
+        report = run_evolution(
+            "ma_crossover",
+            _make_bars(200),
+            symbol="600519",
+            population_size=6,
+            generations=2,
+            seed=2,
+        )
         d = report.to_dict()
         for key in (
-            "status", "strategy_id", "symbol", "fitness_metric", "population_size",
-            "generations", "seed", "evaluations", "best", "baseline", "improvement",
-            "history", "param_space", "message", "disclaimer",
+            "status",
+            "strategy_id",
+            "symbol",
+            "fitness_metric",
+            "population_size",
+            "generations",
+            "seed",
+            "evaluations",
+            "best",
+            "baseline",
+            "improvement",
+            "history",
+            "param_space",
+            "message",
+            "disclaimer",
         ):
             assert key in d
         assert d["strategy_id"] == "ma_crossover"
@@ -143,17 +196,29 @@ class TestEvolution:
         assert d["best"] and "genome" in d["best"] and "metrics" in d["best"]
 
     def test_invalid_metric_falls_back_to_sharpe(self):
-        report = run_evolution("ma_crossover", _make_bars(160), symbol="T",
-                              fitness_metric="not_a_metric", population_size=6,
-                              generations=2, seed=1)
+        report = run_evolution(
+            "ma_crossover",
+            _make_bars(160),
+            symbol="T",
+            fitness_metric="not_a_metric",
+            population_size=6,
+            generations=2,
+            seed=1,
+        )
         assert report.fitness_metric == "sharpe_ratio"
 
     def test_experiment_summary_for_evolution(self):
         # experiment_store._summarize 的 evolution 分支抽出紧凑摘要(供实验记录列表)
         from backend.quant.experiment_store import _summarize
 
-        report = run_evolution("ma_crossover", _make_bars(160), symbol="T",
-                              population_size=6, generations=2, seed=1)
+        report = run_evolution(
+            "ma_crossover",
+            _make_bars(160),
+            symbol="T",
+            population_size=6,
+            generations=2,
+            seed=1,
+        )
         payload = report.to_dict()
         payload["mode"] = "evolution"
         summary = _summarize("evolution", payload)

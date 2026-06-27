@@ -16,10 +16,19 @@ from backend.valuation import (
 )
 
 BASE = {
-    "price": 18.5, "market_cap_yi": 260, "shares_outstanding_yi": 14.0,
-    "revenue_latest_yi": 52, "net_margin": 12.5, "pe": 35, "pb": 2.8,
-    "total_debt_yi": 10, "cash_yi": 40, "fcf_latest_yi": 6.5,
-    "ebitda_yi": 10, "equity_yi": 92, "name": "测试公司",
+    "price": 18.5,
+    "market_cap_yi": 260,
+    "shares_outstanding_yi": 14.0,
+    "revenue_latest_yi": 52,
+    "net_margin": 12.5,
+    "pe": 35,
+    "pb": 2.8,
+    "total_debt_yi": 10,
+    "cash_yi": 40,
+    "fcf_latest_yi": 6.5,
+    "ebitda_yi": 10,
+    "equity_yi": 92,
+    "name": "测试公司",
 }
 
 
@@ -56,7 +65,11 @@ class TestComps:
         assert "error" in build_comps_table({"pe": 10}, [])
 
     def test_cheap_when_below_peers(self):
-        peers = [{"name": "A", "pe": 30}, {"name": "B", "pe": 40}, {"name": "C", "pe": 50}]
+        peers = [
+            {"name": "A", "pe": 30},
+            {"name": "B", "pe": 40},
+            {"name": "C", "pe": 50},
+        ]
         out = build_comps_table({"pe": 10, "price": 5}, peers)
         assert out["target_percentile"]["pe"] == 0  # 低于所有同行
         assert "便宜" in out["valuation_verdict"]
@@ -87,7 +100,10 @@ class TestValueStock:
     def test_value_stock_shape(self):
         out = value_stock(BASE, peers=[{"name": "A", "pe": 30}])
         assert set(out) >= {"dcf", "comps", "lbo", "three_statement", "summary"}
-        assert out["summary"]["dcf_intrinsic_per_share"] == out["dcf"]["intrinsic_per_share"]
+        assert (
+            out["summary"]["dcf_intrinsic_per_share"]
+            == out["dcf"]["intrinsic_per_share"]
+        )
 
     def test_value_stock_no_peers(self):
         out = value_stock(BASE)
@@ -99,19 +115,37 @@ class TestAdapter:
         import backend.fundamentals as F
 
         period = types.SimpleNamespace(
-            revenue_yi=52.0, net_profit_yi=6.5, roe_pct=11.8,
-            yoy_revenue=18.0, gross_margin_pct=35.0, debt_ratio_pct=30.0,
+            revenue_yi=52.0,
+            net_profit_yi=6.5,
+            roe_pct=11.8,
+            yoy_revenue=18.0,
+            gross_margin_pct=35.0,
+            debt_ratio_pct=30.0,
         )
         self_row = types.SimpleNamespace(
-            name="测试公司", symbol="600519", total_mcap_yi=260.0,
-            pe=35.0, pb=2.8, roe_pct=12.0, yoy_revenue_pct=18.0, is_self=True,
+            name="测试公司",
+            symbol="600519",
+            total_mcap_yi=260.0,
+            pe=35.0,
+            pb=2.8,
+            roe_pct=12.0,
+            yoy_revenue_pct=18.0,
+            is_self=True,
         )
         peer_row = types.SimpleNamespace(
-            name="同行A", symbol="600520", total_mcap_yi=300.0,
-            pe=30.0, pb=2.5, roe_pct=14.0, yoy_revenue_pct=20.0, is_self=False,
+            name="同行A",
+            symbol="600520",
+            total_mcap_yi=300.0,
+            pe=30.0,
+            pb=2.5,
+            roe_pct=14.0,
+            yoy_revenue_pct=20.0,
+            is_self=False,
         )
         monkeypatch.setattr(F, "fetch_financial_summary", lambda s, periods=4: [period])
-        monkeypatch.setattr(F, "fetch_industry_peers", lambda s, top_k=8: ("白酒", [self_row, peer_row]))
+        monkeypatch.setattr(
+            F, "fetch_industry_peers", lambda s, top_k=8: ("白酒", [self_row, peer_row])
+        )
 
         feats, peers = features_from_fundamentals("600519")
         assert feats["revenue_latest_yi"] == 52.0
@@ -124,8 +158,12 @@ class TestAdapter:
         import backend.fundamentals as F
 
         period = types.SimpleNamespace(
-            revenue_yi=52.0, net_profit_yi=6.5, roe_pct=11.8,
-            yoy_revenue=18.0, gross_margin_pct=35.0, debt_ratio_pct=30.0,
+            revenue_yi=52.0,
+            net_profit_yi=6.5,
+            roe_pct=11.8,
+            yoy_revenue=18.0,
+            gross_margin_pct=35.0,
+            debt_ratio_pct=30.0,
         )
         monkeypatch.setattr(F, "fetch_financial_summary", lambda s, periods=4: [period])
         monkeypatch.setattr(F, "fetch_industry_peers", lambda s, top_k=8: ("行业", []))

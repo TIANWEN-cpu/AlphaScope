@@ -30,9 +30,27 @@ def tmp_db(monkeypatch):
 def _seed():
     from backend.diagnostics_store import save_cost_record
 
-    save_cost_record(model="claude-sonnet-4-5", vendor="claude", input_tokens=1000, output_tokens=500, cost_usd=0.02)
-    save_cost_record(model="claude-sonnet-4-5", vendor="claude", input_tokens=2000, output_tokens=800, cost_usd=0.05)
-    save_cost_record(model="gpt-5.2", vendor="gpt", input_tokens=500, output_tokens=300, cost_usd=0.01)
+    save_cost_record(
+        model="claude-sonnet-4-5",
+        vendor="claude",
+        input_tokens=1000,
+        output_tokens=500,
+        cost_usd=0.02,
+    )
+    save_cost_record(
+        model="claude-sonnet-4-5",
+        vendor="claude",
+        input_tokens=2000,
+        output_tokens=800,
+        cost_usd=0.05,
+    )
+    save_cost_record(
+        model="gpt-5.2",
+        vendor="gpt",
+        input_tokens=500,
+        output_tokens=300,
+        cost_usd=0.01,
+    )
 
 
 class TestCostSummary:

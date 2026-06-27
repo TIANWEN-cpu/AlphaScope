@@ -121,7 +121,9 @@ def _norm_date(value: Any) -> str:
         return ""
     # 纯数字 → 时间戳(>1e12 视为毫秒)
     try:
-        if isinstance(value, (int, float)) or (isinstance(value, str) and value.strip().isdigit()):
+        if isinstance(value, (int, float)) or (
+            isinstance(value, str) and value.strip().isdigit()
+        ):
             ts = float(value)
             if ts > 1e12:
                 ts /= 1000.0
@@ -165,8 +167,12 @@ def apply_field_map(
                 "high": _to_float(_record_get(rec, field_map.get("high"))),
                 "low": _to_float(_record_get(rec, field_map.get("low"))),
                 "close": close,
-                "volume": _to_float(_record_get(rec, field_map.get("volume"))) if field_map.get("volume") else 0.0,
-                "amount": _to_float(_record_get(rec, field_map.get("amount"))) if field_map.get("amount") else 0.0,
+                "volume": _to_float(_record_get(rec, field_map.get("volume")))
+                if field_map.get("volume")
+                else 0.0,
+                "amount": _to_float(_record_get(rec, field_map.get("amount")))
+                if field_map.get("amount")
+                else 0.0,
                 "source": "http_json",
                 "user_provided": True,
             }
@@ -196,7 +202,9 @@ def normalize_source(cfg: Dict[str, Any]) -> Dict[str, Any]:
         method = "GET"
     headers = cfg.get("headers") if isinstance(cfg.get("headers"), dict) else {}
     field_map = cfg.get("field_map") if isinstance(cfg.get("field_map"), dict) else {}
-    field_map = {k: v for k, v in field_map.items() if k in _ALL_FIELDS and v not in (None, "")}
+    field_map = {
+        k: v for k, v in field_map.items() if k in _ALL_FIELDS and v not in (None, "")
+    }
     return {
         "id": sid,
         "name": name,
@@ -286,7 +294,12 @@ def fetch_json(
     优先用 requests, 缺失回退 stdlib urllib。仅本函数触网, 供 refresh_source 调用、可注入替身。
     """
     if not url or not str(url).lower().startswith(("http://", "https://")):
-        return {"ok": False, "status": 0, "payload": None, "error": "URL 非法(需 http/https)"}
+        return {
+            "ok": False,
+            "status": 0,
+            "payload": None,
+            "error": "URL 非法(需 http/https)",
+        }
     headers = headers or {}
     method = (method or "GET").upper()
     try:
@@ -294,13 +307,20 @@ def fetch_json(
             import requests  # 优先复用项目已有依赖
 
             resp = requests.request(
-                method, url, headers=headers,
+                method,
+                url,
+                headers=headers,
                 json=body if (body is not None and method == "POST") else None,
                 timeout=timeout,
             )
             status = resp.status_code
             if status >= 400:
-                return {"ok": False, "status": status, "payload": None, "error": f"HTTP {status}"}
+                return {
+                    "ok": False,
+                    "status": status,
+                    "payload": None,
+                    "error": f"HTTP {status}",
+                }
             return {"ok": True, "status": status, "payload": resp.json(), "error": None}
         except ImportError:
             pass
@@ -315,9 +335,19 @@ def fetch_json(
         req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
         with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 - 用户自配 URL
             raw = r.read().decode("utf-8", errors="replace")
-            return {"ok": True, "status": getattr(r, "status", 200), "payload": json.loads(raw), "error": None}
+            return {
+                "ok": True,
+                "status": getattr(r, "status", 200),
+                "payload": json.loads(raw),
+                "error": None,
+            }
     except Exception as e:  # noqa: BLE001 - 失败安全
-        return {"ok": False, "status": 0, "payload": None, "error": f"{type(e).__name__}: {e}"}
+        return {
+            "ok": False,
+            "status": 0,
+            "payload": None,
+            "error": f"{type(e).__name__}: {e}",
+        }
 
 
 def _materialize(symbol: str, bars: List[Dict[str, Any]]) -> bool:
@@ -363,30 +393,55 @@ def refresh_source(
         url = url.replace("{symbol}", symbol)
 
     do_fetch = fetcher or fetch_json
-    res = do_fetch(url=url, method=src.get("method", "GET"), headers=src.get("headers"), body=src.get("body"))
+    res = do_fetch(
+        url=url,
+        method=src.get("method", "GET"),
+        headers=src.get("headers"),
+        body=src.get("body"),
+    )
     now_iso = datetime.now().isoformat()
 
     if not res or not res.get("ok"):
         err = (res or {}).get("error") or "抓取失败"
         _update_source_status(source_id, "error", err)
-        return {"ok": False, "source_id": source_id, "symbol": symbol, "error": err,
-                "bar_count": len(materialized_bars(symbol)), "kept_cache": True}
+        return {
+            "ok": False,
+            "source_id": source_id,
+            "symbol": symbol,
+            "error": err,
+            "bar_count": len(materialized_bars(symbol)),
+            "kept_cache": True,
+        }
 
     records = extract_records(res.get("payload"), src.get("records_path", ""))
     if not records:
         _update_source_status(source_id, "error", "记录路径定位不到数组")
-        return {"ok": False, "source_id": source_id, "symbol": symbol,
-                "error": "记录路径定位不到数组(检查 records_path)", "kept_cache": True}
+        return {
+            "ok": False,
+            "source_id": source_id,
+            "symbol": symbol,
+            "error": "记录路径定位不到数组(检查 records_path)",
+            "kept_cache": True,
+        }
 
-    bars = apply_field_map(records, src.get("field_map", {}), symbol=symbol, limit=limit)
+    bars = apply_field_map(
+        records, src.get("field_map", {}), symbol=symbol, limit=limit
+    )
     if not bars:
         _update_source_status(source_id, "error", "字段映射无有效行(检查 field_map)")
-        return {"ok": False, "source_id": source_id, "symbol": symbol,
-                "error": "字段映射后无有效行(检查 field_map / 日期/收盘列)", "kept_cache": True}
+        return {
+            "ok": False,
+            "source_id": source_id,
+            "symbol": symbol,
+            "error": "字段映射后无有效行(检查 field_map / 日期/收盘列)",
+            "kept_cache": True,
+        }
 
     _materialize(symbol, bars)
     dates = [b["date"] for b in bars]
-    _update_source_status(source_id, "ok", None, bar_count=len(bars), last_refresh=now_iso)
+    _update_source_status(
+        source_id, "ok", None, bar_count=len(bars), last_refresh=now_iso
+    )
     return {
         "ok": True,
         "source_id": source_id,
@@ -435,14 +490,18 @@ def preview_fetch(
         return {"ok": False, "error": (res or {}).get("error") or "抓取失败"}
     records = extract_records(res.get("payload"), records_path)
     if not records:
-        keys = list(res["payload"].keys()) if isinstance(res.get("payload"), dict) else []
+        keys = (
+            list(res["payload"].keys()) if isinstance(res.get("payload"), dict) else []
+        )
         return {"ok": False, "error": "记录路径定位不到数组", "top_level_keys": keys}
     sample = records[0]
     return {
         "ok": True,
         "record_count": len(records),
         "sample": sample,
-        "sample_keys": list(sample.keys()) if isinstance(sample, dict) else [f"[{i}]" for i in range(len(sample))],
+        "sample_keys": list(sample.keys())
+        if isinstance(sample, dict)
+        else [f"[{i}]" for i in range(len(sample))],
         "inferred_field_map": infer_field_map(sample),
     }
 

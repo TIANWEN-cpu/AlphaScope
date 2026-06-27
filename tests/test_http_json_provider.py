@@ -56,7 +56,14 @@ class TestApplyFieldMap:
             {"t": "2026-01-02", "o": 10, "h": 12, "l": 9, "c": 11, "v": 1000},
             {"t": "2026-01-01", "o": 9, "h": 11, "l": 8, "c": 10, "v": 900},
         ]
-        fm = {"date": "t", "open": "o", "high": "h", "low": "l", "close": "c", "volume": "v"}
+        fm = {
+            "date": "t",
+            "open": "o",
+            "high": "h",
+            "low": "l",
+            "close": "c",
+            "volume": "v",
+        }
         bars = hj.apply_field_map(records, fm, symbol="600519")
         assert len(bars) == 2
         assert bars[0]["date"] == "2026-01-01"  # 升序
@@ -76,14 +83,19 @@ class TestApplyFieldMap:
         assert hj.apply_field_map(records, {"date": "t"}) == []  # 缺 OHLC
 
     def test_skips_invalid_close(self):
-        records = [{"t": "2026-01-01", "o": 1, "h": 1, "l": 1, "c": 0},
-                   {"t": "2026-01-02", "o": 1, "h": 1, "l": 1, "c": 5}]
+        records = [
+            {"t": "2026-01-01", "o": 1, "h": 1, "l": 1, "c": 0},
+            {"t": "2026-01-02", "o": 1, "h": 1, "l": 1, "c": 5},
+        ]
         fm = {"date": "t", "open": "o", "high": "h", "low": "l", "close": "c"}
         bars = hj.apply_field_map(records, fm)
         assert len(bars) == 1 and bars[0]["close"] == 5.0
 
     def test_limit(self):
-        records = [{"t": f"2026-01-{i:02d}", "o": 1, "h": 1, "l": 1, "c": 1} for i in range(1, 11)]
+        records = [
+            {"t": f"2026-01-{i:02d}", "o": 1, "h": 1, "l": 1, "c": 1}
+            for i in range(1, 11)
+        ]
         fm = {"date": "t", "open": "o", "high": "h", "low": "l", "close": "c"}
         bars = hj.apply_field_map(records, fm, limit=3)
         assert len(bars) == 3 and bars[-1]["date"] == "2026-01-10"
@@ -91,7 +103,9 @@ class TestApplyFieldMap:
 
 class TestInferFieldMap:
     def test_dict_sample(self):
-        fm = hj.infer_field_map({"日期": "x", "开盘": 1, "收盘": 2, "最高": 3, "最低": 4})
+        fm = hj.infer_field_map(
+            {"日期": "x", "开盘": 1, "收盘": 2, "最高": 3, "最低": 4}
+        )
         assert fm["date"] == "日期" and fm["close"] == "收盘"
 
     def test_list_sample_empty(self):
@@ -101,7 +115,13 @@ class TestInferFieldMap:
 
 class TestNormalizeSource:
     def test_defaults_and_clamp(self):
-        s = hj.normalize_source({"name": "我的源", "method": "delete", "field_map": {"date": "t", "bad": "x"}})
+        s = hj.normalize_source(
+            {
+                "name": "我的源",
+                "method": "delete",
+                "field_map": {"date": "t", "bad": "x"},
+            }
+        )
         assert s["method"] == "GET"  # 非法方法回退
         assert s["id"]  # 自动 slug
         assert "bad" not in s["field_map"]  # 过滤非法字段
@@ -127,12 +147,15 @@ def store(tmp_path, monkeypatch):
 def _good_fetcher(payload):
     def _f(**kwargs):
         return {"ok": True, "status": 200, "payload": payload, "error": None}
+
     return _f
 
 
 class TestRegistry:
     def test_save_list_get_delete(self, store):
-        saved = store.save_source({"name": "测试源", "url": "https://x/{symbol}", "symbol": "600519"})
+        saved = store.save_source(
+            {"name": "测试源", "url": "https://x/{symbol}", "symbol": "600519"}
+        )
         assert saved is not None
         sid = saved["id"]
         assert len(store.list_sources()) == 1
@@ -150,21 +173,34 @@ class TestRegistry:
 
 class TestRefreshAndQuery:
     def _save(self, store):
-        return store.save_source({
-            "id": "src1",
-            "name": "K线源",
-            "url": "https://example.com/api/{symbol}",
-            "symbol": "600519",
-            "records_path": "data.klines",
-            "field_map": {"date": "t", "open": "o", "high": "h", "low": "l", "close": "c", "volume": "v"},
-        })
+        return store.save_source(
+            {
+                "id": "src1",
+                "name": "K线源",
+                "url": "https://example.com/api/{symbol}",
+                "symbol": "600519",
+                "records_path": "data.klines",
+                "field_map": {
+                    "date": "t",
+                    "open": "o",
+                    "high": "h",
+                    "low": "l",
+                    "close": "c",
+                    "volume": "v",
+                },
+            }
+        )
 
     def test_refresh_materializes_and_query(self, store):
         self._save(store)
-        payload = {"data": {"klines": [
-            {"t": "2026-01-01", "o": 9, "h": 11, "l": 8, "c": 10, "v": 900},
-            {"t": "2026-01-02", "o": 10, "h": 12, "l": 9, "c": 11, "v": 1000},
-        ]}}
+        payload = {
+            "data": {
+                "klines": [
+                    {"t": "2026-01-01", "o": 9, "h": 11, "l": 8, "c": 10, "v": 900},
+                    {"t": "2026-01-02", "o": 10, "h": 12, "l": 9, "c": 11, "v": 1000},
+                ]
+            }
+        }
         res = store.refresh_source("src1", fetcher=_good_fetcher(payload))
         assert res["ok"] is True
         assert res["bar_count"] == 2
@@ -181,12 +217,18 @@ class TestRefreshAndQuery:
 
     def test_refresh_failure_keeps_cache(self, store):
         self._save(store)
-        ok_payload = {"data": {"klines": [{"t": "2026-01-01", "o": 1, "h": 1, "l": 1, "c": 1, "v": 1}]}}
+        ok_payload = {
+            "data": {
+                "klines": [{"t": "2026-01-01", "o": 1, "h": 1, "l": 1, "c": 1, "v": 1}]
+            }
+        }
         store.refresh_source("src1", fetcher=_good_fetcher(ok_payload))
         assert len(store.materialized_bars("600519")) == 1
+
         # 抓取失败
         def _bad(**kwargs):
             return {"ok": False, "status": 0, "payload": None, "error": "timeout"}
+
         res = store.refresh_source("src1", fetcher=_bad)
         assert res["ok"] is False
         assert res.get("kept_cache") is True
@@ -195,9 +237,22 @@ class TestRefreshAndQuery:
         assert store.get_source("src1")["last_status"] == "error"
 
     def test_refresh_bad_records_path(self, store):
-        store.save_source({"id": "s2", "name": "x", "url": "https://x", "symbol": "000001",
-                           "records_path": "nope.nope",
-                           "field_map": {"date": "t", "open": "o", "high": "h", "low": "l", "close": "c"}})
+        store.save_source(
+            {
+                "id": "s2",
+                "name": "x",
+                "url": "https://x",
+                "symbol": "000001",
+                "records_path": "nope.nope",
+                "field_map": {
+                    "date": "t",
+                    "open": "o",
+                    "high": "h",
+                    "low": "l",
+                    "close": "c",
+                },
+            }
+        )
         res = store.refresh_source("s2", fetcher=_good_fetcher({"data": []}))
         assert res["ok"] is False
         assert "记录路径" in res["error"]
@@ -207,21 +262,46 @@ class TestRefreshAndQuery:
         assert res["ok"] is False
 
     def test_url_symbol_placeholder(self, store):
-        store.save_source({"id": "s3", "name": "x", "url": "https://api/{symbol}.json", "symbol": "600000",
-                           "records_path": "",
-                           "field_map": {"date": "t", "open": "o", "high": "h", "low": "l", "close": "c"}})
+        store.save_source(
+            {
+                "id": "s3",
+                "name": "x",
+                "url": "https://api/{symbol}.json",
+                "symbol": "600000",
+                "records_path": "",
+                "field_map": {
+                    "date": "t",
+                    "open": "o",
+                    "high": "h",
+                    "low": "l",
+                    "close": "c",
+                },
+            }
+        )
         captured = {}
+
         def _cap(**kwargs):
             captured["url"] = kwargs.get("url")
-            return {"ok": True, "payload": [{"t": "2026-01-01", "o": 1, "h": 1, "l": 1, "c": 1}], "error": None}
+            return {
+                "ok": True,
+                "payload": [{"t": "2026-01-01", "o": 1, "h": 1, "l": 1, "c": 1}],
+                "error": None,
+            }
+
         store.refresh_source("s3", fetcher=_cap)
         assert captured["url"] == "https://api/600000.json"
 
 
 class TestPreviewFetch:
     def test_preview_returns_sample_and_map(self, store):
-        payload = {"data": [{"日期": "2026-01-01", "开盘": 1, "收盘": 2, "最高": 3, "最低": 0.5}]}
-        res = store.preview_fetch("https://x", records_path="data", fetcher=_good_fetcher(payload))
+        payload = {
+            "data": [
+                {"日期": "2026-01-01", "开盘": 1, "收盘": 2, "最高": 3, "最低": 0.5}
+            ]
+        }
+        res = store.preview_fetch(
+            "https://x", records_path="data", fetcher=_good_fetcher(payload)
+        )
         assert res["ok"] is True
         assert res["record_count"] == 1
         assert res["inferred_field_map"]["close"] == "收盘"
@@ -229,6 +309,7 @@ class TestPreviewFetch:
     def test_preview_failure_safe(self, store):
         def _bad(**kwargs):
             return {"ok": False, "error": "boom"}
+
         res = store.preview_fetch("https://x", fetcher=_bad)
         assert res["ok"] is False
 

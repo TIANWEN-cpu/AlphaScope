@@ -425,7 +425,9 @@ def _run_chip_distribution_local(body: "ChipDistributionRequestBody") -> dict[st
             initial_capital=100000.0,
         )
 
-    report = compute_chip_distribution(raw, symbol=body.symbol, price_levels=body.price_levels)
+    report = compute_chip_distribution(
+        raw, symbol=body.symbol, price_levels=body.price_levels
+    )
     now = datetime.now()
     run_id = f"chip-{now.strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"
     payload = report.to_dict()
@@ -458,10 +460,18 @@ def _run_chip_distribution_local(body: "ChipDistributionRequestBody") -> dict[st
 
 # 策略横向对比不参与对比的模板策略(需用户配置规则/公式才有信号)。
 _COMPARE_SKIP_STRATEGIES = {"custom_rule", "tdx"}
-_COMPARE_RANK_KEYS = {"sharpe_ratio", "total_return", "calmar_ratio", "annual_return", "win_rate"}
+_COMPARE_RANK_KEYS = {
+    "sharpe_ratio",
+    "total_return",
+    "calmar_ratio",
+    "annual_return",
+    "win_rate",
+}
 
 
-def _run_strategy_comparison_local(body: "StrategyCompareRequestBody") -> dict[str, Any]:
+def _run_strategy_comparison_local(
+    body: "StrategyCompareRequestBody",
+) -> dict[str, Any]:
     """同一标的/区间跑全部内置策略并按指标排名,返回 API 载荷。
 
     只取一次行情,所有策略复用同一份 bar(各自拷贝避免互相污染),复用已测回测引擎。
@@ -489,7 +499,9 @@ def _run_strategy_comparison_local(body: "StrategyCompareRequestBody") -> dict[s
         strategy = StrategyRegistry.create(name, {})
         if strategy is None:
             continue
-        engine = BacktestEngine(initial_capital=body.initial_capital, commission_rate=0.001)
+        engine = BacktestEngine(
+            initial_capital=body.initial_capital, commission_rate=0.001
+        )
         result = engine.run(strategy, [dict(b) for b in bars], body.symbol)
         perf = result.performance or {}
         rows.append(
@@ -520,7 +532,9 @@ def _run_strategy_comparison_local(body: "StrategyCompareRequestBody") -> dict[s
     assumptions: dict[str, Any] = {}
     if bars:
         # 任一引擎实例的假设都一致,取一次披露给前端。
-        assumptions = BacktestEngine(initial_capital=body.initial_capital)._assumptions()
+        assumptions = BacktestEngine(
+            initial_capital=body.initial_capital
+        )._assumptions()
     payload = {
         "run_id": run_id,
         "mode": "strategy_compare",
@@ -699,8 +713,12 @@ class WalkForwardRequestBody(BaseModel):
     end_date: str = Field(description="结束日期 YYYY-MM-DD")
     initial_capital: float = Field(default=1000000.0, description="初始资金")
     params: dict[str, Any] = Field(default_factory=dict, description="策略参数覆盖")
-    n_splits: int = Field(default=5, description="样本外窗口数(2-12, 数据不足时自动收敛)")
-    scheme: str = Field(default="anchored", description="切分方案: anchored(锚定) | rolling(滚动)")
+    n_splits: int = Field(
+        default=5, description="样本外窗口数(2-12, 数据不足时自动收敛)"
+    )
+    scheme: str = Field(
+        default="anchored", description="切分方案: anchored(锚定) | rolling(滚动)"
+    )
 
 
 class ChipDistributionRequestBody(BaseModel):
@@ -728,13 +746,18 @@ class StrategyCompareRequestBody(BaseModel):
     start_date: str = Field(description="开始日期 YYYY-MM-DD")
     end_date: str = Field(description="结束日期 YYYY-MM-DD")
     initial_capital: float = Field(default=1000000.0, description="初始资金")
-    rank_by: str = Field(default="sharpe_ratio", description="排名指标: sharpe_ratio|total_return|calmar_ratio")
+    rank_by: str = Field(
+        default="sharpe_ratio",
+        description="排名指标: sharpe_ratio|total_return|calmar_ratio",
+    )
 
 
 class ExperimentCompareBody(BaseModel):
     """实验横向对比请求体。"""
 
-    run_ids: list[str] = Field(default_factory=list, description="要对比的实验 run_id 列表")
+    run_ids: list[str] = Field(
+        default_factory=list, description="要对比的实验 run_id 列表"
+    )
 
 
 class EvolveRequestBody(BaseModel):
@@ -749,7 +772,9 @@ class EvolveRequestBody(BaseModel):
     start_date: str = Field(description="开始日期 YYYY-MM-DD")
     end_date: str = Field(description="结束日期 YYYY-MM-DD")
     initial_capital: float = Field(default=1000000.0, description="初始资金")
-    params: dict[str, Any] = Field(default_factory=dict, description="固定基底参数(不被进化)")
+    params: dict[str, Any] = Field(
+        default_factory=dict, description="固定基底参数(不被进化)"
+    )
     param_space: dict[str, Any] = Field(
         default_factory=dict, description="可选显式搜索空间;缺省由默认参数推断"
     )
@@ -990,7 +1015,9 @@ async def run_patterns_endpoint(body: PatternsRequestBody):
     """
     try:
         result = await asyncio.to_thread(_run_patterns_local, body)
-        return ApiResponse(success=True, data=result, message=result.get("note") or None)
+        return ApiResponse(
+            success=True, data=result, message=result.get("note") or None
+        )
     except Exception as e:
         return ApiResponse(
             success=False,
@@ -1111,11 +1138,7 @@ async def compile_tdx_endpoint(body: TdxCompileRequestBody):
     return ApiResponse(
         success=compiled.ok,
         data=compiled.to_dict(),
-        message=(
-            "公式编译通过。"
-            if compiled.ok
-            else "公式有错误,请查看 errors。"
-        ),
+        message=("公式编译通过。" if compiled.ok else "公式有错误,请查看 errors。"),
     )
 
 

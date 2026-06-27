@@ -33,7 +33,15 @@ def test_report_gate_clean_passes():
     )
     resp = client.post(
         "/api/quality/report-gate",
-        json={"text": clean, "evidence_chain": {"coverage": 0.9, "overall_confidence": 0.7, "contradictions": [], "missing_evidence": []}},
+        json={
+            "text": clean,
+            "evidence_chain": {
+                "coverage": 0.9,
+                "overall_confidence": 0.7,
+                "contradictions": [],
+                "missing_evidence": [],
+            },
+        },
     )
     assert resp.status_code == 200
     assert resp.json()["data"]["passed"] is True
@@ -41,12 +49,21 @@ def test_report_gate_clean_passes():
 
 def test_export_with_gate_appends_section(monkeypatch):
     monkeypatch.setattr(
-        cs.ConversationStore, "get_conversation",
+        cs.ConversationStore,
+        "get_conversation",
         lambda self, cid: {"title": "T", "stock_symbol": "600519", "mode": "deep"},
     )
     monkeypatch.setattr(
-        cs.ConversationStore, "get_messages",
-        lambda self, cid, limit=200: [{"role": "assistant", "content": "营收同比 +18%。", "timestamp": "t", "metadata": {}}],
+        cs.ConversationStore,
+        "get_messages",
+        lambda self, cid, limit=200: [
+            {
+                "role": "assistant",
+                "content": "营收同比 +18%。",
+                "timestamp": "t",
+                "metadata": {},
+            }
+        ],
     )
     resp = client.get("/api/export/conversation/x.md?gate=true")
     assert resp.status_code == 200

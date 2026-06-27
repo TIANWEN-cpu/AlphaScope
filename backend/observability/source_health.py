@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 # ---- quality_score 阈值(红黄绿) ----
-QUALITY_GOOD = 80.0   # >= 80 绿
-QUALITY_WARN = 50.0   # 50-79 黄
+QUALITY_GOOD = 80.0  # >= 80 绿
+QUALITY_WARN = 50.0  # 50-79 黄
 # < 50 红
 
 
@@ -71,7 +71,9 @@ def compute_quality_score(
         if age <= fresh_window_s:
             freshness_score = 100.0
         else:
-            freshness_score = max(0.0, 100.0 * (1.0 - (age - fresh_window_s) / decay_window))
+            freshness_score = max(
+                0.0, 100.0 * (1.0 - (age - fresh_window_s) / decay_window)
+            )
 
     # 3) 完整度: 以延迟代理(响应越快越完整可用)。>2s 大幅扣分; 0 延迟(未调用)中性给 50。
     if latency <= 0:
@@ -83,7 +85,9 @@ def compute_quality_score(
     else:
         completeness_score = max(0.0, 80.0 - (latency - 2000) / 50.0)
 
-    quality = round((success_rate * freshness_score * completeness_score) / (100.0 * 100.0), 1)
+    quality = round(
+        (success_rate * freshness_score * completeness_score) / (100.0 * 100.0), 1
+    )
     return {
         "quality_score": quality,
         "grade": _quality_grade(quality),

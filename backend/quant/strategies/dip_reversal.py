@@ -37,7 +37,9 @@ class DipReversalStrategy(BaseStrategy):
         signals: list[Signal] = []
         dip_ref: float | None = None  # reference close at last dip entry
         for i in range(n, len(bars)):
-            change = (closes[i] - closes[i - n]) / closes[i - n] if closes[i - n] else 0.0
+            change = (
+                (closes[i] - closes[i - n]) / closes[i - n] if closes[i - n] else 0.0
+            )
             symbol = bars[i].get("symbol", "")
             if change <= dip_thr and dip_ref is None:
                 shares = self._calc_shares(closes[i], portfolio_state)
@@ -46,14 +48,14 @@ class DipReversalStrategy(BaseStrategy):
                         "buy",
                         symbol,
                         shares=shares,
-                        reason=f"超跌企稳 ({n}日{change*100:.2f}%≤{dip_thr*100:.0f}%)",
+                        reason=f"超跌企稳 ({n}日{change * 100:.2f}%≤{dip_thr * 100:.0f}%)",
                     )
                 )
                 dip_ref = closes[i]
             elif dip_ref is not None and closes[i] >= dip_ref * (1 + target):
                 gain = (closes[i] - dip_ref) / dip_ref
                 signals.append(
-                    Signal("sell", symbol, reason=f"反弹止盈 (+{gain*100:.2f}%)")
+                    Signal("sell", symbol, reason=f"反弹止盈 (+{gain * 100:.2f}%)")
                 )
                 dip_ref = None
             elif dip_ref is not None and closes[i] < dip_ref:

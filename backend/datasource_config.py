@@ -31,6 +31,7 @@ _CONFIG_PATH = _PROJECT_ROOT / "config" / "data_sources.yaml"
 # ruamel round-trip YAML (保留注释与顺序); 不可用时回退 PyYAML
 try:
     from ruamel.yaml import YAML
+
     _HAS_RUAMEL = True
 except ImportError:
     _HAS_RUAMEL = False
@@ -98,7 +99,14 @@ PRESET_DATASOURCES: list[dict[str, Any]] = [
     {
         "name": "wind",
         "label": "Wind 万得",
-        "types": ["prices", "fundamentals", "reports", "announcements", "fund_flow", "macro"],
+        "types": [
+            "prices",
+            "fundamentals",
+            "reports",
+            "announcements",
+            "fund_flow",
+            "macro",
+        ],
         "cost_tier": "paid",
         "token_env": "WIND_TOKEN",
         "signup_url": "https://www.wind.com.cn/",
@@ -153,20 +161,22 @@ def list_presets() -> list[dict[str, Any]]:
         name = p["name"]
         cred = creds.get(name)
         enabled = _is_enabled_in_config(config, name)
-        out.append({
-            "name": name,
-            "label": p["label"],
-            "types": p["types"],
-            "cost_tier": p["cost_tier"],
-            "token_env": p["token_env"],
-            "signup_url": p["signup_url"],
-            "doc_url": p.get("doc_url"),
-            "description": p["description"],
-            "advantages": p["advantages"],
-            "has_key": cred is not None,
-            "key_masked": cred.get("key_masked") if cred else None,
-            "enabled": enabled,
-        })
+        out.append(
+            {
+                "name": name,
+                "label": p["label"],
+                "types": p["types"],
+                "cost_tier": p["cost_tier"],
+                "token_env": p["token_env"],
+                "signup_url": p["signup_url"],
+                "doc_url": p.get("doc_url"),
+                "description": p["description"],
+                "advantages": p["advantages"],
+                "has_key": cred is not None,
+                "key_masked": cred.get("key_masked") if cred else None,
+                "enabled": enabled,
+            }
+        )
     return out
 
 
@@ -214,11 +224,17 @@ def get_credential(name: str) -> Optional[dict[str, Any]]:
     }
 
 
-def save_credential(name: str, api_key: str, token_env: Optional[str] = None) -> dict[str, Any]:
+def save_credential(
+    name: str, api_key: str, token_env: Optional[str] = None
+) -> dict[str, Any]:
     """保存数据源 API Key (加密落盘) 并立即注入环境变量 + 热重载 registry。"""
     _ensure_table()
     preset = _PRESET_BY_NAME.get(name)
-    env = token_env or (preset["token_env"] if preset else None) or f"{name.upper()}_TOKEN"
+    env = (
+        token_env
+        or (preset["token_env"] if preset else None)
+        or f"{name.upper()}_TOKEN"
+    )
     now = time.time()
     encrypted = encrypt_key(api_key) if api_key else ""
     db = _db()
@@ -242,7 +258,11 @@ def save_credential(name: str, api_key: str, token_env: Optional[str] = None) ->
     # 热重载 registry, 让带 key 的 provider 立即注册生效
     _reload_registry()
     logger.info("数据源 %s 凭证已保存并热重载 (env=%s)", name, env)
-    return {"name": name, "token_env": env, "key_masked": mask_key(api_key) if api_key else None}
+    return {
+        "name": name,
+        "token_env": env,
+        "key_masked": mask_key(api_key) if api_key else None,
+    }
 
 
 def delete_credential(name: str) -> bool:
@@ -259,6 +279,7 @@ def delete_credential(name: str) -> bool:
 
 
 # ---------------- 权重 / 启停 (落盘 yaml, 保留注释) ----------------
+
 
 def _load_yaml():
     """加载 YAML 为 ruamel CommentedMap (保留注释/顺序); 不可用时回退 PyYAML dict。"""
@@ -280,7 +301,9 @@ def _save_yaml(config) -> None:
         if _HAS_RUAMEL:
             YAML().dump(config, f)
         else:
-            yaml.safe_dump(config, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+            yaml.safe_dump(
+                config, f, allow_unicode=True, sort_keys=False, default_flow_style=False
+            )
 
 
 # data_type (provider.data_types 用的复数形式) -> yaml 里的 _providers 键名 (单数)
@@ -323,7 +346,7 @@ def _section_key(data_type: str) -> str:
 
 def _is_enabled_in_config(config, provider_name: str) -> bool:
     """任一 data_type 下该 provider enabled 即视为启用 (默认 true)。"""
-    for key, val in (config.items() if hasattr(config, "items") else []):
+    for key, val in config.items() if hasattr(config, "items") else []:
         if key.endswith("_providers") and isinstance(val, dict):
             entry = val.get(provider_name)
             if isinstance(entry, dict) and entry.get("enabled") is False:
@@ -339,7 +362,7 @@ def get_config_summary() -> dict[str, Any]:
     # 反向映射: yaml 单数键 -> data_type 复数
     yaml_to_dtype = {v: k for k, v in _DATA_TYPE_TO_YAML_KEY.items()}
     summary: dict[str, Any] = {}
-    for key, val in (config.items() if hasattr(config, "items") else []):
+    for key, val in config.items() if hasattr(config, "items") else []:
         if key.endswith("_providers") and isinstance(val, dict):
             short = key.replace("_providers", "")
             dtype = yaml_to_dtype.get(short, short)  # 默认用单数键本身
@@ -378,17 +401,28 @@ def update_provider_config(
         entry["priority"] = max(0, min(100, int(priority)))
     _save_yaml(config)
     _reload_registry()
-    logger.info("数据源 %s.%s 配置已更新 (enabled=%s, priority=%s) 并热重载",
-                provider_name, data_type, enabled, priority)
-    return {"provider": provider_name, "data_type": data_type,
-            "enabled": entry.get("enabled", True), "priority": entry.get("priority", 0)}
+    logger.info(
+        "数据源 %s.%s 配置已更新 (enabled=%s, priority=%s) 并热重载",
+        provider_name,
+        data_type,
+        enabled,
+        priority,
+    )
+    return {
+        "provider": provider_name,
+        "data_type": data_type,
+        "enabled": entry.get("enabled", True),
+        "priority": entry.get("priority", 0),
+    }
 
 
 # ---------------- registry 热重载 ----------------
 
+
 def _reload_registry() -> None:
     try:
         from backend.providers.registry import get_registry
+
         get_registry().reload()
     except Exception as e:
         logger.warning("registry 热重载失败: %s", e)

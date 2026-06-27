@@ -34,8 +34,22 @@ _OP_ALIASES = {"==": "=", "!=": "<>"}
 
 # 禁止出现在只读查询里的关键字。
 _FORBIDDEN_SQL = (
-    "insert", "update", "delete", "drop", "create", "alter", "attach", "detach",
-    "copy", "pragma", "export", "import", "install", "load", "call", "set ",
+    "insert",
+    "update",
+    "delete",
+    "drop",
+    "create",
+    "alter",
+    "attach",
+    "detach",
+    "copy",
+    "pragma",
+    "export",
+    "import",
+    "install",
+    "load",
+    "call",
+    "set ",
 )
 
 
@@ -149,7 +163,9 @@ def _lake_dir() -> Path:
 
 
 def _parquet_path(symbol: str) -> Path:
-    safe = "".join(ch for ch in str(symbol).strip() if ch.isalnum() or ch in ("_", ".", "-"))
+    safe = "".join(
+        ch for ch in str(symbol).strip() if ch.isalnum() or ch in ("_", ".", "-")
+    )
     return _lake_dir() / f"{safe or 'unknown'}.parquet"
 
 
@@ -184,7 +200,9 @@ def ingest_prices(symbol: str, bars: List[Dict[str, Any]]) -> Dict[str, Any]:
         con = duckdb.connect()
         try:
             con.register("df", df)
-            con.execute(f"COPY (SELECT * FROM df ORDER BY date) TO '{path}' (FORMAT PARQUET)")
+            con.execute(
+                f"COPY (SELECT * FROM df ORDER BY date) TO '{path}' (FORMAT PARQUET)"
+            )
         finally:
             con.close()
         return {"ok": True, "symbol": str(symbol), "rows": len(rows), "path": path}
@@ -214,7 +232,16 @@ def ingest_from_provider(
             continue
         try:
             norm = normalize_symbol(sym) or sym
-            bars = get_prices(norm, start_date=start_date, end_date=end_date, limit=limit, include_incompatible=True) or []
+            bars = (
+                get_prices(
+                    norm,
+                    start_date=start_date,
+                    end_date=end_date,
+                    limit=limit,
+                    include_incompatible=True,
+                )
+                or []
+            )
             results.append(ingest_prices(norm, bars))
         except Exception as e:  # noqa: BLE001
             results.append({"ok": False, "symbol": sym, "rows": 0, "reason": str(e)})
@@ -229,13 +256,21 @@ def query(sql: str, limit: int = 500) -> Dict[str, Any]:
     if not is_select_only(sql):
         return {"ok": False, "reason": "仅允许单条 SELECT/WITH 只读查询"}
     if not _parquet_files():
-        return {"ok": True, "columns": [], "rows": [], "row_count": 0, "note": "数据湖为空, 请先入湖"}
+        return {
+            "ok": True,
+            "columns": [],
+            "rows": [],
+            "row_count": 0,
+            "note": "数据湖为空, 请先入湖",
+        }
     try:
         import duckdb
 
         con = duckdb.connect()
         try:
-            con.execute(f"CREATE VIEW prices AS SELECT * FROM read_parquet('{_glob_str()}')")
+            con.execute(
+                f"CREATE VIEW prices AS SELECT * FROM read_parquet('{_glob_str()}')"
+            )
             lim = max(1, min(5000, int(limit) if limit else 500))
             cur = con.execute(f"SELECT * FROM ({sql.rstrip(';')}) AS _q LIMIT {lim}")
             cols = [d[0] for d in cur.description]
@@ -289,8 +324,13 @@ def screen(
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         finally:
             con.close()
-        return {"ok": True, "matched": len(rows), "rows": rows, "filters": filters,
-                "disclaimer": "仅基于历史行情的批量筛选, 描述过去满足条件的标的, 不预测未来、不构成选股建议。"}
+        return {
+            "ok": True,
+            "matched": len(rows),
+            "rows": rows,
+            "filters": filters,
+            "disclaimer": "仅基于历史行情的批量筛选, 描述过去满足条件的标的, 不预测未来、不构成选股建议。",
+        }
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "reason": str(e)}
 

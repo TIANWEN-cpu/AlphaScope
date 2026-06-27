@@ -121,7 +121,15 @@ def test_evidence_pool_included_when_provided():
 def test_to_dict_shape():
     v = verify_data(_full_stock_data())
     d = v.to_dict()
-    for key in ("overall", "dimensions", "missing", "stale", "ok", "anomalies", "summary"):
+    for key in (
+        "overall",
+        "dimensions",
+        "missing",
+        "stale",
+        "ok",
+        "anomalies",
+        "summary",
+    ):
         assert key in d
     assert isinstance(d["dimensions"], list)
     assert all("label" in dim and "status" in dim for dim in d["dimensions"])

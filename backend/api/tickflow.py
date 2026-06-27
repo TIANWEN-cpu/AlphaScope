@@ -90,7 +90,11 @@ def tickflow_refresh(source_id: str, limit: int = 1000):
     from backend.providers.http_json_provider import refresh_source
 
     result = refresh_source(source_id, limit=limit)
-    return ApiResponse(success=bool(result.get("ok")), data=result, error=result.get("error") if not result.get("ok") else None)
+    return ApiResponse(
+        success=bool(result.get("ok")),
+        data=result,
+        error=result.get("error") if not result.get("ok") else None,
+    )
 
 
 @router.post("/preview", response_model=ApiResponse[dict])
@@ -105,4 +109,8 @@ def tickflow_preview(body: PreviewBody):
         body=body.body,
         records_path=body.records_path,
     )
-    return ApiResponse(success=bool(result.get("ok")), data=result, error=result.get("error") if not result.get("ok") else None)
+    return ApiResponse(
+        success=bool(result.get("ok")),
+        data=result,
+        error=result.get("error") if not result.get("ok") else None,
+    )

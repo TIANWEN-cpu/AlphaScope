@@ -44,11 +44,18 @@ class BollingerBreakStrategy(BaseStrategy):
             if close > upper and std > 0:
                 shares = self._calc_shares(close, portfolio_state)
                 signals.append(
-                    Signal("buy", symbol, shares=shares, reason=f"突破布林上轨 ({close:.2f}>{upper:.2f})")
+                    Signal(
+                        "buy",
+                        symbol,
+                        shares=shares,
+                        reason=f"突破布林上轨 ({close:.2f}>{upper:.2f})",
+                    )
                 )
             elif close < mid:
                 signals.append(
-                    Signal("sell", symbol, reason=f"跌破布林中轨 ({close:.2f}<{mid:.2f})")
+                    Signal(
+                        "sell", symbol, reason=f"跌破布林中轨 ({close:.2f}<{mid:.2f})"
+                    )
                 )
             else:
                 signals.append(Signal("hold", symbol, reason="轨道内运行"))

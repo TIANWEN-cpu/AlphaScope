@@ -32,14 +32,22 @@ def has_configured_provider() -> bool:
         from backend.settings_store import list_providers
 
         providers = list_providers()
-        if any(p.get("enabled", True) and p.get("api_key_masked") not in ("", None, "—") for p in providers):
+        if any(
+            p.get("enabled", True) and p.get("api_key_masked") not in ("", None, "—")
+            for p in providers
+        ):
             return True
     except Exception as exc:  # noqa: BLE001 - settings optional in some envs
         logger.debug("provider list unavailable: %s", exc)
     # Dev fallback: any of the well-known env keys set non-empty.
     import os
 
-    for env_key in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "DASHSCOPE_API_KEY", "MOONSHOT_API_KEY"):
+    for env_key in (
+        "DEEPSEEK_API_KEY",
+        "OPENAI_API_KEY",
+        "DASHSCOPE_API_KEY",
+        "MOONSHOT_API_KEY",
+    ):
         value = os.environ.get(env_key, "").strip()
         if value and not value.startswith("sk-xxx") and value != "your_api_key":
             return True

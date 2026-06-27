@@ -197,7 +197,14 @@ AGENT_PROMPTS = {
 
 def get_default_agent_configs(include_chairman: bool = False) -> List[dict]:
     """从硬编码默认 Agent 生成可编辑配置列表。"""
-    keys = ["fundamental", "buyside_research", "technical", "sentiment", "risk", "retail"]
+    keys = [
+        "fundamental",
+        "buyside_research",
+        "technical",
+        "sentiment",
+        "risk",
+        "retail",
+    ]
     if include_chairman:
         keys.append("chairman")
     configs = []

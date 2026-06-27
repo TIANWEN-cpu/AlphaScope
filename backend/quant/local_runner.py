@@ -282,7 +282,9 @@ def run_local_backtest_payload(
         except Exception:
             benchmark_bars = None
     engine = BacktestEngine(initial_capital=initial_capital, commission_rate=0.001)
-    result = engine.run(strategy, bars, symbol, benchmark_bars=benchmark_bars, benchmark_name=bench_name)
+    result = engine.run(
+        strategy, bars, symbol, benchmark_bars=benchmark_bars, benchmark_name=bench_name
+    )
     performance = result.performance or {}
     now = datetime.now()
     run_id = f"local-{now.strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"

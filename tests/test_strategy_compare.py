@@ -26,7 +26,10 @@ def _make_bars(n: int = 180):
 
 
 def _run(rank_by="sharpe_ratio"):
-    from backend.api.quant import StrategyCompareRequestBody, _run_strategy_comparison_local
+    from backend.api.quant import (
+        StrategyCompareRequestBody,
+        _run_strategy_comparison_local,
+    )
 
     body = StrategyCompareRequestBody(
         symbol="600519",
@@ -35,7 +38,10 @@ def _run(rank_by="sharpe_ratio"):
         initial_capital=1000000.0,
         rank_by=rank_by,
     )
-    with patch("backend.api.quant._load_local_bars", return_value=(_make_bars(), "local_price_store")):
+    with patch(
+        "backend.api.quant._load_local_bars",
+        return_value=(_make_bars(), "local_price_store"),
+    ):
         return _run_strategy_comparison_local(body)
 
 

@@ -19,14 +19,24 @@ def test_export_conversation_markdown(monkeypatch):
     monkeypatch.setattr(
         cs.ConversationStore,
         "get_conversation",
-        lambda self, cid: {"title": "茅台分析", "stock_symbol": "600519", "stock_name": "贵州茅台", "mode": "deep"},
+        lambda self, cid: {
+            "title": "茅台分析",
+            "stock_symbol": "600519",
+            "stock_name": "贵州茅台",
+            "mode": "deep",
+        },
     )
     monkeypatch.setattr(
         cs.ConversationStore,
         "get_messages",
         lambda self, cid, limit=200: [
             {"role": "user", "content": "分析贵州茅台", "timestamp": "2026-06-18"},
-            {"role": "assistant", "content": "营收同比 +18%。", "timestamp": "2026-06-18", "metadata": {}},
+            {
+                "role": "assistant",
+                "content": "营收同比 +18%。",
+                "timestamp": "2026-06-18",
+                "metadata": {},
+            },
         ],
     )
     resp = client.get("/api/export/conversation/abc123.md")
@@ -38,6 +48,8 @@ def test_export_conversation_markdown(monkeypatch):
 
 
 def test_export_missing_conversation(monkeypatch):
-    monkeypatch.setattr(cs.ConversationStore, "get_conversation", lambda self, cid: None)
+    monkeypatch.setattr(
+        cs.ConversationStore, "get_conversation", lambda self, cid: None
+    )
     resp = client.get("/api/export/conversation/nope.md")
     assert resp.status_code == 404

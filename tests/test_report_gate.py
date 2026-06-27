@@ -16,43 +16,93 @@ CLEAN = (
     "较现价 ¥1620 安全边际 +14%；但 Comps 显示 PE 处同业 78% 分位，存在分歧。"
     "**风险提示**: 以上分析仅供参考，不构成投资建议。投资有风险，入市需谨慎。"
 )
-GOOD_EC = {"coverage": 0.85, "overall_confidence": 0.72, "contradictions": [], "missing_evidence": []}
+GOOD_EC = {
+    "coverage": 0.85,
+    "overall_confidence": 0.72,
+    "contradictions": [],
+    "missing_evidence": [],
+}
 
 
 class TestIndividualChecks:
     def test_placeholder_is_critical(self):
-        r = run_gate("这是一段足够长的报告正文，用于占位检查测试。" * 3 + " [TODO] 补充结论。风险提示")
-        assert any(i["category"] == "placeholder" and i["severity"] == "critical" for i in r["issues"])
+        r = run_gate(
+            "这是一段足够长的报告正文，用于占位检查测试。" * 3
+            + " [TODO] 补充结论。风险提示"
+        )
+        assert any(
+            i["category"] == "placeholder" and i["severity"] == "critical"
+            for i in r["issues"]
+        )
         assert r["passed"] is False
 
     def test_fluff_critical_phrase(self):
         text = "公司基本面良好，建议买入。" * 5 + " 风险提示：仅供参考。"
         r = run_gate(text)
-        assert any(i["category"] == "fluff" and i["severity"] == "critical" for i in r["issues"])
+        assert any(
+            i["category"] == "fluff" and i["severity"] == "critical"
+            for i in r["issues"]
+        )
         assert r["passed"] is False
 
     def test_fluff_warning_phrase(self):
-        text = "公司业绩稳健增长，营收 +12%，净利 +9%，估值合理。" * 3 + " 风险提示：仅供参考。"
+        text = (
+            "公司业绩稳健增长，营收 +12%，净利 +9%，估值合理。" * 3
+            + " 风险提示：仅供参考。"
+        )
         r = run_gate(text)
-        assert any(i["category"] == "fluff" and i["severity"] == "warning" for i in r["issues"])
+        assert any(
+            i["category"] == "fluff" and i["severity"] == "warning" for i in r["issues"]
+        )
 
     def test_low_coverage_critical(self):
-        r = run_gate(CLEAN, evidence_chain={"coverage": 0.3, "contradictions": [], "missing_evidence": []})
-        assert any(i["category"] == "evidence" and i["severity"] == "critical" for i in r["issues"])
+        r = run_gate(
+            CLEAN,
+            evidence_chain={
+                "coverage": 0.3,
+                "contradictions": [],
+                "missing_evidence": [],
+            },
+        )
+        assert any(
+            i["category"] == "evidence" and i["severity"] == "critical"
+            for i in r["issues"]
+        )
 
     def test_mid_coverage_warning(self):
-        r = run_gate(CLEAN, evidence_chain={"coverage": 0.5, "contradictions": [], "missing_evidence": []})
+        r = run_gate(
+            CLEAN,
+            evidence_chain={
+                "coverage": 0.5,
+                "contradictions": [],
+                "missing_evidence": [],
+            },
+        )
         sev = [i["severity"] for i in r["issues"] if i["category"] == "evidence"]
         assert "warning" in sev and "critical" not in sev
 
     def test_unsurfaced_contradiction_warning(self):
         text = "营收增长强劲，全面看多，目标价上调。" * 3 + " 风险提示：仅供参考。"
-        r = run_gate(text, evidence_chain={"coverage": 0.9, "contradictions": ["买入/卖出信号冲突"], "missing_evidence": []})
+        r = run_gate(
+            text,
+            evidence_chain={
+                "coverage": 0.9,
+                "contradictions": ["买入/卖出信号冲突"],
+                "missing_evidence": [],
+            },
+        )
         assert any(i["category"] == "contradiction" for i in r["issues"])
 
     def test_surfaced_contradiction_ok(self):
         # 正文已呈现"分歧" → 不再报矛盾未呈现
-        r = run_gate(CLEAN, evidence_chain={"coverage": 0.9, "contradictions": ["x"], "missing_evidence": []})
+        r = run_gate(
+            CLEAN,
+            evidence_chain={
+                "coverage": 0.9,
+                "contradictions": ["x"],
+                "missing_evidence": [],
+            },
+        )
         assert not any(i["category"] == "contradiction" for i in r["issues"])
 
     def test_missing_disclaimer_warning(self):
@@ -62,7 +112,10 @@ class TestIndividualChecks:
 
     def test_empty_report_critical(self):
         r = run_gate("太短")
-        assert any(i["category"] == "structure" and i["severity"] == "critical" for i in r["issues"])
+        assert any(
+            i["category"] == "structure" and i["severity"] == "critical"
+            for i in r["issues"]
+        )
         assert r["passed"] is False
 
     def test_critic_low_score_warning(self):
@@ -90,10 +143,20 @@ class TestIntegration:
     def test_generate_report_with_gate(self):
         from backend.ai_assistant.report_generator import generate_report_with_gate
 
-        conversation = {"title": "茅台分析", "stock_symbol": "600519", "stock_name": "贵州茅台", "mode": "deep"}
+        conversation = {
+            "title": "茅台分析",
+            "stock_symbol": "600519",
+            "stock_name": "贵州茅台",
+            "mode": "deep",
+        }
         messages = [
             {"role": "user", "content": "帮我分析贵州茅台", "timestamp": "2026-06-18"},
-            {"role": "assistant", "content": "营收同比 +18%，DCF ¥1850，安全边际 +14%。", "timestamp": "2026-06-18", "metadata": {}},
+            {
+                "role": "assistant",
+                "content": "营收同比 +18%，DCF ¥1850，安全边际 +14%。",
+                "timestamp": "2026-06-18",
+                "metadata": {},
+            },
         ]
         out = generate_report_with_gate(conversation, messages)
         assert "report" in out and "gate" in out

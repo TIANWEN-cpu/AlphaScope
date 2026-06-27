@@ -46,9 +46,30 @@ def test_schema_invalid_when_missing_ohlc():
 def test_parse_rows_sorted_and_tagged():
     schema = discover_schema(["date", "open", "high", "low", "close", "volume"])
     rows = [
-        {"date": "2026-01-03", "open": "10", "high": "11", "low": "9", "close": "10.5", "volume": "1000"},
-        {"date": "2026-01-01", "open": "10", "high": "11", "low": "9", "close": "10.2", "volume": "900"},
-        {"date": "2026-01-02", "open": "10", "high": "11", "low": "9", "close": "0", "volume": "0"},  # 无效收盘, 跳过
+        {
+            "date": "2026-01-03",
+            "open": "10",
+            "high": "11",
+            "low": "9",
+            "close": "10.5",
+            "volume": "1000",
+        },
+        {
+            "date": "2026-01-01",
+            "open": "10",
+            "high": "11",
+            "low": "9",
+            "close": "10.2",
+            "volume": "900",
+        },
+        {
+            "date": "2026-01-02",
+            "open": "10",
+            "high": "11",
+            "low": "9",
+            "close": "0",
+            "volume": "0",
+        },  # 无效收盘, 跳过
     ]
     bars = parse_rows(rows, schema, symbol="600519.SH")
     assert len(bars) == 2  # 跳过 close<=0 行
@@ -62,7 +83,13 @@ def test_parse_rows_sorted_and_tagged():
 def test_parse_rows_respects_limit():
     schema = discover_schema(["date", "open", "high", "low", "close"])
     rows = [
-        {"date": f"2026-01-{i:02d}", "open": "1", "high": "2", "low": "0.5", "close": "1.5"}
+        {
+            "date": f"2026-01-{i:02d}",
+            "open": "1",
+            "high": "2",
+            "low": "0.5",
+            "close": "1.5",
+        }
         for i in range(1, 21)
     ]
     bars = parse_rows(rows, schema, limit=5)

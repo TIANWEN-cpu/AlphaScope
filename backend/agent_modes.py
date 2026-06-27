@@ -12,6 +12,7 @@ Usage:
     config = resolver.resolve(AnalysisMode.DEEP)
 """
 
+import logging
 import threading
 from enum import Enum
 from dataclasses import dataclass, field
@@ -24,6 +25,8 @@ try:
     from backend.project_paths import CONFIG_DIR
 except ImportError:
     from project_paths import CONFIG_DIR
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisMode(str, Enum):
@@ -150,17 +153,17 @@ class ModeResolver:
     def _load_config(self) -> None:
         """Load configuration from YAML file"""
         if not self._config_path.exists():
-            print(
-                f"[ModeResolver] Config not found: {self._config_path}, using defaults"
+            logger.info(
+                "[ModeResolver] Config not found: %s, using defaults", self._config_path
             )
             return
         try:
             self._raw_config = (
                 yaml.safe_load(self._config_path.read_text(encoding="utf-8")) or {}
             )
-            print(f"[ModeResolver] Loaded config from {self._config_path}")
+            logger.info("[ModeResolver] Loaded config from %s", self._config_path)
         except Exception as e:
-            print(f"[ModeResolver] Failed to load config: {e}")
+            logger.warning("[ModeResolver] Failed to load config: %s", e)
 
     def reload(self) -> None:
         """Reload configuration (e.g., after config file update)"""

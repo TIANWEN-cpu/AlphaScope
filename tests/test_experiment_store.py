@@ -34,7 +34,13 @@ def _bt_payload(run_id="bt-1", symbol="600519"):
         "symbol": symbol,
         "strategy_id": "ma_crossover",
         "finished_at": "2026-06-27T10:00:00",
-        "metrics": {"total_return": 12.3, "sharpe_ratio": 1.5, "max_drawdown": -8.0, "win_rate": 55.0, "trade_count": 9},
+        "metrics": {
+            "total_return": 12.3,
+            "sharpe_ratio": 1.5,
+            "max_drawdown": -8.0,
+            "win_rate": 55.0,
+            "trade_count": 9,
+        },
     }
 
 
@@ -47,7 +53,12 @@ def _wf_payload(run_id="wf-1"):
         "finished_at": "2026-06-27T11:00:00",
         "n_windows": 5,
         "scheme": "anchored",
-        "aggregate": {"consistency_score": 72.0, "pct_profitable_windows": 80.0, "mean_oos_return": 1.2, "robustness": "稳健（历史样本外表现较一致）"},
+        "aggregate": {
+            "consistency_score": 72.0,
+            "pct_profitable_windows": 80.0,
+            "mean_oos_return": 1.2,
+            "robustness": "稳健（历史样本外表现较一致）",
+        },
     }
 
 
@@ -122,21 +133,35 @@ class TestDeleteAndCompare:
 class TestSummarize:
     def test_summarize_per_mode(self, store):
         chip = {
-            "mode": "chip_distribution", "model": "turnover", "current_price": 100.0,
-            "avg_cost": 95.0, "profit_ratio": 80.0, "concentration_90": 12.0,
+            "mode": "chip_distribution",
+            "model": "turnover",
+            "current_price": 100.0,
+            "avg_cost": 95.0,
+            "profit_ratio": 80.0,
+            "concentration_90": 12.0,
         }
         s = store._summarize("chip_distribution", chip)
         assert s["profit_ratio"] == 80.0 and s["model"] == "turnover"
 
-        cmp = {"mode": "strategy_compare", "evaluated": 8, "rank_by": "sharpe_ratio",
-               "ranking": [{"strategy_id": "momentum", "total_return": 9.5}]}
+        cmp = {
+            "mode": "strategy_compare",
+            "evaluated": 8,
+            "rank_by": "sharpe_ratio",
+            "ranking": [{"strategy_id": "momentum", "total_return": 9.5}],
+        }
         s2 = store._summarize("strategy_compare", cmp)
         assert s2["top_strategy"] == "momentum" and s2["evaluated"] == 8
 
     def test_prune_keeps_recent(self, store):
         for i in range(5):
-            store.save_experiment({"run_id": f"r{i}", "mode": "backtest",
-                                   "finished_at": f"2026-06-27T10:0{i}:00", "metrics": {}})
+            store.save_experiment(
+                {
+                    "run_id": f"r{i}",
+                    "mode": "backtest",
+                    "finished_at": f"2026-06-27T10:0{i}:00",
+                    "metrics": {},
+                }
+            )
         # keep=2 → 只剩最近两条
         store._prune(keep=2)
         rows = store.list_experiments()

@@ -46,7 +46,12 @@ def test_unhealthy_and_stale_scores_low():
 
 
 def test_never_called_has_zero_freshness():
-    h = {"status": "healthy", "consecutive_failures": 0, "last_success": 0, "avg_latency_ms": 0}
+    h = {
+        "status": "healthy",
+        "consecutive_failures": 0,
+        "last_success": 0,
+        "avg_latency_ms": 0,
+    }
     q = compute_quality_score(h, now=1_000_000.0)
     assert q["freshness_score"] == 0.0
     # 新鲜度 0 → 质量分必然 0(乘积)

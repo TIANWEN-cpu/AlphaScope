@@ -259,9 +259,7 @@ async def _fetch_and_store_news(
 ) -> tuple[str, str]:
     """异步包装：把阻塞的 provider 调用丢到线程池，避免冻结事件循环。"""
     try:
-        return await asyncio.to_thread(
-            _fetch_and_store_news_sync, symbol, limit
-        )
+        return await asyncio.to_thread(_fetch_and_store_news_sync, symbol, limit)
     except TimeoutError as exc:
         return "timeout", str(exc)
     except Exception as exc:

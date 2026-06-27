@@ -171,7 +171,16 @@ class TestStrategyAutoDiscovery:
     def test_get_and_create_each_strategy(self):
         from backend.quant.strategies import StrategyRegistry
 
-        for name in ("macd_momentum", "ma_crossover", "rsi_reversal", "boll_break", "momentum", "dip_reversal", "volume_break", "turtle"):
+        for name in (
+            "macd_momentum",
+            "ma_crossover",
+            "rsi_reversal",
+            "boll_break",
+            "momentum",
+            "dip_reversal",
+            "volume_break",
+            "turtle",
+        ):
             cls = StrategyRegistry.get(name)
             assert cls is not None, f"{name} not registered"
             inst = StrategyRegistry.create(name)
@@ -238,7 +247,9 @@ class TestNewStrategiesGenerateSignals:
 
         for item in StrategyRegistry.list_strategies():
             strategy = StrategyRegistry.create(item["name"])
-            result = BacktestEngine(initial_capital=100000).run(strategy, _oscillating_bars(), "TEST")
+            result = BacktestEngine(initial_capital=100000).run(
+                strategy, _oscillating_bars(), "TEST"
+            )
             assert result.strategy_name == item["name"]
             assert "total_return" in result.performance
             assert len(result.equity_curve) > 0
@@ -252,6 +263,13 @@ class TestNewStrategiesGenerateSignals:
             TurtleBreakoutStrategy,
             VolumeBreakStrategy,
         )
+
         tiny = _trending_bars(5)
-        for cls in (BollingerBreakStrategy, MomentumStrategy, DipReversalStrategy, VolumeBreakStrategy, TurtleBreakoutStrategy):
+        for cls in (
+            BollingerBreakStrategy,
+            MomentumStrategy,
+            DipReversalStrategy,
+            VolumeBreakStrategy,
+            TurtleBreakoutStrategy,
+        ):
             assert cls().generate_signals(tiny) == []

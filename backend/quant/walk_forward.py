@@ -145,7 +145,9 @@ class WalkForwardReport:
 # ---------------------------------------------------------------------------
 
 
-def _strategy_factory(strategy: StrategyArg, params: dict[str, Any] | None) -> Callable[[], BaseStrategy | None]:
+def _strategy_factory(
+    strategy: StrategyArg, params: dict[str, Any] | None
+) -> Callable[[], BaseStrategy | None]:
     """Return a zero-arg factory producing a *fresh* strategy per window.
 
     A fresh instance avoids any state leaking across windows. Accepts either a
@@ -211,7 +213,12 @@ def _run_segment_backtest(
     engine = BacktestEngine(initial_capital=initial_capital)
     # Copy bars so the engine's ``setdefault('symbol', …)`` never mutates shared dicts.
     result = engine.run(strategy, [dict(b) for b in bars], symbol)
-    return result.equity_curve, result.dates, result.trades, getattr(result, "assumptions", {}) or {}
+    return (
+        result.equity_curve,
+        result.dates,
+        result.trades,
+        getattr(result, "assumptions", {}) or {},
+    )
 
 
 def _build_window(
@@ -382,9 +389,13 @@ def run_walk_forward(
     """
     requested = n_splits
     scheme = scheme if scheme in ("anchored", "rolling") else "anchored"
-    n_splits = max(_MIN_SPLITS, min(_MAX_SPLITS, int(n_splits) if n_splits else _MIN_SPLITS))
+    n_splits = max(
+        _MIN_SPLITS, min(_MAX_SPLITS, int(n_splits) if n_splits else _MIN_SPLITS)
+    )
 
-    strategy_name = strategy if isinstance(strategy, str) else getattr(strategy, "name", "unknown")
+    strategy_name = (
+        strategy if isinstance(strategy, str) else getattr(strategy, "name", "unknown")
+    )
     factory = _strategy_factory(strategy, params)
 
     clean = _sort_bars(bars or [])
@@ -394,7 +405,9 @@ def run_walk_forward(
     full_period: dict[str, Any] = {}
     assumptions: dict[str, Any] = {}
     if n_bars >= 2:
-        eq, _d, tr, assumptions = _run_segment_backtest(factory, clean, symbol, initial_capital)
+        eq, _d, tr, assumptions = _run_segment_backtest(
+            factory, clean, symbol, initial_capital
+        )
         if len(eq) >= 2:
             full_period = build_performance_summary(
                 equity_curve=eq,

@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from backend.providers.base import BaseProvider
 from backend.providers.akshare_provider import AkShareProvider
@@ -206,8 +207,14 @@ class TestProviderRegistry:
         assert "freshness" in p
         assert "requires_key" in p
 
+    @pytest.mark.network
     def test_get_failover_still_works(self):
-        """The get() method should still work with priority-based failover."""
+        """The get() method should still work with priority-based failover.
+
+        Marked ``network``: ``registry.get("news", ...)`` performs a live
+        provider fetch (no mock), which hangs/flakes without internet — so it
+        is excluded in CI via ``-m "not network"``.
+        """
         registry = ProviderRegistry()
         _discover_and_register(registry)
 
@@ -237,6 +244,11 @@ def test_akshare_prices_fall_back_to_tencent_when_primary_empty():
             "backend.providers.akshare_provider.ak.stock_zh_a_hist",
             return_value=pd.DataFrame(),
         ) as primary,
+        # EastMoney sits between the primary feed and the Tencent fallback in the
+        # chain (primary -> eastmoney -> tencent). Stub it empty so this test
+        # deterministically exercises the Tencent leg instead of hitting the
+        # live EastMoney endpoint.
+        patch.object(provider, "_get_prices_from_eastmoney", return_value=[]),
         patch(
             "backend.providers.akshare_provider.ak.stock_zh_a_hist_tx",
             return_value=tx_df,

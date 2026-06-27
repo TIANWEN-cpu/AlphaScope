@@ -42,9 +42,19 @@ class _FakeDailyProvider(BaseProvider):
 
 
 REQUIRED_FIELDS = {
-    "name", "markets", "data_types", "data_class", "freshness", "latency_tier",
-    "cost_tier", "rate_limit", "trust_level", "priority", "requires_key",
-    "available", "degradable",
+    "name",
+    "markets",
+    "data_types",
+    "data_class",
+    "freshness",
+    "latency_tier",
+    "cost_tier",
+    "rate_limit",
+    "trust_level",
+    "priority",
+    "requires_key",
+    "available",
+    "degradable",
 }
 
 
@@ -70,10 +80,13 @@ def test_degradable_reflects_priority():
     rt = _FakeRealtimeProvider().capability()
     daily = _FakeDailyProvider().capability()
     assert rt["degradable"] is True  # priority 90 < 100
+    assert daily["degradable"] is True  # 普通源(priority 50)可降级
+
     # priority 100 的源不可降级
     class _Top(BaseProvider):
         name = "top"
         priority = 100
+
     assert _Top().capability()["degradable"] is False
 
 

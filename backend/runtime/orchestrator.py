@@ -49,11 +49,7 @@ def _resolve_evidence_ids(agent_text: Any, number_to_id: Dict[int, str]) -> List
 
     text = " ".join(
         str(x)
-        for x in (
-            agent_text
-            if isinstance(agent_text, (list, tuple))
-            else [agent_text]
-        )
+        for x in (agent_text if isinstance(agent_text, (list, tuple)) else [agent_text])
         if x is not None
     )
     ids: List[str] = []
@@ -381,7 +377,10 @@ def run_agents_with_mode(
     # Demo mode), return a clearly-labelled demo skeleton instead of attempting
     # LLM calls that will all fail. Honest: never fabricates Agent conclusions.
     try:
-        from backend.agents.demo_fallback import has_configured_provider, build_demo_report
+        from backend.agents.demo_fallback import (
+            has_configured_provider,
+            build_demo_report,
+        )
 
         if not has_configured_provider():
             logger.info("[orchestrator] no provider configured -> demo fallback report")
@@ -591,8 +590,9 @@ def run_agents_with_mode(
 
         risk_gate = RiskEngine().gate(stock_data, summary).to_dict()
         if risk_gate.get("vetoed"):
-            banner = "⛔【风控一票否决】本研报因触发 critical 风控规则被否决, 方向性结论不作为投资依据:\n" + "\n".join(
-                f"  - {r}" for r in risk_gate.get("veto_reasons", [])
+            banner = (
+                "⛔【风控一票否决】本研报因触发 critical 风控规则被否决, 方向性结论不作为投资依据:\n"
+                + "\n".join(f"  - {r}" for r in risk_gate.get("veto_reasons", []))
             )
             research_report = f"{banner}\n\n{research_report}"
             summary = {**summary, "final": "风控否决(结论不作为投资依据)"}

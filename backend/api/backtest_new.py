@@ -136,7 +136,11 @@ def run_backtest(req: BacktestRunRequest) -> ApiResponse:
             benchmark_bars = None  # 数据不足 → 跳过基准指标
 
     result = engine.run(
-        strategy, bars, req.symbol, benchmark_bars=benchmark_bars, benchmark_name=bench_name
+        strategy,
+        bars,
+        req.symbol,
+        benchmark_bars=benchmark_bars,
+        benchmark_name=bench_name,
     )
 
     return ApiResponse(success=True, data=result.to_dict())

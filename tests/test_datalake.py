@@ -13,9 +13,30 @@ import backend.quant.datalake as dl
 class TestNormalizeBars:
     def test_dedup_sort_and_types(self):
         bars = [
-            {"date": "2026-01-02", "open": "10", "high": "12", "low": "9", "close": "11", "volume": "1000"},
-            {"date": "2026-01-01", "open": 9, "high": 11, "low": 8, "close": 10, "volume": 900},
-            {"date": "2026-01-02", "open": 10.5, "high": 12.5, "low": 9.5, "close": 11.5, "volume": 1100},  # 同日覆盖
+            {
+                "date": "2026-01-02",
+                "open": "10",
+                "high": "12",
+                "low": "9",
+                "close": "11",
+                "volume": "1000",
+            },
+            {
+                "date": "2026-01-01",
+                "open": 9,
+                "high": 11,
+                "low": 8,
+                "close": 10,
+                "volume": 900,
+            },
+            {
+                "date": "2026-01-02",
+                "open": 10.5,
+                "high": 12.5,
+                "low": 9.5,
+                "close": 11.5,
+                "volume": 1100,
+            },  # 同日覆盖
         ]
         rows = dl.normalize_bars(bars, "600519")
         assert len(rows) == 2
@@ -25,14 +46,20 @@ class TestNormalizeBars:
         assert isinstance(rows[0]["open"], float)
 
     def test_skips_invalid(self):
-        bars = [{"date": "", "close": 10}, {"date": "2026-01-01", "close": 0}, {"date": "2026-01-02", "close": 5}]
+        bars = [
+            {"date": "", "close": 10},
+            {"date": "2026-01-01", "close": 0},
+            {"date": "2026-01-02", "close": 5},
+        ]
         rows = dl.normalize_bars(bars, "x")
         assert len(rows) == 1 and rows[0]["close"] == 5.0
 
 
 class TestBuildScreenSql:
     def test_valid_filters(self):
-        where, params = dl.build_screen_sql([{"field": "close", "op": ">", "value": 100}])
+        where, params = dl.build_screen_sql(
+            [{"field": "close", "op": ">", "value": 100}]
+        )
         assert where == "close > ?" and params == [100.0]
 
     def test_op_aliases(self):
@@ -43,18 +70,22 @@ class TestBuildScreenSql:
 
     def test_rejects_unknown_field_and_op(self):
         # 非白名单字段 / 操作符被跳过(防注入)
-        where, params = dl.build_screen_sql([
-            {"field": "close); drop table x;--", "op": ">", "value": 1},
-            {"field": "close", "op": "LIKE", "value": 1},
-            {"field": "open", "op": ">", "value": "notnum"},
-        ])
+        where, params = dl.build_screen_sql(
+            [
+                {"field": "close); drop table x;--", "op": ">", "value": 1},
+                {"field": "close", "op": "LIKE", "value": 1},
+                {"field": "open", "op": ">", "value": "notnum"},
+            ]
+        )
         assert where == "1=1" and params == []
 
     def test_multiple_anded(self):
-        where, params = dl.build_screen_sql([
-            {"field": "close", "op": ">=", "value": 10},
-            {"field": "volume", "op": ">", "value": 1000},
-        ])
+        where, params = dl.build_screen_sql(
+            [
+                {"field": "close", "op": ">=", "value": 10},
+                {"field": "volume", "op": ">", "value": 1000},
+            ]
+        )
         assert where == "close >= ? AND volume > ?"
         assert params == [10.0, 1000.0]
 
@@ -80,7 +111,10 @@ class TestIsSelectOnly:
 def test_degraded_when_unavailable(monkeypatch):
     """duckdb 不可用时所有 duckdb-gated 入口优雅降级, 绝不抛出。"""
     monkeypatch.setattr(dl, "is_available", lambda: False)
-    assert dl.ingest_prices("x", [{"date": "2026-01-01", "close": 1}])["available"] is False
+    assert (
+        dl.ingest_prices("x", [{"date": "2026-01-01", "close": 1}])["available"]
+        is False
+    )
     assert dl.query("SELECT 1")["available"] is False
     assert dl.screen([])["available"] is False
     assert dl.stats()["available"] is False
@@ -102,8 +136,14 @@ def lake(tmp_path, monkeypatch):
 
 def _bars(symbol, base=10.0, n=5):
     return [
-        {"date": f"2026-01-{i:02d}", "open": base + i, "high": base + i + 1,
-         "low": base + i - 1, "close": base + i, "volume": 1000 + i * 10}
+        {
+            "date": f"2026-01-{i:02d}",
+            "open": base + i,
+            "high": base + i + 1,
+            "low": base + i - 1,
+            "close": base + i,
+            "volume": 1000 + i * 10,
+        }
         for i in range(1, n + 1)
     ]
 
@@ -127,7 +167,7 @@ class TestRoundTrip:
 
     def test_screen_filters(self, lake):
         lake.ingest_prices("600519", _bars("600519", base=100.0))  # latest close = 105
-        lake.ingest_prices("000001", _bars("000001", base=5.0))    # latest close = 10
+        lake.ingest_prices("000001", _bars("000001", base=5.0))  # latest close = 10
         res = lake.screen([{"field": "close", "op": ">", "value": 50}])
         assert res["ok"] is True
         assert res["matched"] == 1

@@ -23,7 +23,9 @@ def _safe_filename(stem: str) -> str:
 
 
 @router.get("/conversation/{conversation_id}.md")
-def export_conversation_markdown(conversation_id: str, gate: bool = Query(default=False)):
+def export_conversation_markdown(
+    conversation_id: str, gate: bool = Query(default=False)
+):
     """把一段 AI 研究对话导出为 Markdown 文件(浏览器下载)。
 
     ``?gate=true`` 时附加 M3 研报质量门控结果(critical/warning)到文末。

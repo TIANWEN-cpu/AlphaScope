@@ -44,8 +44,14 @@ def _bars(closes, vols=None, highs=None, lows=None):
     highs = highs or [c * 1.02 for c in closes]
     lows = lows or [c * 0.98 for c in closes]
     return [
-        {"date": f"2026-{(i // 28) + 1:02d}-{(i % 28) + 1:02d}", "open": closes[i], "high": highs[i],
-         "low": lows[i], "close": closes[i], "volume": vols[i]}
+        {
+            "date": f"2026-{(i // 28) + 1:02d}-{(i % 28) + 1:02d}",
+            "open": closes[i],
+            "high": highs[i],
+            "low": lows[i],
+            "close": closes[i],
+            "volume": vols[i],
+        }
         for i in range(n)
     ]
 
@@ -141,6 +147,7 @@ class TestPipelineAndCache:
             if sym == "BAD":
                 raise RuntimeError("boom")
             return _bars([10.0] * 70)
+
         m = store.compute_matrix(["GOOD", "BAD"], loader=loader)
         assert m["count"] == 2
         by = {row["symbol"]: row for row in m["rows"]}
