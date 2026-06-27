@@ -10,7 +10,7 @@ This document describes the system architecture and data flow of 研策中枢 Al
 flowchart TB
   UI["<b>用户界面层</b><br/>Vite + React 19 工作台 · Streamlit 调试台 · Windows 一键包 / Docker"]
   API["<b>API 层 · FastAPI</b><br/>REST 100+ · SSE 流式 · 鉴权 / 设置 / 任务中心"]
-  ORCH["<b>Agent 编排层（自研）</b><br/>研究员 Agent 群 · Tool Router · Critic 7 维 · Chairman 会签 · 降级策略"]
+  ORCH["<b>Agent 编排层（自研）</b><br/>研究员 Agent 群 · Tool Router(预留) · Critic 7 维 · Chairman 会签 · 降级策略"]
   QUANT["<b>量化层</b><br/>指标 / 因子库 · 一策略一文件(自动发现) · 回测引擎(T+1/费用/滑点/防未来函数) · 风控规则"]
   DATA["<b>数据层</b><br/>Provider 插件(20 源自动注册) · 健康检查 / 三级降级 · SQLite / 证据链 · Demo 兜底 · RAG 向量检索"]
   UI --> API --> ORCH
@@ -72,7 +72,7 @@ flowchart TB
   - **Deep** — 5 默认角色 Agent（基本面 / 技术面 / 情绪 / 风控 / 资金行为）+ Critic + Chairman，多模型异构。
   - **Auto** — Standard 预筛，置信度模糊（30–70%）时升级到 Deep。
 - **Data Verifier** (`agents/data_verifier.py`，v1.9.4) — 在任何 LLM 调用**之前**做确定性数据完整性预检：逐维度核验行情/技术/基本面/资金流/舆情/证据是否齐全·新鲜·无异常，缺失维度打标后由 `brief_warning()` 生成「严禁编造」强约束注入简报，杜绝 Agent 对缺失数据脑补。纯规则、不触网、失败不阻断；结果经全路径透出 `data_verification`。
-- **Tool Router** (`runtime/tool_router.py`) — Agent 工具调用路由。
+- **Tool Router** (`runtime/tool_router.py`) — Agent 工具调用路由(**预留能力**:模块与单测已就绪,尚未接入默认编排流程)。
 - **Critic** (`critic.py`) — 对每个 Agent 输出做 **7 维评分**：证据质量 / 逻辑一致性 / 矛盾检测 / 缺失证据 / 过度自信标记 / 证据覆盖率 / 因子一致性。
 - **Chairman** (`agents/chairman.py`) — `summarize_with_chairman()` 汇总多模型信号 + 置信度 + 理由，产出最终会签结论。
 - **多空辩论裁决** (`agents/debate.py`，v1.9.14) — 在风控 gate 之后**确定性**合成「看多方 / 看空方(反方质询)/ 主席裁决」:**不新增任何 LLM Agent、不触网、不增成本**,而是复用一次分析里已算出的 Agent 信号(买入/卖出/观望)+ Critic 评审分歧 + 风控否决 + `data_verifier` 数据缺失,把单一结论升级为可审计的多空对峙。反方质询四来源:看空 Agent / 看多但信心不足 / 风控一票否决 / 数据缺失·过期·异常 / Critic 中·高分歧。三份战略报告(compass/deep-research/1.txt)一致把「反方质询 + 裁决理由入报」列为差异化核心,且都警告「治理稳定前别堆 Agent」——故以纯函数失败安全合成器落地。合规:描述研究分歧与共识度/置信度,**绝不给买卖指令**,附免责;裁决小节并入研报正文,经 `/api/analysis/run` 透出 `debate`,「研究报告生成」页以**「多空辩论与裁决」面板**(裁决 banner + 看多/看空双栏 + 反方质询来源徽标,v1.9.15)可视化呈现。
