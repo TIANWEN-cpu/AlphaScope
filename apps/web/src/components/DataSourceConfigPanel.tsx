@@ -77,7 +77,7 @@ export function DataSourceConfigPanel() {
           const maxP = Math.max(0, ...Object.values(types || {}).map((t) => t?.priority ?? 0));
           if (Number.isFinite(maxP)) realDraft[pname] = maxP;
         });
-        setPriorityDraft((prev) => ({ ...draft, ...realDraft }));
+        setPriorityDraft(() => ({ ...draft, ...realDraft }));
       } catch { /* config 为空时忽略 */ }
     } catch (err) {
       setError(getErrorMessage(err));

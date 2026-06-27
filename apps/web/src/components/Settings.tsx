@@ -857,6 +857,7 @@ export function Settings({ initialTab }: SettingsProps) {
     void loadAiModelRoutesFromApi()
       .then((routes) => setAiModelRoutes((current) => ensureRoutesHaveDefaults({ ...current, ...routes, routes: { ...current.routes, ...routes.routes } }, providers)))
       .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时初始化;providers 到位后由 normalizedAiRoutes(memo)与 loadProviders 重算修正
   }, []);
 
   const saveSettings = () => {

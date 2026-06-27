@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, FileSearch, ExternalLink, Hash, Clock, FileJson } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileSearch, Hash, Clock, FileJson } from 'lucide-react';
 import { AnalysisResult, ProviderEvidence } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 

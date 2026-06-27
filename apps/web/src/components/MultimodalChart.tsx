@@ -407,10 +407,9 @@ function getFloatingTooltipStyle(
     return { transform: 'translate(-50%, calc(-100% - 12px))' };
   }
 
-  const { width, height } = size;
+  const { width } = size;
   const edgePadding = 12;
   const chartLeft = Number(viewBox?.x ?? 0);
-  const chartTop = Number(viewBox?.y ?? 0);
   const chartRight = chartLeft + Number(viewBox?.width ?? 0);
   const nearLeft = coordinate.x - width / 2 < chartLeft + edgePadding;
   const nearRight = chartRight > chartLeft && coordinate.x + width / 2 > chartRight - edgePadding;
@@ -468,10 +467,6 @@ function CompactKLineTooltip({ active, payload, label, coordinate, viewBox }: an
       </div>
     </div>
   );
-}
-
-function SilentTooltip() {
-  return null;
 }
 
 function KLineHoverStrip({ point, mode }: { point?: KLinePoint; mode: string }) {
@@ -671,6 +666,7 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅按 selectedStock 重载行情;不随 uploadedImage 变化重拉
   }, [selectedStock]);
 
   // 形态识别:换标的时拉取确定性 K 线形态(失败安全,失败则清空不报错)。

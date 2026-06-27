@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { 
   ComposedChart, 
   Line, 
@@ -8,27 +8,21 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip as ChartTooltip, 
-  Legend,
-  ReferenceLine 
+  Legend 
 } from 'recharts';
 import { 
   Coins, 
   TrendingUp, 
-  ShieldAlert, 
   Layers, 
   Scale, 
   Sliders, 
   BookOpen, 
-  Play, 
-  RotateCcw, 
   Sparkles,
   UserCheck, 
   Info,
   ChevronRight,
-  ArrowRightLeft,
   Flame,
   CheckCircle2,
-  DollarSign,
   AlertTriangle,
   Send
 } from 'lucide-react';
@@ -43,7 +37,6 @@ import {
   getRouteSelection,
   loadAiModelRoutesFromApi,
   loadLocalAiModelRoutes,
-  routesToGlobalAiSettings,
 } from '../lib/aiModelRouting';
 import type { ModelOption, ModelProvider } from '../lib/aiModelRouting';
 
@@ -363,7 +356,7 @@ export function FundDcaLab() {
   // AI & Chat status
   const [aiResponse, setAiResponse] = useState<string>('');
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
-  const [selectedFAQ, setSelectedFAQ] = useState<string>('');
+  const [, setSelectedFAQ] = useState<string>('');
   const [customQuery, setCustomQuery] = useState<string>('');
   const [diagnosticOpen, setDiagnosticOpen] = useState<boolean>(false);
 
@@ -463,7 +456,7 @@ export function FundDcaLab() {
   }, [fetchFundData]);
 
   // Chat model selection for the AI advisor panel (mirrors Workbench/NewsAggregator)
-  const [chatProviders, setChatProviders] = useState<ModelProvider[]>([]);
+  const [, setChatProviders] = useState<ModelProvider[]>([]);
   const [chatModelOptions, setChatModelOptions] = useState<ModelOption[]>([]);
   const [selectedChatModelKey, setSelectedChatModelKey] = useState<string>('');
   const selectedChatModel = chatModelOptions.find((o) => o.key === selectedChatModelKey) ?? chatModelOptions[0];
@@ -670,8 +663,6 @@ export function FundDcaLab() {
         eventTag = eventTag ? `${eventTag} (指标超跌)` : '🧩 量化超跌增持';
       }
 
-      const activeContribution = dcaSingleBase;
-      const extraCapital = dcaSingleBase * (marginBoosterFactor - 1);
       const actualInputThisStep = dcaSingleBase * marginBoosterFactor;
       
       accumulatedCost += actualInputThisStep;
@@ -811,6 +802,7 @@ export function FundDcaLab() {
 
   useEffect(() => {
     runSimulation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 显式列出输入项;runSimulation 是每次渲染重建的闭包,入 deps 会每渲染重跑
   }, [
     selectedFundCode,
     dcaAmount,
@@ -870,6 +862,7 @@ export function FundDcaLab() {
   }
 
   const activeFundIndexData = CLASSES_DESCRIPTION[selectedFund.type] || {};
+  void activeFundIndexData; // 预留:基金分类说明展示(暂未接入 UI)
 
   return (
     <div className="flex flex-col gap-6 p-6 min-h-screen bg-transparent text-neutral-200" id="fund_dca_lab_module">

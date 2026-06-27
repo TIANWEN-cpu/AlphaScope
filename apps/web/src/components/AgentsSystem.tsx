@@ -27,7 +27,7 @@ import {
 import { fetchApi } from '../lib/api';
 import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvents';
 import { STOCK_UNIVERSE, formatStockLabel } from '../lib/stocks';
-import { getErrorMessage, stripSymbolSuffix, useTaskStream } from '../lib/dataFetch';
+import { stripSymbolSuffix, useTaskStream } from '../lib/dataFetch';
 
 const ICON_MAP: Record<AgentIconKey, ElementType> = {
   macro: Globe,

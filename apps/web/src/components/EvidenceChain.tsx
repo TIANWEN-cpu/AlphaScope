@@ -2,17 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Bookmark,
-  HelpCircle,
   Sparkles,
   CheckCircle,
   Cpu,
   FileText,
   FolderLock,
   Plus,
-  MessageSquare,
   Coins,
   Newspaper,
-  Activity,
   Trash2,
   RefreshCw,
 } from 'lucide-react';

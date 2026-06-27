@@ -319,7 +319,6 @@ function GeneratedResearchReport({
   stockName?: string;
   onOpenModelSettings?: () => void;
 }) {
-  const agentCount = Object.keys(result.agents).length;
   const hasBrief = Boolean(result.brief?.trim());
   const hasResearchReport = Boolean(result.research_report?.trim());
   const hasChairmanSummary = Boolean(result.chairman_summary?.trim());

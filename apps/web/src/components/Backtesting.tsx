@@ -17,7 +17,6 @@ import {
   History,
   Layers,
   Play,
-  Settings2,
   ShieldAlert,
   Trash2,
   TrendingUp,
@@ -638,7 +637,7 @@ export function Backtesting() {
     }),
     [],
   );
-  const strategies = strategiesAsync.data ?? [];
+  const strategies = useMemo(() => strategiesAsync.data ?? [], [strategiesAsync.data]);
   const [selectedStrategy, setSelectedStrategy] = useState<string>('');
 
   useEffect(() => {

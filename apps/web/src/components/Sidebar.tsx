@@ -1,16 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  SquareDashedBottomCode, // Using as Logo
+import { // Using as Logo
   LayoutGrid, 
   Newspaper, 
-  BarChart2, 
-  PieChart, 
-  LayoutTemplate, 
   BrainCircuit, 
   Bookmark, 
-  Users, 
-  ListTodo,
+  Users,
   LineChart,
   Beaker,
   Settings,

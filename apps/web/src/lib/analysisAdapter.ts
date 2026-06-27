@@ -483,7 +483,7 @@ export async function getTaskResult(taskId: string, useMockForcefully: boolean =
     let parsed;
     try {
       parsed = JSON.parse(rawResult.output_json);
-    } catch (e) {
+    } catch {
       parsed = rawResult;
     }
     return normalizeAnalysisResult(parsed);

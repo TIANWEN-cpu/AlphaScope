@@ -8,7 +8,6 @@ import {
   Calendar, 
   Sparkles, 
   CheckCircle, 
-  AlertTriangle, 
   Filter, 
   Clock, 
   ArrowUpRight, 

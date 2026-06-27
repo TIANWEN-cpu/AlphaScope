@@ -94,6 +94,7 @@ export function Valuation() {
 
   useEffect(() => {
     if (stock?.symbol) load(stock.symbol);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅按 symbol 变化重新估值;load 为闭包不入 deps
   }, [stock?.symbol]);
 
   const s = data?.summary;

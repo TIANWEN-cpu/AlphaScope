@@ -684,10 +684,9 @@ function getFloatingTooltipStyle(
     return { transform: 'translate(-50%, calc(-100% - 12px))' };
   }
 
-  const { width, height } = size;
+  const { width } = size;
   const edgePadding = 12;
   const chartLeft = Number(viewBox?.x ?? 0);
-  const chartTop = Number(viewBox?.y ?? 0);
   const chartRight = chartLeft + Number(viewBox?.width ?? 0);
   const nearLeft = coordinate.x - width / 2 < chartLeft + edgePadding;
   const nearRight = chartRight > chartLeft && coordinate.x + width / 2 > chartRight - edgePadding;
@@ -743,10 +742,6 @@ function CompactWorkbenchTooltip({ active, payload, label, coordinate, viewBox }
       </div>
     </div>
   );
-}
-
-function SilentTooltip() {
-  return null;
 }
 
 function WorkbenchCandlestick(props: any) {
