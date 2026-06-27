@@ -24,8 +24,9 @@ const Valuation = lazy(() => import('./components/Valuation').then((module) => (
 const DragonTiger = lazy(() => import('./components/DragonTiger').then((module) => ({ default: module.DragonTiger })));
 const ExpertPanel = lazy(() => import('./components/ExpertPanel').then((module) => ({ default: module.ExpertPanel })));
 const MorningBrief = lazy(() => import('./components/MorningBrief').then((module) => ({ default: module.MorningBrief })));
+const MonitoringCenter = lazy(() => import('./components/MonitoringCenter').then((module) => ({ default: module.MonitoringCenter })));
 
-const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'settings'];
+const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'monitor', 'settings'];
 
 function ModuleLoading() {
   return (
@@ -179,6 +180,9 @@ export default function App() {
                   )}
                   {currentTab === 'detailed' && (
                     <ReportGenerator key="report" onOpenModelSettings={openModelSettings} />
+                  )}
+                  {currentTab === 'monitor' && (
+                    <MonitoringCenter key="monitor" />
                   )}
                   {currentTab === 'settings' && (
                     <Settings key="settings" initialTab={settingsInitialTab} />

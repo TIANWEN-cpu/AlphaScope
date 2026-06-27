@@ -184,6 +184,7 @@ if HAS_FASTAPI:
     from backend.api.watchlist import router as watchlist_router
     from backend.api.datasources import router as datasources_router
     from backend.api.csv_upload import router as csv_upload_router
+    from backend.api.monitor import router as monitor_router
 
     # 启动时把已保存的数据源凭证注入环境变量, 使 provider 自动注册时可用
     from backend.datasource_config import init_credentials_on_startup
@@ -217,6 +218,7 @@ if HAS_FASTAPI:
     app.include_router(watchlist_router)
     app.include_router(datasources_router)
     app.include_router(csv_upload_router)
+    app.include_router(monitor_router)
 
     # ============== 全局错误处理 ==============
 

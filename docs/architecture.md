@@ -96,11 +96,13 @@ flowchart TB
 
 ### 6. API 层 (`backend/api/`)
 
-FastAPI 提供 100+ REST / SSE 接口，按域拆分（`quant.py` / `analysis.py` / `news.py` / `evidence.py` / `settings.py` / `providers.py` 等）。SSE 流式用于 AI 对话与研报生成进度。回测响应透出 `assumptions` 字段，让「本次回测假设」对用户可见。
+FastAPI 提供 100+ REST / SSE 接口，按域拆分（`quant.py` / `analysis.py` / `news.py` / `evidence.py` / `settings.py` / `providers.py` / `diagnostics.py` / `monitor.py` 等）。SSE 流式用于 AI 对话与研报生成进度。回测响应透出 `assumptions` 字段，让「本次回测假设」对用户可见。
+
+> **系统监控中心**（`observability/monitor.py` + `GET /api/monitor/snapshot`，v1.9.10）把数据源 / 回测引擎 / 实验记录 / 模型成本 / 工具调用 / 执行追踪六路健康信号聚合成单一快照:每个组件采集器独立失败安全(采集失败仅标 `unknown`、不拖垮整体),状态分级为纯函数可单测,系统总状态取「任一 poor→poor、任一 warn→warn、否则 good」(`unknown` 不参与判定)。纯本地聚合、不触网,仅反映系统自身运行状态,不构成任何投资建议。
 
 ### 7. 用户界面层
 
-- **`apps/web`** — Vite + React 19 + TypeScript 工作台，状态驱动 SPA（无 React Router），Sidebar 分两组（投研核心 / 量化研究引擎）约 15 个模块。SSE 流式对话、证据链反查、回测交易明细与免责声明、**低代码策略编辑器**（字段+操作符+阈值无代码组合信号）、**样本外走查 Tab**（IS/OOS 窗口稳健性体检，v1.9.5）、**筹码分布 / 策略榜 / 实验记录 Tab**（v1.9.6–1.9.8）已接入。
+- **`apps/web`** — Vite + React 19 + TypeScript 工作台，状态驱动 SPA（无 React Router），Sidebar 分两组（投研核心 / 量化研究引擎）约 15 个模块。SSE 流式对话、证据链反查、回测交易明细与免责声明、**低代码策略编辑器**（字段+操作符+阈值无代码组合信号）、**样本外走查 Tab**（IS/OOS 窗口稳健性体检，v1.9.5）、**筹码分布 / 策略榜 / 实验记录 Tab**（v1.9.6–1.9.8）、**系统监控中心**（v1.9.10，单页总览数据源/引擎/成本/调用健康，20s 自动刷新）已接入。
 - **Streamlit 调试台** — 保留用于快速实验与诊断（非主交付形态）。
 - **Windows 一键包** — PyInstaller + Inno Setup，首启自动生成 master key 做 AES-GCM 加密。
 

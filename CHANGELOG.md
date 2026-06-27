@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.9.10 - 2026-06-27
+
+> **Phase 2 续**:新增**系统监控中心(Monitoring Center)**——把分散在各 observability/quant 子系统里的健康信号(数据源 / 回测引擎 / 实验记录 / 模型成本 / 工具调用 / 执行追踪)聚合成**单一快照**,前端单页总览。纯本地聚合、失败安全、不触网,仅反映系统自身运行状态。
+
+### 系统监控中心 monitor(Phase 2)
+- `observability/monitor.py`: 纯聚合 + 失败安全聚合器,**不触网**(只读各子系统进程内缓存状态与本地 SQLite)。
+  - 6 个组件采集器各自独立 try/except:任一组件采集失败仅把该组件标记为 `unknown`,绝不抛出、不拖垮整体
+    (沿用「诚实降级、绝不伪造正常」约定)。
+  - 状态分级抽成**纯函数**(`grade_from_quality` / `tool_call_status` / `trace_status` / `compute_overall_status`),
+    可脱离子系统直接单测;`unknown` 组件不参与总状态判定(未知 ≠ 异常)。
+  - 复用既有 `source_health.compute_quality_score` / `local_runner.local_status_payload` /
+    `experiment_store.count_experiments` / `diagnostics_store.{get_cost_summary,get_diagnostics_summary}` /
+    `tracer.get_stats`,不新建数据通道。
+- `GET /api/monitor/snapshot`: 返回各组件状态 + 系统总状态(good/warn/poor/unknown)+ 红黄绿计数 + 免责声明。
+- 前端 `MonitoringCenter.tsx` 新模块(侧栏「量化研究引擎 · 系统监控中心」):总状态英雄卡 + 红黄绿计数 +
+  组件卡片(状态徽标/摘要/指标明细可展开/`unknown` 采集异常提示)+ 20s 自动刷新(可关)+ 手动刷新。
+- tests/test_monitor.py: 8 用例(质量分/工具调用/追踪三档阈值边界、总状态聚合、快照结构与 now 注入、
+  包装层失败安全、依赖崩溃降级、真实采集器端到端不抛)。
+
 ## v1.9.9 - 2026-06-27
 
 > **Phase 2 续**:把策略工坊里「TDX 公式编译(演示)/后端能力未启用」的占位做成**真能编译+回测**的通达信公式编译器——支持常用 TDX 子集,编译成防未来函数的买卖信号走现有回测引擎。纯确定性、失败安全、合规(用户自定义公式,只做确定性计算)。
