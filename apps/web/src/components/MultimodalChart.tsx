@@ -41,7 +41,7 @@ import {
 } from '../lib/aiModelRouting';
 import { StableChartContainer } from './StableChartContainer';
 import { ThemedSelect } from './ThemedSelect';
-import { LightweightKLine } from './LightweightKLine';
+import { LightweightKLine, type KLineMarker } from './LightweightKLine';
 
 type ChartTab = 'vision' | 'kline';
 type Indicator = 'macd' | 'rsi';
@@ -98,6 +98,27 @@ interface PriceBar {
   previous_close?: number;
   source?: string;
   fetched_at?: number;
+}
+
+// ---- K-line pattern recognition contract (backend/quant/patterns.py) ----
+interface PatternItem {
+  name: string;
+  category: string;
+  direction: string; // bullish | bearish | neutral
+  date: string;
+  index: number;
+  detail: string;
+}
+
+interface PatternData {
+  status: string;
+  symbol: string;
+  bars_used: number;
+  patterns: PatternItem[];
+  counts: Record<string, number>;
+  note?: string;
+  disclaimer?: string;
+  data_source_label?: string;
 }
 
 interface PriceSeriesResponse {
@@ -530,6 +551,9 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
   const [showMA, setShowMA] = useState(true);
   // K 线渲染模式:专业(Lightweight Charts,真缩放/十字光标)↔ 经典(recharts 自绘)。
   const [klineRenderer, setKlineRenderer] = useState<'pro' | 'classic'>('pro');
+  // 形态识别(确定性 K 线形态)。
+  const [patternData, setPatternData] = useState<PatternData | null>(null);
+  const [showPatterns, setShowPatterns] = useState(true);
   const [isDiagnosticRunning, setIsDiagnosticRunning] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -648,6 +672,54 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
       cancelled = true;
     };
   }, [selectedStock]);
+
+  // 形态识别:换标的时拉取确定性 K 线形态(失败安全,失败则清空不报错)。
+  useEffect(() => {
+    let cancelled = false;
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 200);
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    fetchApi<PatternData>('/api/quant/patterns', {
+      method: 'POST',
+      body: JSON.stringify({
+        symbol: stripSymbolSuffix(selectedStock.symbol),
+        start_date: fmt(start),
+        end_date: fmt(end),
+        lookback: 60,
+      }),
+    })
+      .then((data) => {
+        if (!cancelled) setPatternData(data);
+      })
+      .catch(() => {
+        if (!cancelled) setPatternData(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedStock]);
+
+  // 形态 → 图表标记(每个日期取最近一个;看涨红箭头在下、看跌绿箭头在上)。
+  const patternMarkers = useMemo<KLineMarker[]>(() => {
+    if (!showPatterns || !patternData?.patterns?.length) return [];
+    const byDate = new Map<string, PatternItem>();
+    for (const p of patternData.patterns) {
+      if (p.date && !byDate.has(p.date)) byDate.set(p.date, p);
+    }
+    return [...byDate.values()].map((p) => {
+      const bull = p.direction === 'bullish';
+      const bear = p.direction === 'bearish';
+      return {
+        date: p.date,
+        position: bull ? 'belowBar' : bear ? 'aboveBar' : 'inBar',
+        color: bull ? '#f43f5e' : bear ? '#10b981' : '#a3a3a3',
+        shape: bull ? 'arrowUp' : bear ? 'arrowDown' : 'circle',
+        text: p.name,
+      } as KLineMarker;
+    });
+  }, [patternData, showPatterns]);
 
   const [visionModelsReloadKey, setVisionModelsReloadKey] = useState(0);
   useEffect(() => subscribeSettingsChanged(() => setVisionModelsReloadKey((k) => k + 1)), []);
@@ -1142,6 +1214,48 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                     <KLineHoverStrip point={displayHoverPoint} mode="指针行情" />
                     <span className="hidden font-mono text-[10px] text-neutral-600 sm:inline">鼠标移过图表查看该根K线</span>
                   </div>
+
+                  {patternData && patternData.status === 'ok' && patternData.patterns.length > 0 && (
+                    <div className="mb-3 rounded-lg border border-white/5 bg-black/35 px-3 py-2">
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-[11px] font-medium text-neutral-300">
+                          <span>形态识别</span>
+                          <span className="text-rose-400">{patternData.counts.bullish ?? 0} 看涨</span>
+                          <span className="text-emerald-400">{patternData.counts.bearish ?? 0} 看跌</span>
+                          <span className="text-neutral-500">{patternData.counts.neutral ?? 0} 中性</span>
+                        </div>
+                        <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-neutral-400">
+                          <input type="checkbox" checked={showPatterns} onChange={() => setShowPatterns((v) => !v)} />
+                          图上标记
+                        </label>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {patternData.patterns.slice(0, 14).map((p, i) => {
+                          const bull = p.direction === 'bullish';
+                          const bear = p.direction === 'bearish';
+                          return (
+                            <span
+                              key={`${p.date}-${p.name}-${i}`}
+                              title={`${p.date} · ${p.detail}`}
+                              className={cn(
+                                'rounded border px-1.5 py-0.5 text-[10px]',
+                                bull
+                                  ? 'border-rose-500/25 bg-rose-500/10 text-rose-300'
+                                  : bear
+                                    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                                    : 'border-white/10 bg-white/5 text-neutral-400',
+                              )}
+                            >
+                              {p.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      {patternData.disclaimer && (
+                        <p className="mt-1.5 text-[9px] leading-relaxed text-neutral-600">{patternData.disclaimer}</p>
+                      )}
+                    </div>
+                  )}
                   {/* K线蜡烛逐点动画重排贵 -> 关闭，整图由 motion 一次性 GPU 淡入 */}
                   <motion.div
                     key={`mkline-${selectedStock?.symbol ?? 'k'}`}
@@ -1152,7 +1266,7 @@ export function MultimodalChart({ onOpenModelSettings }: MultimodalChartProps) {
                   >
                   <div className="min-h-0 flex-1">
                     {klineRenderer === 'pro' ? (
-                      <LightweightKLine data={chartData} showMA={showMA} />
+                      <LightweightKLine data={chartData} showMA={showMA} markers={patternMarkers} />
                     ) : (
                     <StableChartContainer>
                       <ComposedChart

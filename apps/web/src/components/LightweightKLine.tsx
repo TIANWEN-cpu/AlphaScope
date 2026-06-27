@@ -7,6 +7,8 @@ import {
   type IChartApi,
   type ISeriesApi,
   type LineData,
+  type SeriesMarker,
+  type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
 
@@ -31,6 +33,14 @@ export interface KLineBar {
   ma20?: number;
 }
 
+export interface KLineMarker {
+  date: string;
+  position: 'aboveBar' | 'belowBar' | 'inBar';
+  color: string;
+  shape: 'circle' | 'square' | 'arrowUp' | 'arrowDown';
+  text: string;
+}
+
 interface Props {
   data: KLineBar[];
   /** 总开关(向后兼容):未单独指定 showMa5/showMa20 时控制两条均线。 */
@@ -39,6 +49,8 @@ interface Props {
   showMa5?: boolean;
   showMa10?: boolean;
   showMa20?: boolean;
+  /** 可选:在对应 K 线上打形态标记(箭头/圆点)。 */
+  markers?: KLineMarker[];
 }
 
 const UP = '#f43f5e'; // 涨红
@@ -50,7 +62,7 @@ function toTime(date: string): UTCTimestamp {
   return Math.floor((Number.isNaN(ms) ? 0 : ms) / 1000) as UTCTimestamp;
 }
 
-export function LightweightKLine({ data, showMA = true, showMa5, showMa10, showMa20 }: Props) {
+export function LightweightKLine({ data, showMA = true, showMa5, showMa10, showMa20, markers }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -160,6 +172,22 @@ export function LightweightKLine({ data, showMA = true, showMa5, showMa10, showM
     ma20Ref.current?.setData(ma20On ? m20 : []);
     chart.timeScale().fitContent();
   }, [data, showMA, showMa5, showMa10, showMa20]);
+
+  // 形态标记(可选):在对应 K 线上打箭头/圆点(时间须升序)。
+  useEffect(() => {
+    const candle = candleRef.current;
+    if (!candle) return;
+    const ms: SeriesMarker<Time>[] = (markers || [])
+      .map((m) => ({
+        time: toTime(m.date) as Time,
+        position: m.position,
+        color: m.color,
+        shape: m.shape,
+        text: m.text,
+      }))
+      .sort((a, b) => (a.time as number) - (b.time as number));
+    candle.setMarkers(ms);
+  }, [markers]);
 
   return (
     <div className="relative h-full w-full" style={{ minHeight: 220 }}>
