@@ -1,5 +1,5 @@
 import { fetchApi, API_BASE_URL, API_KEY } from './api';
-import { AgentOpinion, AnalysisResult, ProviderEvidence, ProviderTrace, SourceAppendixItem } from '../types';
+import { AgentOpinion, AnalysisResult, DebatePoint, DebateResult, ProviderEvidence, ProviderTrace, SourceAppendixItem } from '../types';
 import { mockAnalysisResult } from './mockAnalysisData';
 import { getEnabledAgentRuntimeConfigs } from './agentConfigs';
 
@@ -241,6 +241,41 @@ function normalizeSourceAppendix(value: unknown): SourceAppendixItem[] {
   });
 }
 
+function normalizeDebate(value: unknown): DebateResult | undefined {
+  const rec = asRecord(value);
+  if (!Object.keys(rec).length) return undefined;
+  const toPoints = (arr: unknown): DebatePoint[] =>
+    asArray(arr).map((p) => {
+      const r = asRecord(p);
+      return {
+        side: formatInlineValue(r.side),
+        source: formatInlineValue(r.source),
+        kind: formatInlineValue(r.kind),
+        claim: formatTextValue(r.claim),
+        weight: Number(r.weight) || 0,
+        confidence: Number(r.confidence) || 0,
+        evidence_ids: asArray(r.evidence_ids).map((e) =>
+          typeof e === 'number' ? e : formatInlineValue(e),
+        ),
+      };
+    });
+  return {
+    status: formatInlineValue(rec.status) || 'ok',
+    consensus: formatInlineValue(rec.consensus),
+    consensus_score: Number(rec.consensus_score) || 0,
+    divergence_level: formatInlineValue(rec.divergence_level),
+    bull_strength: Number(rec.bull_strength) || 0,
+    bear_strength: Number(rec.bear_strength) || 0,
+    n_bull: Number(rec.n_bull) || 0,
+    n_bear: Number(rec.n_bear) || 0,
+    n_neutral: Number(rec.n_neutral) || 0,
+    bull_points: toPoints(rec.bull_points),
+    bear_points: toPoints(rec.bear_points),
+    ruling: formatTextValue(rec.ruling),
+    disclaimer: formatInlineValue(rec.disclaimer),
+  };
+}
+
 /**
  * Normalizes the raw backend response into a consistent frontend AnalysisResult.
  * This adapter layer protects UI components from backend schema drift.
@@ -264,6 +299,7 @@ export function normalizeAnalysisResult(raw: any): AnalysisResult {
       : formatTextValue(criticRecord.divergence || criticRecord.summary || rawCritic)
     : formatTextValue(rawCritic);
   const chairman_summary = formatTextValue(raw?.chairman_summary || raw?.result?.chairman_summary || '');
+  const debate = normalizeDebate(raw?.debate || raw?.result?.debate);
   const modelStatusRecord = asRecord(raw?.model_status || raw?.result?.model_status || {});
   const model_status = Object.keys(modelStatusRecord).length
     ? {
@@ -313,6 +349,7 @@ export function normalizeAnalysisResult(raw: any): AnalysisResult {
     mode_name: formatInlineValue(raw?.mode_name || raw?.result?.mode_name || ''),
     critic,
     chairman_summary,
+    debate,
     model_status,
     agents: normalizedAgents,
     evidence,

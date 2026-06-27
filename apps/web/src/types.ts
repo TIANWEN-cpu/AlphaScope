@@ -120,6 +120,32 @@ export interface AnalysisModelStatus {
   action?: string;
 }
 
+export interface DebatePoint {
+  side: string;
+  source: string;
+  kind: string;
+  claim: string;
+  weight: number;
+  confidence: number;
+  evidence_ids: (string | number)[];
+}
+
+export interface DebateResult {
+  status: string;
+  consensus: string;
+  consensus_score: number;
+  divergence_level: string;
+  bull_strength: number;
+  bear_strength: number;
+  n_bull: number;
+  n_bear: number;
+  n_neutral: number;
+  bull_points: DebatePoint[];
+  bear_points: DebatePoint[];
+  ruling: string;
+  disclaimer?: string;
+}
+
 export interface AnalysisResult {
   summary?: string;
   brief?: string;
@@ -129,6 +155,7 @@ export interface AnalysisResult {
   agents: Record<string, AgentOpinion>;
   critic?: string;
   chairman_summary?: string;
+  debate?: DebateResult;
   model_status?: AnalysisModelStatus;
   evidence_pool?: EvidencePoolItem[];
   evidence: ProviderEvidence[];

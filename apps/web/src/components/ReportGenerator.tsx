@@ -10,13 +10,16 @@ import {
   ClipboardCheck,
   LineChart,
   ShieldCheck,
+  Scale,
+  TrendingUp,
+  TrendingDown,
   Cpu,
   CheckCircle2,
   XCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { startAsyncAnalysis, getTaskResult, getTaskEventsUrl, getTaskStatus } from '../lib/analysisAdapter';
-import { AnalysisResult } from '../types';
+import { AnalysisResult, DebateResult } from '../types';
 import { DecisionSummary } from './report/DecisionSummary';
 import { AgentOpinionCards } from './report/AgentOpinionCards';
 import { SourceTracePanel } from './report/SourceTracePanel';
@@ -231,6 +234,78 @@ function ModelQualityPanel({ result }: { result: AnalysisResult }) {
   );
 }
 
+const DEBATE_CONSENSUS_TONE: Record<string, string> = {
+  看多共识: 'border-rose-500/30 bg-rose-500/10 text-rose-300',
+  偏看多: 'border-rose-500/25 bg-rose-500/[0.07] text-rose-200',
+  看空共识: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  偏看空: 'border-emerald-500/25 bg-emerald-500/[0.07] text-emerald-200',
+  多空分歧: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  高度分歧: 'border-amber-500/40 bg-amber-500/15 text-amber-200',
+  中性观望: 'border-white/15 bg-white/5 text-neutral-300',
+  风控否决: 'border-red-500/40 bg-red-500/15 text-red-300',
+  未知: 'border-white/10 bg-white/5 text-neutral-400',
+};
+
+function DebatePanel({ debate }: { debate: DebateResult }) {
+  const tone = DEBATE_CONSENSUS_TONE[debate.consensus] || DEBATE_CONSENSUS_TONE['未知'];
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.035] p-5">
+      <div className={cn('mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3', tone)}>
+        <div className="flex items-center gap-2">
+          <Scale className="h-4 w-4" />
+          <span className="text-sm font-semibold">主席裁决：{debate.consensus}</span>
+        </div>
+        <div className="flex items-center gap-3 text-[11px] font-mono opacity-90">
+          <span>共识度 {debate.consensus_score.toFixed(0)}/100</span>
+          <span>分歧 {debate.divergence_level}</span>
+          <span>多 {debate.n_bull} · 空 {debate.n_bear} · 中 {debate.n_neutral}</span>
+        </div>
+      </div>
+
+      {debate.ruling && <p className="mb-4 text-sm leading-relaxed text-neutral-300">{debate.ruling}</p>}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border border-rose-500/15 bg-rose-500/[0.04] p-4">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-rose-300">
+            <TrendingUp className="h-3.5 w-3.5" /> 看多方 ({debate.bull_points.length})
+          </div>
+          {debate.bull_points.length ? (
+            <ul className="space-y-1.5">
+              {debate.bull_points.map((p, i) => (
+                <li key={i} className="text-[12px] leading-relaxed text-neutral-300">· {p.claim}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[12px] text-neutral-600">无看多论据</p>
+          )}
+        </div>
+        <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.04] p-4">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-emerald-300">
+            <TrendingDown className="h-3.5 w-3.5" /> 看空方 / 反方质询 ({debate.bear_points.length})
+          </div>
+          {debate.bear_points.length ? (
+            <ul className="space-y-1.5">
+              {debate.bear_points.map((p, i) => (
+                <li key={i} className="text-[12px] leading-relaxed text-neutral-300">
+                  · {p.claim}
+                  {p.kind === 'risk_veto' && <span className="ml-1 rounded bg-red-500/15 px-1 text-[9px] text-red-300">风控</span>}
+                  {p.kind === 'data_gap' && <span className="ml-1 rounded bg-amber-500/15 px-1 text-[9px] text-amber-300">数据</span>}
+                  {p.kind === 'critic_divergence' && <span className="ml-1 rounded bg-indigo-500/15 px-1 text-[9px] text-indigo-300">评审</span>}
+                  {p.kind === 'low_conviction' && <span className="ml-1 rounded bg-neutral-500/15 px-1 text-[9px] text-neutral-300">信心</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[12px] text-neutral-600">无反方质询</p>
+          )}
+        </div>
+      </div>
+
+      {debate.disclaimer && <p className="mt-4 text-[11px] leading-relaxed text-neutral-500">{debate.disclaimer}</p>}
+    </div>
+  );
+}
+
 function GeneratedResearchReport({
   result,
   onOpenModelSettings,
@@ -261,6 +336,12 @@ function GeneratedResearchReport({
           <div className="rounded-xl border border-white/8 bg-white/[0.035] p-5">
             <ReportTextBlock text={result.chairman_summary} />
           </div>
+        </ReportSection>
+      )}
+
+      {result.debate && result.debate.status === 'ok' && (
+        <ReportSection icon={Scale} title="多空辩论与裁决" eyebrow="Bull vs Bear">
+          <DebatePanel debate={result.debate} />
         </ReportSection>
       )}
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.9.15 - 2026-06-27
+
+> **Phase 3 差异化核心(前端落地)**:把 v1.9.14 的多空辩论裁决在「研究报告生成」页可视化——让"反方质询 + 裁决理由"对用户**可见、可审计**,完成三份报告的「报告含反方观点和裁决理由」验收闭环。
+
+### 多空辩论裁决(前端面板)
+- `ReportGenerator.tsx` 新增「多空辩论与裁决」`ReportSection`:**裁决 banner**(共识标签按多空/分歧/风控着色 +
+  共识度 0-100 + 分歧度 + 多/空/中计数)+ **双栏对峙**——看多方(A 股涨红)/ 看空方·反方质询(跌绿,每条带
+  `风控/数据/评审/信心` 来源徽标)+ 裁决理由 + 免责。
+- `lib/analysisAdapter.ts` `normalizeDebate()` 防御式归一后端 `debate`(schema 漂移/缺字段不崩,统一为前端 `DebateResult`),
+  并入 `normalizeAnalysisResult`;`types.ts` 增 `DebateResult`/`DebatePoint`。
+- tsc 零错误,build 通过(主 index 包不变,面板进 ReportGenerator 懒分包)。
+
 ## v1.9.14 - 2026-06-27
 
 > **Phase 3 差异化核心**:三份战略报告(compass/deep-research/1.txt)**一致收敛**的招牌能力——**多空辩论 + 反方质询 + 主席裁决入报**。三份都警告「证据链/结构化输出/数据治理稳定前别堆复杂 Agent」,而这些前置(v1.9.2/1.9.3/1.9.4)均已就位,故以**确定性合成器**落地:不新增任何 LLM Agent、不触网、不增成本,复用已算出的信号组成多空对峙。
