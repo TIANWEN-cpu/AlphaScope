@@ -16,6 +16,9 @@
   - 复用现有 `BacktestEngine`(T+1/印花税/滑点/防未来函数)与 `metrics`,不新建引擎;
     报告附 `assumptions` 与「样本外 ≠ 未来,不构成投资建议」免责声明。
 - `POST /api/quant/walk-forward`: 复用回测取数链路(_load_local_bars),线程池执行不阻塞事件循环。
+- 前端 `Backtesting.tsx` 新增「样本外走查」Tab(复用策略/标的/资金状态):锚定/滚动方案切换、
+  窗口数设置、一致性评分/样本外胜率/收益均值/平均 WFE 四卡、稳健性判定 banner、
+  「全样本累计 vs 样本外均值」过拟合提示、逐窗口 IS/OOS 明细表、回测假设卡与免责声明。
 - tests/test_walk_forward.py: 15 用例(切分/锚定 vs 滚动/聚合区间/确定性/失败安全/未知策略/API 载荷)。
 
 ## v1.9.4 - 2026-06-27
