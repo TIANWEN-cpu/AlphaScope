@@ -6,16 +6,19 @@ import {
   CheckCircle2,
   Code2,
   Cpu,
+  Database,
   Download,
   Coins,
   Flag,
   Gauge,
   GitBranch,
+  GitCompare,
   History,
   Layers,
   Play,
   Settings2,
   ShieldAlert,
+  Trash2,
   TrendingUp,
   Trophy,
   Upload,
@@ -29,7 +32,7 @@ import { getPersistedStock, subscribeStockSelected } from '../lib/workspaceEvent
 import { getErrorMessage, stripSymbolSuffix, useAsync } from '../lib/dataFetch';
 import { StableChartContainer } from './StableChartContainer';
 
-type TabID = 'overview' | 'workshop' | 'leaderboard' | 'walkforward' | 'chips' | 'pool' | 'compare';
+type TabID = 'overview' | 'workshop' | 'leaderboard' | 'walkforward' | 'chips' | 'experiments' | 'pool' | 'compare';
 
 const TABS: Array<{ id: TabID; label: string; icon: ComponentType<{ className?: string }> }> = [
   { id: 'overview', label: '回测大厅', icon: History },
@@ -37,9 +40,37 @@ const TABS: Array<{ id: TabID; label: string; icon: ComponentType<{ className?: 
   { id: 'leaderboard', label: '策略榜', icon: Trophy },
   { id: 'walkforward', label: '样本外走查', icon: GitBranch },
   { id: 'chips', label: '筹码分布', icon: Coins },
+  { id: 'experiments', label: '实验记录', icon: Database },
   { id: 'pool', label: '股票池解析', icon: Layers },
   { id: 'compare', label: '后验比对', icon: Activity },
 ];
+
+// 实验记录类型元信息(标签 + 主题色)。
+const EXP_MODE_META: Record<string, { label: string; tone: string }> = {
+  backtest: { label: '回测', tone: 'text-indigo-300 border-indigo-500/30 bg-indigo-500/10' },
+  walk_forward: { label: '走查', tone: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' },
+  chip_distribution: { label: '筹码', tone: 'text-amber-300 border-amber-500/30 bg-amber-500/10' },
+  strategy_compare: { label: '策略榜', tone: 'text-rose-300 border-rose-500/30 bg-rose-500/10' },
+};
+
+/** 把实验摘要(随 mode 不同)渲染成一行紧凑文本。 */
+function formatExpSummary(mode: string, summary?: Record<string, number | string>): string {
+  if (!summary) return '--';
+  const num = (v: unknown, d = 2) => (typeof v === 'number' ? v.toFixed(d) : '--');
+  if (mode === 'backtest') {
+    return `收益 ${num(summary.total_return)}% · 夏普 ${num(summary.sharpe_ratio)} · 回撤 ${num(summary.max_drawdown)}% · ${summary.trade_count ?? 0}笔`;
+  }
+  if (mode === 'walk_forward') {
+    return `${summary.n_windows ?? 0}窗 · 样本外胜率 ${num(summary.pct_profitable_windows)}% · 一致性 ${num(summary.consistency_score)} · ${summary.robustness ?? ''}`;
+  }
+  if (mode === 'chip_distribution') {
+    return `获利盘 ${num(summary.profit_ratio)}% · 均成本 ${num(summary.avg_cost)} · 90%集中度 ${num(summary.concentration_90)}%`;
+  }
+  if (mode === 'strategy_compare') {
+    return `${summary.evaluated ?? 0}策略 · 冠军 ${summary.top_strategy ?? '--'}(${num(summary.top_total_return)}%) · 按${summary.rank_by ?? ''}`;
+  }
+  return Object.entries(summary).map(([k, v]) => `${k} ${typeof v === 'number' ? v.toFixed(2) : v}`).join(' · ');
+}
 
 const DEFAULT_POOL_TEXT = `600519 贵州茅台
 300750 宁德时代
@@ -257,6 +288,17 @@ interface StrategyCompareData {
   bar_count?: number;
   disclaimer?: string;
   message?: string;
+}
+
+// ---- Experiment store contract (backend/quant/experiment_store.py) ----
+
+interface ExperimentRow {
+  run_id: string;
+  mode: string;
+  symbol?: string;
+  strategy_id?: string;
+  created_at?: string;
+  summary?: Record<string, number | string>;
 }
 
 interface FactorResponse {
@@ -481,6 +523,16 @@ export function Backtesting() {
   const [cmpResult, setCmpResult] = useState<StrategyCompareData | null>(null);
   const [cmpError, setCmpError] = useState<string | null>(null);
   const [cmpRankBy, setCmpRankBy] = useState<'sharpe_ratio' | 'total_return' | 'calmar_ratio'>('sharpe_ratio');
+
+  // Experiment history (实验记录) state — persisted runs across sessions.
+  const [expRows, setExpRows] = useState<ExperimentRow[]>([]);
+  const [expLoading, setExpLoading] = useState(false);
+  const [expError, setExpError] = useState<string | null>(null);
+  const [expModeFilter, setExpModeFilter] = useState<string>('');
+  const [expSelected, setExpSelected] = useState<Set<string>>(new Set());
+  const [expTotal, setExpTotal] = useState(0);
+  const [expRefresh, setExpRefresh] = useState(0);
+  const [expCompareRows, setExpCompareRows] = useState<ExperimentRow[] | null>(null);
 
   // Strategy catalogue (real)
   const strategiesAsync = useAsync<StrategyInfo[]>(
@@ -723,6 +775,67 @@ export function Backtesting() {
       setActionMessage(`筹码分布失败：${msg}`);
     } finally {
       setChipRunning(false);
+    }
+  };
+
+  // Load persisted experiments when the tab is active / filter / refresh changes.
+  useEffect(() => {
+    if (activeTab !== 'experiments') return;
+    let cancelled = false;
+    setExpLoading(true);
+    setExpError(null);
+    const q = expModeFilter ? `?mode=${encodeURIComponent(expModeFilter)}&limit=100` : '?limit=100';
+    fetchApi<{ experiments?: ExperimentRow[]; total?: number }>(`/api/quant/experiments${q}`)
+      .then((r) => {
+        if (cancelled) return;
+        setExpRows(r.experiments || []);
+        setExpTotal(r.total || 0);
+        setExpLoading(false);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setExpError(getErrorMessage(e));
+        setExpLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, expModeFilter, expRefresh]);
+
+  const deleteExperiment = async (runId: string) => {
+    try {
+      await fetchApi(`/api/quant/experiments/${encodeURIComponent(runId)}`, { method: 'DELETE' });
+      setExpSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(runId);
+        return next;
+      });
+      setExpCompareRows(null);
+      setExpRefresh((n) => n + 1);
+    } catch (err) {
+      setExpError(getErrorMessage(err));
+    }
+  };
+
+  const toggleExpSelect = (runId: string) => {
+    setExpSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(runId)) next.delete(runId);
+      else if (next.size < 4) next.add(runId);
+      return next;
+    });
+  };
+
+  const runExpCompare = async () => {
+    if (expSelected.size < 2) return;
+    try {
+      const res = await fetchApi<{ items?: ExperimentRow[] }>('/api/quant/experiments/compare', {
+        method: 'POST',
+        body: JSON.stringify({ run_ids: Array.from(expSelected) }),
+      });
+      setExpCompareRows(res.items || []);
+    } catch (err) {
+      setExpError(getErrorMessage(err));
     }
   };
 
@@ -1764,6 +1877,117 @@ export function Backtesting() {
                   选择标的与排名指标后点击「一键对比全部策略」，生成该标的上的策略表现排行榜。
                 </div>
               )}
+            </motion.div>
+          )}
+          {activeTab === 'experiments' && (
+            <motion.div key="experiments" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <div className="mb-5 rounded-xl border border-indigo-500/15 bg-indigo-500/[0.04] px-4 py-3 text-[11px] leading-relaxed text-indigo-100/75">
+                <Database className="mr-1 inline h-3.5 w-3.5 align-text-bottom" />
+                实验记录把回测/走查/筹码/策略榜的每次运行<strong className="font-medium text-indigo-50"> 落库持久化</strong>,跨会话可查、可调阅、可勾选<strong className="font-medium text-indigo-50"> 横向对比</strong>(最多 4 个)。共 {expTotal} 条记录(保留最近 300)。
+              </div>
+
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                {([['', '全部'], ['backtest', '回测'], ['walk_forward', '走查'], ['chip_distribution', '筹码'], ['strategy_compare', '策略榜']] as const).map(([key, label]) => (
+                  <button
+                    key={key || 'all'}
+                    onClick={() => { setExpModeFilter(key); setExpSelected(new Set()); setExpCompareRows(null); }}
+                    className={cn('rounded-lg border px-3 py-1.5 text-xs transition-colors', expModeFilter === key ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-200' : 'border-white/10 bg-black/30 text-neutral-400 hover:text-neutral-200')}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <div className="ml-auto flex items-center gap-2">
+                  {expSelected.size >= 2 && (
+                    <button onClick={runExpCompare} className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-600/80 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500">
+                      <GitCompare className="h-3.5 w-3.5" />
+                      对比选中 ({expSelected.size})
+                    </button>
+                  )}
+                  {(expSelected.size > 0 || expCompareRows) && (
+                    <button onClick={() => { setExpSelected(new Set()); setExpCompareRows(null); }} className="rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-neutral-400 hover:text-neutral-200">
+                      清空选择
+                    </button>
+                  )}
+                  <button onClick={() => setExpRefresh((n) => n + 1)} className="rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-neutral-400 hover:text-neutral-200">
+                    刷新
+                  </button>
+                </div>
+              </div>
+
+              {expError && (
+                <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+                  实验记录读取异常：{expError}
+                </div>
+              )}
+
+              {expCompareRows && expCompareRows.length > 0 && (
+                <div className="mb-5 rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.03] p-5 shadow-xl">
+                  <h3 className="mb-4 flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-emerald-200/80">
+                    <GitCompare className="h-4 w-4" />
+                    横向对比 · {expCompareRows.length} 个实验
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {expCompareRows.map((row) => {
+                      const meta = EXP_MODE_META[row.mode] || { label: row.mode, tone: 'text-neutral-300 border-white/15 bg-white/5' };
+                      return (
+                        <div key={row.run_id} className="rounded-xl border border-white/5 bg-black/30 p-4">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className={cn('rounded border px-2 py-0.5 text-[10px] font-mono', meta.tone)}>{meta.label}</span>
+                            <span className="font-mono text-[10px] text-indigo-300">{row.symbol || '--'}</span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-neutral-300">{formatExpSummary(row.mode, row.summary)}</p>
+                          <p className="mt-2 font-mono text-[10px] text-neutral-600">{(row.created_at || '').slice(0, 19).replace('T', ' ')}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-xl">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead className="border-b border-white/5 bg-black/35 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+                    <tr>
+                      <th className="px-4 py-3 w-8"></th>
+                      <th className="px-4 py-3">时间</th>
+                      <th className="px-4 py-3">类型</th>
+                      <th className="px-4 py-3">标的</th>
+                      <th className="px-4 py-3">策略</th>
+                      <th className="px-4 py-3">关键指标</th>
+                      <th className="px-4 py-3 text-right">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expLoading && (
+                      <tr><td colSpan={7} className="px-4 py-8 text-center text-xs text-neutral-500">正在读取实验记录...</td></tr>
+                    )}
+                    {!expLoading && expRows.map((row) => {
+                      const meta = EXP_MODE_META[row.mode] || { label: row.mode, tone: 'text-neutral-300 border-white/15 bg-white/5' };
+                      const selected = expSelected.has(row.run_id);
+                      return (
+                        <tr key={row.run_id} className={cn('border-b border-white/5 hover:bg-white/[0.025]', selected && 'bg-indigo-500/[0.06]')}>
+                          <td className="px-4 py-3">
+                            <input type="checkbox" checked={selected} onChange={() => toggleExpSelect(row.run_id)} className="h-3.5 w-3.5 accent-indigo-500" />
+                          </td>
+                          <td className="px-4 py-3 font-mono text-[11px] text-neutral-500">{(row.created_at || '').slice(0, 19).replace('T', ' ')}</td>
+                          <td className="px-4 py-3"><span className={cn('rounded border px-2 py-0.5 text-[10px] font-mono', meta.tone)}>{meta.label}</span></td>
+                          <td className="px-4 py-3 font-mono text-indigo-300">{row.symbol || '--'}</td>
+                          <td className="px-4 py-3 text-neutral-400">{row.strategy_id || '--'}</td>
+                          <td className="px-4 py-3 text-neutral-300">{formatExpSummary(row.mode, row.summary)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button onClick={() => deleteExperiment(row.run_id)} className="rounded p-1 text-neutral-500 transition-colors hover:bg-rose-500/10 hover:text-rose-300" title="删除">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!expLoading && expRows.length === 0 && (
+                      <tr><td colSpan={7} className="px-4 py-10 text-center text-xs text-neutral-500">暂无实验记录。运行回测 / 走查 / 筹码 / 策略榜后会自动落库于此。</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

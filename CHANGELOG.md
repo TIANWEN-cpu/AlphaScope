@@ -14,6 +14,8 @@
 - 新增端点:`GET /api/quant/experiments`(列举, 可按 mode/symbol 过滤)、
   `GET /api/quant/experiments/{run_id}`(完整载荷)、`DELETE /api/quant/experiments/{run_id}`、
   `POST /api/quant/experiments/compare`(按 run_id 列表取摘要并排)。
+- 前端 `Backtesting.tsx` 新增「实验记录」Tab:类型筛选(回测/走查/筹码/策略榜)+ 记录表
+  (时间/类型徽标/标的/策略/关键指标摘要/删除)+ 勾选最多 4 个一键横向对比(摘要卡并排)。
 - tests/test_experiment_store.py: 11 用例(存取往返/过滤倒序/删除/对比/分模式摘要/prune/失败安全),
   用临时 SQLite 连接隔离不污染开发库。
 
