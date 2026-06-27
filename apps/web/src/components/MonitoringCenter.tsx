@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import {
   Activity,
   AlertTriangle,
@@ -149,16 +150,24 @@ export const MonitoringCenter: React.FC = () => {
   }, [snapshot]);
 
   return (
-    <div className="max-w-5xl px-6 py-6">
+    <motion.div
+      key="monitor"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="max-w-5xl px-6 py-6"
+    >
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h3 className="mb-2 flex items-center gap-2 text-xl font-medium text-neutral-100">
-            <Gauge className="h-5 w-5 text-indigo-400" />
-            系统监控中心
-          </h3>
-          <p className="max-w-2xl text-sm text-neutral-400">
-            单页总览数据源、回测引擎、实验记录、模型成本、工具调用与执行追踪的运行状态。纯本地聚合、失败安全，仅反映系统自身运行情况。
-          </p>
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/20">
+            <Gauge className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-neutral-100">系统监控中心</h1>
+            <p className="mt-1 max-w-2xl text-xs text-neutral-500">
+              单页总览数据源、回测引擎、实验记录、模型成本、工具调用与执行追踪的运行状态。纯本地聚合、失败安全，仅反映系统自身运行情况。
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -228,12 +237,18 @@ export const MonitoringCenter: React.FC = () => {
           </div>
         )}
 
-        {sortedComponents.map((comp) => {
+        {sortedComponents.map((comp, idx) => {
           const status = normalizeStatus(comp.status);
           const meta = statusMeta[status];
           const metricEntries = Object.entries(comp.metrics || {}).filter(([, v]) => isPrimitive(v));
           return (
-            <div key={comp.key} className="rounded-lg border border-white/10 bg-black/20 p-4 transition-colors hover:bg-white/[0.03]">
+            <motion.div
+              key={comp.key}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.05, duration: 0.25 }}
+              className="rounded-lg border border-white/10 bg-black/20 p-4 transition-colors hover:bg-white/[0.03]"
+            >
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-indigo-300/80">{componentIcons[comp.key] ?? <Gauge className="h-4 w-4" />}</span>
@@ -268,7 +283,7 @@ export const MonitoringCenter: React.FC = () => {
                   </div>
                 </details>
               )}
-            </div>
+            </motion.div>
           );
         })}
       </div>
@@ -278,6 +293,6 @@ export const MonitoringCenter: React.FC = () => {
           {snapshot.disclaimer}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };

@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.9.23 - 2026-06-27
+
+> **前端视觉协调与动画对齐**:排查发现 v1.9.0 起新增的 6 个页面(FactorRegistry / DataLakeManager / TickFlowManager / ResearchMemory / MonitoringCenter / StrategyLab)彼此字号、图标容器、间距风格不一致,且全部未接入项目既有的 `motion` 动效体系(其余 20 个老页面均在使用)。本版以 Valuation 为标杆,统一这 6 个页面的视觉语言并补齐动效,纯前端、零业务逻辑改动。
+
+### 新页面动效与视觉对齐(前端,纯前端无后端改动)
+- **页面入场**:6 页统一 `motion.div` 包裹,`opacity:0,y:8 → opacity:1,y:0 → opacity:0,y:-8`(入场/退场),与 Valuation/FundDcaLab 等既有体系一致。
+- **标题/图标容器对齐**:统一 `h1 text-lg font-semibold` + `h-10 w-10` 图标容器(`bg-indigo-500/15` + `shadow-lg shadow-indigo-500/20` + `ring-1`)。修正:MonitoringCenter 原 `h3 text-xl`、StrategyLab 原 `text-xl font-bold`、新页面原 `h2 text-base` 全部统一;图标容器原各自不一(无容器 / `p-2.5` / 扁平 `border`)全部对齐。
+- **列表 stagger**:因子向量行、源列表、股票列表、组件卡片、模板卡、回测指标卡、结论变化点等,按 30–50ms 错峰淡入。
+- **结果块淡入**:矩阵、筛选结果、SQL 查询结果、回测结果等数据块整块淡入(`y:6 → y:0`)。
+- **切换态**:`TickFlowManager` 编辑表单/空状态、`ResearchMemory` 时间线/空状态用 `AnimatePresence mode="wait"` 切换。
+- 配色 token 严格复用既有体系(`white/[0.06]`、`white/[0.03]`、`transition-colors`),未引入新色值;ReportCharts 作为研报内嵌子块(非 tab 页)保持原状未动。
+- 零回归:**本批无后端改动**,无业务逻辑改动,无布局结构改动;`eslint 0 problem` · `tsc 0 error` · `vite build ✓`;主包 index 维持 857 kB 不变,6 页各自独立 chunk(7.88–12.09 kB)。
+
 ## v1.9.22 - 2026-06-27
 
 > **Phase 3 / FinRobot 式报告图表**:研报此前以文字段落为主,缺少 FinRobot 那种「一屏多图」的可视化密度。本版在「研究报告生成」页新增 **9 张图的「多维图表分析」面板**,把本次分析与历史数据可视化呈现——决策、辩论、量价、因子、形态一屏俯瞰。

@@ -6,6 +6,7 @@
  * 自定义保存、AI 规则导入, 三类标签 builtin / custom / ai。
  */
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'motion/react';
 import {
   Beaker,
   Bot,
@@ -332,14 +333,20 @@ export function StrategyLab() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-5 py-6">
+    <motion.div
+      key="strategy-lab"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="mx-auto max-w-6xl space-y-5 px-5 py-6"
+    >
       <header className="flex items-start gap-3">
-        <div className="rounded-xl bg-indigo-500/15 p-2.5">
-          <Beaker className="h-6 w-6 text-indigo-300" />
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/20">
+          <Beaker className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-neutral-100">低代码策略编辑器</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <h1 className="text-lg font-semibold text-neutral-100">低代码策略编辑器</h1>
+          <p className="mt-1 text-xs text-neutral-500">
             字段 + 操作符 + 阈值,无代码组合买卖信号 → 编译为 custom_rule 策略 → 复用真实回测引擎(T+1/印花税/滑点/防未来函数)。
           </p>
         </div>
@@ -351,9 +358,12 @@ export function StrategyLab() {
           <Sparkles className="h-3.5 w-3.5" /> 内置模板(点击载入后可改)
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {PRESETS.map((p) => (
-            <button
+          {PRESETS.map((p, idx) => (
+            <motion.button
               key={p.name}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.04, duration: 0.25 }}
               onClick={() => loadDraft(p)}
               className="group rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left transition-all hover:border-indigo-500/40 hover:bg-indigo-500/[0.06]"
             >
@@ -366,7 +376,7 @@ export function StrategyLab() {
               <p className="mt-1.5 text-[11px] text-neutral-500">
                 买 {p.buy_rules.length} 条 / 卖 {p.sell_rules.length} 条 · {p.logic === 'and' ? '全部满足' : '任一满足'}
               </p>
-            </button>
+            </motion.button>
           ))}
         </div>
       </section>
@@ -507,13 +517,19 @@ export function StrategyLab() {
                   { label: '夏普', value: (result.metrics.sharpe_ratio ?? 0).toFixed(2), good: (result.metrics.sharpe_ratio ?? 0) >= 1 },
                   { label: '胜率', value: pct(result.metrics.win_rate), good: (result.metrics.win_rate ?? 0) >= 0.5 },
                   { label: '交易笔数', value: String(result.metrics.trade_count ?? 0), good: true },
-                ].map((s) => (
-                  <div key={s.label} className="rounded-lg border border-white/5 bg-black/20 p-2.5">
+                ].map((s, idx) => (
+                  <motion.div
+                    key={s.label}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05, duration: 0.25 }}
+                    className="rounded-lg border border-white/5 bg-black/20 p-2.5"
+                  >
                     <div className="text-[11px] text-neutral-500">{s.label}</div>
                     <div className={cn('mt-0.5 text-base font-semibold', s.good ? 'text-emerald-300' : 'text-rose-300')}>
                       {s.value}
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
               {result.assumptions?.note && (
@@ -527,8 +543,14 @@ export function StrategyLab() {
             <div className="mb-3 text-sm font-semibold text-neutral-200">我的策略库({saved.length})</div>
             {saved.length === 0 && <p className="text-xs text-neutral-500">还没有保存的策略。配置规则后点「保存」。</p>}
             <div className="space-y-2">
-              {saved.map((s) => (
-                <div key={s.id} className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 p-2">
+              {saved.map((s, idx) => (
+                <motion.div
+                  key={s.id}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.04, duration: 0.25 }}
+                  className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 p-2"
+                >
                   <span className={cn('rounded border px-1.5 py-0.5 text-[10px]', TAG_STYLE[s.tag])}>{TAG_LABEL[s.tag]}</span>
                   <button onClick={() => loadDraft(s)} className="min-w-0 flex-1 truncate text-left text-sm text-neutral-200 hover:text-indigo-300">
                     {s.name}
@@ -537,12 +559,12 @@ export function StrategyLab() {
                   <button onClick={() => deleteSaved(s.id)} className="flex-shrink-0 rounded p-1 text-neutral-500 hover:bg-red-500/10 hover:text-red-400" aria-label="删除">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

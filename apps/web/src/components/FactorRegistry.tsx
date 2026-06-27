@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion } from 'motion/react';
 import { Sigma, RefreshCcw, Play, TrendingUp, TrendingDown, Minus, Search } from 'lucide-react';
 import { fetchApi } from '../lib/api';
 
@@ -94,18 +95,24 @@ export const FactorRegistry: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
+    <motion.div
+      key="factor-registry"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="flex h-full flex-col gap-4 overflow-y-auto p-5"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-400/20 bg-indigo-500/10 text-indigo-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/20">
             <Sigma className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-neutral-100">因子注册中心 · 研究流水线</h2>
+            <h1 className="text-lg font-semibold text-neutral-100">因子注册中心 · 研究流水线</h1>
             <p className="text-xs text-neutral-500">统一因子目录 + 确定性技术因子计算 + 跨标的因子矩阵</p>
           </div>
         </div>
-        <button type="button" onClick={() => void loadCatalog()} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/10">
+        <button type="button" onClick={() => void loadCatalog()} className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-white/[0.06]">
           <RefreshCcw className="h-3.5 w-3.5" /> 刷新
         </button>
       </div>
@@ -126,16 +133,22 @@ export const FactorRegistry: React.FC = () => {
             <div className="mt-3">
               <div className="mb-2 text-[11px] text-neutral-500">{vector.symbol} · 截面 {vector.asof} · {vector.bar_count} 根</div>
               <div className="flex flex-col gap-1.5">
-                {techDefs.map((d) => {
+                {techDefs.map((d, i) => {
                   const v = vector.factors[d.id];
                   return (
-                    <div key={d.id} className="flex items-center justify-between rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-1.5 text-xs">
+                    <motion.div
+                      key={d.id}
+                      initial={{ opacity: 0, x: -6 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.03, duration: 0.25 }}
+                      className="flex items-center justify-between rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-1.5 text-xs"
+                    >
                       <span className="flex items-center gap-1.5 text-neutral-300">
                         {directionIcon(d.direction)}
                         {d.name}
                       </span>
                       <span className="font-mono text-neutral-200">{v === null || v === undefined ? '—' : `${v}${d.unit}`}</span>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -155,7 +168,12 @@ export const FactorRegistry: React.FC = () => {
 
       {/* 矩阵结果 */}
       {matrix && matrix.rows.length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="rounded-xl border border-white/[0.06] bg-black/20 p-4"
+        >
           <h3 className="mb-3 text-sm font-medium text-neutral-200">因子矩阵 · {matrix.count} 只</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -179,7 +197,7 @@ export const FactorRegistry: React.FC = () => {
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* 因子目录 */}
@@ -214,6 +232,6 @@ export const FactorRegistry: React.FC = () => {
       <p className="pb-2 text-[11px] leading-relaxed text-neutral-600">
         因子是对历史量价/舆情结构的确定性度量,方向仅为口径标注(越大越偏多/偏空/中性),不据此给买卖指令、不预测、不构成选股建议。
       </p>
-    </div>
+    </motion.div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Webhook,
   RefreshCcw,
@@ -196,22 +197,28 @@ export const TickFlowManager: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col gap-4 p-5">
+    <motion.div
+      key="tickflow"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="flex h-full flex-col gap-4 p-5"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-400/20 bg-indigo-500/10 text-indigo-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/20">
             <Webhook className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-neutral-100">自定义数据表 · TickFlow</h2>
+            <h1 className="text-lg font-semibold text-neutral-100">自定义数据表 · TickFlow</h1>
             <p className="text-xs text-neutral-500">配置外部 HTTP/JSON 行情接口 → 字段映射 → 拉取入查询面(与上传 CSV 并列)</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={() => void load()} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/10">
+          <button type="button" onClick={() => void load()} className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-white/[0.06]">
             <RefreshCcw className="h-3.5 w-3.5" /> 刷新
           </button>
-          <button type="button" onClick={startNew} className="flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-3 py-1.5 text-xs text-indigo-200 hover:bg-indigo-500/25">
+          <button type="button" onClick={startNew} className="flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-3 py-1.5 text-xs text-indigo-200 transition-colors hover:bg-indigo-500/25">
             <Plus className="h-3.5 w-3.5" /> 新建源
           </button>
         </div>
@@ -228,11 +235,17 @@ export const TickFlowManager: React.FC = () => {
               暂无自定义源。点「新建源」配置一个 HTTP/JSON 行情接口。
             </div>
           )}
-          {sources.map((s) => {
+          {sources.map((s, idx) => {
             const ok = s.last_status === 'ok';
             const err = s.last_status === 'error';
             return (
-              <div key={s.id} className={`rounded-xl border p-3 ${editing?.id === s.id ? 'border-indigo-400/30 bg-indigo-500/10' : 'border-white/[0.06] bg-black/20'}`}>
+              <motion.div
+                key={s.id}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.04, duration: 0.25 }}
+                className={`rounded-xl border p-3 ${editing?.id === s.id ? 'border-indigo-400/30 bg-indigo-500/10' : 'border-white/[0.06] bg-black/20'}`}
+              >
                 <div className="flex items-center justify-between">
                   <button type="button" onClick={() => startEdit(s)} className="text-left text-sm font-medium text-neutral-200 hover:text-indigo-300">
                     {s.name}
@@ -250,17 +263,34 @@ export const TickFlowManager: React.FC = () => {
                     <Trash2 className="h-3 w-3" /> 删除
                   </button>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
 
         {/* 编辑表单 */}
         <div className="min-w-0 flex-1 overflow-y-auto">
-          {!editing ? (
-            <div className="flex h-full items-center justify-center text-sm text-neutral-500">选择左侧源编辑,或「新建源」</div>
-          ) : (
-            <div className="flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-4">
+          <AnimatePresence mode="wait">
+            {!editing ? (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex h-full items-center justify-center text-sm text-neutral-500"
+              >
+                选择左侧源编辑,或「新建源」
+              </motion.div>
+            ) : (
+              <motion.div
+                key="form"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.25 }}
+                className="flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-4"
+              >
               <div className="grid grid-cols-2 gap-3">
                 <Field label="名称">
                   <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className={inputCls} placeholder="我的K线源" />
@@ -324,15 +354,16 @@ export const TickFlowManager: React.FC = () => {
                   取消
                 </button>
               </div>
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
           <p className="mt-3 pb-2 text-[11px] leading-relaxed text-neutral-600">
             网络仅在「试抓 / 拉取」时发生且失败安全(失败不清空已有缓存)。拉取的数据明确标注来源 `http_json` / 用户自配,
             绝不冒充内置在线源;入库后仅供历史查询与回测,不预测、不构成投资建议。
           </p>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

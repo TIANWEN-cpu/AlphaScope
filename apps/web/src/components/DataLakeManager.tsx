@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import {
   Database,
   RefreshCcw,
@@ -163,18 +164,24 @@ export const DataLakeManager: React.FC = () => {
     setFilters((prev) => prev.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-5">
+    <motion.div
+      key="datalake"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="flex h-full flex-col gap-4 overflow-y-auto p-5"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-400/20 bg-indigo-500/10 text-indigo-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/20">
             <Database className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-neutral-100">数据湖 · DuckDB / Parquet</h2>
+            <h1 className="text-lg font-semibold text-neutral-100">数据湖 · DuckDB / Parquet</h1>
             <p className="text-xs text-neutral-500">行情列式物化 → 一条 SQL 跨标的批量扫描 / 选股 / 因子底座</p>
           </div>
         </div>
-        <button type="button" onClick={() => void loadStatus()} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/10">
+        <button type="button" onClick={() => void loadStatus()} className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-white/[0.06]">
           <RefreshCcw className="h-3.5 w-3.5" /> 刷新
         </button>
       </div>
@@ -195,10 +202,10 @@ export const DataLakeManager: React.FC = () => {
       {/* 状态卡 */}
       {status && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard label="已入湖标的" value={`${status.symbol_count}`} />
-          <StatCard label="总行数" value={status.row_count.toLocaleString()} />
-          <StatCard label="日期范围" value={status.date_range?.length ? `${status.date_range[0]} ~ ${status.date_range[1]}` : '—'} small />
-          <StatCard label="占用空间" value={fmtBytes(status.size_bytes)} />
+          <StatCard label="已入湖标的" value={`${status.symbol_count}`} index={0} />
+          <StatCard label="总行数" value={status.row_count.toLocaleString()} index={1} />
+          <StatCard label="日期范围" value={status.date_range?.length ? `${status.date_range[0]} ~ ${status.date_range[1]}` : '—'} small index={2} />
+          <StatCard label="占用空间" value={fmtBytes(status.size_bytes)} index={3} />
         </div>
       )}
 
@@ -266,7 +273,12 @@ export const DataLakeManager: React.FC = () => {
 
       {/* 筛选结果 */}
       {screenRows.length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="rounded-xl border border-white/[0.06] bg-black/20 p-4"
+        >
           <h3 className="mb-3 text-sm font-medium text-neutral-200">筛选结果 · {screenRows.length} 只</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -291,7 +303,7 @@ export const DataLakeManager: React.FC = () => {
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* 只读 SQL */}
@@ -309,7 +321,12 @@ export const DataLakeManager: React.FC = () => {
           <Play className="h-3.5 w-3.5" /> 运行查询
         </button>
         {queryCols.length > 0 && (
-          <div className="mt-3 overflow-x-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mt-3 overflow-x-auto"
+          >
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-white/[0.06] text-left text-neutral-500">
@@ -324,22 +341,27 @@ export const DataLakeManager: React.FC = () => {
                 ))}
               </tbody>
             </table>
-          </div>
+          </motion.div>
         )}
       </div>
 
       <p className="pb-2 text-[11px] leading-relaxed text-neutral-600">
         数据湖为历史行情的列式副本,批量筛选描述「过去满足条件的标的」,既不预测也不构成选股建议。SQL 仅允许只读查询。
       </p>
-    </div>
+    </motion.div>
   );
 };
 
 const selectCls = 'rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-indigo-400/40';
 
-const StatCard: React.FC<{ label: string; value: string; small?: boolean }> = ({ label, value, small }) => (
-  <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
+const StatCard: React.FC<{ label: string; value: string; small?: boolean; index?: number }> = ({ label, value, small, index = 0 }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 6 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: index * 0.05, duration: 0.25 }}
+    className="rounded-xl border border-white/[0.06] bg-black/20 p-3"
+  >
     <div className="text-[11px] text-neutral-500">{label}</div>
     <div className={`mt-1 font-semibold text-neutral-200 ${small ? 'text-xs' : 'text-lg'}`}>{value}</div>
-  </div>
+  </motion.div>
 );

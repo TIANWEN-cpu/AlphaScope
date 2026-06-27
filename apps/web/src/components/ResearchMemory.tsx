@@ -19,6 +19,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
+import { motion, AnimatePresence } from 'motion/react';
 import { fetchApi } from '../lib/api';
 
 // A 股配色:看多红 / 看空绿 / 观望琥珀。
@@ -174,22 +175,28 @@ export const ResearchMemory: React.FC = () => {
   );
 
   return (
-    <div className="flex h-full flex-col gap-4 p-5">
+    <motion.div
+      key="research-memory"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="flex h-full flex-col gap-4 p-5"
+    >
       {/* 标题 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-400/20 bg-indigo-500/10 text-indigo-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/20">
             <History className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-neutral-100">研究记忆</h2>
+            <h1 className="text-lg font-semibold text-neutral-100">研究记忆</h1>
             <p className="text-xs text-neutral-500">同一股票的研究结论随时间变化轨迹 · 共 {total} 条快照</p>
           </div>
         </div>
         <button
           type="button"
           onClick={() => void loadSymbols()}
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-white/10"
+          className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-white/[0.06]"
         >
           <RefreshCcw className="h-3.5 w-3.5" /> 刷新
         </button>
@@ -207,13 +214,16 @@ export const ResearchMemory: React.FC = () => {
               暂无研究记忆。<br />运行一次「对话式研究 / 研究报告生成」后,结论会自动记入这里。
             </div>
           )}
-          {symbols.map((s) => {
+          {symbols.map((s, idx) => {
             const meta = signalMeta(s.latest_signal);
             const active = s.symbol === selected;
             return (
-              <button
+              <motion.button
                 key={s.symbol}
                 type="button"
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.04, duration: 0.25 }}
                 onClick={() => setSelected(s.symbol)}
                 className={`flex flex-col gap-1 rounded-lg border px-3 py-2 text-left transition-colors ${
                   active ? 'border-indigo-400/30 bg-indigo-500/10' : 'border-transparent bg-white/[0.02] hover:bg-white/[0.05]'
@@ -230,32 +240,46 @@ export const ResearchMemory: React.FC = () => {
                   <span className="truncate">{s.name || '—'}</span>
                   <span>{s.count} 次 · {fmtDay(s.latest_date)}</span>
                 </div>
-              </button>
+              </motion.button>
             );
           })}
         </div>
 
         {/* 右:时间线 */}
         <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto">
-          {!timeline && (
-            <div className="flex h-full items-center justify-center text-sm text-neutral-500">
+          <AnimatePresence mode="wait">
+          {!timeline ? (
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex h-full items-center justify-center text-sm text-neutral-500"
+            >
               {loading ? '加载中…' : '选择左侧股票查看研究记忆'}
-            </div>
-          )}
-
-          {timeline && (
-            <>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="timeline"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col gap-4"
+            >
               {/* 总结卡 */}
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <StatCard label="研究次数" value={`${timeline.summary.count}`} sub={`${fmtDay(timeline.summary.first_date)} 起`} />
+                <StatCard label="研究次数" value={`${timeline.summary.count}`} sub={`${fmtDay(timeline.summary.first_date)} 起`} index={0} />
                 <StatCard
                   label="最新结论"
                   value={timeline.summary.latest_signal || '—'}
                   valueColor={signalMeta(timeline.summary.latest_signal).color}
                   sub={fmtDate(timeline.summary.latest_date)}
+                  index={1}
                 />
-                <StatCard label="结论变化" value={`${timeline.summary.change_count} 次`} sub="信号转折点" />
-                <StatCard label="平均置信度" value={`${timeline.summary.avg_confidence}`} sub={`最新 ${timeline.summary.latest_confidence}`} />
+                <StatCard label="结论变化" value={`${timeline.summary.change_count} 次`} sub="信号转折点" index={2} />
+                <StatCard label="平均置信度" value={`${timeline.summary.avg_confidence}`} sub={`最新 ${timeline.summary.latest_confidence}`} index={3} />
               </div>
 
               {/* 结论变化轨迹 */}
@@ -277,7 +301,13 @@ export const ResearchMemory: React.FC = () => {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {timeline.changes.map((c, i) => (
-                      <div key={i} className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 text-xs">
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.05, duration: 0.25 }}
+                        className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 text-xs"
+                      >
                         <span className="text-neutral-500">{fmtDay(c.from_date)}</span>
                         <span style={{ color: signalMeta(c.from).color }}>{c.from}</span>
                         <ArrowRight className="h-3 w-3 text-neutral-600" />
@@ -285,7 +315,7 @@ export const ResearchMemory: React.FC = () => {
                         <span className={`rounded border px-1.5 py-0.5 text-[10px] ${DIRECTION_CHIP[c.direction] || DIRECTION_CHIP.调整}`}>
                           {c.direction}
                         </span>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 )}
@@ -363,29 +393,36 @@ export const ResearchMemory: React.FC = () => {
                   </table>
                 </div>
               </div>
-            </>
+            </motion.div>
           )}
+          </AnimatePresence>
 
           <p className="pb-2 text-[11px] leading-relaxed text-neutral-600">
             研究记忆仅记录与回看历史分析结论的变化,描述「过去如何判断」,不预测未来、不构成任何投资建议。
           </p>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
-const StatCard: React.FC<{ label: string; value: string; sub?: string; valueColor?: string }> = ({
+const StatCard: React.FC<{ label: string; value: string; sub?: string; valueColor?: string; index?: number }> = ({
   label,
   value,
   sub,
   valueColor,
+  index = 0,
 }) => (
-  <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
+  <motion.div
+    initial={{ opacity: 0, y: 6 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: index * 0.05, duration: 0.25 }}
+    className="rounded-xl border border-white/[0.06] bg-black/20 p-3"
+  >
     <div className="text-[11px] text-neutral-500">{label}</div>
     <div className="mt-1 text-lg font-semibold" style={{ color: valueColor || '#e5e5e5' }}>
       {value}
     </div>
     {sub && <div className="mt-0.5 text-[10px] text-neutral-600">{sub}</div>}
-  </div>
+  </motion.div>
 );
