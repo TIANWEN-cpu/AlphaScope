@@ -71,3 +71,7 @@ feedback/
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
+
+# filter-branch/filter-repo 临时产物
+.git-rewrite/
+refs/original/

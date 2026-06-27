@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from backend.agent_modes import AnalysisMode
 from backend.quant.risk import (
     CRITICAL,
@@ -23,6 +25,17 @@ from backend.quant.risk import (
 )
 from backend.quant.risk.engine import RiskEngine
 from backend.runtime import orchestrator
+
+
+@pytest.fixture(autouse=True)
+def _force_configured_provider():
+    """Pin has_configured_provider() True so the orchestrator integration tests
+    run the real agent path (LLM mocked per-test) instead of the zero-key demo
+    fallback in key-less environments such as CI."""
+    with patch(
+        "backend.agents.demo_fallback.has_configured_provider", return_value=True
+    ):
+        yield
 
 
 # ---------- 单规则 ----------

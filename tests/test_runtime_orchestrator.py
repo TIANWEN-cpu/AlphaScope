@@ -2,8 +2,25 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from backend.agent_modes import AnalysisMode
 from backend.runtime import orchestrator
+
+
+@pytest.fixture(autouse=True)
+def _force_configured_provider():
+    """Exercise the real multi-agent path (LLM is mocked per-test).
+
+    Pin ``has_configured_provider()`` True so these tests never divert to the
+    zero-key demo-fallback report in environments without a saved provider or
+    API key (e.g. CI). Without this they pass only when ambient keys happen to
+    be present.
+    """
+    with patch(
+        "backend.agents.demo_fallback.has_configured_provider", return_value=True
+    ):
+        yield
 
 
 def test_managed_agent_to_runtime_config_uses_management_fields():
