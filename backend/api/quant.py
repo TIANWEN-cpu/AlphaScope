@@ -347,6 +347,70 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
     return payload
 
 
+def _run_chip_distribution_local(body: "ChipDistributionRequestBody") -> dict[str, Any]:
+    """加载本地行情并计算筹码(成本)分布,返回 API 载荷。
+
+    优先直接取**原始** bar(含换手率, 走真实换手扩散模型); 不足时退回带 provider/
+    preview 兜底的清洗取数(无换手 → 量能代理)。筹码分布本身纯确定性、不触网。
+    """
+    from backend.price_store import get_prices, normalize_symbol
+    from backend.quant.chip_distribution import compute_chip_distribution
+
+    sym = normalize_symbol(body.symbol) or body.symbol
+    start_dt = _parse_date(body.start_date, datetime.now() - timedelta(days=365))
+    end_dt = _parse_date(body.end_date, datetime.now())
+    limit = max(120, min(1000, (end_dt - start_dt).days + 30))
+
+    raw = (
+        get_prices(
+            sym,
+            start_date=body.start_date,
+            end_date=body.end_date,
+            limit=limit,
+            include_incompatible=True,
+        )
+        or []
+    )
+    data_source = "local_price_store"
+    if len(raw) < 20:
+        # 退回清洗取数(带 provider/preview 兜底)。换手率会被剥离 → 走量能代理。
+        raw, data_source = _load_local_bars(
+            body.symbol,
+            start_date=body.start_date,
+            end_date=body.end_date,
+            initial_capital=100000.0,
+        )
+
+    report = compute_chip_distribution(raw, symbol=body.symbol, price_levels=body.price_levels)
+    now = datetime.now()
+    run_id = f"chip-{now.strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"
+    payload = report.to_dict()
+    payload.update(
+        {
+            "run_id": run_id,
+            "mode": "chip_distribution",
+            "data_source": data_source,
+            "data_source_label": (
+                "本地样例行情"
+                if data_source == "local_preview"
+                else "实时数据源"
+                if data_source == "provider"
+                else "本地行情库"
+            ),
+            "bar_count": len(raw),
+            "degraded": data_source == "local_preview" or report.status != "ok",
+            "started_at": now.isoformat(),
+            "finished_at": now.isoformat(),
+            "message": (
+                "已使用本地样例行情完成筹码分布,仅用于功能预览。"
+                if data_source == "local_preview"
+                else report.note
+            ),
+        }
+    )
+    return payload
+
+
 # ============================================================
 # 请求模型
 # ============================================================
@@ -434,6 +498,15 @@ class WalkForwardRequestBody(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict, description="策略参数覆盖")
     n_splits: int = Field(default=5, description="样本外窗口数(2-12, 数据不足时自动收敛)")
     scheme: str = Field(default="anchored", description="切分方案: anchored(锚定) | rolling(滚动)")
+
+
+class ChipDistributionRequestBody(BaseModel):
+    """筹码(成本)分布请求体。"""
+
+    symbol: str = Field(description="标的代码")
+    start_date: str = Field(description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(description="结束日期 YYYY-MM-DD")
+    price_levels: int = Field(default=100, description="价位离散桶数(20-400)")
 
 
 class LiveStartBody(BaseModel):
@@ -628,6 +701,25 @@ async def run_walk_forward_endpoint(body: WalkForwardRequestBody):
             success=False,
             error=str(e),
             error_code="LOCAL_WALK_FORWARD_ERROR",
+        )
+
+
+@router.post("/chip-distribution")
+async def run_chip_distribution_endpoint(body: ChipDistributionRequestBody):
+    """筹码(成本)分布分析。
+
+    用换手率扩散模型重建当前持仓成本分布,读出获利盘/平均成本/集中度/上下方
+    筹码密集价。纯确定性、失败安全;描述历史成本结构,不预测价格、不构成建议。
+    同步重计算丢线程池,避免阻塞事件循环。
+    """
+    try:
+        result = await asyncio.to_thread(_run_chip_distribution_local, body)
+        return ApiResponse(success=True, data=result, message=result.get("message"))
+    except Exception as e:
+        return ApiResponse(
+            success=False,
+            error=str(e),
+            error_code="LOCAL_CHIP_DISTRIBUTION_ERROR",
         )
 
 
