@@ -19,7 +19,7 @@ classifiers = [
 [project.optional-dependencies]
 api = ["fastapi>=0.115.0,<1.0", "uvicorn>=0.34.0,<1.0"]
 rag = ["chromadb==0.6.3"]
-dev = ["pytest==8.4.0", "ruff==0.11.10"]
+dev = ["pytest==8.4.0", "ruff==0.15.13"]
 all = ["alphascope[api,rag,dev]"]
 
 [tool.ruff]
