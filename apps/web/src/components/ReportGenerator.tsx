@@ -395,6 +395,14 @@ export function ReportGenerator({ onOpenModelSettings }: ReportGeneratorProps) {
   const [generationStep, setGenerationStep] = useState(0);
   const [progressPercent, setProgressPercent] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
+  // mock 进度 interval 的句柄;组件卸载时清理,避免 VITE_USE_MOCK_REPORT 模式下定时器泄漏
+  const mockIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(
+    () => () => {
+      if (mockIntervalRef.current) clearInterval(mockIntervalRef.current);
+    },
+    [],
+  );
   const [generationError, setGenerationError] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [providers, setProviders] = useState<ModelProvider[]>([]);
@@ -538,7 +546,7 @@ export function ReportGenerator({ onOpenModelSettings }: ReportGeneratorProps) {
       if (forceMock) {
         // Fallback mock flow
         let mockStep = 0;
-        const interval = setInterval(() => {
+        const interval = (mockIntervalRef.current = setInterval(() => {
           mockStep++;
           if (mockStep >= steps.length) {
             clearInterval(interval);
@@ -552,7 +560,7 @@ export function ReportGenerator({ onOpenModelSettings }: ReportGeneratorProps) {
             setProgressPercent(mockStep * 20);
             setGenerationStatus(steps[mockStep]?.desc || 'AI 正在生成报告...');
           }
-        }, 800);
+        }, 800));
         return;
       }
 
