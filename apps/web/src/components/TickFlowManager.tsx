@@ -309,7 +309,7 @@ export const TickFlowManager: React.FC = () => {
                 </div>
               </div>
 
-              {preview?.sample && (
+              {preview?.sample != null && (
                 <div className="rounded-lg border border-white/[0.06] bg-black/30 p-3">
                   <div className="mb-1 text-[11px] text-neutral-500">样本记录(首条)</div>
                   <pre className="max-h-32 overflow-auto text-[11px] text-neutral-400">{JSON.stringify(preview.sample, null, 2)}</pre>

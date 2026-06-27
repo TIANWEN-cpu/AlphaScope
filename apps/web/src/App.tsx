@@ -80,7 +80,7 @@ interface ModuleErrorBoundaryState {
 }
 
 class ModuleErrorBoundary extends React.Component<ModuleErrorBoundaryProps, ModuleErrorBoundaryState> {
-  state: ModuleErrorBoundaryState = { error: null };
+  override state: ModuleErrorBoundaryState = { error: null };
 
   constructor(props: ModuleErrorBoundaryProps) {
     super(props);
@@ -90,11 +90,11 @@ class ModuleErrorBoundary extends React.Component<ModuleErrorBoundaryProps, Modu
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Module failed to load', error, info.componentStack);
   }
 
-  componentDidUpdate(prevProps: ModuleErrorBoundaryProps) {
+  override componentDidUpdate(prevProps: ModuleErrorBoundaryProps) {
     if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
       this.setState({ error: null });
     }
@@ -104,7 +104,7 @@ class ModuleErrorBoundary extends React.Component<ModuleErrorBoundaryProps, Modu
     this.setState({ error: null });
   };
 
-  render() {
+  override render() {
     if (this.state.error) {
       return <ModuleLoadError onRetry={this.retry} />;
     }

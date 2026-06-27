@@ -506,7 +506,7 @@ export function Portfolio() {
                   <RechartsTooltip
                     contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '8px', fontSize: '12px' }}
                     itemStyle={{ color: '#e5e5e5' }}
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value) => formatCurrency(Number(value))}
                   />
                 </PieChart>
               </StableChartContainer>
@@ -538,7 +538,7 @@ export function Portfolio() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                   <XAxis dataKey="bucket" stroke="#737373" fontSize={11} />
                   <YAxis stroke="#737373" fontSize={11} />
-                  <RechartsTooltip contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number) => `${value}%`} />
+                  <RechartsTooltip contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '8px', fontSize: '12px' }} formatter={(value) => `${Number(value)}%`} />
                   <Bar dataKey="limit" name="上限" fill="#334155" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="exposure" name="当前暴露" fill="#6366f1" radius={[4, 4, 0, 0]} />
                 </BarChart>

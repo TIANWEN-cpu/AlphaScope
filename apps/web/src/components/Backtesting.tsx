@@ -2220,7 +2220,7 @@ export function Backtesting() {
                               />
                               <Tooltip
                                 contentStyle={{ backgroundColor: 'rgba(0,0,0,0.82)', borderColor: 'rgba(255,255,255,0.12)', borderRadius: '12px', fontSize: '12px' }}
-                                formatter={(value: number | string) => [`${Number(value).toFixed(2)}%`, '筹码占比']}
+                                formatter={(value) => [`${Number(value).toFixed(2)}%`, '筹码占比']}
                                 labelFormatter={(label) => `成本价 ${label}`}
                               />
                               <Bar dataKey="pct" radius={[0, 2, 2, 0]} animationDuration={600}>

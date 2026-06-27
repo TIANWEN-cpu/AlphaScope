@@ -1296,7 +1296,7 @@ export function NewsAggregator({ onOpenModelSettings }: NewsAggregatorProps) {
                             const matchedTier = sourceSummary.sourceTierBySource.get(source);
                             const nextSource = matchedTier && selectedSource !== source ? source : '';
                             setSelectedSource(nextSource);
-                            setSelectedSourceTier(nextSource ? matchedTier : fallbackSourceTier(source));
+                            setSelectedSourceTier(nextSource && matchedTier ? matchedTier : fallbackSourceTier(source));
                             setSelectedCategory('all');
                             setSelectedArticle(null);
                           }}
