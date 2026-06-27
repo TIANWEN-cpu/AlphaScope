@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.9.8 - 2026-06-27
+
+> **Phase 2 续**:新增**实验记录持久化(experiment_store)**——把回测/走查/筹码/策略榜的结果落 SQLite,跨会话可查、可调阅、可横向对比。补足此前 `_local_runs` 内存态重启即丢的缺口。失败安全、只增不减(与内存态并存)。
+
+### 实验记录持久化 experiment_store(Phase 2)
+- `quant/experiment_store.py`: 自包含模块,懒创建独立表 `quant_experiments`(不改 `db._create_tables`),
+  复用同一 SQLite 单例连接。`save/list/get/delete/compare/count` 全部**失败安全**(出错返回
+  None/[]/False,持久化失败绝不影响运行本身——诚实降级,不假装存了)。按 mode 抽紧凑指标摘要
+  供列表/对比直接用;`_prune` 保留最近 300 条防无限增长。
+- 4 个运行入口(回测/走查/筹码/策略榜)统一经 `_persist_experiment()` 失败安全落库,与既有内存态
+  `_local_runs` 并存(只增不减)。
+- 新增端点:`GET /api/quant/experiments`(列举, 可按 mode/symbol 过滤)、
+  `GET /api/quant/experiments/{run_id}`(完整载荷)、`DELETE /api/quant/experiments/{run_id}`、
+  `POST /api/quant/experiments/compare`(按 run_id 列表取摘要并排)。
+- tests/test_experiment_store.py: 11 用例(存取往返/过滤倒序/删除/对比/分模式摘要/prune/失败安全),
+  用临时 SQLite 连接隔离不污染开发库。
+
 ## v1.9.7 - 2026-06-27
 
 > **Phase 2 续**:新增**策略横向对比榜**——对同一标的一次取数、跑完全部内置策略并按指标排名,帮你快速看哪些策略在该标的历史上表现更好。复用已测回测引擎,纯本地确定性,合规(历史回测 ≠ 选股建议)。

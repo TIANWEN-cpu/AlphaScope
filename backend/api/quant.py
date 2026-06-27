@@ -243,6 +243,19 @@ def _load_local_bars(
     )
 
 
+def _persist_experiment(payload: dict[str, Any]) -> None:
+    """失败安全地把运行载荷落库(experiment_store),供跨会话查询/对比。
+
+    持久化失败绝不影响运行本身(诚实降级:没存就是没存,不假装成功)。
+    """
+    try:
+        from backend.quant.experiment_store import save_experiment
+
+        save_experiment(payload)
+    except Exception:
+        pass
+
+
 def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
     from backend.quant.engine import BacktestEngine
     from backend.quant.strategies import StrategyRegistry
@@ -344,6 +357,7 @@ def _run_local_backtest(body: BacktestRequestBody) -> dict[str, Any]:
     _local_run_details[run_id] = payload
     for stale_run_id in list(_local_run_details.keys())[50:]:
         _local_run_details.pop(stale_run_id, None)
+    _persist_experiment(payload)
     return payload
 
 
@@ -408,6 +422,7 @@ def _run_chip_distribution_local(body: "ChipDistributionRequestBody") -> dict[st
             ),
         }
     )
+    _persist_experiment(payload)
     return payload
 
 
@@ -476,7 +491,7 @@ def _run_strategy_comparison_local(body: "StrategyCompareRequestBody") -> dict[s
     if bars:
         # 任一引擎实例的假设都一致,取一次披露给前端。
         assumptions = BacktestEngine(initial_capital=body.initial_capital)._assumptions()
-    return {
+    payload = {
         "run_id": run_id,
         "mode": "strategy_compare",
         "symbol": body.symbol,
@@ -504,6 +519,8 @@ def _run_strategy_comparison_local(body: "StrategyCompareRequestBody") -> dict[s
         ),
         "disclaimer": "对比基于历史回测,不代表未来表现,不构成投资建议或选股推荐。",
     }
+    _persist_experiment(payload)
+    return payload
 
 
 # ============================================================
@@ -565,6 +582,7 @@ def _run_walk_forward_local(body: "WalkForwardRequestBody") -> dict[str, Any]:
             ),
         }
     )
+    _persist_experiment(payload)
     return payload
 
 
@@ -612,6 +630,12 @@ class StrategyCompareRequestBody(BaseModel):
     end_date: str = Field(description="结束日期 YYYY-MM-DD")
     initial_capital: float = Field(default=1000000.0, description="初始资金")
     rank_by: str = Field(default="sharpe_ratio", description="排名指标: sharpe_ratio|total_return|calmar_ratio")
+
+
+class ExperimentCompareBody(BaseModel):
+    """实验横向对比请求体。"""
+
+    run_ids: list[str] = Field(default_factory=list, description="要对比的实验 run_id 列表")
 
 
 class LiveStartBody(BaseModel):
@@ -844,6 +868,49 @@ async def run_strategy_comparison_endpoint(body: StrategyCompareRequestBody):
             error=str(e),
             error_code="LOCAL_STRATEGY_COMPARE_ERROR",
         )
+
+
+@router.get("/experiments")
+async def list_experiments_endpoint(mode: str = "", symbol: str = "", limit: int = 50):
+    """列举已持久化的量化实验(回测/走查/筹码/策略榜),按时间倒序,可按 mode/symbol 过滤。"""
+    from backend.quant.experiment_store import count_experiments, list_experiments
+
+    items = await asyncio.to_thread(
+        list_experiments, limit=limit, mode=mode or None, symbol=symbol or None
+    )
+    return ApiResponse(
+        success=True,
+        data={"experiments": items, "total": count_experiments()},
+    )
+
+
+@router.get("/experiments/{run_id}")
+async def get_experiment_endpoint(run_id: str):
+    """取一次实验的完整载荷。"""
+    from backend.quant.experiment_store import get_experiment
+
+    result = await asyncio.to_thread(get_experiment, run_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"实验记录不存在: {run_id}")
+    return ApiResponse(success=True, data=result)
+
+
+@router.delete("/experiments/{run_id}")
+async def delete_experiment_endpoint(run_id: str):
+    """删除一次实验记录。"""
+    from backend.quant.experiment_store import delete_experiment
+
+    ok = await asyncio.to_thread(delete_experiment, run_id)
+    return ApiResponse(success=ok, data={"run_id": run_id, "deleted": ok})
+
+
+@router.post("/experiments/compare")
+async def compare_experiments_endpoint(body: ExperimentCompareBody):
+    """取若干实验的摘要并排,供横向对比。"""
+    from backend.quant.experiment_store import compare_experiments
+
+    rows = await asyncio.to_thread(compare_experiments, body.run_ids)
+    return ApiResponse(success=True, data={"items": rows, "count": len(rows)})
 
 
 @router.post("/live/start")
