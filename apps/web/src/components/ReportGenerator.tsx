@@ -15,12 +15,14 @@ import {
   TrendingDown,
   Cpu,
   CheckCircle2,
-  XCircle
+  XCircle,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { startAsyncAnalysis, getTaskResult, getTaskEventsUrl, getTaskStatus } from '../lib/analysisAdapter';
 import { AnalysisResult, DebateResult } from '../types';
 import { DecisionSummary } from './report/DecisionSummary';
+import { ReportCharts } from './ReportCharts';
 import { AgentOpinionCards } from './report/AgentOpinionCards';
 import { SourceTracePanel } from './report/SourceTracePanel';
 import { FieldSourceTable } from './report/FieldSourceTable';
@@ -308,9 +310,13 @@ function DebatePanel({ debate }: { debate: DebateResult }) {
 
 function GeneratedResearchReport({
   result,
+  symbol,
+  stockName,
   onOpenModelSettings,
 }: {
   result: AnalysisResult;
+  symbol?: string;
+  stockName?: string;
   onOpenModelSettings?: () => void;
 }) {
   const agentCount = Object.keys(result.agents).length;
@@ -342,6 +348,12 @@ function GeneratedResearchReport({
       {result.debate && result.debate.status === 'ok' && (
         <ReportSection icon={Scale} title="多空辩论与裁决" eyebrow="Bull vs Bear">
           <DebatePanel debate={result.debate} />
+        </ReportSection>
+      )}
+
+      {symbol && (
+        <ReportSection icon={BarChart3} title="多维图表分析" eyebrow="Charts · 9 图">
+          <ReportCharts result={result} symbol={symbol} stockName={stockName} />
         </ReportSection>
       )}
 
@@ -818,7 +830,7 @@ export function ReportGenerator({ onOpenModelSettings }: ReportGeneratorProps) {
                     result={analysisResult} 
                   />
 
-                  <GeneratedResearchReport result={analysisResult} onOpenModelSettings={onOpenModelSettings} />
+                  <GeneratedResearchReport result={analysisResult} symbol={selectedTarget.symbol} stockName={selectedTarget.name} onOpenModelSettings={onOpenModelSettings} />
 
                   {/* P0: Agent Opinions */}
                   <div className="my-7 border-t border-white/5 pt-7">
