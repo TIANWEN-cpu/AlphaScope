@@ -89,6 +89,7 @@ flowchart TB
 - **K 线形态识别** (`patterns.py`，v1.9.16) — 从 OHLCV **按规则**确定性检出蜡烛形态(十字星/锤子线·上吊线/流星·倒锤/看涨·看跌吞没/刺透·乌云盖顶/启明星·黄昏星/红三兵·三只乌鸦)与结构信号(跳空/N 日突破跌破/MA5-20 金叉死叉/双顶·双底),每个形态规则明确可单测、标注看涨/看跌/中性,同形异义用前段趋势区分。纯确定性、失败安全(脏数据/不足→降级空形态);描述历史 K 线结构,**不预测涨跌、不构成建议**,附免责。`POST /api/quant/patterns`。「交互K线」页以**形态面板 + 专业 K 线图上的形态标记**(看涨红箭头在下 / 看跌绿箭头在上 / 中性圆点,v1.9.17)呈现。
 - **策略横向对比榜** (v1.9.7) — 同一标的一次取数、跑完全部内置策略并按指标(夏普/累计收益/Calmar 等)排名,复用同一回测引擎;模板策略 `custom_rule` 跳过。纯本地确定性,仅历史对比、不构成选股建议。`POST /api/quant/compare-strategies`。
 - **实验记录持久化** (`experiment_store.py`，v1.9.8) — 把回测/走查/筹码/策略榜结果落 SQLite(独立表 `quant_experiments`,懒建表不改核心 schema),跨会话可查/调阅/横比;全失败安全(持久化失败不影响运行),`_prune` 保留最近 300 条。端点 `GET/DELETE /api/quant/experiments[/{run_id}]`、`POST /api/quant/experiments/compare`。与内存态 `_local_runs` 并存。
+- **研究记忆** (`research_memory.py`，v1.9.18) — 把每次 `/api/analysis/run` 的**结论快照**(买入/卖出/观望 + 置信度 + 多空裁决共识 + 风控否决 + 数据核验状态 + 收盘价)旁路落 SQLite(独立表 `research_memory`,懒建表不改核心 schema),于是同一只股票可回看「上周看多、本周转观望」这类**结论随时间的变化轨迹**。纯函数 `build_snapshot`/`compute_changes`(信号转折点 + 转积极/转谨慎方向)/`summarize_history` 可单测;全失败安全(写失败或空跑返回中性值,绝不影响分析本身),每股 `_prune` 留最近 200 条。分析流程跑完旁路记录(try/except 包裹)。端点 `GET /api/research-memory/{symbols,timeline/{symbol}}`、`DELETE .../{snapshot,symbol}/{id}`。仅记录与回看历史、不预测不建议。
 - **通达信(TDX)公式编译器** (`tdx_compiler.py`，v1.9.9) — 词法→递归下降语法→向量化序列求值,把 TDX 公式子集(MA/EMA/SMA/REF/CROSS/HHV/LLV/COUNT… + 赋值/输出/AND·OR)编译成防未来函数的买卖信号,经 `TdxStrategy`(注册名 `tdx`)走现有引擎回测。纯确定性、失败安全(坏公式→无信号)。`POST /api/quant/tdx/compile` 校验预览;回测复用 `/api/quant/backtest`。
 - **风控** — 双层职责分离：① 回测期 `risk_controller.py` 6 条硬规则逐 bar 拦截交易；② 决策期 `risk/engine.py`（v1.9.3）在研报发布前做独立一票否决 gate（黑名单/仓位/集中度/置信度门控，纯规则可单测），critical 触发则研报顶部红字否决、方向性结论不作为投资依据。
 - **Portfolio** (`portfolio.py`) — 持仓与成本核算，`execute_buy/sell` 支持可选佣金/印花税参数。
@@ -107,7 +108,7 @@ FastAPI 提供 100+ REST / SSE 接口，按域拆分（`quant.py` / `analysis.py
 
 ### 7. 用户界面层
 
-- **`apps/web`** — Vite + React 19 + TypeScript 工作台，状态驱动 SPA（无 React Router），Sidebar 分两组（投研核心 / 量化研究引擎）约 15 个模块。SSE 流式对话、证据链反查、回测交易明细与免责声明、**低代码策略编辑器**（字段+操作符+阈值无代码组合信号）、**样本外走查 Tab**（IS/OOS 窗口稳健性体检，v1.9.5）、**筹码分布 / 策略榜 / 实验记录 Tab**（v1.9.6–1.9.8）、**策略进化 Tab**（遗传算法参数寻优 + 收敛曲线 + 一键转样本外走查，v1.9.11）、**系统监控中心**（v1.9.10，单页总览数据源/引擎/成本/调用健康，20s 自动刷新）已接入。
+- **`apps/web`** — Vite + React 19 + TypeScript 工作台，状态驱动 SPA（无 React Router），Sidebar 分两组（投研核心 / 量化研究引擎）约 16 个模块。SSE 流式对话、证据链反查、回测交易明细与免责声明、**低代码策略编辑器**（字段+操作符+阈值无代码组合信号）、**样本外走查 Tab**（IS/OOS 窗口稳健性体检，v1.9.5）、**筹码分布 / 策略榜 / 实验记录 Tab**（v1.9.6–1.9.8）、**策略进化 Tab**（遗传算法参数寻优 + 收敛曲线 + 一键转样本外走查，v1.9.11）、**系统监控中心**（v1.9.10，单页总览数据源/引擎/成本/调用健康，20s 自动刷新）、**研究记忆**（v1.9.18，同一股票结论随时间变化轨迹 + 转折点 + 置信度趋势）已接入。
 - **Streamlit 调试台** — 保留用于快速实验与诊断（非主交付形态）。
 - **Windows 一键包** — PyInstaller + Inno Setup，首启自动生成 master key 做 AES-GCM 加密。
 

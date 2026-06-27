@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.9.18 - 2026-06-27
+
+> **Phase 3 / 研究记忆**:`1.txt` 规划的「同一股票可查看历史研究变化」。把每次 Agent 分析的**结论快照**(买入/卖出/观望 + 置信度 + 多空裁决 + 风控 + 数据核验)旁路落 SQLite,于是同一只股票可回看「上周看多、本周转观望」这类**结论随时间的变化轨迹**,辅助复盘。自包含、失败安全、纯函数可单测,仅记录与回看历史、不预测不建议。
+
+### 研究记忆 research_memory(后端)
+- `backend/quant/research_memory.py`:仿 experiment_store 风格的自包含 SQLite 模块(懒建表 `research_memory`,
+  复用单例连接,**不改 `db._create_tables`**)。纯函数 `build_snapshot`(抽紧凑结论快照)/ `compute_changes`
+  (检出 signal 转折点 + 转积极/转谨慎/横盘/调整方向)/ `summarize_history`(次数/最新信号/信号分布/置信度/变化数)
+  皆可单测;DB 层 `record_snapshot`/`list_symbols`/`get_history`/`get_timeline`/`delete_*`/`_prune_symbol`(每股留 200)
+  **全失败安全**(出错或空跑返回中性值,绝不影响分析本身)。
+- `/api/analysis/run` 跑完**旁路**调用 `record_snapshot`(try/except 包裹,记不上不影响返回);空跑(无信号无计数无裁决)自动跳过,不污染记忆。
+- `backend/api/research_memory.py`:`GET /api/research-memory/symbols`、`GET .../timeline/{symbol}`、
+  `DELETE .../snapshot/{id}`、`DELETE .../symbol/{symbol}`,注册进 `main.py`。
+- tests/test_research_memory.py:22 用例(信号归一/方向/快照映射/变化检测/历史汇总纯函数组 + 临时 SQLite 隔离的
+  记录·时间线·聚合·删除·裁剪 DB 组)。
+
+### 研究记忆(前端)
+- `ResearchMemory.tsx` 侧栏「研究记忆」页(投研体系组):左股票列表(最新结论 chip + 次数),右**时间线**——
+  总结卡(研究次数/最新结论/结论变化数/平均置信度)+ **结论变化轨迹**(转折点 `买入→观望` + 方向徽标)+
+  **置信度趋势图**(recharts)+ 历史快照表(时间/结论/置信度/多空裁决/分歧/风控/收盘)+ 清空本股记忆。
+- 接线:`types.ts` TabID +`research_memory`;`App.tsx` 懒加载 + VISIBLE_TABS + 渲染分支;`Sidebar.tsx` 菜单项(History 图标)。
+- 零回归:全量离线套件 **1159 passed, 1 skipped**(较前 1137 增 22);tsc 零错误;build 通过(ResearchMemory 懒分块)。
+- 合规:研究记忆仅记录与回看历史分析结论的变化,描述「过去如何判断」,不预测未来、不构成任何投资建议,附免责。
+
 ## v1.9.17 - 2026-06-27
 
 > **形态识别(前端落地)**:把 v1.9.16 的 K 线形态在「交互K线」页可视化——形态面板 + **专业 K 线图上的形态标记**,让识别结果一眼可见、可定位到具体那根 K 线。

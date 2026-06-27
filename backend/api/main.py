@@ -185,6 +185,7 @@ if HAS_FASTAPI:
     from backend.api.datasources import router as datasources_router
     from backend.api.csv_upload import router as csv_upload_router
     from backend.api.monitor import router as monitor_router
+    from backend.api.research_memory import router as research_memory_router
 
     # 启动时把已保存的数据源凭证注入环境变量, 使 provider 自动注册时可用
     from backend.datasource_config import init_credentials_on_startup
@@ -219,6 +220,7 @@ if HAS_FASTAPI:
     app.include_router(datasources_router)
     app.include_router(csv_upload_router)
     app.include_router(monitor_router)
+    app.include_router(research_memory_router)
 
     # ============== 全局错误处理 ==============
 
@@ -608,6 +610,17 @@ if HAS_FASTAPI:
         total_agents = int(model_status.get("total_agents") or 0)
         ok_agents = int(model_status.get("ok_agents") or 0)
         all_agents_failed = total_agents > 0 and ok_agents == 0
+
+        # 研究记忆(v1.9.18):把本次结论快照旁路落库, 供「研究记忆」页回看结论随时间变化。
+        # 失败安全 —— 记不上绝不影响分析返回。
+        try:
+            from backend.quant import research_memory
+
+            research_memory.record_snapshot(
+                req.stock_symbol, req.stock_name, result, stock_data
+            )
+        except Exception:
+            pass
 
         return ApiResponse(
             success=not all_agents_failed,

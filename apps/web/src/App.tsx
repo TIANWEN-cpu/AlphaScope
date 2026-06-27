@@ -25,8 +25,9 @@ const DragonTiger = lazy(() => import('./components/DragonTiger').then((module) 
 const ExpertPanel = lazy(() => import('./components/ExpertPanel').then((module) => ({ default: module.ExpertPanel })));
 const MorningBrief = lazy(() => import('./components/MorningBrief').then((module) => ({ default: module.MorningBrief })));
 const MonitoringCenter = lazy(() => import('./components/MonitoringCenter').then((module) => ({ default: module.MonitoringCenter })));
+const ResearchMemory = lazy(() => import('./components/ResearchMemory').then((module) => ({ default: module.ResearchMemory })));
 
-const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'monitor', 'settings'];
+const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'monitor', 'research_memory', 'settings'];
 
 function ModuleLoading() {
   return (
@@ -183,6 +184,9 @@ export default function App() {
                   )}
                   {currentTab === 'monitor' && (
                     <MonitoringCenter key="monitor" />
+                  )}
+                  {currentTab === 'research_memory' && (
+                    <ResearchMemory key="research_memory" />
                   )}
                   {currentTab === 'settings' && (
                     <Settings key="settings" initialTab={settingsInitialTab} />
