@@ -12,14 +12,14 @@ interface Props {
 export const AgentOpinionCards: React.FC<Props> = ({ agents, evidencePool }) => {
   const agentEntries = Object.entries(agents) as Array<[string, AgentOpinion]>;
 
-  if (agentEntries.length === 0) return null;
-
-  // evidence_id → 证据池条目, 供结论反查来源。
+  // evidence_id → 证据池条目, 供结论反查来源。Hook 必须在任何 early return 之前调用。
   const poolById = React.useMemo(() => {
     const m = new Map<string, EvidencePoolItem>();
     (evidencePool ?? []).forEach((item) => m.set(item.evidence_id, item));
     return m;
   }, [evidencePool]);
+
+  if (agentEntries.length === 0) return null;
 
   const formatAgentName = (agentId: string, opinion: AgentOpinion) => {
     const name = opinion.name?.trim();

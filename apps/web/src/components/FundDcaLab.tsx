@@ -699,7 +699,7 @@ export function FundDcaLab() {
       }
 
       // 3. Take-profit evaluation
-      let currentVal = unitsHeld * nav + cashParked;
+      const currentVal = unitsHeld * nav + cashParked;
       const originalTotalProfitRate = accumulatedCost > 0 ? ((currentVal - accumulatedCost) / accumulatedCost) * 100 : 0;
       let isTakeProfitTriggered = false;
 
