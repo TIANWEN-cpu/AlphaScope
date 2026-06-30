@@ -16,6 +16,7 @@ import pytest
 
 from backend.integrations.factor.qlib_adapter import (
     QlibAdapter,
+    _to_qlib_instrument,
     normalize_qlib_factor_df,
 )
 from backend.integrations.schemas import HealthStatus, LicenseSafety
@@ -70,6 +71,19 @@ def test_normalize_factor_set_label_carried_through():
     assert out["factor_set"] == "alpha360"
 
 
+def test_to_qlib_instrument_sh_sz_prefix():
+    """A 股 6 位代码 → Qlib SH/SZ 口径; 已带前缀/非标准原样返回。"""
+    assert _to_qlib_instrument("600000") == "SH600000"  # 沪市主板
+    assert _to_qlib_instrument("688981") == "SH688981"  # 科创板
+    assert _to_qlib_instrument("000001") == "SZ000001"  # 深市主板
+    assert _to_qlib_instrument("300750") == "SZ300750"  # 创业板
+    # 已是 Qlib 口径 → 原样
+    assert _to_qlib_instrument("SH600000") == "SH600000"
+    # 非标准/空 → 原样 (交给 Qlib 自行解析)
+    assert _to_qlib_instrument("AAPL") == "AAPL"
+    assert _to_qlib_instrument("") == ""
+
+
 # ============================================================
 # 2. 元数据 + 边界 (始终跑, 不依赖 qlib)
 # ============================================================
@@ -112,10 +126,13 @@ def test_qlib_healthcheck_reports_availability():
 
 
 def test_compute_factors_failure_safe_returns_empty_vector():
-    """qlib 不可用时 compute_factors 不抛, 返回空因子向量 (结构与正常一致)。"""
+    """qlib 不可用时 compute_factors 不抛, 返回空因子向量 (结构与正常一致)。
+
+    symbol 经 _to_qlib_instrument 转成 Qlib 口径 (000001 → SZ000001)。
+    """
     a = QlibAdapter()
     out = a.compute_factors(["000001"], bars=[])
-    assert out["symbol"] == "000001"
+    assert out["symbol"] == "SZ000001"
     assert out["factors"] == {}
     assert out["source"] == "qlib"
 

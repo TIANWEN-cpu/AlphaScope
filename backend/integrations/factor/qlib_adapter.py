@@ -48,6 +48,25 @@ from backend.integrations.registry import register
 _DEFAULT_FACTOR_SET = "alpha158"
 
 
+def _to_qlib_instrument(code: str) -> str:
+    """把 AlphaScope 口径标的代码转成 Qlib 口径 (如 600000 → SH600000, 000001 → SZ000001)。
+
+    Qlib CN 数据用 交易所前缀 + 6 位代码: 沪市 (60/68/90/11 开头) → SH, 深市 → SZ。
+    纯函数, 失败安全: 已带前缀/非 6 位/空 → 原样返回 (交给 Qlib 自行解析或报错)。
+    """
+    if not code:
+        return code
+    s = str(code).strip().upper()
+    if s.startswith(("SH", "SZ", "BJ")) and len(s) >= 8:
+        return s  # 已是 Qlib 口径
+    digits = s.lstrip("#")
+    if len(digits) != 6 or not digits.isdigit():
+        return s  # 非标准 6 位代码, 原样返回
+    if digits[:2] in ("60", "68", "90", "11", "13", "56"):
+        return "SH" + digits
+    return "SZ" + digits
+
+
 # ============================================================
 # 纯函数 (无需 qlib 即可单测)
 # ============================================================
@@ -104,18 +123,17 @@ def normalize_qlib_factor_df(
 def has_qlib_data_initialized() -> bool:
     """探测 qlib 是否已初始化数据目录。
 
-    qlib.init() 需要指向一个已下载的数据目录; 未初始化时因子计算会失败。
-    本函数检查 qlib.config 里是否已注册 provider, 失败安全返回 False。
+    qlib.init() 成功后, qlib.config.C.registered 会变 True (QlibConfig 单例的
+    @property)。这是最干净的「是否已初始化」判断点 (init() 本身在
+    skip_if_reg and C.registered 时早返回)。provider_uri 在 init 后会被
+    resolve_path 规范化成 dict, 不可直接做字符串比较。
     """
     if not _QLIB_AVAILABLE:
         return False
     try:
-        from qlib.config import config  # type: ignore[import-untyped]
+        from qlib.config import C  # type: ignore[import-untyped]
 
-        provider = getattr(config, "provider_uri", None) or (
-            config.get("provider_uri") if isinstance(config, dict) else None
-        )
-        return bool(provider)
+        return bool(getattr(C, "registered", False))
     except Exception:
         return False
 
@@ -188,26 +206,50 @@ class QlibAdapter(FactorAdapter):
         """为给定标的计算 Qlib 因子向量。
 
         关键入参 (kw):
-        - bars: list[dict]  单标的 OHLCV (必需, 注入不触网; 多标的时用第一个)
+        - instruments: list[str]  Qlib 口径标的 (如 ["SH600000"]); 缺省回退 symbols
+        - start_time / end_time: str  因子计算区间 (如 "2020-01-01")
         - factor_set: str   "alpha158"(默认) / "alpha360"
 
         返回 normalize_qlib_factor_df 归一化后的结构。
-        失败安全: qlib 不可用 / 数据未初始化 → 返回空因子向量, 不抛。
+        失败安全: qlib 不可用 / 数据未初始化 / API 抛错 → 返回空因子向量, 不抛。
         本方法是 Qlib 相对自研 factor_registry 的差异化能力 (ML 衍生因子), 故单独实现。
+
+        注意: 正确的 Qlib API 是 ``from qlib.contrib.data.handler import Alpha158``,
+        handler 需要 instruments/start_time/end_time/fit_*_time, 取因子用
+        ``h.fetch(col_set="feature")``。详见 Qlib data framework 文档。
         """
-        symbol = symbols[0] if symbols else str(kw.get("symbol", ""))
+        instruments = kw.get("instruments") or [
+            _to_qlib_instrument(s) for s in symbols if s
+        ]
+        symbol = instruments[0] if instruments else str(kw.get("symbol", ""))
         factor_set = str(kw.get("factor_set", _DEFAULT_FACTOR_SET))
-        if not _QLIB_AVAILABLE or not has_qlib_data_initialized():
+        start_time = str(kw.get("start_time", "2018-01-01"))
+        end_time = str(kw.get("end_time", "2024-12-31"))
+        if not _QLIB_AVAILABLE or not has_qlib_data_initialized() or not instruments:
             # 失败安全: 返回空因子向量 (结构与正常输出一致)
             return normalize_qlib_factor_df(None, symbol=symbol, factor_set=factor_set)
         try:
-            # 延迟导入 qlib 的具体 API (避免模块导入时的副作用)
-            from qlib.data.dataset.loader import (  # type: ignore[import-untyped]
-                Alpha158,
-            )
+            # 延迟导入 qlib 的具体 API (避免模块导入时的副作用)。
+            # 注意: Alpha158 在 qlib.contrib.data.handler (非 qlib.data.dataset.loader)。
+            if factor_set == "alpha360":
+                from qlib.contrib.data.handler import (  # type: ignore[import-untyped]
+                    Alpha360 as _Handler,
+                )
+            else:
+                from qlib.contrib.data.handler import (  # type: ignore[import-untyped]
+                    Alpha158 as _Handler,
+                )
 
-            handler = Alpha158()  # 实际使用需 qlib.init 过; 否则抛错被下面捕获
-            df = handler.fetch()  # 取因子矩阵
+            h = _Handler(
+                instruments=instruments,
+                start_time=start_time,
+                end_time=end_time,
+                fit_start_time=start_time,
+                fit_end_time=end_time,
+                # 仅取原始因子值, 关闭 DropnaLabel/CSZScoreNorm 等 learn 处理
+                learn_processors=[],
+            )
+            df = h.fetch(col_set="feature")  # MultiIndex(datetime, instrument) × 158 列
             return normalize_qlib_factor_df(df, symbol=symbol, factor_set=factor_set)
         except Exception:
             return normalize_qlib_factor_df(None, symbol=symbol, factor_set=factor_set)
