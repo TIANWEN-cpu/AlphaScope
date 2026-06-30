@@ -21,6 +21,8 @@ optuna>=3.0  # 超参优化; 缺失时调参能力降级
 langgraph>=0.2  # 多 Agent 工作流编排; 缺失时自研编排兜底
 evidently>=0.4  # 数据漂移与质量监控; 缺失时降级
 ragas>=0.1  # RAG/LLM 输出评测; 缺失时降级 (依赖较重, 可选)
+prefect>=3.0  # Python 工作流 (调度/重试/缓存); 缺失时降级, 不影响自研 task_queue
+opentelemetry-sdk>=1.20  # 分布式追踪 (trace/metrics/logs 标准); 缺失时降级
 akshare==1.18.60
 requests==2.32.3
 curl_cffi==0.13.0
