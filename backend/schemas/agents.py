@@ -186,3 +186,10 @@ class AnalysisSummary(BaseModel):
     reduce: int = Field(default=0, description="减持票数")
     avg_confidence: float = Field(default=0.0, description="平均置信度")
     total_agents: int = Field(default=0, description="参与 Agent 数")
+    score: float = Field(default=50.0, ge=0, le=100, description="确定性评级评分 0-100")
+    rating: str = Field(
+        default="中性", description="五档评级: 强烈推荐/推荐/中性/谨慎/回避"
+    )
+    rating_breakdown: dict[str, Any] = Field(
+        default_factory=dict, description="评分可审计明细(W/D/raw/conf_factor 等)"
+    )

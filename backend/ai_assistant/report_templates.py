@@ -11,6 +11,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from backend.runtime.rating import score_to_rating
+
 
 class ReportTemplate:
     """Base class for report templates."""
@@ -107,17 +109,8 @@ class StockDeepRatingTemplate(ReportTemplate):
 """
         return md
 
-    @staticmethod
-    def _score_to_rating(score: float) -> str:
-        if score >= 80:
-            return "强烈推荐"
-        if score >= 60:
-            return "推荐"
-        if score >= 40:
-            return "中性"
-        if score >= 20:
-            return "谨慎"
-        return "回避"
+    # 评分→五档评级已统一到 backend.runtime.rating.score_to_rating
+    _score_to_rating = staticmethod(score_to_rating)
 
     @staticmethod
     def _format_financials(data: dict) -> str:

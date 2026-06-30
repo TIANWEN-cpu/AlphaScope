@@ -21,6 +21,7 @@ from backend.agents.base import (
     _agent_config_from_dict,
 )
 from backend.agents.chairman import summarize_with_chairman
+from backend.runtime.rating import compute_rating
 
 try:
     from backend.agent_modes import AnalysisMode, AgentModeConfig, get_mode_resolver
@@ -564,12 +565,16 @@ def run_agents_with_mode(
         except Exception as e:
             chairman_summary = f"主席总结生成失败: {_sanitize_model_error(e)}"
 
+    rating = compute_rating(list(results.values()), risk_vetoed=False)
     summary = {
         "final": final,
         "buy": buy,
         "sell": sell,
         "hold": hold,
         "avg_confidence": avg_conf,
+        "score": rating["score"],
+        "rating": rating["rating"],
+        "rating_breakdown": rating["breakdown"],
     }
     model_status = _build_model_status(results, critic_block, chairman_summary)
     research_report = _build_research_report_body(
@@ -595,7 +600,14 @@ def run_agents_with_mode(
                 + "\n".join(f"  - {r}" for r in risk_gate.get("veto_reasons", []))
             )
             research_report = f"{banner}\n\n{research_report}"
-            summary = {**summary, "final": "风控否决(结论不作为投资依据)"}
+            vetoed_rating = compute_rating(list(results.values()), risk_vetoed=True)
+            summary = {
+                **summary,
+                "final": "风控否决(结论不作为投资依据)",
+                "score": vetoed_rating["score"],
+                "rating": vetoed_rating["rating"],
+                "rating_breakdown": vetoed_rating["breakdown"],
+            }
     except Exception as exc:  # noqa: BLE001 - 风控 gate 失败不应阻断研报
         logger.debug("风控 gate 评估失败, 跳过: %s", exc)
 
