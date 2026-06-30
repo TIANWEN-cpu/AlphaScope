@@ -12,7 +12,7 @@
 - **能力 analyze**:对标的跑多 Agent 团队, 返回归一化 NormalizedAgentOpinion 列表 (BUY/SELL/HOLD → 买入/卖出/观望 + thesis)。
 - **失败安全**:不可用/缺凭证/.propagate 抛错/单标的失败 → 返回空列表, 不抛;单标的失败不影响其余。
 - **边界**:allow_live_order=False;观点永远 forbidden_live_order=True (绝不直接变订单, 须经证据+风控+人工确认)。
-- **许可证防火墙**:项目 license 不明确 → COPILEFT_RISK + code_copy_allowed=False (只 pip/外部进程用, 不拷码入仓, 与 §12 一致);requires_evidence=True。
+- **许可证**:TradingAgents 是 Apache License 2.0 (已核对仓库 LICENSE) → SAFE + code_copy_allowed=True, 与 vectorBT/OpenBB/Qlib 同级;requires_evidence=True。
 - **归一化纯函数可单测**:_normalize_decision (容错 LLM 噪声如 "buy."/"最终决策: SELL", 未知值→HOLD)/ map_decision_to_opinion (thesis 优先 final_trade_decision 退到报告拼接)/ has_llm_credentials 不依赖 tradingagents。
 
 ### Phase 2 adapter 覆盖度 (四类全部验证)

@@ -207,11 +207,11 @@ class TradingagentsAdapter(AgentTeamAdapter):
                     "description": "对给定标的跑多 Agent 团队, 返回归一化观点",
                 },
             ],
-            # TradingAgents 项目本身的 license 需注意 (仓库 README 标注), 这里谨慎标
-            # COPILEFT_RISK + code_copy_allowed=False: 只通过 pip/外部进程用, 不拷码入仓
-            license_name="research",  # 项目未明确商用条款, 谨慎
-            license_safety=LicenseSafety.COPILEFT_RISK,
-            code_copy_allowed=False,
+            # TradingAgents 是 Apache License 2.0 (已核对仓库 LICENSE 文件), 属可商用
+            # 的宽松开源协议, 与 vectorBT(Apache)/OpenBB(MIT)/Qlib(MIT) 同级 → SAFE。
+            license_name="Apache-2.0",
+            license_safety=LicenseSafety.SAFE,
+            code_copy_allowed=True,
             allow_live_order=False,
             requires_evidence=True,
         )

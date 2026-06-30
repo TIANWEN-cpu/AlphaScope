@@ -98,15 +98,16 @@ def test_has_llm_credentials_detects_env(monkeypatch):
 def test_tradingagents_metadata_and_boundary():
     """adapter 元数据 + 交易边界 + 许可证防火墙。
 
-    TradingAgents 项目 license 不明确 → 谨慎标 COPILEFT_RISK + code_copy_allowed=False
-    (只通过 pip/外部进程用, 不拷码入主仓, 与规划 §12 License Firewall 一致)。
+    TradingAgents 是 Apache License 2.0 (已核对仓库 LICENSE) → SAFE, 与 vectorBT/
+    OpenBB/Qlib 同级; code_copy_allowed=True。仍 allow_live_order=False + requires_evidence。
     """
     a = TradingagentsAdapter()
     meta = a.metadata()
     assert meta.name == "tradingagents"
     assert meta.allow_live_order is False
-    assert meta.license_safety == LicenseSafety.COPILEFT_RISK
-    assert meta.code_copy_allowed is False
+    assert meta.license_safety == LicenseSafety.SAFE
+    assert meta.license_name == "Apache-2.0"
+    assert meta.code_copy_allowed is True
     assert meta.requires_evidence is True
     # agent adapter 不暴露任何实盘下单能力
     for cap in meta.capabilities:
