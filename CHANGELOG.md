@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.9.24 - 2026-06-30
+
+> **Phase 0 + Phase 1 落地 / 交易边界工程化 + Integration Registry 骨架 + 确定性评级层**:把战略规划里「不自动实盘下单」红线与「外部项目通过 adapter 接入」从文字变成工程约束与协议。新增四道交易边界防线(config/不变量/源码扫描/守卫)、Integration Registry(schemas + 四类 adapter 基类 + 注册表 + 自动发现 + 5 个 API + demo adapter)、确定性评级 0-100 五档(接入编排并去重 report_templates 的旧实现)、Manual Review Ticket schema;清除量化层 `LiveRunRequest/Status` 实盘残留。纯增量与加固,未删改既有研究/回测/Agent 能力。
+
+### Phase 0 交易边界 No-Live-Order Boundary(后端)
+- **配置防线** `config/legal_boundaries.yaml`:显式列出允许(paper/backtest/manual_ticket/report/watchlist)与永久禁止(live_broker_order/llm_direct_order/auto_execution/real_api_secret_for_trading)的能力标志。
+- **不变量防线** `backend/security/trading_boundary.py`:启动期 `assert_invariant` 硬断言所有 `allow_live_*`/`allow_auto_*` 为 False,违例抛 `BoundaryViolation`;`live_order_blocked` 属性 + `assert_no_live_order(action)` 运行期守卫。
+- **源码防线** `scan_forbidden_symbols()`:AST 扫描 `backend/` 下 .py,禁止把 `submit_order`/`place_order`/`execute_trade`/`auto_trade`/`live_gateway` 定义为函数/类/方法名。
+- `describe_capabilities()` 供 UI「安全边界」面板;`backend/security/__init__.py` 导出。
+
+### Phase 1 Integration Registry 插件中心(后端)
+- **统一数据契约** `backend/integrations/schemas.py`:`IntegrationMetadata`(+ `LicenseSafety` 许可证分级 + `allow_live_order` 恒 False + `code_copy_allowed`)、`CapabilitySpec`、`IntegrationHealth`、`BacktestAssumptions`(回测假设卡)、`BacktestMetrics`、`NormalizedBacktestResult`、`NormalizedAgentOpinion`(均带研究语义自证字段)。
+- **四类 adapter 基类** `backend/integrations/base.py`:`BaseAdapter` 抽象 + `DataAdapter`/`FactorAdapter`/`BacktestEngineAdapter`/`AgentTeamAdapter`;`metadata()` 双保险断言 `allow_live_order is False`。
+- **注册表 + 自动发现** `backend/integrations/registry.py`:`@register` 装饰器、`autodiscover()` 扫描 `integrations/{data,factor,backtest,agent}/<name>_adapter.py`、`healthcheck_all()`、`assert_boundary_invariant()`(Phase 0 第四道防线);注册时三道断言(边界/能力黑名单/许可证防火墙:copyleft+code_copy 拒绝)。
+- **demo_adapter** `backend/integrations/backtest/demo_adapter.py`:零依赖 BacktestEngineAdapter 参考实现,返回静态归一化结果。
+- **5 个 API 端点** `backend/api/integrations.py`:`GET /api/integrations`、`/boundary`、`/{name}`、`/{name}/health`、`POST /{name}/run`(受边界守卫,白名单只代理研究/回测/分析能力);注册进 `main.py`。
+- `backend/integrations/__init__.py` 导出全部公共符号。
+
+### 确定性评级层 Rating(后端)
+- `backend/runtime/rating.py`:`score_to_rating`(五档阈值,全项目唯一权威)+ `compute_rating(agent_results, risk_vetoed)` 纯函数——加权净方向 D → raw=50+50D → 平均置信度向中性收缩 → 风控否决压到 ≤15;空/全零置信度中性兜底;全程输出 `breakdown`(W/D/raw/avg_conf/conf_factor/n_agents/risk_vetoed)可审计。
+- **接入编排** `orchestrator.run_agents_with_mode`:summary 现同时输出 `score/rating/rating_breakdown`;风控否决时重算为 vetoed 评分。
+- **去重** `ai_assistant/report_templates.py`:`_score_to_rating` 改为复用 `rating.score_to_rating`(删旧实现)。
+- **合规** `ai_assistant/compliance.py` 新增 `RATING_DISCLAIMER`;`schemas/agents.py::AnalysisSummary` 补 `score/rating/rating_breakdown` 字段。
+
+### Manual Review Ticket schema + 清除实盘残留(后端)
+- 新增 `backend/schemas/{manual_ticket,paper_order,research_decision}.py`(人工确认单/纸面订单/研究决策裁决,研究语义,不含订单流),`schemas/__init__.py` 导出。
+- 从 `schemas/quant.py` 删除 `LiveRunRequest`/`LiveRunStatus`(无引用,干净移除)。
+
+### 前端评级徽章接入
+- `ReportGenerator.tsx`/`analysisAdapter.ts`/`types.ts`:从后端 summary 抽 `score/rating/rating_breakdown`,新增 `RatingBreakdown` 类型;研报顶部展示评级徽章 + 可审计明细;缺值优雅降级。
+
+### 验证
+- 离线套件 `pytest -m "not network"` 全绿:**1393 passed, 1 skipped, 1 deselected**(较 v1.9.23 +43:integrations 8 + security 8 + rating 27)。
+- `ruff check`/`ruff format --check` 通过;前端 `tsc 0 error`·`eslint 0 problem`·`vite build ✓`(主包 index 857KB 不变)。
+
+### 合规
+- 新增 Integration Registry / Rating / Manual Ticket 全部研究语义:注册表不执行交易,评级仅为度量,人工确认单不连 broker;`allow_live_order`/`forbidden_live_order` 等字段恒 False/True 并由测试断言。不预测不荐股不构成投资建议。
+
 ## v1.9.23 - 2026-06-27
 
 > **前端视觉协调与动画对齐**:排查发现 v1.9.0 起新增的 6 个页面(FactorRegistry / DataLakeManager / TickFlowManager / ResearchMemory / MonitoringCenter / StrategyLab)彼此字号、图标容器、间距风格不一致,且全部未接入项目既有的 `motion` 动效体系(其余 20 个老页面均在使用)。本版以 Valuation 为标杆,统一这 6 个页面的视觉语言并补齐动效,纯前端、零业务逻辑改动。
