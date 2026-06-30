@@ -29,8 +29,9 @@ const ResearchMemory = lazy(() => import('./components/ResearchMemory').then((mo
 const TickFlowManager = lazy(() => import('./components/TickFlowManager').then((module) => ({ default: module.TickFlowManager })));
 const DataLakeManager = lazy(() => import('./components/DataLakeManager').then((module) => ({ default: module.DataLakeManager })));
 const FactorRegistry = lazy(() => import('./components/FactorRegistry').then((module) => ({ default: module.FactorRegistry })));
+const IntegrationCenter = lazy(() => import('./components/IntegrationCenter').then((module) => ({ default: module.IntegrationCenter })));
 
-const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'monitor', 'research_memory', 'tickflow', 'datalake', 'factor_registry', 'settings'];
+const VISIBLE_TABS: TabID[] = ['dashboard', 'workbench', 'agents', 'experts', 'market', 'tasks', 'strategy_lab', 'fund_dca', 'news', 'chart', 'detailed', 'saved', 'valuation', 'dragon_tiger', 'investors', 'brief', 'monitor', 'research_memory', 'tickflow', 'datalake', 'factor_registry', 'integration_center', 'settings'];
 
 function ModuleLoading() {
   return (
@@ -199,6 +200,9 @@ export default function App() {
                   )}
                   {currentTab === 'factor_registry' && (
                     <FactorRegistry key="factor_registry" />
+                  )}
+                  {currentTab === 'integration_center' && (
+                    <IntegrationCenter key="integration_center" />
                   )}
                   {currentTab === 'settings' && (
                     <Settings key="settings" initialTab={settingsInitialTab} />

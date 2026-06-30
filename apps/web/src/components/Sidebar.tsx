@@ -23,7 +23,8 @@ import { // Using as Logo
   History,
   Webhook,
   Database,
-  Sigma
+  Sigma,
+  Boxes
 } from 'lucide-react';
 import type { TabID } from '../types';
 import { cn } from '../lib/utils';
@@ -69,6 +70,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
         { id: 'tickflow', label: '自定义数据表', icon: Webhook },
         { id: 'datalake', label: '数据湖', icon: Database },
         { id: 'factor_registry', label: '因子注册中心', icon: Sigma },
+        { id: 'integration_center', label: '集成中心', icon: Boxes },
         { id: 'monitor', label: '系统监控中心', icon: Gauge },
       ]
     }
