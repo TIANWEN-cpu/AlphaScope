@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.9.25 - 2026-06-30
+
+> **Phase 2 首个真实 adapter / vectorBT 向量化回测 + 参数扫描 + registry 重入死锁修复**:把战略规划 Phase 2 第一个外部项目 vectorBT 按统一协议接入 Integration Registry,验证「外部能力插件」路线走通。同时修复 registry 首次初始化的重入死锁(v1.9.24 的潜在稳定性隐患)。纯增量,未删改既有研究/回测/Agent 能力。
+
+### Phase 2 首个真实 adapter: vectorBT(后端)
+- `backend/integrations/backtest/vectorbt_adapter.py`:把 [vectorBT](https://github.com/polakowo/vectorbt)(Apache-2.0, NumPy 向量化回测库)接入 registry,补齐原生引擎(精确逐 bar)不擅长的**快速参数网格扫描**。
+- **可选依赖 + 优雅降级**:import-guard 包裹 vectorbt,缺装不影响其余功能(healthcheck 报 UNAVAILABLE),装上即生效;与 DuckDB 数据湖同哲学。
+- **不触网**:OHLCV 由调用方 `bars=` 注入,不抓数据不下单。
+- **两个能力**:`run_backtest`(单次向量化回测,内置 ma_cross)+ `param_sweep`(参数网格扫描,按 sharpe/max_drawdown/total_return 排序返回 top_n——vectorBT 的核心差异化)。
+- **诚实假设卡**:vectorbt 原生不模拟 A 股 T+1/印花税/涨跌停/停牌;`BacktestAssumptions` 显式标注这些未建模项 + note 写明「偏乐观,仅初筛」,防误读为可实盘(想法 #4 落地)。
+- **边界**:allow_live_order=False;Apache-2.0 → SAFE + code_copy_allowed=True + PYTHON_ADAPTER;过 registry 三道断言。
+- **纯函数可单测**:`bars_to_close_series`/`build_ma_cross_signals`/`parse_param_grid`/`build_assumptions`/`map_vbt_stats_to_metrics` 不依赖 vectorbt,始终可测。
+
+### 稳定性修复: Integration Registry 重入死锁(后端)
+- `backend/integrations/registry.py::get_registry`:在持锁态调 `autodiscover()`,而 autodiscover import 的 `*_adapter.py` 模块级 `@register` 会**重入** `get_registry()`;原 `threading.Lock`(不可重入)→ 同线程再抢锁 → **死锁**,首次初始化永久挂起。v1.9.24 仅 demo 时侥幸未触发,加第二个 adapter 必现。
+- 修复:`_singleton_lock` Lock→**RLock**(同线程可重入);autodiscover 前先发布单例,重入的 `get_registry()` 直接返回正在构建的 registry;autodiscover 抛错回滚单例下次重试。
+
+### 验证
+- 离线套件 `pytest -m "not network"` 全绿:**1408 passed, 4 skipped, 1 deselected**(较 v1.9.24 +15:vectorbt 纯函数/元数据/边界 15 用例;3 个 vbt 执行路径用例未装 vectorbt 时正确跳过)。
+- `ruff check`/`ruff format --check` 通过;前端未改动(维持 v1.9.24)。
+
+### 合规
+- vectorbt adapter 全程研究语义:不触网不下单;假设卡诚实披露未建模的 A 股摩擦;回测结果是对历史数据的统计描述,不预测不荐股不构成投资建议。
+
 ## v1.9.24 - 2026-06-30
 
 > **Phase 0 + Phase 1 落地 / 交易边界工程化 + Integration Registry 骨架 + 确定性评级层**:把战略规划里「不自动实盘下单」红线与「外部项目通过 adapter 接入」从文字变成工程约束与协议。新增四道交易边界防线(config/不变量/源码扫描/守卫)、Integration Registry(schemas + 四类 adapter 基类 + 注册表 + 自动发现 + 5 个 API + demo adapter)、确定性评级 0-100 五档(接入编排并去重 report_templates 的旧实现)、Manual Review Ticket schema;清除量化层 `LiveRunRequest/Status` 实盘残留。纯增量与加固,未删改既有研究/回测/Agent 能力。
