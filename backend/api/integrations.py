@@ -163,8 +163,12 @@ def _default_capability(category: str) -> str:
 def _dispatch(
     adapter: Any, category: str, capability: str, params: dict[str, Any]
 ) -> Any:
-    """按类别调用 adapter 的对应方法, 返回可序列化结果。"""
-    if category == "backtest" and (capability in ("", "run_backtest")):
+    """按类别调用 adapter 的对应方法, 返回可序列化结果。
+
+    覆盖已落地的四类能力: backtest/run_backtest, backtest/param_sweep (vectorBT),
+    data/get_ohlcv (OpenBB), agent/analyze, factor/compute_factors。
+    """
+    if category == "backtest" and capability in ("", "run_backtest"):
         from backend.integrations.schemas import BacktestAssumptions
 
         assumptions = params.get("assumptions")
@@ -176,11 +180,40 @@ def _dispatch(
             assumptions=BacktestAssumptions(
                 engine_name=adapter.NAME, **(assumptions or {})
             ),
+            **_extra_backtest_kwargs(params),
         )
         return res.model_dump()
+    if category == "backtest" and capability == "param_sweep":
+        # vectorBT 的差异化能力: 参数网格扫描
+        bars = params.get("bars", [])
+        return adapter.param_sweep(
+            bars=bars,
+            param_grid=params.get("param_grid"),
+            metric=params.get("metric", "sharpe"),
+            top_n=int(params.get("top_n", 20)),
+        )
+    if category == "data" and capability in ("", "get_ohlcv"):
+        # OpenBB 等数据源 adapter: 取历史 OHLCV
+        symbol = params.get("symbol") or (params.get("symbols") or [""])[0]
+        return adapter.get_ohlcv(
+            symbol=symbol,
+            start=params.get("start", ""),
+            end=params.get("end", ""),
+            **{k: v for k, v in params.items() if k in ("market", "provider")},
+        )
     if category == "agent" and (capability in ("", "analyze")):
         out = adapter.analyze(symbols=params.get("symbols", []))
         return [o.model_dump() for o in out]
     if category == "factor" and (capability in ("", "compute_factors")):
         return adapter.compute_factors(symbols=params.get("symbols", []))
     raise ValueError(f"adapter {adapter.NAME!r} 不支持能力 {capability!r}")
+
+
+def _extra_backtest_kwargs(params: dict[str, Any]) -> dict[str, Any]:
+    """把 backtest 的额外参数 (bars/fast/slow/fees/init_cash 等) 透传给 adapter。
+
+    run_backtest 的基础字段 (strategy_id/symbols/start/end/assumptions) 已显式抽出,
+    其余如 vectorBT 的 bars/fast/slow/fees/init_cash 通过 **kw 注入。
+    """
+    reserved = {"strategy_id", "symbols", "start", "end", "assumptions"}
+    return {k: v for k, v in params.items() if k not in reserved}

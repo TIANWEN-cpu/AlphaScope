@@ -275,6 +275,8 @@ class VectorbtAdapter(BacktestEngineAdapter):
         close = bars_to_close_series(bars)
         fees = float(kw.get("fees", 0.0003))
         init_cash = float(kw.get("init_cash", 1_000_000.0))
+        # benchmark 默认沪深300 (A 股); 全球品种调用方应传 benchmark="S&P500" 等
+        benchmark = kw.get("benchmark", "沪深300")
         fast = int(kw.get("fast", 5))
         slow = int(kw.get("slow", 20))
         symbol = symbols[0] if symbols else (close.name or "unknown")
@@ -315,7 +317,7 @@ class VectorbtAdapter(BacktestEngineAdapter):
             start_date=start,
             end_date=end,
             initial_cash=init_cash,
-            benchmark="沪深300",
+            benchmark=benchmark,
             assumptions=assump,
             metrics=metrics,
             equity_curve=[

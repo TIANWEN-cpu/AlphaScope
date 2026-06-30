@@ -221,3 +221,55 @@ def test_integrations_api_boundary_endpoint():
     body = r.json()
     assert body["success"] is True
     assert body["data"]["live_order_blocked"] is True
+
+
+# ----------------------------- _dispatch 覆盖 -----------------------------
+
+
+def test_dispatch_supports_all_category_capability_pairs():
+    """_dispatch 必须覆盖每类 adapter 的核心能力 (审查回归: 防止新增 adapter 后
+    忘了补 dispatch 分支, 导致 /run 端点对某些能力报 '不支持')。"""
+    from backend.api.integrations import _dispatch, _default_capability
+    from backend.integrations.registry import get_registry
+
+    reg = get_registry()
+
+    # demo (backtest/run_backtest) — 真实可跑
+    demo = reg.get("demo")
+    out = _dispatch(demo, "backtest", "run_backtest", {"symbols": ["000001"]})
+    assert out["engine_name"] == "demo"
+
+    # data/get_ohlcv — 用 stub adapter (openbb/vectorbt 未装时仍要保证 dispatch 分支存在)
+    class _StubData:
+        NAME = "stub_data"
+
+        def get_ohlcv(self, symbol, start, end, **kw):
+            return [{"symbol": symbol, "date": start, "close": 1.0}]
+
+    res = _dispatch(
+        _StubData(),
+        "data",
+        _default_capability("data"),
+        {"symbol": "AAPL", "start": "2024-01-01", "end": "2024-01-02"},
+    )
+    assert isinstance(res, list) and res[0]["symbol"] == "AAPL"
+
+    # backtest/param_sweep — stub (vectorbt 未装时仍要保证 dispatch 分支存在)
+    class _StubSweep:
+        NAME = "stub_sweep"
+
+        def param_sweep(self, bars=None, param_grid=None, metric="sharpe", top_n=20):
+            return [
+                {"params": {"fast": 5, "slow": 20}, "metric": metric, "top_n": top_n}
+            ]
+
+    res = _dispatch(
+        _StubSweep(), "backtest", "param_sweep", {"metric": "sharpe", "top_n": 5}
+    )
+    assert isinstance(res, list) and res[0]["top_n"] == 5
+
+    # 未声明能力仍应抛 ValueError (守卫)
+    import pytest
+
+    with pytest.raises(ValueError, match="不支持能力"):
+        _dispatch(demo, "backtest", "totally_unknown_cap", {})
