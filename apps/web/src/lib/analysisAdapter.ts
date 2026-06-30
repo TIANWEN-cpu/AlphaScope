@@ -290,6 +290,14 @@ export function normalizeAnalysisResult(raw: any): AnalysisResult {
   const source_errors = asArray(raw?.source_errors || raw?.result?.source_errors || []);
   const summary = formatTextValue(raw?.summary || raw?.result?.summary || raw?.brief || raw?.result?.brief || '');
   const brief = formatTextValue(raw?.brief || raw?.result?.brief || '');
+  // 结构化评级(确定性公式输出) — 后端 summary 是 dict 时直接抽取
+  const summaryRecord = asRecord(raw?.summary || raw?.result?.summary || {});
+  const rawScore = Number(summaryRecord.score);
+  const rawRating = formatInlineValue(summaryRecord.rating);
+  const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : undefined;
+  const rating = rawRating || undefined;
+  const rating_breakdown = asRecord(summaryRecord.rating_breakdown || {});
+  const hasBreakdown = Object.keys(rating_breakdown).length > 0;
   const research_report = formatTextValue(raw?.research_report || raw?.result?.research_report || '');
   const rawCritic = raw?.critic || raw?.result?.critic || '';
   const criticRecord = asRecord(rawCritic);
@@ -356,7 +364,10 @@ export function normalizeAnalysisResult(raw: any): AnalysisResult {
     provider_traces,
     source_appendix,
     degraded,
-    source_errors
+    source_errors,
+    score,
+    rating,
+    rating_breakdown: hasBreakdown ? (rating_breakdown as any) : undefined,
   };
 }
 

@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { startAsyncAnalysis, getTaskResult, getTaskEventsUrl, getTaskStatus } from '../lib/analysisAdapter';
-import { AnalysisResult, DebateResult } from '../types';
+import { AnalysisResult, DebateResult, RatingBreakdown } from '../types';
 import { DecisionSummary } from './report/DecisionSummary';
 import { ReportCharts } from './ReportCharts';
 import { AgentOpinionCards } from './report/AgentOpinionCards';
@@ -248,6 +248,69 @@ const DEBATE_CONSENSUS_TONE: Record<string, string> = {
   未知: 'border-white/10 bg-white/5 text-neutral-400',
 };
 
+const RATING_TIER_TONE: Record<string, string> = {
+  强烈推荐: 'border-rose-500/35 bg-rose-500/10 text-rose-300',
+  推荐: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
+  中性: 'border-white/15 bg-white/5 text-neutral-300',
+  谨慎: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  回避: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+};
+
+const RATING_DISCLAIMER = '评级由多 Agent 投票与置信度确定性计算得出，仅为研究辅助，不构成投资建议。';
+
+function RatingBadge({
+  score,
+  rating,
+  breakdown,
+}: {
+  score?: number;
+  rating?: string;
+  breakdown?: RatingBreakdown;
+}) {
+  if (score === undefined || rating === undefined) return null;
+  const tone = RATING_TIER_TONE[rating] || RATING_TIER_TONE['中性'];
+  const vetoed = breakdown?.risk_vetoed === true;
+  const pct = Math.max(0, Math.min(100, score));
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.035] p-5">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col items-center justify-center">
+          <div className="relative flex h-20 w-20 items-center justify-center">
+            <svg className="absolute inset-0 -rotate-90" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="34" fill="none" stroke="currentColor" strokeWidth="6" className="text-white/8" />
+              <circle
+                cx="40"
+                cy="40"
+                r="34"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeDasharray={`${(pct / 100) * 2 * Math.PI * 34} ${2 * Math.PI * 34}`}
+                className={tone.split(' ').find((c) => c.startsWith('text-')) || 'text-neutral-300'}
+              />
+            </svg>
+            <span className="text-xl font-bold text-neutral-100">{Math.round(pct)}</span>
+          </div>
+          <span className="mt-1 text-[10px] text-neutral-500">评分 / 100</span>
+        </div>
+        <div className="flex-1 min-w-[180px]">
+          <span className={cn('inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold', tone)}>
+            {vetoed ? '⛔ 风控否决' : rating}
+          </span>
+          <p className="mt-2 text-[11px] leading-relaxed text-neutral-500">{RATING_DISCLAIMER}</p>
+          {breakdown && (
+            <p className="mt-1 text-[11px] text-neutral-600">
+              加权方向 D={breakdown.D.toFixed(2)} · 平均置信度 {(breakdown.avg_conf ?? 0).toFixed(0)}% ·
+              收缩因子 {(breakdown.conf_factor ?? 0).toFixed(2)} · {breakdown.n_agents ?? 0} Agents
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DebatePanel({ debate }: { debate: DebateResult }) {
   const tone = DEBATE_CONSENSUS_TONE[debate.consensus] || DEBATE_CONSENSUS_TONE['未知'];
   return (
@@ -369,8 +432,15 @@ function GeneratedResearchReport({
 
       {result.summary && (
         <ReportSection icon={FileText} title="综合评级与投票" eyebrow="Decision Matrix">
-          <div className="rounded-xl border border-white/8 bg-white/[0.035] p-5">
-            <ReportTextBlock text={result.summary} />
+          <div className="space-y-4">
+            <RatingBadge
+              score={result.score}
+              rating={result.rating}
+              breakdown={result.rating_breakdown}
+            />
+            <div className="rounded-xl border border-white/8 bg-white/[0.035] p-5">
+              <ReportTextBlock text={result.summary} />
+            </div>
           </div>
         </ReportSection>
       )}

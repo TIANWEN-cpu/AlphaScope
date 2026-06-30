@@ -146,6 +146,16 @@ export interface DebateResult {
   disclaimer?: string;
 }
 
+export interface RatingBreakdown {
+  n_agents: number;
+  W: number;
+  D: number;
+  raw: number;
+  avg_conf: number;
+  conf_factor: number;
+  risk_vetoed: boolean;
+}
+
 export interface AnalysisResult {
   summary?: string;
   brief?: string;
@@ -164,6 +174,9 @@ export interface AnalysisResult {
   degraded: boolean;
   source_errors: any[];
   data_status?: string;
+  score?: number;
+  rating?: string;
+  rating_breakdown?: RatingBreakdown;
 }
 
 export interface AnalysisTask {
