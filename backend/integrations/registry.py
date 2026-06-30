@@ -148,17 +148,30 @@ class IntegrationRegistry:
 # ------------------- 进程级单例 -------------------
 
 _registry_singleton: IntegrationRegistry | None = None
-_singleton_lock = threading.Lock()
+# 必须用 RLock: autodiscover 会 import ``*_adapter.py``, 其模块级 ``@register``
+# 装饰器会重入 get_registry()。threading.Lock 不可重入会死锁; RLock 允许同线程多次获取。
+_singleton_lock = threading.RLock()
 
 
 def get_registry() -> IntegrationRegistry:
-    """获取进程级 registry 单例, 首次调用触发自动发现。"""
+    """获取进程级 registry 单例, 首次调用触发自动发现。
+
+    防死锁: autodiscover 会 import 各 ``*_adapter.py``, 其模块级 ``@register``
+    装饰器会**重入**本函数。因此:
+    1. 锁用 RLock (同线程可重入);
+    2. autodiscover 前先把单例设上, 重入的 get_registry() 直接拿到正在构建的
+       registry (返回已注册部分), 不会再次进入 autodiscover。
+    """
     global _registry_singleton
     with _singleton_lock:
         if _registry_singleton is None:
             reg = IntegrationRegistry()
-            autodiscover(registry=reg)
-            _registry_singleton = reg
+            _registry_singleton = reg  # 先发布, 防止 autodiscover 内的重入死锁
+            try:
+                autodiscover(registry=reg)
+            except Exception:
+                _registry_singleton = None  # autodiscover 失败则回滚, 下次重试
+                raise
         return _registry_singleton
 
 
