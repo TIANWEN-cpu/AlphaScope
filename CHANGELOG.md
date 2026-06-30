@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.9.28 - 2026-06-30
+
+> **Phase 2 第三个真实 adapter / Qlib AI 量化因子引擎 (首个 FactorAdapter)**:把 [Qlib](https://github.com/microsoft/qlib)(MIT, 微软 AI 量化平台)接入 Integration Registry, 补齐自研确定性因子库所不擅长的 Alpha158/Alpha360 系统化因子 + ML 衍生因子能力 (对应规划「QlibAdapter」, v2.5 蓝图核心)。四类 adapter 协议现已有三类 (Backtest+Data+Factor) 被真实项目验证走通。纯增量, 未删改既有研究/回测/Agent 能力。
+
+### Phase 2 第三个真实 adapter: Qlib (FactorAdapter)(后端)
+- `backend/integrations/factor/qlib_adapter.py`:Qlib(MIT, 微软 AI 量化平台)接入 registry, 补齐 ML 因子能力 (对应规划「QlibAdapter」「FactorLab + Qlib 深度融合」)。
+- **可选依赖 + 优雅降级**:import-guard 包裹 qlib, 缺装不影响其余功能 (healthcheck 报 UNAVAILABLE), 装上 + 初始化数据即生效;与 vectorbt/openbb/DuckDB 同哲学。
+- **不触网**:OHLCV 由调用方注入, 不抓数据不下单。
+- **能力 compute_factors**:用 Alpha158/Alpha360 算因子向量, 归一化成 AlphaScope 因子向量结构 (与 factor_registry.compute_for_symbol 同构: {symbol,asof,factor_set,factors,source,disclaimer})。
+- **数据初始化探测** has_qlib_data_initialized():检查 qlib.config 是否注册 provider;healthcheck 已装但数据未初始化时 DEGRADED (提示 qlib.init + 下载数据), 初始化后 HEALTHY。
+- **失败安全**:qlib 不可用/数据未初始化/API 抛错 → 返回空因子向量 (结构与正常一致), 不抛破坏性异常。
+- **边界**:allow_live_order=False;MIT → SAFE + code_copy_allowed=True + PYTHON_ADAPTER;过 registry 三道断言。
+- **纯函数可单测**:normalize_qlib_factor_df (取最新行作 asof 因子向量, 过滤 NaN/inf, 跳过非数值列, 兼容 pandas)/ has_qlib_data_initialized 不依赖 qlib 始终可测。
+- **诚实口径**:Qlib 因子含 ML 衍生, 与确定性技术因子口径不同;输出标 source=qlib + disclaimer 防混淆。
+
+### adapter 覆盖度进展
+- 四类 adapter 协议已有三类被真实项目验证:BacktestEngineAdapter (demo/vectorBT) + DataAdapter (OpenBB) + FactorAdapter (Qlib)。仅剩 AgentTeamAdapter (TradingAgents)。
+
+### 验证
+- 离线套件 `pytest -m "not network"` 全绿:**1427 passed, 6 skipped, 1 deselected**(较 v1.9.27 +9:qlib 纯函数/元数据/边界/失败安全 9 用例;1 个 qlib 执行路径用例未装时正确跳过)。
+- `ruff check`/`ruff format --check` 通过;前端未改动(维持 v1.9.24)。
+
+### 合规
+- Qlib adapter 全程研究语义:因子是对历史量价/ML 结构的度量, direction 仅为口径标注;不据此给买卖指令、不预测、不构成选股建议;输出附 disclaimer。
+
+## v1.9.27 - 2026-06-30
+
+> **审查修复版**:审查 v1.9.25/26 发现三个真实缺口, 全部修复。
+
+### 修复(后端)
+- `_dispatch` 缺 data/get_ohlcv 分支 (api/integrations.py):OpenBB 是 DataAdapter, 装上后 POST /api/integrations/openbb/run 会进 ValueError。补 data/get_ohlcv 分支。
+- `_dispatch` 缺 backtest/param_sweep 分支:vectorBT 核心差异化能力(参数网格扫描)通过 /run 不可达。补 param_sweep 分支。
+- vectorbt_adapter benchmark 硬编码"沪深300":vectorbt/OpenBB 面向全球品种, 美股回测标沪深300误导。改为 kw.get("benchmark", "沪深300") 可配置。
+- 新增 test_dispatch_supports_all_category_capability_pairs, 用 stub adapter 锁定每类能力的 dispatch 分支存在 (防以后加 adapter 又漏 dispatch)。
+
+### 验证
+- 离线套件 **1418 passed**(较 v1.9.26 +1 dispatch 覆盖用例);ruff 通过。
+
 ## v1.9.26 - 2026-06-30
 
 > **Phase 2 第二个真实 adapter / OpenBB 全球数据路由器 (首个 DataAdapter)**:把 [OpenBB](https://github.com/OpenBB-finance/OpenBB)(MIT, 聚合 FMP/Polygon/AlphaVantage/Yahoo/FRED 等数十源)接入 Integration Registry, 扩展 AlphaScope 到美股/ETF/宏观/加密。Integration Registry 四类 adapter 协议现已有两类(Backtest + Data)被真实项目验证走通。纯增量, 未删改既有研究/回测/Agent 能力。
