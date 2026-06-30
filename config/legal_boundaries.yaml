@@ -1,0 +1,36 @@
+# Legal Boundaries / 交易边界配置 (Phase 0)
+#
+# 本文件把 AlphaScope 的「不自动实盘下单」红线从 README 变成工程约束。
+# backend/security/trading_boundary.py 在启动时加载本文件, 并在测试中
+# 断言下列 live_* 标志永远为 false。任何集成 (Integration) 都必须遵守。
+#
+# 合规哲学:
+#   - 允许: 研究、回测、纸面交易、人工确认单、再平衡草案、风险预警
+#   - 禁止: 真实 broker 下单、LLM 直接触发交易、实盘密钥用于交易
+
+# ---------- 允许的能力 ----------
+allow_paper_trading: true            # 纸面交易 / 模拟撮合
+allow_backtest: true                 # 历史回测 / walk-forward / 参数扫描
+allow_manual_ticket_export: true     # 人工确认单 / 再平衡草案导出 (CSV/MD/PDF)
+allow_research_report: true          # 研究报告 / Agent 辩论 / 证据链
+allow_watchlist: true                # 观察池 / 预警 / 监控
+
+# ---------- 永久禁止的能力 (改动这些即违背项目定位) ----------
+allow_live_broker_order: false       # 真实 broker submit/cancel/modify order
+allow_llm_direct_order: false        # LLM / Agent 直接触发交易动作
+allow_auto_execution: false          # 任何形式的自动下单 / 自动执行
+allow_real_api_secret_for_trading: false  # 用真实券商密钥做交易 (只读行情密钥另议)
+
+# ---------- 命名隔离 ----------
+# 这些词不应作为 AlphaScope 内部的「已定义符号名」(函数/类/方法)出现,
+# 避免误导。trading_boundary.py 会静态扫描 backend/ 并由测试断言。
+forbidden_symbol_names:
+  - submit_order
+  - place_order
+  - execute_trade
+  - auto_trade
+  - live_gateway
+
+# 接近交易但允许的能力, 必须用「研究语义」命名:
+#   create_research_ticket / create_manual_order_draft / create_paper_order
+#   export_rebalance_plan / simulate_execution
