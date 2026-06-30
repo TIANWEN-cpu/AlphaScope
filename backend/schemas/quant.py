@@ -115,32 +115,6 @@ class BacktestResult(BaseModel):
 
 
 # ============================================================
-# 实盘
-# ============================================================
-
-
-class LiveRunRequest(BaseModel):
-    """实盘请求"""
-
-    strategy_id: str = Field(description="策略ID")
-    symbol: str = Field(description="标的代码")
-    params: dict[str, Any] = Field(default_factory=dict, description="策略参数覆盖")
-    capital: float = Field(default=1000000.0, description="投入资金")
-
-
-class LiveRunStatus(BaseModel):
-    """实盘状态"""
-
-    run_id: str = Field(description="运行ID")
-    strategy_id: str = Field(description="策略ID")
-    symbol: str = Field(description="标的代码")
-    status: RunStatus = Field(description="运行状态")
-    pnl: float = Field(default=0.0, description="当前盈亏")
-    position: int = Field(default=0, description="当前持仓")
-    started_at: Optional[datetime] = Field(default=None, description="开始时间")
-
-
-# ============================================================
 # 运行记录
 # ============================================================
 

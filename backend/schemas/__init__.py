@@ -55,8 +55,6 @@ from .quant import (
     BacktestMetrics,
     BacktestRequest,
     BacktestResult,
-    LiveRunRequest,
-    LiveRunStatus,
     QuantEngineStatus,
     RunRecord,
     RunStatus,
@@ -80,6 +78,16 @@ from .funds import (
     RebalanceRequest,
     RebalanceResult,
 )
+
+# 交易边界 / 研究决策 (Phase 0) — 不含任何实盘下单能力
+from .manual_ticket import (
+    ManualReviewTicket,
+    TicketLine,
+    TicketLineAction,
+    TicketStatus,
+)
+from .paper_order import PaperOrder, PaperOrderStatus
+from .research_decision import DecisionVerdict, ResearchDecision
 
 __all__ = [
     # 数据模型
@@ -134,8 +142,6 @@ __all__ = [
     "BacktestMetrics",
     "BacktestRequest",
     "BacktestResult",
-    "LiveRunRequest",
-    "LiveRunStatus",
     "QuantEngineStatus",
     "RunRecord",
     "RunStatus",
@@ -155,4 +161,13 @@ __all__ = [
     "PortfolioHolding",
     "RebalanceRequest",
     "RebalanceResult",
+    # 交易边界 / 研究决策 (Phase 0)
+    "ManualReviewTicket",
+    "TicketLine",
+    "TicketLineAction",
+    "TicketStatus",
+    "PaperOrder",
+    "PaperOrderStatus",
+    "DecisionVerdict",
+    "ResearchDecision",
 ]
