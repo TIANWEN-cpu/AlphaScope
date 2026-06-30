@@ -8,6 +8,8 @@ plotly==6.7.0
 duckdb>=1.0,<2  # DuckDB/Parquet 数据湖 (批量选股/因子扫描); 缺失时数据湖能力优雅降级, 不影响其余功能
 exchange_calendars>=4.0  # 真实交易日历 (节假日/周末/T+1); 缺失时回落周末启发式, 不影响其余功能
 pandera>=0.20  # 数据契约 schema 校验; 缺失时仅做字段存在性检查, 不影响其余功能
+quantstats>=0.0.62  # 专业级绩效报告 (Sharpe/Sortino/Max DD/热力图); 缺失时降级, 不影响其余功能
+backtrader>=1.9.78  # 经典事件驱动回测引擎 (多引擎互补); 缺失时降级, 不影响其余功能
 akshare==1.18.60
 requests==2.32.3
 curl_cffi==0.13.0
