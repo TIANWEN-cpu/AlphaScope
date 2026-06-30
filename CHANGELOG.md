@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.9.29 - 2026-06-30
+
+> **Phase 2 收尾 / TradingAgents 外部投研团队 (首个 AgentTeamAdapter)**:把 [TradingAgents](https://github.com/TauricResearch/TradingAgents)(多智能体 LLM 金融投研框架)接入 Integration Registry, 作为外部投研团队输出 BUY/SELL/HOLD + 研报。**至此四类 adapter 协议 (Backtest+Data+Factor+Agent) 全部被真实开源项目验证走通, Phase 2 完整收尾。** API 对照真实源码核对 (吸取 v1.9.28 Qlib 臆测错误的教训)。纯增量, 未删改既有研究/回测/Agent 能力。
+
+### Phase 2 收尾: TradingAgents (AgentTeamAdapter)(后端)
+- `backend/integrations/agent/tradingagents_adapter.py`:TradingAgents(4 分析师 + 多空辩论 + 风控辩论 + 组合经理)接入 registry, 作为外部投研团队 (对应规划「TradingAgentsAdapter」, Phase 5)。
+- **API 对照真实源码核对 (非臆测)**:先拉 v0.3.0 的 trading_graph.py/default_config.py/pyproject.toml 核对, 确认入口 `from tradingagents.graph.trading_graph import TradingAgentsGraph`、运行 `final_state, decision = ta.propagate(company, date, asset_type)` 返回二元组、decision ∈ {BUY,SELL,HOLD}、config 走 dict (无 llm_config 参数)、key 只能环境变量。
+- **可选依赖 + 优雅降级**:import-guard 包裹, 缺装不影响其余功能 (healthcheck 报 UNAVAILABLE)。
+- **LLM 凭证必需 (与前三 adapter 不同)**:TradingAgents 无离线模式, .propagate 需 LLM key;has_llm_credentials 探测 OPENAI_API_KEY 等, healthcheck 已装但缺凭证时 DEGRADED。
+- **能力 analyze**:对标的跑多 Agent 团队, 返回归一化 NormalizedAgentOpinion 列表 (BUY/SELL/HOLD → 买入/卖出/观望 + thesis)。
+- **失败安全**:不可用/缺凭证/.propagate 抛错/单标的失败 → 返回空列表, 不抛;单标的失败不影响其余。
+- **边界**:allow_live_order=False;观点永远 forbidden_live_order=True (绝不直接变订单, 须经证据+风控+人工确认)。
+- **许可证防火墙**:项目 license 不明确 → COPILEFT_RISK + code_copy_allowed=False (只 pip/外部进程用, 不拷码入仓, 与 §12 一致);requires_evidence=True。
+- **归一化纯函数可单测**:_normalize_decision (容错 LLM 噪声如 "buy."/"最终决策: SELL", 未知值→HOLD)/ map_decision_to_opinion (thesis 优先 final_trade_decision 退到报告拼接)/ has_llm_credentials 不依赖 tradingagents。
+
+### Phase 2 adapter 覆盖度 (四类全部验证)
+- BacktestEngineAdapter (demo/vectorBT) + DataAdapter (OpenBB) + FactorAdapter (Qlib) + AgentTeamAdapter (TradingAgents)。**四类协议全部被真实项目验证, Phase 2 完整收尾。**
+
+### 验证
+- 离线套件 `pytest -m "not network"` 全绿:**1440 passed, 7 skipped, 1 deselected**(较 v1.9.28 +12:tradingagents 纯函数/元数据/边界/凭证/失败安全 12 用例;1 执行路径用例未装时正确跳过)。
+- `ruff check`/`ruff format --check` 通过;前端未改动。registry 五个 adapter 全部自动发现, allow_live_order 全 False, 边界不变量通过。
+
+### 合规
+- TradingAgents adapter 全程研究语义:输出 BUY/SELL/HOLD 是研究观点, forbidden_live_order=True, 须经证据+风控+人工确认;不预测不荐股不构成投资建议。许可证防火墙:仅 pip/外部进程使用。
+
 ## v1.9.28 - 2026-06-30
 
 > **Phase 2 第三个真实 adapter / Qlib AI 量化因子引擎 (首个 FactorAdapter)**:把 [Qlib](https://github.com/microsoft/qlib)(MIT, 微软 AI 量化平台)接入 Integration Registry, 补齐自研确定性因子库所不擅长的 Alpha158/Alpha360 系统化因子 + ML 衍生因子能力 (对应规划「QlibAdapter」, v2.5 蓝图核心)。四类 adapter 协议现已有三类 (Backtest+Data+Factor) 被真实项目验证走通。纯增量, 未删改既有研究/回测/Agent 能力。
