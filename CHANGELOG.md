@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.9.26 - 2026-06-30
+
+> **Phase 2 第二个真实 adapter / OpenBB 全球数据路由器 (首个 DataAdapter)**:把 [OpenBB](https://github.com/OpenBB-finance/OpenBB)(MIT, 聚合 FMP/Polygon/AlphaVantage/Yahoo/FRED 等数十源)接入 Integration Registry, 扩展 AlphaScope 到美股/ETF/宏观/加密。Integration Registry 四类 adapter 协议现已有两类(Backtest + Data)被真实项目验证走通。纯增量, 未删改既有研究/回测/Agent 能力。
+
+### Phase 2 第二个真实 adapter: OpenBB (DataAdapter)(后端)
+- `backend/integrations/data/openbb_adapter.py`:OpenBB(MIT, 全球金融数据平台)接入 registry, 扩展数据覆盖到全球品种 (对应规划「OpenBBProvider 增强」)。
+- **可选依赖 + 优雅降级**:import-guard 包裹 openbb, 缺装不影响其余功能 (healthcheck 报 UNAVAILABLE), 装上 + 配凭证即生效;与 vectorbt/DuckDB 同哲学。
+- **只读数据源**:OpenBB 只取数据, 无任何交易能力;allow_live_order=False。
+- **能力 get_ohlcv**:取全球品种历史 OHLCV (AAPL/SPY/BTC-USD), 归一化成 AlphaScope 标准 OHLCV dict (与 akshare provider 同构)。
+- **凭证探测** has_any_provider_credentials():检查 OPENBB_FMP_API_KEY/POLYGON_API_KEY 等环境变量;healthcheck 已装但无凭证时 DEGRADED (Yahoo 免 key 源仍可用), 有凭证 HEALTHY。
+- **失败安全**:凭证缺失/网络错误/字段不匹配/品种不支持 → 返回空 + 降级, 不抛。
+- **边界**:allow_live_order=False;MIT → SAFE + code_copy_allowed=True + PYTHON_ADAPTER;过 registry 三道断言。
+- **纯函数可单测**:normalize_ohlcv_df(兼容 pandas/polars, 处理各 provider 字段名差异, 跳过无日期行, OHLC 缺失回落 0)/ has_any_provider_credentials 不依赖 openbb 始终可测。
+
+### adapter 覆盖度进展
+- 四类 adapter 协议已有两类被真实项目验证:BacktestEngineAdapter (demo/vectorBT) + DataAdapter (OpenBB)。剩余 FactorAdapter (Qlib) / AgentTeamAdapter (TradingAgents) 待 Phase 2 后续。
+
+### 验证
+- 离线套件 `pytest -m "not network"` 全绿:**1417 passed, 5 skipped, 1 deselected**(较 v1.9.25 +9:openbb 纯函数/元数据/边界/凭证探测 9 用例;1 个 openbb 执行路径用例未装时正确跳过)。
+- `ruff check`/`ruff format --check` 通过;前端未改动(维持 v1.9.24)。
+
+### 合规
+- OpenBB adapter 全程研究语义:只读历史数据, 不触网交易不下单;不预测不荐股不构成投资建议。
+
 ## v1.9.25 - 2026-06-30
 
 > **Phase 2 首个真实 adapter / vectorBT 向量化回测 + 参数扫描 + registry 重入死锁修复**:把战略规划 Phase 2 第一个外部项目 vectorBT 按统一协议接入 Integration Registry,验证「外部能力插件」路线走通。同时修复 registry 首次初始化的重入死锁(v1.9.24 的潜在稳定性隐患)。纯增量,未删改既有研究/回测/Agent 能力。
