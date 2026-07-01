@@ -312,9 +312,9 @@ const LOADING_QUANT_CARDS: MetricCard[] = [
 ];
 
 const ANALYSIS_MODES = [
-  { id: 'standard', label: '标准分析', desc: '基本面、资金、技术面综合研判' },
-  { id: 'risk', label: '风险扫描', desc: '公告、舆情、解禁、减持和异常交易优先' },
-  { id: 'technical', label: '技术诊断', desc: 'K线、均线、量价和短线情绪优先' },
+  { id: 'auto', label: '自动模式', desc: '先快速预筛，信号强时直接给结论，分歧时自动升级深度分析' },
+  { id: 'standard', label: '标准分析', desc: '基本面、资金、技术面综合研判（多 Agent 会签）' },
+  { id: 'deep', label: '深度分析', desc: '买方深度调研 + 全维度专家团 + Critic 反证 + 主席总结（最完整）' },
 ] as const;
 
 type AnalysisModeId = typeof ANALYSIS_MODES[number]['id'];

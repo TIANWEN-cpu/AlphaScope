@@ -3,6 +3,7 @@ import type { ElementType } from 'react';
 import {
   BarChart3,
   Bot,
+  ChevronDown,
   Database,
   Globe,
   Network,
@@ -48,6 +49,8 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
   const [topologyOpen, setTopologyOpen] = useState(false);
   const [stock, setStock] = useState(() => getPersistedStock() ?? STOCK_UNIVERSE[0]);
   const [runningTaskCount, setRunningTaskCount] = useState<number>(0);
+  const [analysisMode, setAnalysisMode] = useState<'auto' | 'standard' | 'deep'>('deep');
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const task = useTaskStream();
 
   useEffect(() => {
@@ -95,7 +98,7 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
 
   const handleRun = () => {
     if (!stock || task.isRunning) return;
-    void task.run(stripSymbolSuffix(stock.symbol), stock.name, 'deep');
+    void task.run(stripSymbolSuffix(stock.symbol), stock.name, analysisMode);
   };
   const handleStop = () => {
     void task.cancel().then(() => void refreshRunningCount());
@@ -125,6 +128,48 @@ export function AgentsSystem({ onOpenAgentSettings }: AgentsSystemProps) {
           <span className="rounded-lg border border-white/5 bg-black/40 px-3 py-2 text-xs font-mono text-neutral-400">
             标的：{formatStockLabel(stock)}
           </span>
+          <div className="relative">
+            <button
+              type="button"
+              data-testid="agents-mode-selector"
+              onClick={() => setModeMenuOpen((open) => !open)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs font-medium text-neutral-300 transition-colors hover:bg-white/[0.06]"
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_5px_rgba(99,102,241,0.5)]"></div>
+              {analysisMode === 'auto' ? '自动模式' : analysisMode === 'standard' ? '标准分析' : '深度分析'}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+            <AnimatePresence>
+              {modeMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  className="absolute right-0 top-10 z-50 w-64 overflow-hidden rounded-xl border border-white/10 bg-[#101010] shadow-2xl"
+                >
+                  {([
+                    { id: 'auto', label: '自动模式', desc: '快速预筛, 信号强直接给结论, 分歧时升级深度' },
+                    { id: 'standard', label: '标准分析', desc: '基本面/资金/技术面多 Agent 综合研判' },
+                    { id: 'deep', label: '深度分析', desc: '买方深度调研 + 全专家团 + Critic 反证 + 主席 (最完整)' },
+                  ] as const).map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      data-testid={`agents-mode-${m.id}`}
+                      onClick={() => { setAnalysisMode(m.id); setModeMenuOpen(false); }}
+                      className={cn(
+                        'w-full px-3 py-3 text-left transition-colors',
+                        analysisMode === m.id ? 'bg-indigo-500/10' : 'hover:bg-white/[0.04]'
+                      )}
+                    >
+                      <span className="block text-xs font-medium text-neutral-100">{m.label}</span>
+                      <span className="mt-1 block text-[10px] leading-relaxed text-neutral-500">{m.desc}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           <button
             type="button"
             onClick={refreshRunningCount}
