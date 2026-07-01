@@ -27,7 +27,9 @@ from typing import Any
 # ----- 可选依赖: pandera 缺失时优雅降级 -----
 try:
     import pandera.pandas as pa  # type: ignore[import-untyped]
-    from pandera import DataFrameModel, Column  # type: ignore[import-untyped]
+
+    # pandera 0.20+: DataFrameModel/Column 从 pandera.pandas 导入 (顶层已弃用, 未来移除)
+    from pandera.pandas import DataFrameModel, Column  # type: ignore[import-untyped]
 
     # pandera 0.20+: 多行校验错误是 SchemaErrors (复数); 旧版 ValidationError 已移除
     from pandera.errors import SchemaErrors  # type: ignore[import-untyped]
