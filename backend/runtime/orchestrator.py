@@ -248,7 +248,7 @@ def _build_research_report_body(
             reason = "模型调用未完成，需检查 Provider 后重新生成。"
         agent_lines.append(
             f"- {r.get('name', r.get('key', 'Agent'))}: {state}; 信号 {r.get('signal', '观望')}; "
-            f"置信度 {_safe_float(r.get('confidence')):.0f}%。{reason[:120]}"
+            f"置信度 {_safe_float(r.get('confidence')):.0f}%。{reason[:800]}"
         )
     if not agent_lines:
         agent_lines.append("- 暂无启用专家席位。")
@@ -679,7 +679,7 @@ def _run_auto_mode(
             "role": "user",
             "content": (
                 f"{brief}\n\n"
-                '请用 JSON 返回: {"signal": "买入|卖出|观望", "confidence": 0-100, "reason": "50字内理由"}'
+                '请用 JSON 返回: {"signal": "买入|卖出|观望", "confidence": 0-100, "reason": "300字以上分析，包含：核心逻辑、关键数据、主要风险、操作建议"}'
             ),
         },
     ]

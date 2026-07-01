@@ -155,7 +155,7 @@ export const MonitoringCenter: React.FC = () => {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="max-w-5xl px-6 py-6"
+      className="flex h-full flex-col gap-4 overflow-y-auto p-5"
     >
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex items-start gap-3">

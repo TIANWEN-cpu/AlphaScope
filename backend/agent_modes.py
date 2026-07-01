@@ -69,7 +69,7 @@ class AgentModeConfig:
     # Auto mode specific
     pre_screen_provider: str = "deepseek"
     pre_screen_model: str = "deepseek-chat"
-    pre_screen_max_tokens: int = 300
+    pre_screen_max_tokens: int = 1024
     pre_screen_temperature: float = 0.3
     escalate_below: int = 30
     escalate_above: int = 70
@@ -271,7 +271,7 @@ class ModeResolver:
             # Auto-specific
             pre_screen_provider=pre_screen.get("provider", "deepseek"),
             pre_screen_model=pre_screen.get("model", "deepseek-chat"),
-            pre_screen_max_tokens=pre_screen.get("max_tokens", 300),
+            pre_screen_max_tokens=pre_screen.get("max_tokens", 1024),
             pre_screen_temperature=pre_screen.get("temperature", 0.3),
             escalate_below=raw.get("escalate_below", 30),
             escalate_above=raw.get("escalate_above", 70),

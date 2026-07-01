@@ -225,7 +225,7 @@ def call_llm_custom(
     api_key: str,
     model: str,
     messages: list,
-    max_tokens: int = 900,
+    max_tokens: int = 2048,
     temperature: float = 0.4,
 ) -> str:
     """调用用户自定义 OpenAI-compatible 模型。"""
@@ -257,7 +257,7 @@ def send_message(session: ChatSession, user_msg: str) -> ChatSession:
                 api_key=getattr(session, "api_key", ""),
                 model=session.model,
                 messages=_build_payload(session),
-                max_tokens=900,
+                max_tokens=2048,
                 temperature=0.4,
             )
         except Exception as e:
@@ -280,7 +280,7 @@ def send_message(session: ChatSession, user_msg: str) -> ChatSession:
                 model=md,
                 messages=_build_payload(session),
                 json_mode=False,
-                max_tokens=900,
+                max_tokens=2048,
                 temperature=0.4,
             )
             # Streamlit 热重载时 call_llm 可能仍指向旧函数签名，不接受 api_key。

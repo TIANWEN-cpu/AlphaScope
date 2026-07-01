@@ -338,7 +338,7 @@ export function StrategyLab() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="mx-auto max-w-6xl space-y-5 px-5 py-6"
+      className="flex h-full flex-col gap-4 overflow-y-auto p-5"
     >
       <header className="flex items-start gap-3">
         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/20">
